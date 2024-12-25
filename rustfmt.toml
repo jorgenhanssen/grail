@@ -1,0 +1,4 @@
+max_width = 100
+hard_tabs = false
+edition = "2021"
+use_small_heuristics = "Max"
