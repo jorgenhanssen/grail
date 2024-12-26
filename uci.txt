@@ -1,0 +1,111 @@
+UCI (Universal Chess Interface)
+
+This is the description of a new interface between a chess engine and a graphical user interface called UCI. It was designed by Rudolf Huber and Stefan Meyer-Kahlen and is used in the chess engines SOS 11/2000 and Shredder 5 as well as in the Shredder 5 graphical user interface. Also, the new version 6 of Chess Assistant will support this engine interface. The UCI interface is free to use for everyone, so you can use it in your own program without any license fees or restrictions. If you make any additions or modifications to the interface, it might be a good idea to contact me beforehand so we can maintain compatibility.
+
+## Description of the Universal Chess Interface (UCI)
+
+### General Specifications
+
+- The specification is independent of the operating system. For Windows, the engine is a normal executable file, either a console or a "real" Windows application.
+- All communication is done via standard input and output with plain text commands.
+- The engine should boot and wait for input from the GUI. It should wait for the `isready` or `setoption` command to set up its internal parameters, as the boot process should be as quick as possible.
+- The engine must always be able to process input from `stdin`, even while thinking.
+- All command strings the engine receives will end with `\n`, and all commands the GUI receives should also end with `\n`.
+  - Note: `\n` can be `0x0d` or `0x0a0d` or any combination depending on your OS. If the engine and GUI run on the same OS, this should not be an issue. However, be cautious when running a Linux engine in a Windows GUI.
+- Arbitrary whitespace between tokens is allowed.
+  - Example: `debug on\n`, `   debug     on  \n`, and `\t  debug \t  \t\ton\t  \n` all set the debug mode of the engine to on.
+- The engine will always be in forced mode, meaning it should never start calculating or pondering without receiving a `go` command first.
+- Before the engine is asked to search on a position, there will always be a `position` command to inform the engine about the current position.
+- By default, all opening book handling is done by the GUI, but there is an option for the engine to use its own book (`OwnBook` option; see below).
+- If the engine or GUI receives an unknown command or token, it should ignore it and try to parse the rest of the string in the line.
+  - Examples: `joho debug on\n` should switch the debug mode on, assuming `joho` is not defined. However, `debug joho on\n` will be undefined.
+- If the engine receives a command it is not supposed to process (e.g., `stop` when the engine is not calculating), it should ignore it.
+
+### Move Format
+
+The move format is in long algebraic notation. A null move from the engine to the GUI should be sent as `0000`.
+
+Examples:
+- `e2e4`
+- `e7e5`
+- `e1g1` (white short castling)
+- `e7e8q` (promotion)
+
+### Commands from GUI to Engine
+
+- uci: Instructs the engine to use the UCI (Universal Chess Interface). This will be sent once as the first command after program boot to tell the engine to switch to UCI mode. After receiving the `uci` command, the engine must identify itself with the `id` command and send the `option` commands to indicate which engine settings are supported. The engine should then send `uciok` to acknowledge UCI mode. If `uciok` is not sent within a specific time period, the GUI will terminate the engine task.
+
+- debug [on|off]: Switches the engine's debug mode on or off. In debug mode, the engine should send additional information to the GUI (e.g., with the `info string` command). This mode should be off by default and can be switched at any time, even when the engine is thinking.
+
+- isready: Used to synchronize the engine with the GUI. After receiving this command, the engine must respond with `readyok` when it is ready. This command can also be sent when the engine is calculating, in which case the engine should immediately respond with `readyok` without stopping the search.
+
+- setoption name <id> [value <x>]: Sent when the user wants to change the internal parameters of the engine. For button-type options, no value is needed. The name and value of the option should not be case-sensitive and can include spaces. Avoid using `name` or `value` in `<id>` or `<x>` to prevent parsing issues.
+
+- register: Attempts to register the engine or inform the engine that registration will be done later. This command is sent if the engine sends `registration error` at startup. Example: `register name Stefan MK code 4359874324`
+
+- ucinewgame: Indicates that the next search (initiated with `position` and `go`) will be from a different game. This can be a new game the engine should play, analyze, or a new position from a test suite.
+
+- position [fen <fenstring>|startpos] moves <move1> ... <movei>: Sets up the position described in `fenstring` and plays the moves on the internal chessboard. If the game started from the initial position, the string `startpos` is used.
+
+- go: Starts calculation on the current position. Additional commands may follow, such as `searchmoves`, `ponder`, `wtime`, `btime`, `depth`, etc.
+
+- stop: Stops calculation as soon as possible.
+
+- ponderhit: Informs the engine that the user has played the expected move. The engine should continue searching but switch to normal search mode.
+
+- quit: Quits the program as soon as possible.
+
+### Commands from Engine to GUI
+
+- id name <name>: Identifies the engine name.
+
+- id author <author>: Identifies the engine author.
+
+- uciok: Indicates that the engine is ready in UCI mode.
+
+- readyok: Responds to `isready`, indicating that the engine is ready to accept new commands.
+
+- bestmove <move1> [ponder <move2>]: Indicates the best move found by the engine. Optionally, a ponder move can be included.
+
+- info: Sends search information to the GUI (e.g., depth, score, nodes, PV line, etc.).
+
+- copyprotection: Informs the GUI about the status of copy protection checks.
+
+- registration: Informs the GUI about the status of registration checks.
+
+- option: Lists engine options that can be modified by the GUI.
+
+### Chess960 Support
+
+UCI can support Chess960 (Fischer Random Chess) with minimal modifications:
+
+- The engine must declare support for Chess960 using the `UCI_Chess960` option (`option name UCI_Chess960 type check default false`).
+- Castling moves are sent in the form where the king "takes" its own rook (e.g., `e1h1` for white short castling).
+- Castling rights in FEN strings use the rook's file letter (uppercase for white, lowercase for black). Example: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w AHah -`.
+
+---
+
+### Example Communication
+
+Here is an example of how communication between the GUI and engine might look:
+
+1. The GUI sends: `uci`
+2. The engine responds:
+   - `id name Shredder`
+   - `id author Stefan MK`
+   - `option name Hash type spin default 1 min 1 max 128`
+   - `uciok`
+3. The GUI sends: `setoption name Hash value 32`
+4. The GUI sends: `isready`
+5. The engine responds: `readyok`
+6. The GUI sends: `position startpos moves e2e4 e7e5`
+7. The GUI sends: `go infinite`
+8. The engine sends:
+   - `info depth 1 seldepth 0`
+   - `info score cp 13 depth 1 nodes 13 time 15 pv e2e4`
+9. The GUI sends: `stop`
+10. The engine responds:
+    - `bestmove g1f3 ponder d8f6`
+
+
+More in Stockfish doc: https://official-stockfish.github.io/docs/stockfish-wiki/UCI-&-Commands.html
