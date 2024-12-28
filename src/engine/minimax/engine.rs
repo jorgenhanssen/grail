@@ -34,7 +34,6 @@ impl Engine for MinimaxEngine {
     }
 
     fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> ChessMove {
-        self.nodes = 0;
         let search_time = params.move_time.unwrap_or(10_000);
         let start_time = std::time::Instant::now();
 
@@ -42,6 +41,8 @@ impl Engine for MinimaxEngine {
         let mut best_move = None;
 
         while start_time.elapsed().as_millis() < search_time as u128 {
+            self.nodes = 0;
+
             let mut alpha = f32::NEG_INFINITY;
             let mut beta = f32::INFINITY;
             let moves_with_scores = get_ordered_moves(&self.board);

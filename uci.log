@@ -1,43 +1,181 @@
-23:33:57 [DEBUG] (1) grail::uci::connection: Input: "uci"
-23:33:57 [DEBUG] (2) grail::uci::connection: Output: "id name Grail"
-23:33:57 [DEBUG] (2) grail::uci::connection: Output: "id author Jørgen Hanssen"
-23:33:57 [DEBUG] (2) grail::uci::connection: Output: "uciok"
-23:33:57 [DEBUG] (1) grail::uci::connection: Input: "isready"
-23:33:57 [DEBUG] (2) grail::uci::connection: Output: "readyok"
-23:33:57 [DEBUG] (1) grail::uci::connection: Input: "stop"
-23:33:57 [DEBUG] (1) grail::uci::connection: Input: "ucinewgame"
-23:33:57 [DEBUG] (1) grail::uci::connection: Input: "isready"
-23:33:57 [DEBUG] (1) grail::uci::connection: Input: "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 moves d2d4 g8f6 d1d3 d7d5 c1f4 b8c6 b1d2 f6h5 f4e3 e7e5 c2c3 e5e4 d3c2 f8e7 c2a4 e8g8 h2h3 f7f5 g2g3 c8e6 c3c4 d5c4 e1c1 b7b5 a4b5 c6d4 b5e5 e7f6 e5c5 d8d5 c5d5 e6d5 d2b1 c7c5 g3g4 f5f4 e3d4 c5d4 g4h5 e4e3 h1h2 a8b8 f2e3 c4c3 b2b3 c3c2 c1c2 b8c8 c2b2 d4d3 b2a3 f6e7 a3a4 d5c6 a4a5 f8f5 a5a6 f4e3 a2a3 e7d6 f1g2 d6h2 g2f3 h2g1 d1g1 c6f3 e2f3 c8c7 h5h6 f5f6"
-23:33:57 [DEBUG] (2) grail::uci::connection: Output: "readyok"
-23:33:57 [DEBUG] (1) grail::uci::connection: Input: "go movetime 11000"
-23:33:57 [DEBUG] (1) grail::engine::minimax::engine: Move: a6a5, Score: -198.5
-23:33:57 [DEBUG] (1) grail::engine::minimax::engine: Move: a6b5, Score: -200.5
-23:33:57 [DEBUG] (2) grail::uci::connection: Output: "info depth 1 multipv 1 score cp -198 nodes 2 nps 5907 time 0 pv a6a5"
-23:33:57 [DEBUG] (1) grail::engine::minimax::engine: Move: a6a5, Score: -308.5
-23:33:57 [DEBUG] (1) grail::engine::minimax::engine: Move: a6b5, Score: -310.5
-23:33:57 [DEBUG] (2) grail::uci::connection: Output: "info depth 2 multipv 1 score cp -308 nodes 40 nps 45232 time 0 pv a6a5 f6h6"
-23:33:57 [DEBUG] (1) grail::engine::minimax::engine: Move: a6a5, Score: -207.5
-23:33:57 [DEBUG] (1) grail::engine::minimax::engine: Move: a6b5, Score: -202.5
-23:33:57 [DEBUG] (2) grail::uci::connection: Output: "info depth 3 multipv 1 score cp -202 nodes 113 nps 77928 time 1 pv a6b5 a7a6 b5a5"
-23:33:57 [DEBUG] (1) grail::engine::minimax::engine: Move: a6a5, Score: -375.5
-23:33:57 [DEBUG] (1) grail::engine::minimax::engine: Move: a6b5, Score: -377.5
-23:33:57 [DEBUG] (2) grail::uci::connection: Output: "info depth 4 multipv 1 score cp -375 nodes 1280 nps 339692 time 3 pv a6a5 f6h6 g1g2 h6h3"
-23:33:57 [DEBUG] (1) grail::engine::minimax::engine: Move: a6a5, Score: -249.5
-23:33:57 [DEBUG] (1) grail::engine::minimax::engine: Move: a6b5, Score: -299
-23:33:57 [DEBUG] (2) grail::uci::connection: Output: "info depth 5 multipv 1 score cp -249 nodes 2069 nps 312127 time 6 pv a6a5 f6h6 g1g5 h6h3 g5g7"
-23:33:57 [DEBUG] (1) grail::engine::minimax::engine: Move: a6a5, Score: -499.5
-23:33:57 [DEBUG] (1) grail::engine::minimax::engine: Move: a6b5, Score: -501.5
-23:33:57 [DEBUG] (2) grail::uci::connection: Output: "info depth 6 multipv 1 score cp -499 nodes 30193 nps 821979 time 36 pv a6a5 d3d2 b1d2 e3d2 g1d1 f6h6"
-23:33:57 [DEBUG] (1) grail::engine::minimax::engine: Move: a6a5, Score: -313
-23:33:57 [DEBUG] (1) grail::engine::minimax::engine: Move: a6b5, Score: -313
-23:33:57 [DEBUG] (2) grail::uci::connection: Output: "info depth 7 multipv 1 score cp -313 nodes 62224 nps 696462 time 89 pv a6a5 f6h6 f3f4 e3e2 b1d2 c7c5 a5a4"
-23:33:58 [DEBUG] (1) grail::engine::minimax::engine: Move: a6a5, Score: -564.5
-23:33:58 [DEBUG] (1) grail::engine::minimax::engine: Move: a6b5, Score: -564
-23:33:58 [DEBUG] (2) grail::uci::connection: Output: "info depth 8 multipv 1 score cp -564 nodes 1161426 nps 1177684 time 986 pv a6b5 f6h6 g1e1 e3e2 b5a5 c7c1 e1c1 e2e1q"
-23:34:00 [DEBUG] (1) grail::engine::minimax::engine: Move: a6a5, Score: -322
-23:34:00 [DEBUG] (1) grail::engine::minimax::engine: Move: a6b5, Score: -322
-23:34:00 [DEBUG] (2) grail::uci::connection: Output: "info depth 9 multipv 1 score cp -322 nodes 2607237 nps 817504 time 3189 pv a6a5 f6h6 b3b4 h6h3 f3f4 c7f7 g1g5 f7f4 g5g7"
-23:34:16 [DEBUG] (1) grail::engine::minimax::engine: Move: a6a5, Score: -681.5
-23:34:23 [DEBUG] (1) grail::engine::minimax::engine: Move: a6b5, Score: -681.5
-23:34:23 [DEBUG] (2) grail::uci::connection: Output: "info depth 10 multipv 1 score cp -681 nodes 28499489 nps 1084467 time 26279 pv a6a5 f6c6 h6g7 e3e2 g1e1 c6c1 b1d2 c1e1 d2e4 g8g7"
-23:34:23 [DEBUG] (2) grail::uci::connection: Output: "bestmove a6a5"
+23:44:29 [DEBUG] (1) grail::uci::connection: Input: "uci"
+23:44:29 [DEBUG] (2) grail::uci::connection: Output: "id name Grail"
+23:44:29 [DEBUG] (2) grail::uci::connection: Output: "id author Jørgen Hanssen"
+23:44:29 [DEBUG] (2) grail::uci::connection: Output: "uciok"
+23:44:29 [DEBUG] (1) grail::uci::connection: Input: "isready"
+23:44:29 [DEBUG] (2) grail::uci::connection: Output: "readyok"
+23:44:29 [DEBUG] (1) grail::uci::connection: Input: "stop"
+23:44:29 [DEBUG] (1) grail::uci::connection: Input: "ucinewgame"
+23:44:29 [DEBUG] (1) grail::uci::connection: Input: "isready"
+23:44:29 [DEBUG] (1) grail::uci::connection: Input: "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+23:44:29 [DEBUG] (2) grail::uci::connection: Output: "readyok"
+23:44:29 [DEBUG] (1) grail::uci::connection: Input: "go movetime 11000"
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b1a3, Score: 51
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b1c3, Score: 56
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g1f3, Score: 56
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g1h3, Score: 51
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a3, Score: 44
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a4, Score: 45.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b3, Score: 46
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b4, Score: 45.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c3, Score: 47
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c4, Score: 47
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d3, Score: 54
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d4, Score: 54.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e3, Score: 57
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e4, Score: 56.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f3, Score: 45
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f4, Score: 45
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g3, Score: 46
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g4, Score: 45.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h3, Score: 44
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h4, Score: 45.5
+23:44:29 [DEBUG] (2) grail::uci::connection: Output: "info depth 1 multipv 1 score cp 57 nodes 20 nps 7311 time 2 pv e2e3"
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b1a3, Score: 38.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b1c3, Score: 43.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g1f3, Score: 43.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g1h3, Score: 40.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a3, Score: 38.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a4, Score: 40
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b3, Score: 40.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b4, Score: 40
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c3, Score: 41.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c4, Score: 41.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d3, Score: 43.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d4, Score: 42
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e3, Score: 44.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e4, Score: 44
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f3, Score: 39.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f4, Score: 39.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g3, Score: 40.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g4, Score: 40
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h3, Score: 38.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h4, Score: 40
+23:44:29 [DEBUG] (2) grail::uci::connection: Output: "info depth 2 multipv 1 score cp 44 nodes 201 nps 39815 time 5 pv e2e3 e7e5"
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b1a3, Score: 46.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b1c3, Score: 52.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g1f3, Score: 51
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g1h3, Score: 48.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a3, Score: 47.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a4, Score: 48
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b3, Score: 48.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b4, Score: 50.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c3, Score: 52.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c4, Score: 52.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d3, Score: 51.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d4, Score: 58.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e3, Score: 60
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e4, Score: 57
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f3, Score: 54
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f4, Score: 56
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g3, Score: 56
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g4, Score: 55
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h3, Score: 55
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h4, Score: 55.5
+23:44:29 [DEBUG] (2) grail::uci::connection: Output: "info depth 3 multipv 1 score cp 60 nodes 2095 nps 190952 time 10 pv e2e3 e7e5 d1g4"
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b1a3, Score: 30.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b1c3, Score: 37
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g1f3, Score: 37
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g1h3, Score: 35.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a3, Score: 37
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a4, Score: 37
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b3, Score: 37
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b4, Score: 36.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c3, Score: 36.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c4, Score: 35.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d3, Score: 37
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d4, Score: 41
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e3, Score: 46
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e4, Score: 46
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f3, Score: 46
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f4, Score: 46
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g3, Score: 46
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g4, Score: 46
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h3, Score: 45.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h4, Score: 46
+23:44:29 [DEBUG] (2) grail::uci::connection: Output: "info depth 4 multipv 1 score cp 46 nodes 13180 nps 524964 time 25 pv e2e3 e7e6 d1g4 d8g5"
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b1a3, Score: 57
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b1c3, Score: 65
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g1f3, Score: 64
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g1h3, Score: 52
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a3, Score: 64.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a4, Score: 65
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b3, Score: 125
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b4, Score: 56.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c3, Score: 156
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c4, Score: 137
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d3, Score: 156
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d4, Score: 155.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e3, Score: 155.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e4, Score: 141
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f3, Score: 66.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f4, Score: 68
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g3, Score: 149.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g4, Score: 149
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h3, Score: 67.5
+23:44:29 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h4, Score: 70
+23:44:29 [DEBUG] (2) grail::uci::connection: Output: "info depth 5 multipv 1 score cp 156 nodes 74150 nps 788969 time 93 pv c2c3 e7e5 d1b3 d8h4 b3b7"
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: b1a3, Score: -47.5
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: b1c3, Score: -47.5
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: g1f3, Score: -48.5
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: g1h3, Score: -47.5
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a3, Score: -53
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a4, Score: -47.5
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b3, Score: -52.5
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b4, Score: -51
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c3, Score: -49
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c4, Score: -52.5
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d3, Score: -50
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d4, Score: -49.5
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e3, Score: -48.5
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e4, Score: -49
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f3, Score: -54
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f4, Score: -51.5
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g3, Score: -51
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g4, Score: -48.5
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h3, Score: -52.5
+23:44:30 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h4, Score: -47.5
+23:44:30 [DEBUG] (2) grail::uci::connection: Output: "info depth 6 multipv 1 score cp -47 nodes 557892 nps 818101 time 681 pv b1a3 e7e5 a3b5 f8c5 g1f3 c5f2"
+23:44:31 [DEBUG] (1) grail::engine::minimax::engine: Move: b1a3, Score: 88
+23:44:31 [DEBUG] (1) grail::engine::minimax::engine: Move: b1c3, Score: 133.5
+23:44:32 [DEBUG] (1) grail::engine::minimax::engine: Move: g1f3, Score: 135
+23:44:32 [DEBUG] (1) grail::engine::minimax::engine: Move: g1h3, Score: 135
+23:44:32 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a3, Score: 135
+23:44:32 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a4, Score: 133.5
+23:44:32 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b3, Score: 135
+23:44:32 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b4, Score: 135
+23:44:33 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c3, Score: 159.5
+23:44:33 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c4, Score: 158
+23:44:33 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d3, Score: 159.5
+23:44:33 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d4, Score: 159.5
+23:44:34 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e3, Score: 160
+23:44:34 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e4, Score: 159
+23:44:34 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f3, Score: 154
+23:44:34 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f4, Score: 152.5
+23:44:34 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g3, Score: 158.5
+23:44:34 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g4, Score: 160
+23:44:34 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h3, Score: 152.5
+23:44:34 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h4, Score: 157.5
+23:44:34 [DEBUG] (2) grail::uci::connection: Output: "info depth 7 multipv 1 score cp 160 nodes 4040655 nps 847402 time 4768 pv e2e3 d7d5 d1h5 h7h6 h5e5 f7f6 e5d5"
+23:44:38 [DEBUG] (1) grail::engine::minimax::engine: Move: b1a3, Score: -87
+23:44:41 [DEBUG] (1) grail::engine::minimax::engine: Move: b1c3, Score: -78.5
+23:44:44 [DEBUG] (1) grail::engine::minimax::engine: Move: g1f3, Score: -78.5
+23:44:47 [DEBUG] (1) grail::engine::minimax::engine: Move: g1h3, Score: -78.5
+23:44:50 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a3, Score: -78.5
+23:44:53 [DEBUG] (1) grail::engine::minimax::engine: Move: a2a4, Score: -78.5
+23:44:56 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b3, Score: -78
+23:44:58 [DEBUG] (1) grail::engine::minimax::engine: Move: b2b4, Score: -78
+23:45:01 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c3, Score: -76.5
+23:45:03 [DEBUG] (1) grail::engine::minimax::engine: Move: c2c4, Score: -76.5
+23:45:04 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d3, Score: -76.5
+23:45:08 [DEBUG] (1) grail::engine::minimax::engine: Move: d2d4, Score: -59.5
+23:45:11 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e3, Score: -59.5
+23:45:13 [DEBUG] (1) grail::engine::minimax::engine: Move: e2e4, Score: -59.5
+23:45:14 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f3, Score: -59.5
+23:45:16 [DEBUG] (1) grail::engine::minimax::engine: Move: f2f4, Score: -59.5
+23:45:17 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g3, Score: -59.5
+23:45:18 [DEBUG] (1) grail::engine::minimax::engine: Move: g2g4, Score: -59.5
+23:45:20 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h3, Score: -59.5
+23:45:22 [DEBUG] (1) grail::engine::minimax::engine: Move: h2h4, Score: -59.5
+23:45:22 [DEBUG] (2) grail::uci::connection: Output: "info depth 8 multipv 1 score cp -59 nodes 44544206 nps 841599 time 52928 pv d2d4 c7c6 c2c3 d8a5 d1b3 d7d5 g1f3 a5a2"
+23:45:22 [DEBUG] (2) grail::uci::connection: Output: "bestmove d2d4"
