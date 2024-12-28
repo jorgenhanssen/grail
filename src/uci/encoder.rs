@@ -11,10 +11,10 @@ impl Encoder {
             UciOutput::UciOk => "uciok".to_string(),
             UciOutput::ReadyOk => "readyok".to_string(),
 
-            UciOutput::BestMove { bestmove, ponder } => {
+            UciOutput::BestMove { best_move, ponder } => {
                 format!(
                     "bestmove {}{}",
-                    bestmove,
+                    best_move,
                     ponder
                         .as_ref()
                         .map_or(String::new(), |m| format!(" ponder {}", m))
@@ -22,7 +22,7 @@ impl Encoder {
             }
             UciOutput::Info(info) => {
                 format!(
-                    "info depth {} multipv 1 score cp {} nodes {} nps {} time {} pc {}",
+                    "info depth {} multipv 1 score cp {} nodes {} nps {} time {} pv {}",
                     info.depth,
                     info.score,
                     info.nodes,

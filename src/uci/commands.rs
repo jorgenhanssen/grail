@@ -24,7 +24,7 @@ pub enum UciOutput {
     UciOk,
     ReadyOk,
     BestMove {
-        bestmove: ChessMove,
+        best_move: ChessMove,
         ponder: Option<ChessMove>,
     },
     Info(Info),
@@ -35,9 +35,9 @@ pub enum UciOutput {
 #[derive(Debug)]
 pub struct Info {
     pub depth: u8,
-    pub nodes: u64,
-    pub nodes_per_second: u64,
-    pub time: u64,
+    pub nodes: u32,
+    pub nodes_per_second: u32,
+    pub time: u32,
     pub line: Vec<ChessMove>,
     pub score: i32, // centipawns
 }
@@ -51,7 +51,7 @@ pub struct GoParams {
     pub infinite: bool,
 
     // Restrict search to moves in this list.
-    pub searchmoves: Option<Vec<String>>,
+    pub search_moves: Option<Vec<String>>,
 
     // Integer of milliseconds White has left on the clock.
     pub wtime: Option<u64>,
@@ -66,7 +66,7 @@ pub struct GoParams {
     pub binc: Option<u64>,
 
     // Number of moves to the next time control. If this is not set, but wtime or btime are, then it is sudden death.
-    pub movestogo: Option<u64>,
+    pub moves_to_go: Option<u64>,
 
     // Search depth ply only.
     pub depth: Option<u64>,
@@ -75,7 +75,7 @@ pub struct GoParams {
     pub nodes: Option<u64>,
 
     // Search exactly movetime milliseconds.
-    pub movetime: Option<u64>,
+    pub move_time: Option<u64>,
 }
 
 #[derive(Debug, Default)]

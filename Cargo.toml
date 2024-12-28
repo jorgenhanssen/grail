@@ -7,4 +7,6 @@ edition = "2021"
 chess = "3.2.0"
 clap = { version = "4.5.23", features = ["derive"] }
 log = "0.4.22"
+rand = "0.8.5"
+rayon = "1.10.0"
 simplelog = "0.12.2"

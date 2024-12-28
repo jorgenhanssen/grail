@@ -50,7 +50,7 @@ impl Decoder {
                 .split_whitespace();
 
             for mv in moves {
-                let mv = ChessMove::from_san(&board, mv).unwrap();
+                let mv = ChessMove::from_str(mv).unwrap();
                 board = board.make_move_new(mv);
             }
         }
@@ -61,15 +61,15 @@ impl Decoder {
         UciInput::Go(GoParams {
             ponder: input.contains("ponder"),
             infinite: input.contains("infinite"),
-            searchmoves: None, // We'll implement this later
+            search_moves: None, // We'll implement this later
             wtime: extract_numeric_param(input, "wtime"),
             btime: extract_numeric_param(input, "btime"),
             winc: extract_numeric_param(input, "winc"),
             binc: extract_numeric_param(input, "binc"),
-            movestogo: extract_numeric_param(input, "movestogo"),
+            moves_to_go: extract_numeric_param(input, "movestogo"),
             depth: extract_numeric_param(input, "depth"),
             nodes: extract_numeric_param(input, "nodes"),
-            movetime: extract_numeric_param(input, "movetime"),
+            move_time: extract_numeric_param(input, "movetime"),
         })
     }
 }
