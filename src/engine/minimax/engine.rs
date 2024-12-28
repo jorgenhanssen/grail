@@ -29,6 +29,10 @@ impl Engine for MinimaxEngine {
         self.board = board;
     }
 
+    fn stop(&mut self) {
+        // TODO: implement
+    }
+
     fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> ChessMove {
         self.nodes = 0;
         let search_time = params.move_time.unwrap_or(10_000);
@@ -72,7 +76,6 @@ impl Engine for MinimaxEngine {
                     beta = beta.min(best_score);
                 }
 
-                // log current move and it's score
                 log::debug!("Move: {}, Score: {}", m.to_string(), score);
 
                 if alpha >= beta {
@@ -89,7 +92,7 @@ impl Engine for MinimaxEngine {
                     nodes: self.nodes,
                     nodes_per_second: nps,
                     time: elapsed.as_millis() as u32,
-                    line: best_line, // Use the best line we found
+                    line: best_line,
                     score: best_score as i32,
                 }))
                 .unwrap();
@@ -123,7 +126,7 @@ impl MinimaxEngine {
                 self.nodes += 1;
                 return (0.0, Vec::new());
             }
-            BoardStatus::Ongoing => { /* continue */ }
+            BoardStatus::Ongoing => {}
         }
 
         if depth == 0 {

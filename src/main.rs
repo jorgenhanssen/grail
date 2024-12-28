@@ -43,8 +43,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     ponder: None,
                 })?;
             }
-            UciInput::Stop => {}
-            UciInput::Quit => {}
+            UciInput::Stop => {
+                engine.stop();
+            }
+            UciInput::Quit => {
+                engine.stop();
+            }
             UciInput::Unknown(line) => {
                 debug!("Unknown command: {}", line);
             }

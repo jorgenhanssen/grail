@@ -55,7 +55,6 @@ fn evaluate_material(board: &Board) -> f32 {
     score
 }
 
-// White Pawn PST (a1=0 ... h1=7; a2=8 ... h8=63)
 const WHITE_PAWN_PST: [f32; 64] = [
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 1.0, 1.0, 2.0,
     3.0, 3.0, 2.0, 1.0, 1.0, 0.5, 0.5, 1.0, 2.5, 2.5, 1.0, 0.5, 0.5, 0.0, 0.0, 0.0, 2.0, 2.0, 0.0,
@@ -63,8 +62,6 @@ const WHITE_PAWN_PST: [f32; 64] = [
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
 ];
 
-// Black Pawn PST is the reverse of White’s, since from White's perspective
-// Black pawns move "the other way."
 const BLACK_PAWN_PST: [f32; 64] = {
     let mut table = [0.0; 64];
     let mut i = 0;
@@ -75,7 +72,6 @@ const BLACK_PAWN_PST: [f32; 64] = {
     table
 };
 
-// White Knight PST
 const WHITE_KNIGHT_PST: [f32; 64] = [
     -5.0, -4.0, -2.0, -2.0, -2.0, -2.0, -4.0, -5.0, -4.0, -2.0, 0.0, 0.5, 0.5, 0.0, -2.0, -4.0,
     -2.0, 0.5, 1.0, 1.0, 1.0, 1.0, 0.5, -2.0, -2.0, 0.0, 1.0, 2.0, 2.0, 1.0, 0.0, -2.0, -2.0, 0.0,
@@ -93,7 +89,6 @@ const BLACK_KNIGHT_PST: [f32; 64] = {
     table
 };
 
-// White Bishop PST
 const WHITE_BISHOP_PST: [f32; 64] = [
     -2.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -2.0, -1.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5, -1.0, -1.0,
     1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, 0.5, 0.5,
@@ -111,7 +106,6 @@ const BLACK_BISHOP_PST: [f32; 64] = {
     table
 };
 
-// White Rook PST
 const WHITE_ROOK_PST: [f32; 64] = [
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.5, -0.5, 0.0, 0.0,
     0.0, 0.0, 0.0, 0.0, -0.5, -0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.5, -0.5, 0.0, 0.0, 0.0, 0.0,
@@ -129,7 +123,6 @@ const BLACK_ROOK_PST: [f32; 64] = {
     table
 };
 
-// White Queen PST
 const WHITE_QUEEN_PST: [f32; 64] = [
     -2.0, -1.0, -1.0, -0.5, -0.5, -1.0, -1.0, -2.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, -1.0,
     0.5, 0.5, 0.5, 0.5, 0.5, 0.0, -1.0, -0.5, 0.0, 0.5, 0.5, 0.5, 0.5, 0.0, -0.5, -0.5, 0.0, 0.5,
@@ -147,8 +140,6 @@ const BLACK_QUEEN_PST: [f32; 64] = {
     table
 };
 
-// White King PST (we typically split into mid-game and endgame PSTs in
-// advanced engines, but here we’ll just do one table)
 const WHITE_KING_PST: [f32; 64] = [
     -3.0, -4.0, -4.0, -5.0, -5.0, -4.0, -4.0, -3.0, -3.0, -4.0, -4.0, -5.0, -5.0, -4.0, -4.0, -3.0,
     -3.0, -4.0, -4.0, -5.0, -5.0, -4.0, -4.0, -3.0, -3.0, -4.0, -4.0, -5.0, -5.0, -4.0, -4.0, -3.0,
@@ -166,10 +157,6 @@ const BLACK_KING_PST: [f32; 64] = {
     table
 };
 
-// ------------------------------------------------------------
-// 2) Base material values (in centipawns). These are typical
-//    guidelines but can differ depending on the engine.
-// ------------------------------------------------------------
 fn base_piece_value(piece: Piece) -> f32 {
     match piece {
         Piece::Pawn => 100.0,
@@ -181,10 +168,6 @@ fn base_piece_value(piece: Piece) -> f32 {
     }
 }
 
-// ------------------------------------------------------------
-// 3) A helper that returns the PST bonus for the given piece,
-//    color, and square (from White’s perspective).
-// ------------------------------------------------------------
 fn psq_bonus(piece: Piece, color: Color, sq: Square) -> f32 {
     let idx = sq.to_index();
     match piece {
@@ -233,16 +216,6 @@ fn psq_bonus(piece: Piece, color: Color, sq: Square) -> f32 {
     }
 }
 
-// ------------------------------------------------------------
-// 4) Count mobility for a given color. We do this by:
-//    - If it's already that color's turn, just count the moves.
-//    - Otherwise, make a "null move" to flip side_to_move,
-//      then count the legal moves.
-//
-//    In some positions (e.g. check), null moves might be
-//    disallowed by the crate. In that case, you can either
-//    skip mobility or handle it differently.
-// ------------------------------------------------------------
 fn count_mobility(board: &Board, color: Color) -> usize {
     if board.side_to_move() == color {
         // It's already our turn
@@ -253,7 +226,7 @@ fn count_mobility(board: &Board, color: Color) -> usize {
             MoveGen::new_legal(&board_after_null).count()
         } else {
             // If null move is not available (e.g. in check),
-            // fallback to 0 or do something else:
+            // fallback to 0 for now.
             0
         }
     }
@@ -270,7 +243,7 @@ fn evaluate_pawn_structure(board: &Board, color: Color) -> f32 {
         files[file] += 1;
     }
 
-    // Combined loop for both doubled pawns and isolated pawns checks
+    // check isolated pawns and doubled+ pawns
     for file in 0..8 {
         match files[file] {
             0 => continue,
