@@ -16,10 +16,10 @@ const ENGINE_NAME: &str = "Grail";
 const ENGINE_AUTHOR: &str = "Jørgen Hanssen";
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let _ = init();
+    let args = init()?;
 
     let mut uci = UciConnection::new();
-    let mut engine = Engine::new();
+    let mut engine = engine::create(&args);
 
     uci.listen(|input, output| {
         match input {

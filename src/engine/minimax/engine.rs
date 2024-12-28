@@ -1,5 +1,5 @@
-use std::sync::mpsc::Sender;
-
+use crate::engine::Engine;
+use crate::utils::get_ordered_moves;
 use crate::{
     uci::{
         commands::{GoParams, Info},
@@ -7,26 +7,29 @@ use crate::{
     },
     utils::evaluate_board,
 };
-use chess::{Board, BoardStatus, ChessMove, MoveGen, Piece};
+use chess::{Board, BoardStatus, ChessMove};
+use std::sync::mpsc::Sender;
 
-pub struct Engine {
+pub struct MinimaxEngine {
     board: Board,
     nodes: u32,
 }
 
-impl Engine {
-    pub fn new() -> Self {
+impl Default for MinimaxEngine {
+    fn default() -> Self {
         Self {
             board: Board::default(),
             nodes: 0,
         }
     }
+}
 
-    pub fn set_position(&mut self, board: Board) {
+impl Engine for MinimaxEngine {
+    fn set_position(&mut self, board: Board) {
         self.board = board;
     }
 
-    pub fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> ChessMove {
+    fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> ChessMove {
         self.nodes = 0;
         let search_time = params.move_time.unwrap_or(10_000);
         let start_time = std::time::Instant::now();
@@ -97,7 +100,9 @@ impl Engine {
 
         best_move.unwrap()
     }
+}
 
+impl MinimaxEngine {
     fn alpha_beta(
         &mut self,
         board: &Board,
@@ -164,75 +169,5 @@ impl Engine {
             }
             (best_value, best_line)
         }
-    }
-}
-
-fn get_ordered_moves(board: &Board) -> Vec<ChessMove> {
-    // Pre-allocate vector for moves and their scores
-    let mut moves_with_scores: Vec<(ChessMove, i32)> = MoveGen::new_legal(board)
-        .map(|m| (m, mvv_lva(m, board)))
-        .collect();
-
-    // Sort by score (descending)
-    moves_with_scores.sort_unstable_by_key(|&(_, score)| -score);
-
-    // Convert to moves vector, reusing the allocation
-    moves_with_scores.into_iter().map(|(m, _)| m).collect()
-}
-
-fn mvv_lva(move_: ChessMove, board: &Board) -> i32 {
-    // Check for promotions first - these are usually very good moves
-    if let Some(promotion) = move_.get_promotion() {
-        return match promotion {
-            Piece::Queen => 20000,
-            Piece::Rook => 19000,
-            Piece::Bishop | Piece::Knight => 18000,
-            _ => 0,
-        };
-    }
-
-    let resulting_board = board.make_move_new(move_);
-
-    // Checks are very important but slightly below promotions
-    if resulting_board.checkers().popcnt() > 0 {
-        return 15000;
-    }
-
-    // Next look at captures
-    if let Some(victim) = board.piece_on(move_.get_dest()) {
-        let victim_value = match victim {
-            Piece::Queen => 900,
-            Piece::Rook => 500,
-            Piece::Bishop => 330, // Slightly higher than knight
-            Piece::Knight => 320,
-            Piece::Pawn => 100,
-            Piece::King => 0, // Shouldn't happen in legal moves
-        };
-
-        let attacker = board.piece_on(move_.get_source()).unwrap();
-        let attacker_value = match attacker {
-            Piece::Queen => 900,
-            Piece::Rook => 500,
-            Piece::Bishop => 330,
-            Piece::Knight => 320,
-            Piece::Pawn => 100,
-            Piece::King => 0,
-        };
-
-        // Score = 10 * victim value - attacker value
-        // This ensures capturing a queen with a pawn is better than capturing a pawn with a queen
-        return victim_value * 10 - attacker_value;
-    }
-
-    // For non-capture moves, return a small positive value based on the piece type
-    // This encourages moving more valuable pieces first in quiet positions
-    let piece = board.piece_on(move_.get_source()).unwrap();
-    match piece {
-        Piece::Queen => 50,
-        Piece::Rook => 40,
-        Piece::Bishop => 30,
-        Piece::Knight => 30,
-        Piece::Pawn => 20,
-        Piece::King => 10,
     }
 }
