@@ -171,9 +171,11 @@ impl MinimaxEngine {
         // Proceed with normal alpha-beta:
         let mut moves = get_ordered_moves(board);
 
+        // If we have a TT move, move it to the front
         if let Some(tt_move) = maybe_tt_move {
             if let Some(pos) = moves.iter().position(|m| *m == tt_move) {
-                moves.swap(0, pos);
+                moves.remove(pos); // Remove the TT move from its current position
+                moves.insert(0, tt_move); // Insert it at the front
             }
         }
 
