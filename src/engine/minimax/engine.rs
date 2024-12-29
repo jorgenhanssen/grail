@@ -374,6 +374,7 @@ fn see_naive(board: &Board, capture_move: ChessMove) -> i32 {
 }
 
 // A simple piece-value lookup
+#[inline(always)]
 fn piece_value(piece: chess::Piece) -> i32 {
     match piece {
         chess::Piece::Pawn => 1,
