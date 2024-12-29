@@ -1,8 +1,21 @@
-use chess::{Board, Color, MoveGen, Piece, Square};
+use chess::{Board, BoardStatus, Color, MoveGen, Piece, Square};
 
 // Return final evaluation (positive = good for White, negative = good for Black)
 // Does not consider checkmate!
 pub fn evaluate_board(board: &Board) -> f32 {
+    match board.status() {
+        BoardStatus::Checkmate => {
+            // If it’s White to move and board is checkmated => White lost
+            if board.side_to_move() == chess::Color::White {
+                return -10_000.0;
+            } else {
+                return 10_000.0;
+            }
+        }
+        BoardStatus::Stalemate => return 0.0,
+        BoardStatus::Ongoing => {}
+    }
+
     let mut score = evaluate_material(board);
 
     score += count_mobility(board, Color::White) as f32;
