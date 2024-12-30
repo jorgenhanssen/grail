@@ -65,7 +65,7 @@ impl Engine for MinimaxEngine {
                 f32::INFINITY
             };
             let mut current_best_move = moves_with_scores[0].0;
-            let mut best_line = Vec::new();
+            let mut pv = Vec::new();
 
             for (m, _) in moves_with_scores {
                 let new_board = self.board.make_move_new(m);
@@ -76,14 +76,14 @@ impl Engine for MinimaxEngine {
                     if score > best_score {
                         best_score = score;
                         current_best_move = m;
-                        best_line = line;
+                        pv = line;
                     }
                     alpha = alpha.max(best_score);
                 } else {
                     if score < best_score {
                         best_score = score;
                         current_best_move = m;
-                        best_line = line;
+                        pv = line;
                     }
                     beta = beta.min(best_score);
                 }
@@ -107,11 +107,11 @@ impl Engine for MinimaxEngine {
                     nodes_per_second: nps,
                     time: elapsed.as_millis() as u32,
                     score: if is_forced_checkmate {
-                        self.convert_mate_score(best_score, &best_line)
+                        self.convert_mate_score(best_score, &pv)
                     } else {
                         self.convert_centipawn_score(best_score)
                     },
-                    line: best_line,
+                    pv,
                 }))
                 .unwrap();
 
@@ -364,12 +364,12 @@ impl MinimaxEngine {
         }
     }
 
-    fn convert_mate_score(&self, score: f32, line: &Vec<ChessMove>) -> Score {
+    fn convert_mate_score(&self, score: f32, pv: &Vec<ChessMove>) -> Score {
         let is_winning = (score > 0.0) == (self.board.side_to_move() == chess::Color::White);
         let mate_in = if is_winning {
-            line.len() as i32
+            pv.len() as i32
         } else {
-            -(line.len() as i32)
+            -(pv.len() as i32)
         };
         Score::Mate(mate_in)
     }

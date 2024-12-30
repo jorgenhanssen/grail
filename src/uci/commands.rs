@@ -38,7 +38,7 @@ pub struct Info {
     pub nodes: u32,
     pub nodes_per_second: u32,
     pub time: u32,
-    pub line: Vec<ChessMove>,
+    pub pv: Vec<ChessMove>,
     pub score: Score,
 }
 

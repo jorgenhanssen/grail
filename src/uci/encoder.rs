@@ -33,7 +33,7 @@ impl Encoder {
                     info.nodes,
                     info.nodes_per_second,
                     info.time,
-                    info.line
+                    info.pv
                         .iter()
                         .map(|m| m.to_string())
                         .collect::<Vec<String>>()
