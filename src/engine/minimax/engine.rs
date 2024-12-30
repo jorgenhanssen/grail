@@ -10,9 +10,8 @@ use crate::{
     },
     utils::evaluate_board,
 };
+use ahash::AHashMap;
 use chess::{Board, BoardStatus, ChessMove};
-use lru::LruCache;
-use std::num::NonZero;
 use std::sync::mpsc::Sender;
 
 use super::tt::{Bound, TTEntry};
@@ -20,7 +19,7 @@ use super::tt::{Bound, TTEntry};
 pub struct MinimaxEngine {
     board: Board,
     nodes: u32,
-    tt: LruCache<u64, TTEntry>,
+    tt: AHashMap<u64, TTEntry>,
 }
 
 impl Default for MinimaxEngine {
@@ -28,7 +27,7 @@ impl Default for MinimaxEngine {
         Self {
             board: Board::default(),
             nodes: 0,
-            tt: LruCache::new(NonZero::new(64_000_000).unwrap()),
+            tt: AHashMap::with_capacity(64_000_000),
         }
     }
 }
@@ -44,6 +43,7 @@ impl Engine for MinimaxEngine {
 
     fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> ChessMove {
         self.tt.clear();
+        self.nodes = 0;
 
         let search_time = params.move_time.unwrap_or(10_000);
         let start_time = std::time::Instant::now();
@@ -52,8 +52,6 @@ impl Engine for MinimaxEngine {
         let mut best_move = None;
 
         while start_time.elapsed().as_millis() < search_time as u128 {
-            self.nodes = 0;
-
             let mut alpha = f32::NEG_INFINITY;
             let mut beta = f32::INFINITY;
             let moves_with_scores = get_ordered_moves(&self.board);
@@ -152,8 +150,6 @@ impl MinimaxEngine {
         }
 
         if depth == 0 {
-            // self.nodes += 1;
-            // return (evaluate_board(board), Vec::new());
             return self.quiescence_search(board, alpha, beta);
         }
 
@@ -210,8 +206,8 @@ impl MinimaxEngine {
                     line.insert(0, m);
                     best_line = line;
                 }
-                alpha = alpha.max(best_value);
 
+                alpha = alpha.max(best_value);
                 if alpha >= beta {
                     break;
                 }
@@ -231,8 +227,8 @@ impl MinimaxEngine {
                     line.insert(0, m);
                     best_line = line;
                 }
-                beta = beta.min(best_value);
 
+                beta = beta.min(best_value);
                 if beta <= alpha {
                     break;
                 }
@@ -357,10 +353,10 @@ impl MinimaxEngine {
 
         if let Some(old_entry) = self.tt.get(&board_hash) {
             if old_entry.depth <= depth {
-                self.tt.put(board_hash, entry);
+                self.tt.insert(board_hash, entry);
             }
         } else {
-            self.tt.put(board_hash, entry);
+            self.tt.insert(board_hash, entry);
         }
     }
 
@@ -384,25 +380,16 @@ impl MinimaxEngine {
     }
 }
 
+#[inline]
 fn see_naive(board: &Board, capture_move: ChessMove) -> f32 {
-    // 1. Identify the piece being captured:
-    let captured_piece = board.piece_on(capture_move.get_dest());
-    // 2. Identify the piece doing the capturing:
-    let capturing_piece = board.piece_on(capture_move.get_source());
-
-    // Should never happen, but just in case
-    if captured_piece.is_none() || capturing_piece.is_none() {
-        return 0.0;
+    if let (Some(captured_piece), Some(capturing_piece)) = (
+        board.piece_on(capture_move.get_dest()),
+        board.piece_on(capture_move.get_source()),
+    ) {
+        let captured_val = piece_value(captured_piece);
+        let capturing_val = piece_value(capturing_piece);
+        captured_val - capturing_val
+    } else {
+        0.0
     }
-
-    let captured_val = piece_value(captured_piece.unwrap());
-    let capturing_val = piece_value(capturing_piece.unwrap());
-
-    // A simple "material swing" check: if you're capturing a more valuable piece
-    // or an equal piece, it's probably at least break-even.
-    // If you're losing material overall, return negative.
-    // TODO: Also allow capture of non-protected pieces
-    let naive_exchange_score = captured_val - capturing_val;
-
-    naive_exchange_score
 }

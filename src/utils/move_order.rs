@@ -1,11 +1,14 @@
 use chess::{Board, ChessMove, MoveGen, Piece};
 
 pub fn get_ordered_moves(board: &Board) -> Vec<(ChessMove, i32)> {
-    let mut moves_with_scores: Vec<(ChessMove, i32)> = MoveGen::new_legal(board)
-        .map(|m| (m, score(m, board)))
-        .collect();
+    let movegen = MoveGen::new_legal(board);
+    let mut moves_with_scores = Vec::with_capacity(movegen.len());
 
-    moves_with_scores.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+    for m in movegen {
+        moves_with_scores.push((m, -score(m, board)));
+    }
+
+    moves_with_scores.sort_unstable_by_key(|&(_, score)| score);
     moves_with_scores
 }
 

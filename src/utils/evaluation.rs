@@ -1,5 +1,5 @@
 use crate::utils::values::{BISHOP_VALUE, KNIGHT_VALUE, PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE};
-use chess::{Board, BoardStatus, Color, MoveGen, Piece};
+use chess::{Board, BoardStatus, Color, Piece};
 
 use super::{get_pst, sum_pst, CHECKMATE_SCORE};
 
@@ -21,9 +21,6 @@ pub fn evaluate_board(board: &Board) -> f32 {
     let mut score = 0.0;
     score += evaluate_material(board, Color::White);
     score -= evaluate_material(board, Color::Black);
-
-    score += count_mobility(board, Color::White) as f32;
-    score -= count_mobility(board, Color::Black) as f32;
 
     score += evaluate_pawn_structure(board, Color::White);
     score -= evaluate_pawn_structure(board, Color::Black);
@@ -76,22 +73,6 @@ fn evaluate_material(board: &Board, color: Color) -> f32 {
     let bishop_pair_bonus = if num_bishops >= 2 { 50.0 } else { 0.0 };
 
     return piece_value + pst_value + bishop_pair_bonus;
-}
-
-fn count_mobility(board: &Board, color: Color) -> usize {
-    if board.side_to_move() == color {
-        // It's already our turn
-        MoveGen::new_legal(board).count()
-    } else {
-        // Force a null move if possible
-        if let Some(board_after_null) = board.null_move() {
-            MoveGen::new_legal(&board_after_null).count()
-        } else {
-            // If null move is not available (e.g. in check),
-            // fallback to 0 for now.
-            0
-        }
-    }
 }
 
 fn evaluate_pawn_structure(board: &Board, color: Color) -> f32 {
