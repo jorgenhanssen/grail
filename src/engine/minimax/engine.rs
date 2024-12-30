@@ -20,6 +20,7 @@ pub struct MinimaxEngine {
     board: Board,
     nodes: u32,
     tt: AHashMap<u64, TTEntry>,
+    killer_moves: Vec<[Option<ChessMove>; 2]>, // 2 per depth
 }
 
 impl Default for MinimaxEngine {
@@ -28,6 +29,7 @@ impl Default for MinimaxEngine {
             board: Board::default(),
             nodes: 0,
             tt: AHashMap::with_capacity(64_000_000),
+            killer_moves: vec![[None; 2]; 100], // 100 is a good depth
         }
     }
 }
@@ -35,6 +37,7 @@ impl Default for MinimaxEngine {
 impl Engine for MinimaxEngine {
     fn set_position(&mut self, board: Board) {
         self.board = board;
+        self.killer_moves.clear();
     }
 
     fn stop(&mut self) {
@@ -43,6 +46,7 @@ impl Engine for MinimaxEngine {
 
     fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> ChessMove {
         self.tt.clear();
+        self.killer_moves = vec![[None; 2]; 100];
         self.nodes = 0;
 
         let search_time = params.move_time.unwrap_or(10_000);
@@ -180,15 +184,26 @@ impl MinimaxEngine {
             }
         }
 
+        let mut preferred_moves = Vec::new();
+        if maybe_tt_move.is_some() {
+            preferred_moves.push(maybe_tt_move.unwrap());
+        }
+
+        // Add killer moves for this specific depth if they are legal
+        for killer_move in self.killer_moves[depth as usize].iter().flatten() {
+            if board.legal(*killer_move) && !preferred_moves.contains(killer_move) {
+                preferred_moves.push(*killer_move);
+            }
+        }
+
         // Proceed with normal alpha-beta:
         let mut moves = get_ordered_moves(board);
 
-        // If we have a TT move, move it to the front
-        // TODO: Maybe 0 as score is not good
-        if let Some(tt_move) = maybe_tt_move {
-            if let Some(pos) = moves.iter().position(|m| *m == (tt_move, 0)) {
+        // let's move any preferred moves to the front
+        for preferred_move in preferred_moves {
+            if let Some(pos) = moves.iter().position(|m| m.0 == preferred_move) {
                 moves.remove(pos);
-                moves.insert(0, (tt_move, 0));
+                moves.insert(0, (preferred_move, 0));
             }
         }
 
@@ -209,6 +224,12 @@ impl MinimaxEngine {
 
                 alpha = alpha.max(best_value);
                 if alpha >= beta {
+                    if let Some(m) = best_move {
+                        if !board.piece_on(m.get_dest()).is_some() {
+                            self.add_killer_move(depth as usize, m);
+                        }
+                    }
+
                     break;
                 }
             }
@@ -230,6 +251,12 @@ impl MinimaxEngine {
 
                 beta = beta.min(best_value);
                 if beta <= alpha {
+                    if let Some(m) = best_move {
+                        if !board.piece_on(m.get_dest()).is_some() {
+                            self.add_killer_move(depth as usize, m);
+                        }
+                    }
+
                     break;
                 }
             }
@@ -357,6 +384,16 @@ impl MinimaxEngine {
             }
         } else {
             self.tt.insert(board_hash, entry);
+        }
+    }
+
+    fn add_killer_move(&mut self, depth: usize, m: ChessMove) {
+        let killers = &mut self.killer_moves[depth];
+        if killers[0] != Some(m) {
+            if killers[1] != Some(m) {
+                killers[1] = killers[0];
+                killers[0] = Some(m);
+            }
         }
     }
 
