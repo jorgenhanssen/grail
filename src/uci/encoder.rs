@@ -1,3 +1,5 @@
+use crate::uci::commands::Score;
+
 use super::commands::UciOutput;
 
 pub struct Encoder {}
@@ -22,9 +24,12 @@ impl Encoder {
             }
             UciOutput::Info(info) => {
                 format!(
-                    "info depth {} multipv 1 score cp {} nodes {} nps {} time {} pv {}",
+                    "info depth {} multipv 1 score {} nodes {} nps {} time {} pv {}",
                     info.depth,
-                    info.score,
+                    match info.score {
+                        Score::Centipawns(cp) => format!("cp {}", cp),
+                        Score::Mate(moves) => format!("mate {}", moves),
+                    },
                     info.nodes,
                     info.nodes_per_second,
                     info.time,

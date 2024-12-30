@@ -1,5 +1,8 @@
 use crate::engine::Engine;
-use crate::utils::{get_ordered_moves, CAPTURE_SCORE, PROMOTION_SCORE};
+use crate::uci::commands::Score;
+use crate::utils::{
+    get_ordered_moves, piece_value, CAPTURE_SCORE, CHECKMATE_SCORE, PROMOTION_SCORE,
+};
 use crate::{
     uci::{
         commands::{GoParams, Info},
@@ -40,6 +43,8 @@ impl Engine for MinimaxEngine {
     }
 
     fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> ChessMove {
+        self.tt.clear();
+
         let search_time = params.move_time.unwrap_or(10_000);
         let start_time = std::time::Instant::now();
 
@@ -90,6 +95,8 @@ impl Engine for MinimaxEngine {
                 }
             }
 
+            let is_forced_checkmate = best_score.abs() >= CHECKMATE_SCORE;
+
             let elapsed = start_time.elapsed();
             let nps = (self.nodes as f32 / elapsed.as_secs_f32()) as u32;
 
@@ -99,13 +106,21 @@ impl Engine for MinimaxEngine {
                     nodes: self.nodes,
                     nodes_per_second: nps,
                     time: elapsed.as_millis() as u32,
+                    score: if is_forced_checkmate {
+                        self.convert_mate_score(best_score, &best_line)
+                    } else {
+                        self.convert_centipawn_score(best_score)
+                    },
                     line: best_line,
-                    score: best_score as i32,
                 }))
                 .unwrap();
 
             best_move = Some(current_best_move);
             current_depth += 1;
+
+            if is_forced_checkmate {
+                break;
+            }
         }
 
         best_move.unwrap()
@@ -124,9 +139,9 @@ impl MinimaxEngine {
             BoardStatus::Checkmate => {
                 self.nodes += 1;
                 if board.side_to_move() == chess::Color::White {
-                    return (-10_000.0 * (depth as f32 + 1.0), Vec::new());
+                    return (-CHECKMATE_SCORE * (depth as f32 + 1.0), Vec::new());
                 } else {
-                    return (10_000.0 * (depth as f32 + 1.0), Vec::new());
+                    return (CHECKMATE_SCORE * (depth as f32 + 1.0), Vec::new());
                 }
             }
             BoardStatus::Stalemate => {
@@ -259,7 +274,7 @@ impl MinimaxEngine {
 
                 // We also want to search capture moves if they are good enough
                 if score >= CAPTURE_SCORE {
-                    return see_naive(board, mv) >= 0;
+                    return see_naive(board, mv) >= 0.0;
                 }
 
                 false
@@ -348,9 +363,28 @@ impl MinimaxEngine {
             self.tt.put(board_hash, entry);
         }
     }
+
+    fn convert_mate_score(&self, score: f32, line: &Vec<ChessMove>) -> Score {
+        let is_winning = (score > 0.0) == (self.board.side_to_move() == chess::Color::White);
+        let mate_in = if is_winning {
+            line.len() as i32
+        } else {
+            -(line.len() as i32)
+        };
+        Score::Mate(mate_in)
+    }
+
+    fn convert_centipawn_score(&self, score: f32) -> Score {
+        let cp_score = if self.board.side_to_move() == chess::Color::White {
+            score as i32
+        } else {
+            -(score as i32)
+        };
+        Score::Centipawns(cp_score)
+    }
 }
 
-fn see_naive(board: &Board, capture_move: ChessMove) -> i32 {
+fn see_naive(board: &Board, capture_move: ChessMove) -> f32 {
     // 1. Identify the piece being captured:
     let captured_piece = board.piece_on(capture_move.get_dest());
     // 2. Identify the piece doing the capturing:
@@ -358,7 +392,7 @@ fn see_naive(board: &Board, capture_move: ChessMove) -> i32 {
 
     // Should never happen, but just in case
     if captured_piece.is_none() || capturing_piece.is_none() {
-        return 0;
+        return 0.0;
     }
 
     let captured_val = piece_value(captured_piece.unwrap());
@@ -371,17 +405,4 @@ fn see_naive(board: &Board, capture_move: ChessMove) -> i32 {
     let naive_exchange_score = captured_val - capturing_val;
 
     naive_exchange_score
-}
-
-// A simple piece-value lookup
-#[inline(always)]
-fn piece_value(piece: chess::Piece) -> i32 {
-    match piece {
-        chess::Piece::Pawn => 1,
-        chess::Piece::Knight => 3,
-        chess::Piece::Bishop => 3,
-        chess::Piece::Rook => 5,
-        chess::Piece::Queen => 9,
-        chess::Piece::King => 100, // Will in practice never be used
-    }
 }

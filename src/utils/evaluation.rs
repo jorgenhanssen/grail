@@ -1,4 +1,7 @@
-use chess::{BitBoard, Board, BoardStatus, Color, MoveGen, Piece};
+use crate::utils::values::{BISHOP_VALUE, KNIGHT_VALUE, PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE};
+use chess::{Board, BoardStatus, Color, MoveGen, Piece};
+
+use super::{get_pst, sum_pst, CHECKMATE_SCORE};
 
 // Return final evaluation (positive = good for White, negative = good for Black)
 pub fn evaluate_board(board: &Board) -> f32 {
@@ -6,9 +9,9 @@ pub fn evaluate_board(board: &Board) -> f32 {
         BoardStatus::Checkmate => {
             // If it’s White to move and board is checkmated => White lost
             if board.side_to_move() == chess::Color::White {
-                return -10_000.0;
+                return -CHECKMATE_SCORE;
             } else {
-                return 10_000.0;
+                return CHECKMATE_SCORE;
             }
         }
         BoardStatus::Stalemate => return 0.0,
@@ -50,181 +53,30 @@ fn evaluate_material(board: &Board, color: Color) -> f32 {
         + ROOK_VALUE * num_rooks as f32
         + QUEEN_VALUE * num_queens as f32;
 
-    let pst = get_pst_refs(color);
-    let mut psq_value = 0.0;
+    let pst = get_pst(color);
+    let mut pst_value = 0.0;
     if num_pawns > 0 {
-        psq_value += sum_psq(pawn_mask, pst.pawn);
+        pst_value += sum_pst(pawn_mask, pst.pawn);
     }
     if num_knights > 0 {
-        psq_value += sum_psq(knight_mask, pst.knight);
+        pst_value += sum_pst(knight_mask, pst.knight);
     }
     if num_bishops > 0 {
-        psq_value += sum_psq(bishop_mask, pst.bishop);
+        pst_value += sum_pst(bishop_mask, pst.bishop);
     }
     if num_rooks > 0 {
-        psq_value += sum_psq(rook_mask, pst.rook);
+        pst_value += sum_pst(rook_mask, pst.rook);
     }
     if num_queens > 0 {
-        psq_value += sum_psq(queen_mask, pst.queen);
+        pst_value += sum_pst(queen_mask, pst.queen);
     }
-    psq_value += sum_psq(king_mask, pst.king);
+    pst_value += sum_pst(king_mask, pst.king);
 
     // bonus for bishop pair
-    let bishop_pair_bonus = if num_bishops >= 2 {
-        BISHOP_PAIR_BONUS
-    } else {
-        0.0
-    };
+    let bishop_pair_bonus = if num_bishops >= 2 { 50.0 } else { 0.0 };
 
-    return piece_value + psq_value + bishop_pair_bonus;
+    return piece_value + pst_value + bishop_pair_bonus;
 }
-
-#[inline(always)]
-fn sum_psq(bitboard: BitBoard, table: &[f32; 64]) -> f32 {
-    let mut total = 0.0;
-    for sq in bitboard {
-        total += table[sq.to_index()];
-    }
-    total
-}
-
-const PAWN_VALUE: f32 = 100.0;
-const KNIGHT_VALUE: f32 = 320.0;
-const BISHOP_VALUE: f32 = 330.0;
-const ROOK_VALUE: f32 = 500.0;
-const QUEEN_VALUE: f32 = 900.0;
-const BISHOP_PAIR_BONUS: f32 = 50.0;
-
-struct PSTRefs<'a> {
-    pawn: &'a [f32; 64],
-    knight: &'a [f32; 64],
-    bishop: &'a [f32; 64],
-    rook: &'a [f32; 64],
-    queen: &'a [f32; 64],
-    king: &'a [f32; 64],
-}
-
-fn get_pst_refs(color: Color) -> PSTRefs<'static> {
-    match color {
-        Color::White => PSTRefs {
-            pawn: &WHITE_PAWN_PST,
-            knight: &WHITE_KNIGHT_PST,
-            bishop: &WHITE_BISHOP_PST,
-            rook: &WHITE_ROOK_PST,
-            queen: &WHITE_QUEEN_PST,
-            king: &WHITE_KING_PST,
-        },
-        Color::Black => PSTRefs {
-            pawn: &BLACK_PAWN_PST,
-            knight: &BLACK_KNIGHT_PST,
-            bishop: &BLACK_BISHOP_PST,
-            rook: &BLACK_ROOK_PST,
-            queen: &BLACK_QUEEN_PST,
-            king: &BLACK_KING_PST,
-        },
-    }
-}
-
-const WHITE_PAWN_PST: [f32; 64] = [
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 1.0, 1.0, 2.0,
-    3.0, 3.0, 2.0, 1.0, 1.0, 0.5, 0.5, 1.0, 2.5, 2.5, 1.0, 0.5, 0.5, 0.0, 0.0, 0.0, 2.0, 2.0, 0.0,
-    0.0, 0.0, 0.5, -0.5, -1.0, 0.0, 0.0, -1.0, -0.5, 0.5, 0.5, 1.0, 1.0, -2.0, -2.0, 1.0, 1.0, 0.5,
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-];
-
-const BLACK_PAWN_PST: [f32; 64] = {
-    let mut table = [0.0; 64];
-    let mut i = 0;
-    while i < 64 {
-        table[i] = -WHITE_PAWN_PST[63 - i];
-        i += 1;
-    }
-    table
-};
-
-const WHITE_KNIGHT_PST: [f32; 64] = [
-    -5.0, -14.0, -2.0, -2.0, -2.0, -2.0, -14.0, -5.0, -4.0, -2.0, 0.0, 0.5, 0.5, 0.0, -2.0, -4.0,
-    -2.0, 0.5, 1.0, 1.0, 1.0, 1.0, 0.5, -2.0, -2.0, 0.0, 1.0, 2.0, 2.0, 1.0, 0.0, -2.0, -2.0, 0.0,
-    1.0, 2.0, 2.0, 1.0, 0.0, -2.0, -2.0, 0.5, 1.0, 1.0, 1.0, 1.0, 0.5, -2.0, -4.0, -2.0, 0.0, 0.5,
-    0.5, 0.0, -2.0, -4.0, -5.0, -4.0, -2.0, -2.0, -2.0, -2.0, -4.0, -5.0,
-];
-
-const BLACK_KNIGHT_PST: [f32; 64] = {
-    let mut table = [0.0; 64];
-    let mut i = 0;
-    while i < 64 {
-        table[i] = -WHITE_KNIGHT_PST[63 - i];
-        i += 1;
-    }
-    table
-};
-
-const WHITE_BISHOP_PST: [f32; 64] = [
-    -2.0, -1.0, -11.0, -1.0, -1.0, -11.0, -1.0, -2.0, -1.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5, -1.0,
-    -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, -1.0, -1.0, 0.5,
-    0.5, 1.0, 1.0, 0.5, 0.5, -1.0, -1.0, 0.0, 0.5, 1.0, 1.0, 0.5, 0.0, -1.0, -1.0, 0.0, 0.0, 0.0,
-    0.0, 0.0, -1.0, -2.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -2.0,
-];
-const BLACK_BISHOP_PST: [f32; 64] = {
-    let mut table = [0.0; 64];
-    let mut i = 0;
-    while i < 64 {
-        table[i] = -WHITE_BISHOP_PST[63 - i];
-        i += 1;
-    }
-    table
-};
-
-const WHITE_ROOK_PST: [f32; 64] = [
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.5, -0.5, 0.0, 0.0,
-    0.0, 0.0, 0.0, 0.0, -0.5, -0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.5, -0.5, 0.0, 0.0, 0.0, 0.0,
-    0.0, 0.0, -0.5, -0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.5, -0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-    -0.5, 0.0, 0.0, 0.0, 0.5, 0.5, 0.0, 0.0, 0.0,
-];
-
-const BLACK_ROOK_PST: [f32; 64] = {
-    let mut table = [0.0; 64];
-    let mut i = 0;
-    while i < 64 {
-        table[i] = -WHITE_ROOK_PST[63 - i];
-        i += 1;
-    }
-    table
-};
-
-const WHITE_QUEEN_PST: [f32; 64] = [
-    -2.0, -1.0, -1.0, -0.5, -0.5, -1.0, -1.0, -2.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, -1.0,
-    0.5, 0.5, 0.5, 0.5, 0.5, 0.0, -1.0, -0.5, 0.0, 0.5, 0.5, 0.5, 0.5, 0.0, -0.5, -0.5, 0.0, 0.5,
-    0.5, 0.5, 0.5, 0.0, -0.5, -1.0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0, -1.0, -1.0, 0.0, 0.0, 0.0, 0.0,
-    0.0, 0.0, -1.0, -2.0, -1.0, -1.0, -0.5, -0.5, -1.0, -1.0, -2.0,
-];
-
-const BLACK_QUEEN_PST: [f32; 64] = {
-    let mut table = [0.0; 64];
-    let mut i = 0;
-    while i < 64 {
-        table[i] = -WHITE_QUEEN_PST[63 - i];
-        i += 1;
-    }
-    table
-};
-
-const WHITE_KING_PST: [f32; 64] = [
-    -3.0, -4.0, -4.0, -5.0, -5.0, -4.0, -4.0, -3.0, -3.0, -4.0, -4.0, -5.0, -5.0, -4.0, -4.0, -3.0,
-    -3.0, -4.0, -4.0, -5.0, -5.0, -4.0, -4.0, -3.0, -3.0, -4.0, -4.0, -5.0, -5.0, -4.0, -4.0, -3.0,
-    -2.0, -3.0, -3.0, -4.0, -4.0, -3.0, -3.0, -2.0, -1.0, -2.0, -2.0, -2.0, -2.0, -2.0, -2.0, -1.0,
-    2.0, 2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0, 3.0, 1.0, 0.0, 0.0, 1.0, 3.0, 2.0,
-];
-
-const BLACK_KING_PST: [f32; 64] = {
-    let mut table = [0.0; 64];
-    let mut i = 0;
-    while i < 64 {
-        table[i] = -WHITE_KING_PST[63 - i];
-        i += 1;
-    }
-    table
-};
 
 fn count_mobility(board: &Board, color: Color) -> usize {
     if board.side_to_move() == color {

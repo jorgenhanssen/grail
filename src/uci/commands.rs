@@ -39,7 +39,13 @@ pub struct Info {
     pub nodes_per_second: u32,
     pub time: u32,
     pub line: Vec<ChessMove>,
-    pub score: i32, // centipawns
+    pub score: Score,
+}
+
+#[derive(Debug)]
+pub enum Score {
+    Centipawns(i32), // centipawns
+    Mate(i32),       // Positive for mate-in-n, negative for mated-in-n
 }
 
 #[derive(Debug)]
