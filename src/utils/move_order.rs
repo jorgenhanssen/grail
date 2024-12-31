@@ -1,15 +1,29 @@
 use chess::{Board, ChessMove, MoveGen, Piece};
 
-pub fn get_ordered_moves(board: &Board) -> Vec<(ChessMove, i32)> {
-    let movegen = MoveGen::new_legal(board);
-    let mut moves_with_scores = Vec::with_capacity(movegen.len());
+pub fn get_ordered_moves(
+    board: &Board,
+    preferred_moves: Option<&[ChessMove]>,
+) -> Vec<(ChessMove, i32)> {
+    let legal_moves = MoveGen::new_legal(board);
+    let mut scored_moves = Vec::with_capacity(legal_moves.len());
 
-    for m in movegen {
-        moves_with_scores.push((m, -score(m, board)));
+    if let Some(prioritized_moves) = preferred_moves {
+        for m in legal_moves {
+            if prioritized_moves.contains(&m) {
+                scored_moves.push((m, i32::MAX));
+            } else {
+                scored_moves.push((m, score(m, board)));
+            }
+        }
+    } else {
+        for m in legal_moves {
+            scored_moves.push((m, score(m, board)));
+        }
     }
 
-    moves_with_scores.sort_unstable_by_key(|&(_, score)| score);
-    moves_with_scores
+    // Sort moves by score in descending order
+    scored_moves.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+    scored_moves
 }
 
 pub const PROMOTION_SCORE: i32 = 10000;

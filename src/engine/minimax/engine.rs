@@ -37,7 +37,6 @@ impl Default for MinimaxEngine {
 impl Engine for MinimaxEngine {
     fn set_position(&mut self, board: Board) {
         self.board = board;
-        self.killer_moves.clear();
     }
 
     fn stop(&mut self) {
@@ -58,7 +57,7 @@ impl Engine for MinimaxEngine {
         while start_time.elapsed().as_millis() < search_time as u128 {
             let mut alpha = f32::NEG_INFINITY;
             let mut beta = f32::INFINITY;
-            let moves_with_scores = get_ordered_moves(&self.board);
+            let moves_with_scores = get_ordered_moves(&self.board, None);
 
             let maximizing = self.board.side_to_move() == chess::Color::White;
             let mut best_score = if maximizing {
@@ -184,28 +183,23 @@ impl MinimaxEngine {
             }
         }
 
-        let mut preferred_moves = Vec::new();
+        let mut preferred_moves = Vec::with_capacity(3);
         if maybe_tt_move.is_some() {
             preferred_moves.push(maybe_tt_move.unwrap());
         }
 
         // Add killer moves for this specific depth if they are legal
-        for killer_move in self.killer_moves[depth as usize].iter().flatten() {
-            if board.legal(*killer_move) && !preferred_moves.contains(killer_move) {
-                preferred_moves.push(*killer_move);
+        for &killer_move_opt in &self.killer_moves[depth as usize] {
+            if let Some(killer_move) = killer_move_opt {
+                // don't need to check if legal, it will be used as mask for legal moves.
+                if !preferred_moves.contains(&killer_move) {
+                    preferred_moves.push(killer_move);
+                }
             }
         }
 
         // Proceed with normal alpha-beta:
-        let mut moves = get_ordered_moves(board);
-
-        // let's move any preferred moves to the front
-        for preferred_move in preferred_moves {
-            if let Some(pos) = moves.iter().position(|m| m.0 == preferred_move) {
-                moves.remove(pos);
-                moves.insert(0, (preferred_move, 0));
-            }
-        }
+        let moves = get_ordered_moves(board, Some(&preferred_moves));
 
         let mut best_line = Vec::new();
 
@@ -285,7 +279,7 @@ impl MinimaxEngine {
             alpha = stand_pat;
         }
 
-        let moves = get_ordered_moves(board);
+        let moves = get_ordered_moves(board, None);
 
         let moves_to_search: Vec<(ChessMove, i32)> = moves
             .into_iter()
@@ -390,10 +384,8 @@ impl MinimaxEngine {
     fn add_killer_move(&mut self, depth: usize, m: ChessMove) {
         let killers = &mut self.killer_moves[depth];
         if killers[0] != Some(m) {
-            if killers[1] != Some(m) {
-                killers[1] = killers[0];
-                killers[0] = Some(m);
-            }
+            killers[1] = killers[0];
+            killers[0] = Some(m);
         }
     }
 
