@@ -21,6 +21,7 @@ pub struct MinimaxEngine {
     nodes: u32,
     tt: AHashMap<u64, TTEntry>,
     killer_moves: Vec<[Option<ChessMove>; 2]>, // 2 per depth
+    search_depth: u32,
 }
 
 impl Default for MinimaxEngine {
@@ -30,6 +31,7 @@ impl Default for MinimaxEngine {
             nodes: 0,
             tt: AHashMap::with_capacity(64_000_000),
             killer_moves: vec![[None; 2]; 100], // 100 is a good depth
+            search_depth: 1,
         }
     }
 }
@@ -47,11 +49,11 @@ impl Engine for MinimaxEngine {
         self.tt.clear();
         self.killer_moves = vec![[None; 2]; 100];
         self.nodes = 0;
+        self.search_depth = 1;
 
         let search_time = params.move_time.unwrap_or(10_000);
         let start_time = std::time::Instant::now();
 
-        let mut current_depth: u8 = 1;
         let mut best_move = None;
 
         while start_time.elapsed().as_millis() < search_time as u128 {
@@ -70,7 +72,7 @@ impl Engine for MinimaxEngine {
 
             for (m, _) in moves_with_scores {
                 let new_board = self.board.make_move_new(m);
-                let (score, mut line) = self.alpha_beta(&new_board, current_depth - 1, alpha, beta);
+                let (score, mut line) = self.alpha_beta(&new_board, 1, alpha, beta);
                 line.insert(0, m); // Add current move to the beginning of the line
 
                 if maximizing {
@@ -103,7 +105,7 @@ impl Engine for MinimaxEngine {
 
             output
                 .send(UciOutput::Info(Info {
-                    depth: current_depth,
+                    depth: self.search_depth,
                     nodes: self.nodes,
                     nodes_per_second: nps,
                     time: elapsed.as_millis() as u32,
@@ -117,7 +119,7 @@ impl Engine for MinimaxEngine {
                 .unwrap();
 
             best_move = Some(current_best_move);
-            current_depth += 1;
+            self.search_depth += 1;
 
             if is_forced_checkmate {
                 break;
@@ -132,7 +134,7 @@ impl MinimaxEngine {
     fn alpha_beta(
         &mut self,
         board: &Board,
-        depth: u8,
+        depth: u32,
         mut alpha: f32,
         mut beta: f32,
     ) -> (f32, Vec<ChessMove>) {
@@ -152,7 +154,7 @@ impl MinimaxEngine {
             BoardStatus::Ongoing => {}
         }
 
-        if depth == 0 {
+        if depth >= self.search_depth {
             return self.quiescence_search(board, alpha, beta);
         }
 
@@ -208,7 +210,7 @@ impl MinimaxEngine {
             let mut best_move = None;
             for (m, _) in moves {
                 let new_board = board.make_move_new(m);
-                let (value, mut line) = self.alpha_beta(&new_board, depth - 1, alpha, beta);
+                let (value, mut line) = self.alpha_beta(&new_board, depth + 1, alpha, beta);
                 if value > best_value {
                     best_value = value;
                     best_move = Some(m);
@@ -235,7 +237,7 @@ impl MinimaxEngine {
             let mut best_move = None;
             for (m, _) in moves {
                 let new_board = board.make_move_new(m);
-                let (value, mut line) = self.alpha_beta(&new_board, depth - 1, alpha, beta);
+                let (value, mut line) = self.alpha_beta(&new_board, depth + 1, alpha, beta);
                 if value < best_value {
                     best_value = value;
                     best_move = Some(m);
@@ -336,11 +338,12 @@ impl MinimaxEngine {
         (best_eval, best_line)
     }
 
-    fn probe_tt(&mut self, board: &Board, depth: u8) -> Option<(f32, Bound, Option<ChessMove>)> {
+    fn probe_tt(&mut self, board: &Board, depth: u32) -> Option<(f32, Bound, Option<ChessMove>)> {
         let board_hash = board.get_hash();
+        let plies = self.search_depth - depth;
+
         if let Some(entry) = self.tt.get(&board_hash) {
-            // If the stored depth is sufficient, we can do bounding.
-            if entry.depth >= depth {
+            if entry.plies >= plies {
                 return Some((entry.value, entry.bound, entry.best_move));
             }
         }
@@ -350,12 +353,14 @@ impl MinimaxEngine {
     fn store_tt(
         &mut self,
         board: &Board,
-        depth: u8,
+        depth: u32,
         value: f32,
         alpha: f32,
         beta: f32,
         best_move: Option<ChessMove>,
     ) {
+        let plies = self.search_depth - depth;
+
         let bound = if value <= alpha {
             Bound::Upper
         } else if value >= beta {
@@ -366,14 +371,14 @@ impl MinimaxEngine {
 
         let board_hash = board.get_hash();
         let entry = TTEntry {
-            depth,
+            plies,
             value,
             bound,
             best_move,
         };
 
         if let Some(old_entry) = self.tt.get(&board_hash) {
-            if old_entry.depth <= depth {
+            if old_entry.plies <= plies {
                 self.tt.insert(board_hash, entry);
             }
         } else {
