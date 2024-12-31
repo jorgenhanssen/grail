@@ -183,17 +183,17 @@ impl MinimaxEngine {
             }
         }
 
-        let mut preferred_moves = Vec::with_capacity(3);
+        let mut preferred_moves = AHashMap::with_capacity(3);
         if maybe_tt_move.is_some() {
-            preferred_moves.push(maybe_tt_move.unwrap());
+            preferred_moves.insert(maybe_tt_move.unwrap(), i32::MAX);
         }
 
         // Add killer moves for this specific depth if they are legal
         for &killer_move_opt in &self.killer_moves[depth as usize] {
             if let Some(killer_move) = killer_move_opt {
                 // don't need to check if legal, it will be used as mask for legal moves.
-                if !preferred_moves.contains(&killer_move) {
-                    preferred_moves.push(killer_move);
+                if !preferred_moves.contains_key(&killer_move) {
+                    preferred_moves.insert(killer_move, CAPTURE_SCORE - 1);
                 }
             }
         }
