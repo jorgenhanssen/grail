@@ -22,6 +22,7 @@ pub struct MinimaxEngine {
     tt: AHashMap<u64, TTEntry>,
     killer_moves: Vec<[Option<ChessMove>; 2]>, // 2 per depth
     search_depth: u32,
+    current_pv: Vec<ChessMove>,
 }
 
 impl Default for MinimaxEngine {
@@ -32,6 +33,7 @@ impl Default for MinimaxEngine {
             tt: AHashMap::with_capacity(64_000_000),
             killer_moves: vec![[None; 2]; 100], // 100 is a good depth
             search_depth: 1,
+            current_pv: Vec::new(),
         }
     }
 }
@@ -50,6 +52,7 @@ impl Engine for MinimaxEngine {
         self.killer_moves = vec![[None; 2]; 100];
         self.nodes = 0;
         self.search_depth = 1;
+        self.current_pv.clear();
 
         let search_time = params.move_time.unwrap_or(10_000);
         let start_time = std::time::Instant::now();
@@ -59,7 +62,13 @@ impl Engine for MinimaxEngine {
         while start_time.elapsed().as_millis() < search_time as u128 {
             let mut alpha = f32::NEG_INFINITY;
             let mut beta = f32::INFINITY;
-            let moves_with_scores = get_ordered_moves(&self.board, None);
+
+            let mut preferred_moves = AHashMap::with_capacity(1);
+            let best_first_move = self.current_pv.first();
+            if let Some(move_) = best_first_move {
+                preferred_moves.insert(move_.clone(), i32::MAX);
+            }
+            let moves_with_scores = get_ordered_moves(&self.board, Some(&preferred_moves));
 
             let maximizing = self.board.side_to_move() == chess::Color::White;
             let mut best_score = if maximizing {
@@ -103,6 +112,10 @@ impl Engine for MinimaxEngine {
             let elapsed = start_time.elapsed();
             let nps = (self.nodes as f32 / elapsed.as_secs_f32()) as u32;
 
+            best_move = Some(current_best_move);
+            self.current_pv = pv.clone();
+            self.search_depth += 1;
+
             output
                 .send(UciOutput::Info(Info {
                     depth: self.search_depth,
@@ -117,9 +130,6 @@ impl Engine for MinimaxEngine {
                     pv,
                 }))
                 .unwrap();
-
-            best_move = Some(current_best_move);
-            self.search_depth += 1;
 
             if is_forced_checkmate {
                 break;
@@ -186,18 +196,23 @@ impl MinimaxEngine {
         }
 
         let mut preferred_moves = AHashMap::with_capacity(3);
-        if maybe_tt_move.is_some() {
-            preferred_moves.insert(maybe_tt_move.unwrap(), i32::MAX);
-        }
 
         // Add killer moves for this specific depth if they are legal
         for &killer_move_opt in &self.killer_moves[depth as usize] {
             if let Some(killer_move) = killer_move_opt {
                 // don't need to check if legal, it will be used as mask for legal moves.
                 if !preferred_moves.contains_key(&killer_move) {
-                    preferred_moves.insert(killer_move, CAPTURE_SCORE - 1);
+                    preferred_moves.insert(killer_move, CAPTURE_SCORE - 2);
                 }
             }
+        }
+
+        if maybe_tt_move.is_some() {
+            preferred_moves.insert(maybe_tt_move.unwrap(), CAPTURE_SCORE - 1);
+        }
+
+        if let Some(&move_) = self.current_pv.get(depth as usize) {
+            preferred_moves.insert(move_, i32::MAX);
         }
 
         // Proceed with normal alpha-beta:
