@@ -433,9 +433,7 @@ fn see_naive(board: &Board, capture_move: ChessMove) -> f32 {
         board.piece_on(capture_move.get_dest()),
         board.piece_on(capture_move.get_source()),
     ) {
-        let captured_val = piece_value(captured_piece);
-        let capturing_val = piece_value(capturing_piece);
-        captured_val - capturing_val
+        piece_value(captured_piece) - piece_value(capturing_piece)
     } else {
         0.0
     }
