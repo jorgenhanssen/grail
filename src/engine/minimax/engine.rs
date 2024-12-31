@@ -77,25 +77,24 @@ impl Engine for MinimaxEngine {
                 f32::INFINITY
             };
             let mut current_best_move = moves_with_scores[0].0;
-            let mut pv = Vec::new();
 
             for (m, _) in moves_with_scores {
                 let new_board = self.board.make_move_new(m);
-                let (score, mut line) = self.alpha_beta(&new_board, 1, alpha, beta);
-                line.insert(0, m); // Add current move to the beginning of the line
+                let (score, mut pv) = self.alpha_beta(&new_board, 1, alpha, beta);
+                pv.insert(0, m); // Add current move to the beginning of the line
 
                 if maximizing {
                     if score > best_score {
                         best_score = score;
                         current_best_move = m;
-                        pv = line;
+                        self.current_pv = pv;
                     }
                     alpha = alpha.max(best_score);
                 } else {
                     if score < best_score {
                         best_score = score;
                         current_best_move = m;
-                        pv = line;
+                        self.current_pv = pv;
                     }
                     beta = beta.min(best_score);
                 }
@@ -113,7 +112,6 @@ impl Engine for MinimaxEngine {
             let nps = (self.nodes as f32 / elapsed.as_secs_f32()) as u32;
 
             best_move = Some(current_best_move);
-            self.current_pv = pv.clone();
             self.search_depth += 1;
 
             output
@@ -123,11 +121,11 @@ impl Engine for MinimaxEngine {
                     nodes_per_second: nps,
                     time: elapsed.as_millis() as u32,
                     score: if is_forced_checkmate {
-                        self.convert_mate_score(best_score, &pv)
+                        self.convert_mate_score(best_score, &self.current_pv)
                     } else {
                         self.convert_centipawn_score(best_score)
                     },
-                    pv,
+                    pv: self.current_pv.clone(),
                 }))
                 .unwrap();
 
