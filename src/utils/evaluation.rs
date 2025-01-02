@@ -150,13 +150,13 @@ fn evaluate_king_safety(board: &Board, color: Color) -> f32 {
     let enemy_pawns = enemy_pieces & board.pieces(Piece::Pawn) & king_zone;
 
     // Apply different penalties based on piece type
-    score -= (enemy_queens.popcnt() as f32) * piece_value(Piece::Queen) * 0.1;
-    score -= (enemy_rooks.popcnt() as f32) * piece_value(Piece::Rook) * 0.1;
-    score -= (enemy_bishops.popcnt() as f32) * piece_value(Piece::Bishop) * 0.1;
-    score -= (enemy_knights.popcnt() as f32) * piece_value(Piece::Knight) * 0.1;
-    score -= (enemy_pawns.popcnt() as f32) * piece_value(Piece::Pawn) * 0.1;
+    score -= (enemy_queens.popcnt() as f32) * piece_value(Piece::Queen);
+    score -= (enemy_rooks.popcnt() as f32) * piece_value(Piece::Rook);
+    score -= (enemy_bishops.popcnt() as f32) * piece_value(Piece::Bishop);
+    score -= (enemy_knights.popcnt() as f32) * piece_value(Piece::Knight);
+    score -= (enemy_pawns.popcnt() as f32) * piece_value(Piece::Pawn);
 
-    score
+    score * 0.2
 }
 
 const KING_ZONE_RADIUS: i8 = 2;
