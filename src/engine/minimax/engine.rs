@@ -203,7 +203,18 @@ impl MinimaxEngine {
 
         let mut preferred_moves = AHashMap::with_capacity(3);
 
+        // First priority is the current PV move
+        if let Some(&move_) = self.current_pv.get(depth as usize) {
+            preferred_moves.insert(move_, i32::MAX);
+        }
+
+        // Then any hash move from the tt
+        if maybe_tt_move.is_some() {
+            preferred_moves.insert(maybe_tt_move.unwrap(), i32::MAX - 1);
+        }
+
         // Add killer moves for this specific depth if they are legal
+        // But these are not as good as capture moves!
         for &killer_move_opt in &self.killer_moves[depth as usize] {
             if let Some(killer_move) = killer_move_opt {
                 // don't need to check if legal, it will be used as mask for legal moves.
@@ -211,14 +222,6 @@ impl MinimaxEngine {
                     preferred_moves.insert(killer_move, CAPTURE_SCORE - 2);
                 }
             }
-        }
-
-        if maybe_tt_move.is_some() {
-            preferred_moves.insert(maybe_tt_move.unwrap(), CAPTURE_SCORE - 1);
-        }
-
-        if let Some(&move_) = self.current_pv.get(depth as usize) {
-            preferred_moves.insert(move_, i32::MAX);
         }
 
         // Proceed with normal alpha-beta:
