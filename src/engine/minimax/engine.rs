@@ -174,6 +174,10 @@ impl MinimaxEngine {
             return self.quiescence_search(board, alpha, beta, depth);
         }
 
+        if let Some(score) = self.try_null_move_pruning(board, depth, beta) {
+            return (score, Vec::new());
+        }
+
         let mut maybe_tt_move = None;
         if let Some((tt_value, tt_bound, tt_move)) = self.probe_tt(board, depth) {
             maybe_tt_move = tt_move; // Store the move for later use
@@ -372,6 +376,29 @@ impl MinimaxEngine {
     }
 
     #[inline]
+    fn try_null_move_pruning(&mut self, board: &Board, depth: u32, beta: f32) -> Option<f32> {
+        let in_check = board.checkers().popcnt() > 0;
+        if depth >= 3 && !in_check && allow_null_move(board) {
+            if let Some(null_board) = board.null_move() {
+                let r = 3; // Null move reduction (R=3 is common)
+                let new_depth = depth + 1 + r;
+
+                if new_depth < self.search_depth {
+                    let (null_score, _) =
+                        self.alpha_beta(&null_board, new_depth, -beta, -beta + 1.0);
+                    let null_score = -null_score;
+
+                    if null_score >= beta {
+                        // Position is so good that even giving opponent a free move doesn't help
+                        return Some(beta);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    #[inline]
     fn probe_tt(&mut self, board: &Board, depth: u32) -> Option<(f32, Bound, Option<ChessMove>)> {
         let board_hash = board.get_hash();
         let plies = self.search_depth - depth;
@@ -459,4 +486,19 @@ fn see_naive(board: &Board, capture_move: ChessMove) -> f32 {
     } else {
         0.0
     }
+}
+
+// Helper function to determine if null move is allowed
+// Don't allow null move in endgame positions where zugzwang is likely
+#[inline]
+fn allow_null_move(board: &Board) -> bool {
+    let pieces = board.combined();
+    let non_pawn_material = (board.pieces(chess::Piece::Queen)
+        | board.pieces(chess::Piece::Rook)
+        | board.pieces(chess::Piece::Bishop)
+        | board.pieces(chess::Piece::Knight))
+    .popcnt()
+        > 3;
+
+    pieces.popcnt() > 10 && non_pawn_material
 }
