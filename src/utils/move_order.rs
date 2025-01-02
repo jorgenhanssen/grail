@@ -34,11 +34,6 @@ const PROMOTION_SCORE_BISHOP: i32 = PROMOTION_SCORE + 2;
 const PROMOTION_SCORE_KNIGHT: i32 = PROMOTION_SCORE + 1;
 
 pub const CAPTURE_SCORE: i32 = 1000;
-const CAPTURE_SCORE_QUEEN: i32 = CAPTURE_SCORE + 5;
-const CAPTURE_SCORE_ROOK: i32 = CAPTURE_SCORE + 4;
-const CAPTURE_SCORE_BISHOP: i32 = CAPTURE_SCORE + 3;
-const CAPTURE_SCORE_KNIGHT: i32 = CAPTURE_SCORE + 2;
-const CAPTURE_SCORE_PAWN: i32 = CAPTURE_SCORE + 1;
 
 pub const CHECK_SCORE: i32 = 100;
 
@@ -49,6 +44,29 @@ const PIECE_SCORE_BISHOP: i32 = PIECE_SCORE + 4;
 const PIECE_SCORE_KNIGHT: i32 = PIECE_SCORE + 3;
 const PIECE_SCORE_PAWN: i32 = PIECE_SCORE + 2;
 const PIECE_SCORE_KING: i32 = PIECE_SCORE + 1;
+
+// MVV-LVA table
+// king, queen, rook, bishop, knight, pawn
+const MVV_LVA: [[i32; 6]; 6] = [
+    [0, 0, 0, 0, 0, 0],       // victim King
+    [50, 51, 52, 53, 54, 55], // victim Queen
+    [40, 41, 42, 43, 44, 45], // victim Rook
+    [30, 31, 32, 33, 34, 35], // victim Bishop
+    [20, 21, 22, 23, 24, 25], // victim Knight
+    [10, 11, 12, 13, 14, 15], // victim Pawn
+];
+// Helper function to convert Piece to array index
+#[inline]
+fn mvva_lva_index(piece: Piece) -> usize {
+    match piece {
+        Piece::King => 0,
+        Piece::Queen => 1,
+        Piece::Rook => 2,
+        Piece::Bishop => 3,
+        Piece::Knight => 4,
+        Piece::Pawn => 5,
+    }
+}
 
 fn score(move_: ChessMove, board: &Board) -> i32 {
     // Check for promotions first
@@ -62,16 +80,11 @@ fn score(move_: ChessMove, board: &Board) -> i32 {
         };
     }
 
-    // Next look at captures
+    // Next look at captures (MVV-LVA)
     if let Some(victim) = board.piece_on(move_.get_dest()) {
-        return match victim {
-            Piece::Queen => CAPTURE_SCORE_QUEEN,
-            Piece::Rook => CAPTURE_SCORE_ROOK,
-            Piece::Bishop => CAPTURE_SCORE_BISHOP,
-            Piece::Knight => CAPTURE_SCORE_KNIGHT,
-            Piece::Pawn => CAPTURE_SCORE_PAWN,
-            _ => 0,
-        };
+        let attacker = board.piece_on(move_.get_source()).unwrap();
+        let mvva_lva_score = MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)];
+        return CAPTURE_SCORE + mvva_lva_score;
     }
 
     // Then look for checks
