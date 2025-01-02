@@ -35,6 +35,7 @@ pub enum UciOutput {
 #[derive(Debug)]
 pub struct Info {
     pub depth: u32,
+    pub sel_depth: u32,
     pub nodes: u32,
     pub nodes_per_second: u32,
     pub time: u32,

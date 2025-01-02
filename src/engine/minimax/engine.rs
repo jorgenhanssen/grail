@@ -1,7 +1,7 @@
 use crate::engine::Engine;
 use crate::uci::commands::Score;
 use crate::utils::{
-    get_ordered_moves, piece_value, CAPTURE_SCORE, CHECKMATE_SCORE, PROMOTION_SCORE,
+    get_ordered_moves, piece_value, CAPTURE_SCORE, CHECKMATE_SCORE, CHECK_SCORE, PROMOTION_SCORE,
 };
 use crate::{
     uci::{
@@ -19,10 +19,14 @@ use super::tt::{Bound, TTEntry};
 pub struct MinimaxEngine {
     board: Board,
     nodes: u32,
-    tt: AHashMap<u64, TTEntry>,
     killer_moves: Vec<[Option<ChessMove>; 2]>, // 2 per depth
-    search_depth: u32,
     current_pv: Vec<ChessMove>,
+
+    tt: AHashMap<u64, TTEntry>,
+    qs_tt: AHashMap<u64, f32>,
+
+    search_depth: u32,
+    max_depth_reached: u32,
 }
 
 impl Default for MinimaxEngine {
@@ -31,8 +35,10 @@ impl Default for MinimaxEngine {
             board: Board::default(),
             nodes: 0,
             tt: AHashMap::with_capacity(64_000_000),
+            qs_tt: AHashMap::with_capacity(128_000_000),
             killer_moves: vec![[None; 2]; 100], // 100 is a good depth
             search_depth: 1,
+            max_depth_reached: 1,
             current_pv: Vec::new(),
         }
     }
@@ -52,6 +58,7 @@ impl Engine for MinimaxEngine {
         self.killer_moves = vec![[None; 2]; 100];
         self.nodes = 0;
         self.search_depth = 1;
+        self.max_depth_reached = 1;
         self.current_pv.clear();
 
         let search_time = params.move_time.unwrap_or(10_000);
@@ -117,6 +124,7 @@ impl Engine for MinimaxEngine {
             output
                 .send(UciOutput::Info(Info {
                     depth: self.search_depth,
+                    sel_depth: self.max_depth_reached,
                     nodes: self.nodes,
                     nodes_per_second: nps,
                     time: elapsed.as_millis() as u32,
@@ -163,7 +171,7 @@ impl MinimaxEngine {
         }
 
         if depth >= self.search_depth {
-            return self.quiescence_search(board, alpha, beta);
+            return self.quiescence_search(board, alpha, beta, depth);
         }
 
         let mut maybe_tt_move = None;
@@ -280,17 +288,24 @@ impl MinimaxEngine {
         board: &Board,
         mut alpha: f32,
         mut beta: f32,
+        depth: u32,
     ) -> (f32, Vec<ChessMove>) {
         self.nodes += 1;
+        self.max_depth_reached = depth.max(self.max_depth_reached);
+
+        // Prune if visited in some other QS search
+        let board_hash = board.get_hash();
+        if let Some(&score) = self.qs_tt.get(&board_hash) {
+            return (score, Vec::new());
+        }
 
         // Evaluate the board right away
         let stand_pat = evaluate_board(board);
 
-        // If even our stand_pat is good enough to prune
         if stand_pat >= beta {
-            return (beta, Vec::new());
+            return (stand_pat, Vec::new());
         }
-        if stand_pat > alpha {
+        if alpha < stand_pat {
             alpha = stand_pat;
         }
 
@@ -299,8 +314,8 @@ impl MinimaxEngine {
         let moves_to_search: Vec<(ChessMove, i32)> = moves
             .into_iter()
             .filter(|&(mv, score)| {
-                // We definitely want to search promotion moves
-                if score >= PROMOTION_SCORE {
+                // We definitely want to search promotion moves and checks
+                if score >= PROMOTION_SCORE || score == CHECK_SCORE {
                     return true;
                 }
 
@@ -317,7 +332,8 @@ impl MinimaxEngine {
             return (stand_pat, Vec::new());
         }
 
-        let side_to_move = board.side_to_move();
+        let maximizing = board.side_to_move() == chess::Color::White;
+
         let mut best_line = Vec::new();
         let mut best_eval = stand_pat;
 
@@ -326,10 +342,10 @@ impl MinimaxEngine {
             let new_board = board.make_move_new(m);
 
             // Recursively call quiescence
-            let (score, mut line) = self.quiescence_search(&new_board, alpha, beta);
+            let (score, mut line) = self.quiescence_search(&new_board, alpha, beta, depth + 1);
             line.insert(0, m);
 
-            if side_to_move == chess::Color::White {
+            if maximizing {
                 if score > best_eval {
                     best_eval = score;
                     best_line = line;
@@ -348,9 +364,11 @@ impl MinimaxEngine {
             }
         }
 
+        self.qs_tt.insert(board_hash, best_eval);
         (best_eval, best_line)
     }
 
+    #[inline]
     fn probe_tt(&mut self, board: &Board, depth: u32) -> Option<(f32, Bound, Option<ChessMove>)> {
         let board_hash = board.get_hash();
         let plies = self.search_depth - depth;
@@ -399,6 +417,7 @@ impl MinimaxEngine {
         }
     }
 
+    #[inline]
     fn add_killer_move(&mut self, depth: usize, m: ChessMove) {
         let killers = &mut self.killer_moves[depth];
         if killers[0] != Some(m) {
@@ -410,9 +429,9 @@ impl MinimaxEngine {
     fn convert_mate_score(&self, score: f32, pv: &Vec<ChessMove>) -> Score {
         let is_winning = (score > 0.0) == (self.board.side_to_move() == chess::Color::White);
         let mate_in = if is_winning {
-            pv.len() as i32
+            pv.len() as i32 - 1
         } else {
-            -(pv.len() as i32)
+            -((pv.len() as i32) - 1)
         };
         Score::Mate(mate_in)
     }

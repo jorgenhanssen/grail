@@ -24,8 +24,9 @@ impl Encoder {
             }
             UciOutput::Info(info) => {
                 format!(
-                    "info depth {} multipv 1 score {} nodes {} nps {} time {} pv {}",
+                    "info depth {} seldepth {} multipv 1 score {} nodes {} nps {} time {} pv {}",
                     info.depth,
+                    info.sel_depth,
                     match info.score {
                         Score::Centipawns(cp) => format!("cp {}", cp),
                         Score::Mate(moves) => format!("mate {}", moves),
