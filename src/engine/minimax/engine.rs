@@ -19,7 +19,7 @@ use super::tt::{Bound, TTEntry};
 pub struct MinimaxEngine {
     board: Board,
     nodes: u32,
-    killer_moves: Vec<[Option<ChessMove>; 2]>, // 2 per depth
+    killer_moves: [[Option<ChessMove>; 2]; 100], // 2 per depth
     current_pv: Vec<ChessMove>,
 
     tt: AHashMap<u64, TTEntry>,
@@ -35,7 +35,7 @@ impl Default for MinimaxEngine {
             nodes: 0,
             tt: AHashMap::with_capacity(64_000_000),
             qs_tt: AHashMap::with_capacity(128_000_000),
-            killer_moves: vec![[None; 2]; 100], // 100 is a good depth
+            killer_moves: [[None; 2]; 100], // 100 is a good depth
             max_depth_reached: 1,
             current_pv: Vec::new(),
         }
@@ -53,7 +53,7 @@ impl Engine for MinimaxEngine {
 
     fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> ChessMove {
         self.tt.clear();
-        self.killer_moves = vec![[None; 2]; 100];
+        self.killer_moves = [[None; 2]; 100];
         self.nodes = 0;
         self.max_depth_reached = 1;
         self.current_pv.clear();
@@ -111,7 +111,7 @@ impl Engine for MinimaxEngine {
                 }
             }
 
-            let is_forced_checkmate = best_score.abs() >= CHECKMATE_SCORE;
+            let found_checkmate = best_score.abs() >= CHECKMATE_SCORE;
 
             let elapsed = start_time.elapsed();
             let nps = (self.nodes as f32 / elapsed.as_secs_f32()) as u32;
@@ -126,7 +126,7 @@ impl Engine for MinimaxEngine {
                     nodes: self.nodes,
                     nodes_per_second: nps,
                     time: elapsed.as_millis() as u32,
-                    score: if is_forced_checkmate {
+                    score: if found_checkmate {
                         self.convert_mate_score(best_score, &self.current_pv)
                     } else {
                         self.convert_centipawn_score(best_score)
@@ -134,10 +134,6 @@ impl Engine for MinimaxEngine {
                     pv: self.current_pv.clone(),
                 }))
                 .unwrap();
-
-            if is_forced_checkmate {
-                break;
-            }
         }
 
         best_move.unwrap()
@@ -200,7 +196,7 @@ impl MinimaxEngine {
             }
         }
 
-        let mut preferred_moves = AHashMap::with_capacity(3);
+        let mut preferred_moves = AHashMap::with_capacity(5);
 
         // First priority is the current PV move
         if let Some(&move_) = self.current_pv.get(depth as usize) {
@@ -231,10 +227,17 @@ impl MinimaxEngine {
         if board.side_to_move() == chess::Color::White {
             let mut best_value = f32::NEG_INFINITY;
             let mut best_move = None;
-            for (m, _) in moves {
+            for (move_index, (m, score)) in moves.into_iter().enumerate() {
+                // Only apply LMR if we haven't seen any fail-highs yet
+                let mut current_max_depth = max_depth;
+                if should_apply_lmr(score, depth, max_depth) {
+                    let reduction = calculate_dynamic_lmr_reduction(depth, move_index, score);
+                    current_max_depth = max_depth.saturating_sub(reduction);
+                }
+
                 let new_board = board.make_move_new(m);
                 let (value, mut line) =
-                    self.alpha_beta(&new_board, depth + 1, max_depth, alpha, beta);
+                    self.alpha_beta(&new_board, depth + 1, current_max_depth, alpha, beta);
                 if value > best_value {
                     best_value = value;
                     best_move = Some(m);
@@ -249,7 +252,6 @@ impl MinimaxEngine {
                             self.add_killer_move(depth as usize, m);
                         }
                     }
-
                     break;
                 }
             }
@@ -259,10 +261,17 @@ impl MinimaxEngine {
         } else {
             let mut best_value = f32::INFINITY;
             let mut best_move = None;
-            for (m, _) in moves {
+            for (move_index, (m, score)) in moves.into_iter().enumerate() {
+                // Only apply LMR if we haven't seen any fail-highs yet
+                let mut current_max_depth = max_depth;
+                if should_apply_lmr(score, depth, max_depth) {
+                    let reduction = calculate_dynamic_lmr_reduction(depth, move_index, score);
+                    current_max_depth = max_depth.saturating_sub(reduction);
+                }
+
                 let new_board = board.make_move_new(m);
                 let (value, mut line) =
-                    self.alpha_beta(&new_board, depth + 1, max_depth, alpha, beta);
+                    self.alpha_beta(&new_board, depth + 1, current_max_depth, alpha, beta);
                 if value < best_value {
                     best_value = value;
                     best_move = Some(m);
@@ -277,7 +286,6 @@ impl MinimaxEngine {
                             self.add_killer_move(depth as usize, m);
                         }
                     }
-
                     break;
                 }
             }
@@ -427,7 +435,7 @@ impl MinimaxEngine {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn add_killer_move(&mut self, depth: usize, m: ChessMove) {
         let killers = &mut self.killer_moves[depth];
         if killers[0] != Some(m) {
@@ -456,7 +464,7 @@ impl MinimaxEngine {
     }
 }
 
-#[inline]
+#[inline(always)]
 fn see_naive(board: &Board, capture_move: ChessMove) -> f32 {
     if let (Some(captured_piece), Some(capturing_piece)) = (
         board.piece_on(capture_move.get_dest()),
@@ -468,17 +476,21 @@ fn see_naive(board: &Board, capture_move: ChessMove) -> f32 {
     }
 }
 
-// Helper function to determine if null move is allowed
-// Don't allow null move in endgame positions where zugzwang is likely
-#[inline]
-fn allow_null_move(board: &Board) -> bool {
-    let pieces = board.combined();
-    let non_pawn_material = (board.pieces(chess::Piece::Queen)
-        | board.pieces(chess::Piece::Rook)
-        | board.pieces(chess::Piece::Bishop)
-        | board.pieces(chess::Piece::Knight))
-    .popcnt()
-        > 3;
+#[inline(always)]
+fn should_apply_lmr(move_score: i32, current_depth: u32, max_depth: u32) -> bool {
+    let remaining_depth = max_depth.saturating_sub(current_depth);
 
-    pieces.popcnt() > 10 && non_pawn_material
+    // Apply LMR only if there's enough remaining depth and the move is not critical
+    remaining_depth > 1 && move_score < CHECK_SCORE
+}
+
+#[inline(always)]
+fn calculate_dynamic_lmr_reduction(depth: u32, move_index: usize, score: i32) -> u32 {
+    if score < CHECK_SCORE {
+        // Dynamic reduction for quiet moves
+        (1.35 + (depth as f64).ln() * (move_index as f64).ln() / 2.75).ceil() as u32
+    } else {
+        // Smaller reduction for captures and promotions
+        (0.20 + (depth as f64).ln() * (move_index as f64).ln() / 3.35).ceil() as u32
+    }
 }
