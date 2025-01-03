@@ -152,10 +152,11 @@ impl MinimaxEngine {
         match board.status() {
             BoardStatus::Checkmate => {
                 self.nodes += 1;
+                let remaining_depth = (max_depth - depth) as f32;
                 if board.side_to_move() == chess::Color::White {
-                    return (-CHECKMATE_SCORE * (depth as f32 + 1.0), Vec::new());
+                    return (-CHECKMATE_SCORE * (remaining_depth + 1.0), Vec::new());
                 } else {
-                    return (CHECKMATE_SCORE * (depth as f32 + 1.0), Vec::new());
+                    return (CHECKMATE_SCORE * (remaining_depth + 1.0), Vec::new());
                 }
             }
             BoardStatus::Stalemate => {
@@ -228,12 +229,8 @@ impl MinimaxEngine {
             let mut best_value = f32::NEG_INFINITY;
             let mut best_move = None;
             for (move_index, (m, score)) in moves.into_iter().enumerate() {
-                // Only apply LMR if we haven't seen any fail-highs yet
-                let mut current_max_depth = max_depth;
-                if should_apply_lmr(score, depth, max_depth) {
-                    let reduction = calculate_dynamic_lmr_reduction(depth, move_index, score);
-                    current_max_depth = max_depth.saturating_sub(reduction);
-                }
+                let reduction = calculate_dynamic_lmr_reduction(depth, move_index, score);
+                let current_max_depth = max_depth.saturating_sub(reduction);
 
                 let new_board = board.make_move_new(m);
                 let (value, mut line) =
@@ -262,12 +259,8 @@ impl MinimaxEngine {
             let mut best_value = f32::INFINITY;
             let mut best_move = None;
             for (move_index, (m, score)) in moves.into_iter().enumerate() {
-                // Only apply LMR if we haven't seen any fail-highs yet
-                let mut current_max_depth = max_depth;
-                if should_apply_lmr(score, depth, max_depth) {
-                    let reduction = calculate_dynamic_lmr_reduction(depth, move_index, score);
-                    current_max_depth = max_depth.saturating_sub(reduction);
-                }
+                let reduction = calculate_dynamic_lmr_reduction(depth, move_index, score);
+                let current_max_depth = max_depth.saturating_sub(reduction);
 
                 let new_board = board.make_move_new(m);
                 let (value, mut line) =
@@ -476,21 +469,12 @@ fn see_naive(board: &Board, capture_move: ChessMove) -> f32 {
     }
 }
 
-#[inline(always)]
-fn should_apply_lmr(move_score: i32, current_depth: u32, max_depth: u32) -> bool {
-    let remaining_depth = max_depth.saturating_sub(current_depth);
-
-    // Apply LMR only if there's enough remaining depth and the move is not critical
-    remaining_depth > 1 && move_score < CHECK_SCORE
-}
-
+// Same as Weiss
 #[inline(always)]
 fn calculate_dynamic_lmr_reduction(depth: u32, move_index: usize, score: i32) -> u32 {
     if score < CHECK_SCORE {
-        // Dynamic reduction for quiet moves
         (1.35 + (depth as f64).ln() * (move_index as f64).ln() / 2.75).ceil() as u32
     } else {
-        // Smaller reduction for captures and promotions
         (0.20 + (depth as f64).ln() * (move_index as f64).ln() / 3.35).ceil() as u32
     }
 }
