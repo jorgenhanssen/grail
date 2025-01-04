@@ -26,6 +26,8 @@ pub struct MinimaxEngine {
     qs_tt: AHashMap<u64, f32>,
 
     max_depth_reached: u32,
+
+    position_stack: Vec<u64>,
 }
 
 impl Default for MinimaxEngine {
@@ -38,6 +40,8 @@ impl Default for MinimaxEngine {
             killer_moves: [[None; 2]; 100], // 100 is a good depth
             max_depth_reached: 1,
             current_pv: Vec::new(),
+
+            position_stack: Vec::with_capacity(100),
         }
     }
 }
@@ -57,6 +61,10 @@ impl Engine for MinimaxEngine {
         self.nodes = 0;
         self.max_depth_reached = 1;
         self.current_pv.clear();
+
+        // Init position stack
+        self.position_stack.clear();
+        self.position_stack.push(self.board.get_hash());
 
         let mut current_depth = 1;
         let search_time = params.move_time.unwrap_or(10_000);
@@ -85,7 +93,11 @@ impl Engine for MinimaxEngine {
 
             for (m, _) in moves_with_scores {
                 let new_board = self.board.make_move_new(m);
+
+                self.position_stack.push(new_board.get_hash());
                 let (score, mut pv) = self.alpha_beta(&new_board, 1, current_depth, alpha, beta);
+                self.position_stack.pop();
+
                 pv.insert(0, m); // Add current move to the beginning of the line
 
                 if maximizing {
@@ -149,6 +161,13 @@ impl MinimaxEngine {
         mut alpha: f32,
         mut beta: f32,
     ) -> (f32, Vec<ChessMove>) {
+        let hash = *self.position_stack.last().unwrap();
+
+        if self.has_repetition(hash) {
+            self.nodes += 1;
+            return (0.0, Vec::new()); // Treat as a draw
+        }
+
         match board.status() {
             BoardStatus::Checkmate => {
                 self.nodes += 1;
@@ -171,7 +190,7 @@ impl MinimaxEngine {
         }
 
         let mut maybe_tt_move = None;
-        if let Some((tt_value, tt_bound, tt_move)) = self.probe_tt(board, depth, max_depth) {
+        if let Some((tt_value, tt_bound, tt_move)) = self.probe_tt(hash, depth, max_depth) {
             maybe_tt_move = tt_move; // Store the move for later use
                                      // If it's an EXACT result, we can just return.
             match tt_bound {
@@ -233,8 +252,12 @@ impl MinimaxEngine {
                 let current_max_depth = max_depth.saturating_sub(reduction);
 
                 let new_board = board.make_move_new(m);
+
+                self.position_stack.push(new_board.get_hash());
                 let (value, mut line) =
                     self.alpha_beta(&new_board, depth + 1, current_max_depth, alpha, beta);
+                self.position_stack.pop();
+
                 if value > best_value {
                     best_value = value;
                     best_move = Some(m);
@@ -253,7 +276,7 @@ impl MinimaxEngine {
                 }
             }
 
-            self.store_tt(board, depth, max_depth, best_value, alpha, beta, best_move);
+            self.store_tt(hash, depth, max_depth, best_value, alpha, beta, best_move);
             (best_value, best_line)
         } else {
             let mut best_value = f32::INFINITY;
@@ -263,8 +286,12 @@ impl MinimaxEngine {
                 let current_max_depth = max_depth.saturating_sub(reduction);
 
                 let new_board = board.make_move_new(m);
+
+                self.position_stack.push(new_board.get_hash());
                 let (value, mut line) =
                     self.alpha_beta(&new_board, depth + 1, current_max_depth, alpha, beta);
+                self.position_stack.pop();
+
                 if value < best_value {
                     best_value = value;
                     best_move = Some(m);
@@ -283,7 +310,7 @@ impl MinimaxEngine {
                 }
             }
 
-            self.store_tt(board, depth, max_depth, best_value, alpha, beta, best_move);
+            self.store_tt(hash, depth, max_depth, best_value, alpha, beta, best_move);
             (best_value, best_line)
         }
     }
@@ -298,9 +325,15 @@ impl MinimaxEngine {
         self.nodes += 1;
         self.max_depth_reached = depth.max(self.max_depth_reached);
 
+        let hash = *self.position_stack.last().unwrap();
+
+        if self.has_repetition(hash) {
+            self.nodes += 1;
+            return (0.0, Vec::new()); // Treat as a draw
+        }
+
         // Prune if visited in some other QS search
-        let board_hash = board.get_hash();
-        if let Some(&score) = self.qs_tt.get(&board_hash) {
+        if let Some(&score) = self.qs_tt.get(&hash) {
             return (score, Vec::new());
         }
 
@@ -347,7 +380,10 @@ impl MinimaxEngine {
             let new_board = board.make_move_new(m);
 
             // Recursively call quiescence
+            self.position_stack.push(new_board.get_hash());
             let (score, mut line) = self.quiescence_search(&new_board, alpha, beta, depth + 1);
+            self.position_stack.pop();
+
             line.insert(0, m);
 
             if maximizing {
@@ -369,21 +405,20 @@ impl MinimaxEngine {
             }
         }
 
-        self.qs_tt.insert(board_hash, best_eval);
+        self.qs_tt.insert(hash, best_eval);
         (best_eval, best_line)
     }
 
     #[inline]
     fn probe_tt(
         &mut self,
-        board: &Board,
+        hash: u64,
         depth: u32,
         max_depth: u32,
     ) -> Option<(f32, Bound, Option<ChessMove>)> {
-        let board_hash = board.get_hash();
         let plies = max_depth - depth;
 
-        if let Some(entry) = self.tt.get(&board_hash) {
+        if let Some(entry) = self.tt.get(&hash) {
             if entry.plies >= plies {
                 return Some((entry.value, entry.bound, entry.best_move));
             }
@@ -393,7 +428,7 @@ impl MinimaxEngine {
 
     fn store_tt(
         &mut self,
-        board: &Board,
+        hash: u64,
         depth: u32,
         max_depth: u32,
         value: f32,
@@ -411,7 +446,6 @@ impl MinimaxEngine {
             Bound::Exact
         };
 
-        let board_hash = board.get_hash();
         let entry = TTEntry {
             plies,
             value,
@@ -419,12 +453,12 @@ impl MinimaxEngine {
             best_move,
         };
 
-        if let Some(old_entry) = self.tt.get(&board_hash) {
+        if let Some(old_entry) = self.tt.get(&hash) {
             if old_entry.plies <= plies {
-                self.tt.insert(board_hash, entry);
+                self.tt.insert(hash, entry);
             }
         } else {
-            self.tt.insert(board_hash, entry);
+            self.tt.insert(hash, entry);
         }
     }
 
@@ -454,6 +488,14 @@ impl MinimaxEngine {
             -(score as i32)
         };
         Score::Centipawns(cp_score)
+    }
+
+    #[inline(always)]
+    fn has_repetition(&self, hash: u64) -> bool {
+        // We only need to check if there are 2 occurrences of the hash.
+        // No need to explore a position if it exists further up the stack.
+        // In most cases, this is a draw.
+        self.position_stack.iter().filter(|&&h| h == hash).count() >= 2
     }
 }
 
