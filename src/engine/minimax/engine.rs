@@ -249,7 +249,7 @@ impl MinimaxEngine {
             let mut best_move = None;
             for (move_index, (m, score)) in moves.into_iter().enumerate() {
                 let reduction = calculate_dynamic_lmr_reduction(depth, move_index, score);
-                let current_max_depth = max_depth.saturating_sub(reduction);
+                let current_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
 
                 let new_board = board.make_move_new(m);
 
@@ -283,7 +283,7 @@ impl MinimaxEngine {
             let mut best_move = None;
             for (move_index, (m, score)) in moves.into_iter().enumerate() {
                 let reduction = calculate_dynamic_lmr_reduction(depth, move_index, score);
-                let current_max_depth = max_depth.saturating_sub(reduction);
+                let current_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
 
                 let new_board = board.make_move_new(m);
 
