@@ -156,7 +156,7 @@ fn evaluate_king_safety(board: &Board, color: Color) -> f32 {
     score -= (enemy_knights.popcnt() as f32) * piece_value(Piece::Knight);
     score -= (enemy_pawns.popcnt() as f32) * piece_value(Piece::Pawn);
 
-    score * 0.1
+    score * 0.3
 }
 
 const KING_ZONE_RADIUS: i8 = 2;
