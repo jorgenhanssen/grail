@@ -68,9 +68,9 @@ fn mvva_lva_index(piece: Piece) -> usize {
     }
 }
 
-fn score(move_: ChessMove, board: &Board) -> i32 {
+fn score(mov: ChessMove, board: &Board) -> i32 {
     // Check for promotions first
-    if let Some(promotion) = move_.get_promotion() {
+    if let Some(promotion) = mov.get_promotion() {
         return match promotion {
             Piece::Queen => PROMOTION_SCORE_QUEEN,
             Piece::Rook => PROMOTION_SCORE_ROOK,
@@ -80,23 +80,22 @@ fn score(move_: ChessMove, board: &Board) -> i32 {
         };
     }
 
+    let attacker = board.piece_on(mov.get_source()).unwrap();
+    let victim = board.piece_on(mov.get_dest());
+
     // Next look at captures (MVV-LVA)
-    if let Some(victim) = board.piece_on(move_.get_dest()) {
-        let attacker = board.piece_on(move_.get_source()).unwrap();
-        let mvva_lva_score = MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)];
-        return CAPTURE_SCORE + mvva_lva_score;
+    if let Some(victim) = victim {
+        return CAPTURE_SCORE + MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)];
     }
 
     // Then look for checks
-    let resulting_board = board.make_move_new(move_);
-    if resulting_board.checkers().popcnt() > 0 {
+    if board.make_move_new(mov).checkers().popcnt() > 0 {
         return CHECK_SCORE;
     }
 
     // For non-capture moves, return a small positive value based on the piece type
     // This encourages moving more valuable pieces first in quiet positions
-    let piece = board.piece_on(move_.get_source()).unwrap();
-    match piece {
+    match attacker {
         Piece::Queen => PIECE_SCORE_QUEEN,
         Piece::Rook => PIECE_SCORE_ROOK,
         Piece::Bishop => PIECE_SCORE_BISHOP,
