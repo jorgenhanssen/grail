@@ -1,5 +1,5 @@
 use crate::utils::values::{BISHOP_VALUE, KNIGHT_VALUE, PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE};
-use chess::{BitBoard, Board, BoardStatus, Color, File, MoveGen, Piece, Rank, Square, EMPTY};
+use chess::{BitBoard, Board, BoardStatus, Color, MoveGen, Piece, EMPTY};
 
 use super::{get_pst, piece_value, sum_pst, CHECKMATE_SCORE};
 
@@ -20,12 +20,15 @@ pub fn evaluate_board(board: &Board) -> f32 {
         BoardStatus::Ongoing => {}
     }
 
-    let mut score = 0.0;
-    score += evaluate_material(board, Color::White);
-    score -= evaluate_material(board, Color::Black);
+    let white_mask = board.color_combined(Color::White);
+    let black_mask = board.color_combined(Color::Black);
 
-    score += evaluate_pawn_structure(board, Color::White);
-    score -= evaluate_pawn_structure(board, Color::Black);
+    let mut score = 0.0;
+    score += evaluate_material(board, Color::White, &white_mask);
+    score -= evaluate_material(board, Color::Black, &black_mask);
+
+    score += evaluate_pawn_structure(board, &white_mask);
+    score -= evaluate_pawn_structure(board, &black_mask);
 
     score += evaluate_mobility(board, Color::White);
     score -= evaluate_mobility(board, Color::Black);
@@ -36,9 +39,7 @@ pub fn evaluate_board(board: &Board) -> f32 {
     score
 }
 
-fn evaluate_material(board: &Board, color: Color) -> f32 {
-    let color_mask = board.color_combined(color);
-
+fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard) -> f32 {
     let pawn_mask = board.pieces(Piece::Pawn) & color_mask;
     let knight_mask = board.pieces(Piece::Knight) & color_mask;
     let bishop_mask = board.pieces(Piece::Bishop) & color_mask;
@@ -83,9 +84,9 @@ fn evaluate_material(board: &Board, color: Color) -> f32 {
     return piece_value + pst_value + bishop_pair_bonus;
 }
 
-fn evaluate_pawn_structure(board: &Board, color: Color) -> f32 {
+fn evaluate_pawn_structure(board: &Board, color_mask: &BitBoard) -> f32 {
     let mut score = 0.0;
-    let pawns = board.pieces(Piece::Pawn) & board.color_combined(color);
+    let pawns = board.pieces(Piece::Pawn) & color_mask;
 
     // File occupancy
     let mut files = [0; 8];
@@ -161,13 +162,13 @@ fn evaluate_king_safety(board: &Board, color: Color) -> f32 {
 
 const KING_ZONE_RADIUS: i8 = 2;
 const KING_ZONES: [BitBoard; 64] = {
-    let mut zones = [BitBoard(0); 64];
+    let mut zones = [EMPTY; 64];
     let mut i = 0;
     while i < 64 {
         let king_file = (i % 8) as i8;
         let king_rank = (i / 8) as i8;
 
-        let mut zone = BitBoard(0);
+        let mut zone = EMPTY;
         let mut rank_offset = -KING_ZONE_RADIUS;
         while rank_offset <= KING_ZONE_RADIUS {
             let mut file_offset = -KING_ZONE_RADIUS;
