@@ -1,6 +1,6 @@
-use std::{fs::File, path::PathBuf};
+use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[command(name = "Grail")]
@@ -13,4 +13,12 @@ pub struct Args {
         default_value = "/Users/jorgenoptima/code/projects/grail/uci.log"
     )]
     pub log_file: PathBuf,
+
+    #[command(subcommand)]
+    pub engines: Engines,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Engines {
+    Minimax {},
 }

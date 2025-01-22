@@ -1,9 +1,11 @@
 mod args;
+mod engine;
 mod uci;
+mod utils;
 
 use args::Args;
-use chess::{ChessMove, Square};
 use clap::Parser;
+use engine::Engine;
 use log::{debug, LevelFilter};
 use simplelog::{Config, WriteLogger};
 use std::error::Error;
@@ -14,9 +16,10 @@ const ENGINE_NAME: &str = "Grail";
 const ENGINE_AUTHOR: &str = "Jørgen Hanssen";
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let _ = init();
+    let args = init()?;
 
     let mut uci = UciConnection::new();
+    let mut engine = engine::create(&args);
 
     uci.listen(|input, output| {
         match input {
@@ -30,19 +33,22 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             UciInput::UciNewGame => {}
             UciInput::Position(board) => {
-                debug!("board: {:?}", board.get_hash());
+                engine.set_position(board.clone());
             }
             UciInput::Go(params) => {
-                debug!("go: {:?}", params);
+                let best_move = engine.search(params, &output);
 
-                // TODO: Implement search
                 output.send(UciOutput::BestMove {
-                    bestmove: ChessMove::new(Square::E2, Square::E4, None),
+                    best_move: best_move,
                     ponder: None,
                 })?;
             }
-            UciInput::Stop => {}
-            UciInput::Quit => {}
+            UciInput::Stop => {
+                engine.stop();
+            }
+            UciInput::Quit => {
+                engine.stop();
+            }
             UciInput::Unknown(line) => {
                 debug!("Unknown command: {}", line);
             }
