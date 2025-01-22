@@ -1,7 +1,10 @@
 use crate::utils::values::{BISHOP_VALUE, KNIGHT_VALUE, PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE};
 use chess::{BitBoard, Board, BoardStatus, Color, MoveGen, Piece, EMPTY};
 
-use super::{get_pst, piece_value, sum_pst, CHECKMATE_SCORE};
+use super::{
+    get_pst, piece_value, sum_pst, CHECKMATE_SCORE, KNIGHT_OUTPOST_BONUS, PASSED_PAWN_BONUS,
+    ROOK_ON_SEVENTH_BONUS, ROOK_OPEN_FILE_BONUS, ROOK_SEMI_OPEN_FILE_BONUS,
+};
 
 // Return final evaluation (positive = good for White, negative = good for Black)
 pub fn evaluate_board(board: &Board) -> f32 {
@@ -32,6 +35,12 @@ pub fn evaluate_board(board: &Board) -> f32 {
 
     score += evaluate_mobility(board, Color::White);
     score -= evaluate_mobility(board, Color::Black);
+
+    score += evaluate_rooks(board, Color::White);
+    score -= evaluate_rooks(board, Color::Black);
+
+    score += evaluate_knights(board, Color::White);
+    score -= evaluate_knights(board, Color::Black);
 
     score += evaluate_king_safety(board, Color::White);
     score -= evaluate_king_safety(board, Color::Black);
@@ -87,20 +96,24 @@ fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard) -> f32 
 fn evaluate_pawn_structure(board: &Board, color_mask: &BitBoard) -> f32 {
     let mut score = 0.0;
     let pawns = board.pieces(Piece::Pawn) & color_mask;
+    let color = if color_mask == board.color_combined(Color::White) {
+        Color::White
+    } else {
+        Color::Black
+    };
 
-    // File occupancy
+    // double, tripled, isolated
     let mut files = [0; 8];
     for sq in pawns {
         let file = sq.get_file() as usize;
         files[file] += 1;
     }
 
-    // check isolated pawns and doubled+ pawns
     for file in 0..8 {
         match files[file] {
             0 => continue,
             1 => {
-                // Check for isolated pawns in the same loop
+                // Check for isolated pawns
                 let isolated = if file == 0 {
                     files[file + 1] == 0
                 } else if file == 7 {
@@ -114,6 +127,23 @@ fn evaluate_pawn_structure(board: &Board, color_mask: &BitBoard) -> f32 {
             }
             2 => score -= 20.0, // doubled pawns
             _ => score -= 40.0, // tripled or more
+        }
+    }
+
+    // For each pawn, check if it’s "passed".
+    let enemy_pawns = board.pieces(Piece::Pawn) & board.color_combined(!color);
+
+    for sq in pawns {
+        if is_passed_pawn(sq, color, enemy_pawns) {
+            // Rank from White's perspective is sq.get_rank(), from 0..7 (White=bottom).
+            // For Black we might invert it: rank = 7 - sq.get_rank().
+            let rank = sq.get_rank() as usize;
+            let rank_from_white_persp = if color == Color::White {
+                rank
+            } else {
+                7 - rank
+            };
+            score += PASSED_PAWN_BONUS[rank_from_white_persp];
         }
     }
 
@@ -188,3 +218,158 @@ const KING_ZONES: [BitBoard; 64] = {
     }
     zones
 };
+
+fn is_passed_pawn(pawn_square: chess::Square, color: Color, enemy_pawns: BitBoard) -> bool {
+    // Identify all squares in front of this pawn (including same file,
+    // and adjacent files) up until it reaches the last rank.
+    // If no enemy pawns exist in that region, it’s passed.
+
+    let file = pawn_square.get_file() as i8;
+    let rank = pawn_square.get_rank() as i8;
+
+    // For White, check ranks above ‘rank’, for Black, ranks below.
+    let direction = if color == Color::White { 1 } else { -1 };
+
+    for r in (rank + direction..=7)
+        .step_by(1)
+        .take_while(|&r| r >= 0 && r < 8)
+    {
+        for f in (file - 1)..=(file + 1) {
+            if f < 0 || f > 7 {
+                continue;
+            }
+            let sq_index = (r * 8 + f) as u8;
+            let sq_bb = BitBoard(1 << sq_index);
+            if (sq_bb & enemy_pawns).popcnt() > 0 {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+fn evaluate_rooks(board: &Board, color: Color) -> f32 {
+    let mut score = 0.0;
+    let rooks = board.pieces(Piece::Rook) & board.color_combined(color);
+
+    let all_pawns = board.pieces(Piece::Pawn);
+    let our_pawns = all_pawns & board.color_combined(color);
+    let their_pawns = all_pawns & board.color_combined(!color);
+
+    for sq in rooks {
+        let file = sq.get_file() as usize;
+
+        // Count how many pawns are on this file for each side.
+        let mut our_file_pawns = 0;
+        let mut their_file_pawns = 0;
+        for rank in 0..8 {
+            let sq_index = rank * 8 + file;
+            let sq_bb = BitBoard(1 << sq_index);
+            if (sq_bb & our_pawns).popcnt() > 0 {
+                our_file_pawns += 1;
+            }
+            if (sq_bb & their_pawns).popcnt() > 0 {
+                their_file_pawns += 1;
+            }
+        }
+
+        if our_file_pawns == 0 && their_file_pawns == 0 {
+            // fully open file
+            score += ROOK_OPEN_FILE_BONUS;
+        } else if our_file_pawns == 0 && their_file_pawns > 0 {
+            // semi-open file
+            score += ROOK_SEMI_OPEN_FILE_BONUS;
+        }
+
+        // Rook on seventh (or second for Black) rank
+        let rank = sq.get_rank() as u8;
+        if (color == Color::White && rank == 6) || (color == Color::Black && rank == 1) {
+            score += ROOK_ON_SEVENTH_BONUS;
+        }
+    }
+
+    score
+}
+
+fn evaluate_knights(board: &Board, color: Color) -> f32 {
+    let mut score = 0.0;
+    let knights = board.pieces(Piece::Knight) & board.color_combined(color);
+    let our_pawns = board.pieces(Piece::Pawn) & board.color_combined(color);
+    let their_pawns = board.pieces(Piece::Pawn) & board.color_combined(!color);
+
+    for sq in knights {
+        // We want to see if the square is protected by our pawn
+        // and cannot be attacked by an enemy pawn.
+
+        let file = sq.get_file() as i8;
+        let rank = sq.get_rank() as i8;
+
+        // Check squares from which an enemy pawn could attack this knight’s square.
+        // For White pawns, those squares are one rank down and file +/- 1.
+        // For Black pawns, one rank up, file +/- 1.
+        // We’ll see if there's an actual enemy pawn on those squares.
+
+        let (attack_rank, enemy_color) = if color == Color::White {
+            (rank - 1, Color::Black)
+        } else {
+            (rank + 1, Color::White)
+        };
+        let can_be_attacked_by_pawn = {
+            if attack_rank >= 0 && attack_rank < 8 {
+                let left_file = file - 1;
+                let right_file = file + 1;
+                let mut attack_squares = vec![];
+                if left_file >= 0 && left_file < 8 {
+                    attack_squares.push((attack_rank, left_file));
+                }
+                if right_file >= 0 && right_file < 8 {
+                    attack_squares.push((attack_rank, right_file));
+                }
+                attack_squares.iter().any(|&(r, f)| {
+                    let sq_index = (r as u8) * 8 + (f as u8);
+                    let sq_bb = BitBoard(1 << sq_index);
+                    (sq_bb & their_pawns).popcnt() > 0
+                })
+            } else {
+                false
+            }
+        };
+
+        // Check if the knight’s square is defended by your own pawns.
+        // For White pawns, those squares are one rank up, file +/- 1.
+        // For Black pawns, one rank down, file +/- 1.
+        // This is simplistic, but enough for demonstration.
+
+        let defend_rank = if color == Color::White {
+            rank + 1
+        } else {
+            rank - 1
+        };
+        let is_defended_by_own_pawn = if defend_rank >= 0 && defend_rank < 8 {
+            let left_file = file - 1;
+            let right_file = file + 1;
+            let mut defend_squares = vec![];
+            if left_file >= 0 && left_file < 8 {
+                defend_squares.push((defend_rank, left_file));
+            }
+            if right_file >= 0 && right_file < 8 {
+                defend_squares.push((defend_rank, right_file));
+            }
+            defend_squares.iter().any(|&(r, f)| {
+                let sq_index = (r as u8) * 8 + (f as u8);
+                let sq_bb = BitBoard(1 << sq_index);
+                (sq_bb & our_pawns).popcnt() > 0
+            })
+        } else {
+            false
+        };
+
+        // If the knight cannot be attacked by a pawn AND is defended by your pawn,
+        // give it an outpost bonus.
+        if !can_be_attacked_by_pawn && is_defended_by_own_pawn {
+            score += KNIGHT_OUTPOST_BONUS;
+        }
+    }
+
+    score
+}
