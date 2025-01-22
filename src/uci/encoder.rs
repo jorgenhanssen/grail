@@ -1,3 +1,5 @@
+use crate::uci::commands::Score;
+
 use super::commands::UciOutput;
 
 pub struct Encoder {}
@@ -11,10 +13,10 @@ impl Encoder {
             UciOutput::UciOk => "uciok".to_string(),
             UciOutput::ReadyOk => "readyok".to_string(),
 
-            UciOutput::BestMove { bestmove, ponder } => {
+            UciOutput::BestMove { best_move, ponder } => {
                 format!(
                     "bestmove {}{}",
-                    bestmove,
+                    best_move,
                     ponder
                         .as_ref()
                         .map_or(String::new(), |m| format!(" ponder {}", m))
@@ -22,13 +24,17 @@ impl Encoder {
             }
             UciOutput::Info(info) => {
                 format!(
-                    "info depth {} multipv 1 score cp {} nodes {} nps {} time {} pc {}",
+                    "info depth {} seldepth {} multipv 1 score {} nodes {} nps {} time {} pv {}",
                     info.depth,
-                    info.score,
+                    info.sel_depth,
+                    match info.score {
+                        Score::Centipawns(cp) => format!("cp {}", cp),
+                        Score::Mate(moves) => format!("mate {}", moves),
+                    },
                     info.nodes,
                     info.nodes_per_second,
                     info.time,
-                    info.line
+                    info.pv
                         .iter()
                         .map(|m| m.to_string())
                         .collect::<Vec<String>>()
