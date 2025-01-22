@@ -23,4 +23,3 @@ pub const PASSED_PAWN_BONUS: [f32; 8] = [0.0, 5.0, 10.0, 20.0, 40.0, 70.0, 120.0
 pub const ROOK_OPEN_FILE_BONUS: f32 = 15.0;
 pub const ROOK_SEMI_OPEN_FILE_BONUS: f32 = 8.0;
 pub const ROOK_ON_SEVENTH_BONUS: f32 = 20.0;
-pub const KNIGHT_OUTPOST_BONUS: f32 = 15.0;
