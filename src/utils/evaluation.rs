@@ -33,9 +33,6 @@ pub fn evaluate_board(board: &Board) -> f32 {
     score += evaluate_pawn_structure(board, &white_mask);
     score -= evaluate_pawn_structure(board, &black_mask);
 
-    score += evaluate_mobility(board, Color::White);
-    score -= evaluate_mobility(board, Color::Black);
-
     score += evaluate_rooks(board, Color::White);
     score -= evaluate_rooks(board, Color::Black);
 
@@ -145,22 +142,6 @@ fn evaluate_pawn_structure(board: &Board, color_mask: &BitBoard) -> f32 {
     }
 
     score
-}
-
-#[inline]
-fn evaluate_mobility(board: &Board, color: Color) -> f32 {
-    if board.side_to_move() == color {
-        return MoveGen::new_legal(&board).count() as f32;
-    }
-
-    // Movegen will return None if the current board has a check.
-    // However, the quiescence search implementation will never allow evaluation
-    // of a board with a check, so Some(board) will always be returned.
-    if let Some(board) = board.null_move() {
-        return MoveGen::new_legal(&board).count() as f32;
-    }
-
-    0.0
 }
 
 fn evaluate_king_safety(board: &Board, color: Color) -> f32 {
