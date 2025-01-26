@@ -11,7 +11,7 @@ pub enum Bound {
 
 #[derive(Clone, Copy)]
 pub struct TTEntry {
-    pub plies: u32,
+    pub plies: u64,
     pub value: f32,
     pub bound: Bound,
     pub best_move: Option<ChessMove>,
