@@ -111,7 +111,8 @@ impl SelfPlayWorker {
 
         let (engine_move, engine_score) = self.get_engine_move(&board);
 
-        evaluations.push((board.clone(), engine_score));
+        // tanh to force mate scores to be in [-1, 1]
+        evaluations.push((board.clone(), engine_score.tanh()));
 
         if self.should_use_engine_move(&engine_score) {
             engine_move
