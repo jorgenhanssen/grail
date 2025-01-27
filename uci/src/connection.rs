@@ -1,7 +1,6 @@
 use super::commands::{UciInput, UciOutput};
 use super::decoder::Decoder;
 use super::encoder::Encoder;
-use log::debug;
 use std::error::Error;
 use std::io::{self, BufRead};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -36,13 +35,13 @@ impl UciConnection {
             reader.read_line(&mut in_line)?;
 
             let in_line = in_line.trim();
-            debug!("Input: {:?}", in_line);
+            log::debug!("Input: {:?}", in_line);
 
             let input = decoder.decode(&in_line);
 
             // Handle potential errors from callback
             if let Err(e) = callback(&input, self.output_tx.clone()) {
-                debug!("Callback error: {:?}", e);
+                log::error!("Callback error: {:?}", e);
             }
 
             if matches!(input, UciInput::Quit) {
@@ -59,7 +58,7 @@ impl UciConnection {
 
             while let Ok(output) = output_rx.recv() {
                 let out_line = encoder.encode(&output);
-                debug!("Output: {:?}", out_line);
+                log::debug!("Output: {:?}", out_line);
                 println!("{}", out_line);
             }
         });

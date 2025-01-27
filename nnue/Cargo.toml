@@ -4,10 +4,21 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+search = { path = "../search" }
+
+ahash = { workspace = true }
+chess = { workspace = true }
+log = { workspace = true }
+rayon = { workspace = true }
+rand = { workspace = true }
+num_cpus = { workspace = true }
+simplelog = { workspace = true }
+clap = { workspace = true }
 
 [lib]
 name = "nnue"
 
 [[bin]]
 name = "train"
-path = "src/bin/train.rs"
+path = "src/bin/train/main.rs"
+
