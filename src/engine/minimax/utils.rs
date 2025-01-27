@@ -41,9 +41,9 @@ pub fn convert_mate_score(board: &Board, score: f32, pv: &Vec<ChessMove>) -> Sco
 #[inline(always)]
 pub fn convert_centipawn_score(board: &Board, score: f32) -> Score {
     let cp_score = if board.side_to_move() == chess::Color::White {
-        score as i32
+        100.0 * score
     } else {
-        -(score as i32)
+        -100.0 * score
     };
-    Score::Centipawns(cp_score)
+    Score::Centipawns(cp_score as i32)
 }

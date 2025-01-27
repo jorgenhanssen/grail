@@ -115,7 +115,7 @@ impl Engine for MinimaxEngine {
 
 impl MinimaxEngine {
     #[inline(always)]
-    fn init_search(&mut self) {
+    pub fn init_search(&mut self) {
         self.tt.clear();
         self.qs_tt.clear();
         self.killer_moves = [[None; 2]; 100];
@@ -128,7 +128,7 @@ impl MinimaxEngine {
         self.position_stack.push(self.board.get_hash());
     }
 
-    fn search_root(&mut self, depth: u64) -> (ChessMove, f32) {
+    pub fn search_root(&mut self, depth: u64) -> (ChessMove, f32) {
         let mut alpha = f32::NEG_INFINITY;
         let mut beta = f32::INFINITY;
 

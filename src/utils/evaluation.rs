@@ -1,9 +1,9 @@
 use crate::utils::values::{BISHOP_VALUE, KNIGHT_VALUE, PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE};
-use chess::{BitBoard, Board, BoardStatus, Color, MoveGen, Piece, EMPTY};
+use chess::{BitBoard, Board, BoardStatus, Color, Piece, EMPTY};
 
 use super::{
-    get_pst, piece_value, sum_pst, CHECKMATE_SCORE, PASSED_PAWN_BONUS, ROOK_ON_SEVENTH_BONUS,
-    ROOK_OPEN_FILE_BONUS, ROOK_SEMI_OPEN_FILE_BONUS,
+    get_pst, piece_value, sum_pst, PASSED_PAWN_BONUS, ROOK_ON_SEVENTH_BONUS, ROOK_OPEN_FILE_BONUS,
+    ROOK_SEMI_OPEN_FILE_BONUS,
 };
 
 // Return final evaluation (positive = good for White, negative = good for Black)
@@ -14,9 +14,9 @@ pub fn evaluate_board(board: &Board) -> f32 {
         BoardStatus::Checkmate => {
             // If it's White to move and board is checkmated => White lost
             if is_white {
-                return -CHECKMATE_SCORE;
+                return -1.0;
             } else {
-                return CHECKMATE_SCORE;
+                return 1.0;
             }
         }
         BoardStatus::Stalemate => return 0.0,
@@ -39,7 +39,7 @@ pub fn evaluate_board(board: &Board) -> f32 {
     score += evaluate_king_safety(board, Color::White);
     score -= evaluate_king_safety(board, Color::Black);
 
-    score
+    (score / 1_500.0).tanh()
 }
 
 fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard) -> f32 {
