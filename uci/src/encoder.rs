@@ -1,6 +1,4 @@
-use crate::uci::commands::Score;
-
-use super::commands::UciOutput;
+use super::commands::{Score, UciOutput};
 
 pub struct Encoder {}
 

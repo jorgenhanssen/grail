@@ -2,9 +2,7 @@ use std::str::FromStr;
 
 use chess::{Board, ChessMove};
 
-use crate::uci::commands::GoParams;
-
-use super::commands::UciInput;
+use super::commands::{GoParams, UciInput};
 
 pub struct Decoder {}
 

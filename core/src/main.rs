@@ -1,7 +1,5 @@
 mod args;
 mod engine;
-mod uci;
-mod utils;
 
 use args::Args;
 use clap::Parser;

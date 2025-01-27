@@ -1,6 +1,6 @@
-use crate::uci::commands::Score;
 use crate::utils::{piece_value, CHECK_SCORE};
 use chess::{Board, ChessMove};
+use uci::commands::Score;
 
 #[inline(always)]
 pub fn see_naive(board: &Board, capture_move: ChessMove) -> f32 {

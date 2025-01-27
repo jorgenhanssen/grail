@@ -1,0 +1,14 @@
+[package]
+name = "search"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+uci = { path = "../uci" }
+
+chess = { workspace = true }
+ahash = { workspace = true }
+log = { workspace = true }
+
+[lib]
+name = "search"

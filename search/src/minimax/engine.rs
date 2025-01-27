@@ -1,17 +1,15 @@
-use crate::engine::Engine;
+use crate::utils::evaluate_board;
 use crate::utils::{
     get_ordered_moves, CAPTURE_SCORE, CHECKMATE_SCORE, CHECK_SCORE, PROMOTION_SCORE,
 };
-use crate::{
-    uci::{
-        commands::{GoParams, Info},
-        UciOutput,
-    },
-    utils::evaluate_board,
-};
+use crate::Engine;
 use ahash::AHashMap;
 use chess::{Board, BoardStatus, ChessMove};
 use std::sync::mpsc::Sender;
+use uci::{
+    commands::{GoParams, Info},
+    UciOutput,
+};
 
 use super::tt::{Bound, TTEntry};
 use super::utils::{

@@ -1,6 +1,6 @@
-use crate::uci::{commands::GoParams, UciOutput};
 use chess::{Board, ChessMove};
 use std::sync::mpsc::Sender;
+use uci::{commands::GoParams, UciOutput};
 
 pub trait Engine {
     fn set_position(&mut self, board: Board);
