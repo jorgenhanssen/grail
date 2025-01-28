@@ -1,6 +1,7 @@
 use std::io::{self, Read, Write};
 
 use crate::{encode_board, encoding::NUM_FEATURES};
+use candle_core::{Device, Result, Tensor};
 use chess::Board;
 
 #[derive(Clone, Debug)]
@@ -78,5 +79,27 @@ impl Samples {
         }
 
         Ok(Self { samples })
+    }
+
+    pub fn to_xy(&self, device: &Device) -> Result<(Tensor, Tensor)> {
+        let x = Tensor::new(
+            self.samples
+                .iter()
+                .flat_map(|sample| sample.features.iter().map(|&x| x as f32))
+                .collect::<Vec<f32>>(),
+            device,
+        )?
+        .reshape((self.samples.len(), NUM_FEATURES))?;
+
+        let y = Tensor::new(
+            self.samples
+                .iter()
+                .map(|sample| sample.score)
+                .collect::<Vec<f32>>(),
+            device,
+        )?
+        .reshape((self.samples.len(), 1))?;
+
+        Ok((x, y))
     }
 }

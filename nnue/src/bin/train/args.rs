@@ -6,5 +6,8 @@ use clap::Parser;
 #[command(version = "0.1.0")]
 pub struct Args {
     #[arg(long, default_value_t = 10)]
-    pub epochs: u64,
+    pub epochs: usize,
+
+    #[arg(long, default_value_t = 128)]
+    pub batch_size: usize,
 }
