@@ -1,7 +1,7 @@
 pub mod encoding;
-pub mod nnue;
+pub mod network;
 pub mod samples;
 pub mod version;
 
 pub use encoding::encode_board;
-pub use nnue::NNUE;
+pub use network::Network;

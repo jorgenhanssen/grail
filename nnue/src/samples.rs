@@ -82,23 +82,16 @@ impl Samples {
     }
 
     pub fn to_xy(&self, device: &Device) -> Result<(Tensor, Tensor)> {
-        let x = Tensor::new(
-            self.samples
-                .iter()
-                .flat_map(|sample| sample.features.iter().map(|&x| x as f32))
-                .collect::<Vec<f32>>(),
-            device,
-        )?
-        .reshape((self.samples.len(), NUM_FEATURES))?;
+        let num_samples = self.samples.len();
 
-        let y = Tensor::new(
-            self.samples
-                .iter()
-                .map(|sample| sample.score)
-                .collect::<Vec<f32>>(),
-            device,
-        )?
-        .reshape((self.samples.len(), 1))?;
+        let features = self
+            .samples
+            .iter()
+            .flat_map(|sample| sample.features.iter().map(|&x| x as f32));
+        let scores = self.samples.iter().map(|sample| sample.score);
+
+        let x = Tensor::from_iter(features, device)?.reshape((num_samples, NUM_FEATURES))?;
+        let y = Tensor::from_iter(scores, device)?.reshape((num_samples, 1))?;
 
         Ok((x, y))
     }
