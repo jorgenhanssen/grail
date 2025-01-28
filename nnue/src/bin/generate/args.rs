@@ -1,7 +1,7 @@
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-#[command(name = "NNUE Trainer")]
+#[command(name = "NNUE Data Generator")]
 #[command(author = "Jørgen Hanssen <jorgen@hanssen.io>")]
 #[command(version = "0.1.0")]
 pub struct Args {

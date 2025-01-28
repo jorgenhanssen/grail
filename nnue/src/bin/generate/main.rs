@@ -19,14 +19,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     // TODO: load correct evaluation function (model if version, else default)
     match current_version {
         Some(version) => {
-            let path = manager.file_path(version, "data.bin");
-            let mut file = File::open(&path)?;
-            let samples = Samples::read_from_reader(&mut file)?;
-            log::info!("Read {} samples from {:?}", samples.len(), path);
-
+            // TODO: load NNUE
             return Ok(());
         }
-        _ => {}
+        _ => {
+            // TODO: load traditional evaluation function
+        }
     }
 
     let generator = Generator::new(num_cpus::get());
