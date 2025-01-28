@@ -39,9 +39,10 @@ impl Samples {
             // Score as f32 (4 bytes)
             writer.write_all(&sample.score.to_le_bytes())?;
 
-            for &feat in &sample.features {
-                writer.write_all(&[feat as u8])?;
-            }
+            // Write all features at once
+            writer.write_all(unsafe {
+                std::slice::from_raw_parts(sample.features.as_ptr() as *const u8, NUM_FEATURES)
+            })?;
         }
 
         Ok(())
@@ -67,13 +68,11 @@ impl Samples {
             reader.read_exact(&mut score_buf)?;
             let score = f32::from_le_bytes(score_buf);
 
-            // read features (i8 => 1 byte each)
+            // read all features at once
             let mut features = [0i8; NUM_FEATURES];
-            let mut single_byte = [0u8; 1];
-            for f in 0..NUM_FEATURES {
-                reader.read_exact(&mut single_byte)?;
-                features[f] = single_byte[0] as i8;
-            }
+            reader.read_exact(unsafe {
+                std::slice::from_raw_parts_mut(features.as_mut_ptr() as *mut u8, NUM_FEATURES)
+            })?;
 
             samples.push(Sample { score, features });
         }
