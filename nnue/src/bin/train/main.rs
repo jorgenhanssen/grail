@@ -16,6 +16,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = init()?;
 
     let manager = VersionManager::new("nnue/versions")?;
+    let version = manager.get_latest_version()?.expect("No version found");
     let samples = load_samples(&manager)?;
     let device = Device::Cpu;
 
@@ -47,6 +48,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     log::info!("Dumping test results...");
 
     dump_test_results(&test_preds, &y_test, f32::try_from(test_loss)?)?;
+
+    log::info!("Saving model...");
+    let path = manager.file_path(version, "model.bin");
+    varmap.save(&path)?;
 
     log::info!("Done!");
 
