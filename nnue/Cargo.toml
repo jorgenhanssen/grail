@@ -19,6 +19,9 @@ clap = { workspace = true }
 name = "nnue"
 
 [[bin]]
+name = "generate"
+path = "src/bin/generate/main.rs"
+
+[[bin]]
 name = "train"
 path = "src/bin/train/main.rs"
-

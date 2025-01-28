@@ -71,8 +71,8 @@ impl Default for MinimaxEngine {
         Self {
             board: Board::default(),
             nodes: 0,
-            tt: AHashMap::with_capacity(8_000_000),
-            qs_tt: AHashMap::with_capacity(16_000_000),
+            tt: AHashMap::with_capacity(6_000_000),
+            qs_tt: AHashMap::with_capacity(12_000_000),
             killer_moves: [[None; 2]; 100], // 100 is a good depth
             max_depth_reached: 1,
             current_pv: Vec::new(),
