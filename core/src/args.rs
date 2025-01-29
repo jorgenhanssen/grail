@@ -7,12 +7,8 @@ use clap::{Parser, Subcommand};
 #[command(author = "Jørgen Hanssen <jorgen@hanssen.io>")]
 #[command(version = "0.1.0")]
 pub struct Args {
-    #[arg(
-        short,
-        long,
-        default_value = "/Users/jorgenoptima/code/projects/grail/uci.log"
-    )]
-    pub log_file: PathBuf,
+    #[arg(short, long)]
+    pub log_file: Option<PathBuf>,
 
     #[command(subcommand)]
     pub engines: Engines,

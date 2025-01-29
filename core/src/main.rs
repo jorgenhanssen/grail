@@ -60,12 +60,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn init() -> Result<Args, Box<dyn Error>> {
     let args = Args::parse();
 
-    WriteLogger::init(
-        LevelFilter::Debug,
-        Config::default(),
-        File::create(&args.log_file)?,
-    )
-    .unwrap();
+    if let Some(log_file) = &args.log_file {
+        WriteLogger::init(
+            LevelFilter::Debug,
+            Config::default(),
+            File::create(log_file)?,
+        )
+        .unwrap();
+    }
 
     Ok(args)
 }
