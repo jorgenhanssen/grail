@@ -1,8 +1,12 @@
-use std::sync::Arc;
+use std::error::Error;
 use std::time::Instant;
+use std::{path::PathBuf, sync::Arc};
 
 use ahash::AHashSet;
 use chess::{Board, ChessMove, Game, MoveGen};
+use evaluation::{Evaluator, TraditionalEvaluator};
+use nnue::version::VersionManager;
+use nnue::NNUE;
 use rand::Rng;
 use search::{Engine, MinimaxEngine};
 use std::sync::Mutex;
@@ -11,11 +15,25 @@ use rayon::iter::*;
 
 pub struct Generator {
     threads: usize,
+    nnue_path: Option<PathBuf>,
 }
 
 impl Generator {
-    pub fn new(threads: usize) -> Self {
-        Self { threads }
+    pub fn new(threads: usize, manager: &VersionManager) -> Result<Self, Box<dyn Error>> {
+        let version = manager.get_latest_version()?;
+
+        let generator = match version {
+            Some(version) => Self {
+                threads,
+                nnue_path: Some(manager.file_path(version, "model.bin")),
+            },
+            _ => Self {
+                threads,
+                nnue_path: None,
+            },
+        };
+
+        Ok(generator)
     }
 
     pub fn run(&self, duration: u64, depth: u64) -> Vec<(Board, f32)> {
@@ -25,8 +43,13 @@ impl Generator {
         let global_evaluated = Arc::new(Mutex::new(AHashSet::new()));
 
         let evaluations = (0..self.threads).into_par_iter().map(|tid| {
+            let evaluator: Box<dyn Evaluator> = match &self.nnue_path {
+                Some(path) => Box::new(NNUE::new(path.clone())),
+                None => Box::new(TraditionalEvaluator),
+            };
+
             let global_evaluated_ref = Arc::clone(&global_evaluated);
-            let mut worker = SelfPlayWorker::new(tid, global_evaluated_ref, depth);
+            let mut worker = SelfPlayWorker::new(tid, global_evaluated_ref, depth, evaluator);
 
             worker.play_games(duration)
         });
@@ -47,14 +70,19 @@ struct SelfPlayWorker {
 }
 
 impl SelfPlayWorker {
-    pub fn new(tid: usize, global_evaluated: Arc<Mutex<AHashSet<u64>>>, depth: u64) -> Self {
+    pub fn new(
+        tid: usize,
+        global_evaluated: Arc<Mutex<AHashSet<u64>>>,
+        depth: u64,
+        evaluator: Box<dyn Evaluator>,
+    ) -> Self {
         Self {
             tid,
             global_evaluated,
             game: Game::new(),
             depth,
 
-            engine: MinimaxEngine::default(),
+            engine: MinimaxEngine::new(evaluator),
             positions_in_current_game: AHashSet::new(),
         }
     }

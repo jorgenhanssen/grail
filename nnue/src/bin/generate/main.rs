@@ -14,20 +14,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let manager = VersionManager::new()?;
 
-    let current_version = manager.get_latest_version()?;
-
-    // TODO: load correct evaluation function (model if version, else default)
-    match current_version {
-        Some(version) => {
-            // TODO: load NNUE
-            return Ok(());
-        }
-        _ => {
-            // TODO: load traditional evaluation function
-        }
-    }
-
-    let generator = Generator::new(num_cpus::get());
+    let generator = Generator::new(num_cpus::get(), &manager)?;
     let evaluations = generator.run(args.duration, args.depth);
 
     let samples = Samples::from_evaluations(&evaluations);

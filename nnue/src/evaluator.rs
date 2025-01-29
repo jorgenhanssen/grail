@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use candle_nn::{VarBuilder, VarMap};
 use chess::Board;
 use evaluation::Evaluator;
@@ -5,7 +7,6 @@ use evaluation::Evaluator;
 use crate::{
     encoding::{encode_board, NUM_FEATURES},
     network::Network,
-    version::VersionManager,
 };
 use candle_core::{DType, Device, Module, Tensor};
 
@@ -15,17 +16,16 @@ pub struct NNUE {
 }
 
 impl NNUE {
-    pub fn new() -> Self {
+    pub fn new(path: PathBuf) -> Self {
         let device = Device::Cpu;
 
         let mut varmap = VarMap::new();
         let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
 
+        log::info!("Loading NNUE model from {}", path.display());
+
         let network = Network::new(&vs).unwrap();
-        varmap
-            // .load("code/grail/nnue/versions/v0/model.bin")
-            .load("nnue/versions/v0/model.bin")
-            .unwrap();
+        varmap.load(path).expect("Failed to load NNUE model");
 
         Self { network, device }
     }

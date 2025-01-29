@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     log::info!("Splitting samples into train and test...");
 
-    let (x_train, x_test, y_train, y_test) = train_test_split(&x, &y, 0.1, Some(42))?;
+    let (x_train, x_test, y_train, y_test) = train_test_split(&x, &y, 0.01, Some(42))?;
 
     log::info!("Creating network...");
 
@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     log::info!("Training network...");
 
-    fit(&net, &mut opt, &x_train, &y_train, &args, 0.2)?;
+    fit(&net, &mut opt, &x_train, &y_train, &args, 0.1)?;
 
     log::info!("Testing network...");
 
