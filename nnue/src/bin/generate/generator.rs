@@ -25,7 +25,7 @@ impl Generator {
         let generator = match version {
             Some(version) => Self {
                 threads,
-                nnue_path: Some(manager.file_path(version, "model.bin")),
+                nnue_path: Some(manager.file_path(version, "model.safetensors")),
             },
             _ => Self {
                 threads,

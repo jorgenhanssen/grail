@@ -16,7 +16,7 @@ impl Network {
         };
 
         // Build the network architecture
-        network.add_layer(64, vs)?;
+        network.add_layer(128, vs)?;
         network.add_layer(64, vs)?;
         network.add_layer(1, vs)?;
 

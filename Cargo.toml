@@ -18,3 +18,10 @@ simplelog = "0.12.2"
 num_cpus = "1.16.0"
 candle-core = "0.8.2"
 candle-nn = "0.8.2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+incremental = false

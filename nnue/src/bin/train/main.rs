@@ -20,15 +20,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     let samples = load_samples(&manager)?;
     let device = Device::Cpu;
 
-    log::info!("Converting samples to tensors...");
+    log::info!("Converting samples to tensors.");
 
     let (x, y) = samples.to_xy(&device)?;
 
-    log::info!("Splitting samples into train and test...");
+    log::info!("Splitting samples into train and test.");
 
     let (x_train, x_test, y_train, y_test) = train_test_split(&x, &y, 0.01, Some(42))?;
 
-    log::info!("Creating network...");
+    log::info!("Creating network.");
 
     let varmap = VarMap::new();
     let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
@@ -36,21 +36,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut opt = AdamW::new(varmap.all_vars(), ParamsAdamW::default())?;
 
-    log::info!("Training network...");
-
+    log::info!("Training network.");
     fit(&net, &mut opt, &x_train, &y_train, &args, 0.1)?;
 
-    log::info!("Testing network...");
+    evaluate(&net, &x_test, &y_test, &manager)?;
 
-    let test_preds = net.forward(&x_test)?;
-    let test_loss = mse(&test_preds, &y_test)?;
-
-    log::info!("Dumping test results...");
-
-    dump_test_results(&test_preds, &y_test, f32::try_from(test_loss)?)?;
-
-    log::info!("Saving model...");
-    let path = manager.file_path(version, "model.bin");
+    log::info!("Saving model.");
+    let path = manager.file_path(version, "model.safetensors");
     varmap.save(&path)?;
 
     log::info!("Done!");
@@ -63,6 +55,18 @@ fn init() -> Result<Args, Box<dyn Error>> {
     SimpleLogger::init(LevelFilter::Info, Config::default())?;
 
     Ok(args)
+}
+
+fn load_samples(manager: &VersionManager) -> Result<Samples, Box<dyn Error>> {
+    let version = manager.get_latest_version()?.expect("No version found");
+    log::info!("Loading data for version {}", version);
+
+    let path = manager.file_path(version, "data.bin");
+    let mut file = File::open(&path)?;
+    let samples = Samples::read_from_reader(&mut file)?;
+
+    log::info!("Read {} samples from {:?}", samples.len(), path);
+    Ok(samples)
 }
 
 fn fit(
@@ -126,28 +130,23 @@ fn fit(
     Ok(())
 }
 
-fn load_samples(manager: &VersionManager) -> Result<Samples, Box<dyn Error>> {
-    let version = manager.get_latest_version()?.expect("No version found");
-    log::info!("Loading data for version {}", version);
-
-    let path = manager.file_path(version, "data.bin");
-    let mut file = File::open(&path)?;
-    let samples = Samples::read_from_reader(&mut file)?;
-
-    log::info!("Read {} samples from {:?}", samples.len(), path);
-    Ok(samples)
-}
-
-fn dump_test_results(
-    predictions: &Tensor,
-    labels: &Tensor,
-    test_loss: f32,
+fn evaluate(
+    net: &Network,
+    x_test: &Tensor,
+    y_test: &Tensor,
+    manager: &VersionManager,
 ) -> Result<(), Box<dyn Error>> {
     use std::io::Write;
 
+    log::info!("Evaluating model.");
+    let predictions = net.forward(x_test)?;
+    let test_loss = f32::try_from(mse(&predictions, y_test)?)?;
+
+    let version = manager.get_latest_version()?.expect("No version found");
     log::info!("Test loss: {}", test_loss);
 
-    let mut file = File::create("test_results.txt")?;
+    let file_path = manager.file_path(version, "evaluation.txt");
+    let mut file = File::create(&file_path)?;
     writeln!(file, "Test Loss: {}", test_loss)?;
     writeln!(file, "Label      Prediction")?;
     writeln!(file, "--------------------")?;
@@ -155,10 +154,10 @@ fn dump_test_results(
     let num_samples = predictions.dim(0)?;
     for i in 0..num_samples {
         let pred = f32::try_from(predictions.get(i)?.squeeze(0)?)?;
-        let label = f32::try_from(labels.get(i)?.squeeze(0)?)?;
+        let label = f32::try_from(y_test.get(i)?.squeeze(0)?)?;
         writeln!(file, "{:<10.6} {:.6}", label, pred)?;
     }
 
-    log::info!("Test results have been written to test_results.txt");
+    log::info!("Evaluation written to {}", file_path.display());
     Ok(())
 }

@@ -9,7 +9,7 @@ pub fn create(args: &Args) -> impl Engine {
     match args.engines {
         Engines::Minimax {} => {
             // TODO: Fix
-            let path = PathBuf::from("nnue/versions/v0/model.bin");
+            let path = PathBuf::from("nnue/versions/v0/model.safetensors");
             let nnue = NNUE::new(path);
             MinimaxEngine::new(Box::new(nnue))
         }
