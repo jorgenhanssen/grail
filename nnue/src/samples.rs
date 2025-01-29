@@ -1,13 +1,13 @@
 use std::io::{self, Read, Write};
 
-use crate::{encode_board, encoding::NUM_FEATURES};
+use crate::encoding::{encode_board, NUM_FEATURES};
 use candle_core::{Device, Result, Tensor};
 use chess::Board;
 
 #[derive(Clone, Debug)]
 pub struct Sample {
     pub score: f32,
-    pub features: [i8; NUM_FEATURES],
+    pub features: [f32; NUM_FEATURES],
 }
 
 #[derive(Clone, Debug)]
@@ -37,18 +37,21 @@ impl Samples {
 
         // 2) each sample
         for sample in &self.samples {
-            // Score as f32 (4 bytes)
             writer.write_all(&sample.score.to_le_bytes())?;
 
-            // Write all features at once
+            // Write features array as raw bytes - much faster than individual writes
             writer.write_all(unsafe {
-                std::slice::from_raw_parts(sample.features.as_ptr() as *const u8, NUM_FEATURES)
+                std::slice::from_raw_parts(
+                    sample.features.as_ptr() as *const u8,
+                    std::mem::size_of::<f32>() * NUM_FEATURES,
+                )
             })?;
         }
 
         Ok(())
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.samples.len()
     }
@@ -64,15 +67,17 @@ impl Samples {
         let mut samples = Vec::with_capacity(num_samples as usize);
 
         for _ in 0..num_samples {
-            // read score (f32 => 4 bytes)
             let mut score_buf = [0u8; 4];
             reader.read_exact(&mut score_buf)?;
             let score = f32::from_le_bytes(score_buf);
 
-            // read all features at once
-            let mut features = [0i8; NUM_FEATURES];
+            // Read features as f32
+            let mut features = [0.0f32; NUM_FEATURES];
             reader.read_exact(unsafe {
-                std::slice::from_raw_parts_mut(features.as_mut_ptr() as *mut u8, NUM_FEATURES)
+                std::slice::from_raw_parts_mut(
+                    features.as_mut_ptr() as *mut u8,
+                    std::mem::size_of::<f32>() * NUM_FEATURES,
+                )
             })?;
 
             samples.push(Sample { score, features });
@@ -87,7 +92,7 @@ impl Samples {
         let features = self
             .samples
             .iter()
-            .flat_map(|sample| sample.features.iter().map(|&x| x as f32));
+            .flat_map(|sample| sample.features.iter().copied());
         let scores = self.samples.iter().map(|sample| sample.score);
 
         let x = Tensor::from_iter(features, device)?.reshape((num_samples, NUM_FEATURES))?;

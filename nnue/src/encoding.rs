@@ -2,6 +2,9 @@ use chess::{Board, Color, Piece, ALL_SQUARES};
 
 pub const NUM_FEATURES: usize = 773;
 
+const SIDE_TO_MOVE_IDX: usize = 768;
+const CASTLE_BASE_IDX: usize = 769;
+
 /// Returns a one-hot encoding of the board without en-passant or promotion availability.
 ///
 /// Layout (all entries are 0.0 or 1.0):
@@ -33,57 +36,47 @@ pub const NUM_FEATURES: usize = 773;
 ///       - 772 = Black can castle queenside
 ///
 ///  Total features = 773.  (No en-passant, no promotion bits.)
-pub fn encode_board(board: &Board) -> [i8; NUM_FEATURES] {
+pub fn encode_board(board: &Board) -> [f32; NUM_FEATURES] {
     // 64 squares * 12 piece-types = 768
     // + 1 (side to move)
     // + 4 (castling rights)
     // = 773 total
-    let mut features = [0i8; NUM_FEATURES];
+    let mut features = [0f32; NUM_FEATURES];
 
     // 1) Piece placements [0..768)
     for sq in ALL_SQUARES {
         if let Some(piece) = board.piece_on(sq) {
             let color = board.color_on(sq).unwrap();
-            let piece_channel = piece_color_to_index(piece, color);
-            let sq_index = sq.to_index(); // 0..63
-            let offset = sq_index * 12 + piece_channel;
-            features[offset] = 1;
+            let offset = sq.to_index() * 12 + piece_color_to_index(piece, color);
+            features[offset] = 1.0;
         }
     }
 
-    // 2) Side to move [768]
-    let side_to_move_idx = 768;
     if board.side_to_move() == Color::White {
-        features[side_to_move_idx] = 1;
+        features[SIDE_TO_MOVE_IDX] = 1.0;
     }
 
     // 3) Castling rights [769..772]
-    let castle_base = side_to_move_idx + 1;
-    features[castle_base + 0] = if board.castle_rights(Color::White).has_kingside() {
-        1
-    } else {
-        0
-    };
-    features[castle_base + 1] = if board.castle_rights(Color::White).has_queenside() {
-        1
-    } else {
-        0
-    };
-    features[castle_base + 2] = if board.castle_rights(Color::Black).has_kingside() {
-        1
-    } else {
-        0
-    };
-    features[castle_base + 3] = if board.castle_rights(Color::Black).has_queenside() {
-        1
-    } else {
-        0
-    };
+    let wcr = board.castle_rights(Color::White);
+    let bcr = board.castle_rights(Color::Black);
+
+    if wcr.has_kingside() {
+        features[CASTLE_BASE_IDX] = 1.0;
+    }
+    if wcr.has_queenside() {
+        features[CASTLE_BASE_IDX + 1] = 1.0;
+    }
+    if bcr.has_kingside() {
+        features[CASTLE_BASE_IDX + 2] = 1.0;
+    }
+    if bcr.has_queenside() {
+        features[CASTLE_BASE_IDX + 3] = 1.0;
+    }
 
     features
 }
 
-/// Maps (Piece, Color) to a channel index in [0..11].
+#[inline]
 fn piece_color_to_index(piece: Piece, color: Color) -> usize {
     match (color, piece) {
         (Color::White, Piece::Pawn) => 0,

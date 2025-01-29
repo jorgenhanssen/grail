@@ -63,7 +63,7 @@ fn init() -> Result<Args, Box<dyn Error>> {
     WriteLogger::init(
         LevelFilter::Debug,
         Config::default(),
-        File::create(&args.log_file)?,
+        File::create("/home/jorgenhanssen/code/grail/uci.log")?,
     )
     .unwrap();
 

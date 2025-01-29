@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "core",
+  "evaluation",
   "search",
   "nnue", 
   "uci",

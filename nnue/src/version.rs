@@ -1,14 +1,14 @@
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub struct VersionManager {
     root_path: PathBuf,
 }
 
 impl VersionManager {
-    pub fn new(root_path: impl AsRef<Path>) -> io::Result<Self> {
-        let root_path = root_path.as_ref().to_path_buf();
+    pub fn new() -> io::Result<Self> {
+        let root_path = PathBuf::from("nnue/versions");
         fs::create_dir_all(&root_path)?;
         Ok(Self { root_path })
     }

@@ -1,10 +1,10 @@
-use crate::utils::evaluate_board;
-use crate::utils::{
-    get_ordered_moves, CAPTURE_SCORE, CHECKMATE_SCORE, CHECK_SCORE, PROMOTION_SCORE,
+use crate::{
+    utils::{get_ordered_moves, CAPTURE_SCORE, CHECK_SCORE, PROMOTION_SCORE},
+    Engine,
 };
-use crate::Engine;
 use ahash::AHashMap;
 use chess::{Board, BoardStatus, ChessMove};
+use evaluation::{Evaluator, TraditionalEvaluator};
 use std::sync::mpsc::Sender;
 use uci::{
     commands::{GoParams, Info},
@@ -15,6 +15,8 @@ use super::tt::{Bound, TTEntry};
 use super::utils::{
     calculate_dynamic_lmr_reduction, convert_centipawn_score, convert_mate_score, see_naive,
 };
+
+pub const CHECKMATE_SCORE: f32 = 1_000_000.0;
 
 pub struct SearchController {
     start_time: std::time::Instant,
@@ -33,6 +35,8 @@ impl SearchController {
 
     #[inline(always)]
     fn continue_search(&self, depth: u64) -> bool {
+        return self.start_time.elapsed().as_millis() < 10_000;
+
         // Check time limit if it exists
         if let Some(allocated_time) = self.allocated_time {
             if self.start_time.elapsed().as_millis() >= allocated_time as u128 {
@@ -64,6 +68,7 @@ pub struct MinimaxEngine {
     max_depth_reached: u64,
 
     position_stack: Vec<u64>,
+    evaluator: Box<dyn Evaluator>,
 }
 
 impl Default for MinimaxEngine {
@@ -78,11 +83,19 @@ impl Default for MinimaxEngine {
             current_pv: Vec::new(),
 
             position_stack: Vec::with_capacity(100),
+            evaluator: Box::new(TraditionalEvaluator),
         }
     }
 }
 
 impl Engine for MinimaxEngine {
+    fn new(evaluator: Box<dyn Evaluator>) -> Self {
+        Self {
+            evaluator,
+            ..Default::default()
+        }
+    }
+
     fn set_position(&mut self, board: Board) {
         self.board = board;
     }
@@ -361,7 +374,7 @@ impl MinimaxEngine {
         }
 
         // Evaluate the board right away
-        let stand_pat = evaluate_board(board);
+        let stand_pat = self.evaluator.evaluate(board);
 
         if stand_pat >= beta {
             return (stand_pat, Vec::new());

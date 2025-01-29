@@ -7,7 +7,7 @@ use candle_nn::{loss::mse, AdamW, Module, Optimizer, ParamsAdamW, VarBuilder, Va
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::LevelFilter;
-use nnue::{encoding::NUM_FEATURES, samples::Samples, version::VersionManager, Network};
+use nnue::{network::Network, samples::Samples, version::VersionManager};
 use simplelog::{Config, SimpleLogger};
 use std::{error::Error, fs::File};
 use utils::train_test_split;
@@ -15,7 +15,7 @@ use utils::train_test_split;
 fn main() -> Result<(), Box<dyn Error>> {
     let args = init()?;
 
-    let manager = VersionManager::new("nnue/versions")?;
+    let manager = VersionManager::new()?;
     let version = manager.get_latest_version()?.expect("No version found");
     let samples = load_samples(&manager)?;
     let device = Device::Cpu;
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let varmap = VarMap::new();
     let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
-    let net = Network::new(&vs, NUM_FEATURES)?;
+    let net = Network::new(&vs)?;
 
     let mut opt = AdamW::new(varmap.all_vars(), ParamsAdamW::default())?;
 

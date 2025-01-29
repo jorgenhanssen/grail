@@ -1,5 +1,5 @@
-use crate::utils::{piece_value, CHECK_SCORE};
 use chess::{Board, ChessMove};
+use evaluation::piece_value;
 use uci::commands::Score;
 
 #[inline(always)]

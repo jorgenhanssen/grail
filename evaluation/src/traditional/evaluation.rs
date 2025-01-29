@@ -1,9 +1,9 @@
-use crate::utils::values::{BISHOP_VALUE, KNIGHT_VALUE, PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE};
 use chess::{BitBoard, Board, BoardStatus, Color, Piece, EMPTY};
 
-use super::{
-    get_pst, piece_value, sum_pst, PASSED_PAWN_BONUS, ROOK_ON_SEVENTH_BONUS, ROOK_OPEN_FILE_BONUS,
-    ROOK_SEMI_OPEN_FILE_BONUS,
+use crate::traditional::pst::{get_pst, sum_pst};
+use crate::traditional::values::{
+    piece_value, BISHOP_VALUE, KNIGHT_VALUE, PASSED_PAWN_BONUS, PAWN_VALUE, QUEEN_VALUE,
+    ROOK_ON_SEVENTH_BONUS, ROOK_OPEN_FILE_BONUS, ROOK_SEMI_OPEN_FILE_BONUS, ROOK_VALUE,
 };
 
 // Return final evaluation (positive = good for White, negative = good for Black)

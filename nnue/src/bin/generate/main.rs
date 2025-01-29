@@ -12,7 +12,7 @@ use std::{error::Error, fs::File};
 fn main() -> Result<(), Box<dyn Error>> {
     let args = init()?;
 
-    let manager = VersionManager::new("nnue/versions")?;
+    let manager = VersionManager::new()?;
 
     let current_version = manager.get_latest_version()?;
 

@@ -1,20 +1,22 @@
 use candle_core::{Result, Tensor};
 use candle_nn::{linear, Linear, Module, VarBuilder};
 
+use crate::encoding::NUM_FEATURES;
+
 pub struct Network {
     layers: Vec<Linear>,
     last_size: usize, // Track the last layer's output size
 }
 
 impl Network {
-    pub fn new(vs: &VarBuilder, in_features: usize) -> Result<Self> {
+    pub fn new(vs: &VarBuilder) -> Result<Self> {
         let mut network = Self {
             layers: Vec::new(),
-            last_size: in_features,
+            last_size: NUM_FEATURES,
         };
 
         // Build the network architecture
-        network.add_layer(128, vs)?;
+        network.add_layer(64, vs)?;
         network.add_layer(64, vs)?;
         network.add_layer(1, vs)?;
 
@@ -32,6 +34,7 @@ impl Network {
 }
 
 impl Module for Network {
+    #[inline]
     fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let mut x = x.clone();
 
