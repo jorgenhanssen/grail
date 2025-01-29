@@ -21,4 +21,6 @@ Cargo.lock
 #.idea/
 
 *.log
-*.csv
+
+# nnue models and data
+nnue/versions/
