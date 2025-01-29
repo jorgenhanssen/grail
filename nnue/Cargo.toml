@@ -15,9 +15,9 @@ rand = { workspace = true }
 num_cpus = { workspace = true }
 simplelog = { workspace = true }
 clap = { workspace = true }
-candle-core = "0.8.2"
-candle-nn = "0.8.2"
-indicatif = "0.17.0"
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+indicatif = { workspace = true }
 
 [lib]
 name = "nnue"

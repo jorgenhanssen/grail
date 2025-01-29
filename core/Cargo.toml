@@ -19,3 +19,5 @@ log = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
 simplelog = { workspace = true }
+candle-core = { workspace = true }
+candle-nn = { workspace = true }

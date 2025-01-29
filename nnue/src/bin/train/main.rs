@@ -20,15 +20,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     let samples = load_samples(&manager)?;
     let device = Device::Cpu;
 
-    log::info!("Converting samples to tensors.");
+    log::info!("Converting samples to tensors");
 
     let (x, y) = samples.to_xy(&device)?;
 
-    log::info!("Splitting samples into train and test.");
+    log::info!("Splitting samples into train and test");
 
     let (x_train, x_test, y_train, y_test) = train_test_split(&x, &y, 0.01, Some(42))?;
 
-    log::info!("Creating network.");
+    log::info!("Creating network");
 
     let varmap = VarMap::new();
     let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
@@ -36,12 +36,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut opt = AdamW::new(varmap.all_vars(), ParamsAdamW::default())?;
 
-    log::info!("Training network.");
+    log::info!("Training network");
     fit(&net, &mut opt, &x_train, &y_train, &args, 0.1)?;
 
     evaluate(&net, &x_test, &y_test, &manager)?;
 
-    log::info!("Saving model.");
+    log::info!("Saving model");
     let path = manager.file_path(version, "model.safetensors");
     varmap.save(&path)?;
 

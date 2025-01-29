@@ -3,6 +3,8 @@ use std::time::Instant;
 use std::{path::PathBuf, sync::Arc};
 
 use ahash::AHashSet;
+use candle_core::Device;
+use candle_nn::VarMap;
 use chess::{Board, ChessMove, Game, MoveGen};
 use evaluation::{Evaluator, TraditionalEvaluator};
 use nnue::version::VersionManager;
@@ -44,7 +46,13 @@ impl Generator {
 
         let evaluations = (0..self.threads).into_par_iter().map(|tid| {
             let evaluator: Box<dyn Evaluator> = match &self.nnue_path {
-                Some(path) => Box::new(NNUE::new(path.clone())),
+                Some(path) => {
+                    let mut varmap = VarMap::new();
+                    let nnue = Box::new(NNUE::new(&varmap, &Device::Cpu));
+                    varmap.load(path).unwrap();
+
+                    nnue
+                }
                 None => Box::new(TraditionalEvaluator),
             };
 

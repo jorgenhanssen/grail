@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use candle_nn::{VarBuilder, VarMap};
 use chess::Board;
 use evaluation::Evaluator;
@@ -16,18 +14,16 @@ pub struct NNUE {
 }
 
 impl NNUE {
-    pub fn new(path: PathBuf) -> Self {
-        let device = Device::Cpu;
+    pub fn new(varmap: &VarMap, device: &Device) -> Self {
+        log::info!("Loading NNUE model");
 
-        let mut varmap = VarMap::new();
         let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
-
-        log::info!("Loading NNUE model from {}", path.display());
-
         let network = Network::new(&vs).unwrap();
-        varmap.load(path).expect("Failed to load NNUE model");
 
-        Self { network, device }
+        Self {
+            network,
+            device: device.clone(),
+        }
     }
 }
 

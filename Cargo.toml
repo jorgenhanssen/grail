@@ -18,6 +18,7 @@ simplelog = "0.12.2"
 num_cpus = "1.16.0"
 candle-core = "0.8.2"
 candle-nn = "0.8.2"
+indicatif = "0.17.0"
 
 [profile.release]
 opt-level = 3
