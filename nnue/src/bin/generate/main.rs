@@ -58,11 +58,6 @@ fn print_label_distribution(samples: &Samples) {
     // Find the maximum bin count for scaling
     let max_count = *bins.iter().max().unwrap_or(&1);
 
-    log::info!("Label distribution (normalized scores):");
-    log::info!(
-        "Each '=' represents approximately {} samples",
-        max_count / MAX_WIDTH
-    );
     for (i, count) in bins.iter().enumerate() {
         let range_start = MIN_SCORE + (i as f32 * BIN_SIZE);
         let range_end = range_start + BIN_SIZE;
