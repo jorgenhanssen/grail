@@ -27,16 +27,19 @@ setup:
 	# Source it right now for *this* shell
 	$(CARGO_ENV)
 
-build:
+build-grail:
 	$(call cargo-build,grail)
-
-run:
+run-grail:
 	$(call cargo-run,grail)
 
-generate:
+build-generate:
+	$(call cargo-build,generate)
+run-generate:
 	$(call cargo-run,generate)
 
-train:
+build-train:
+	$(call cargo-build,train)
+run-train:
 	$(call cargo-run,train)
 
 try: build
