@@ -124,7 +124,7 @@ fn fit(
             ));
         }
 
-        progress_bar.finish();
+        progress_bar.finish_with_message("Done!");
     }
 
     Ok(())

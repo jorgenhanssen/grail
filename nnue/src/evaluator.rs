@@ -15,8 +15,6 @@ pub struct NNUE {
 
 impl NNUE {
     pub fn new(varmap: &VarMap, device: &Device) -> Self {
-        log::info!("Loading NNUE model");
-
         let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
         let network = Network::new(&vs).unwrap();
 

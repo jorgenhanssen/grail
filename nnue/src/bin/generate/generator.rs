@@ -7,6 +7,7 @@ use candle_core::Device;
 use candle_nn::VarMap;
 use chess::{Board, ChessMove, Game, MoveGen};
 use evaluation::{Evaluator, TraditionalEvaluator};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use nnue::version::VersionManager;
 use nnue::NNUE;
 use rand::Rng;
@@ -39,30 +40,59 @@ impl Generator {
     }
 
     pub fn run(&self, duration: u64, depth: u64) -> Vec<(Board, f32)> {
-        log::info!("Generating NNUE samples using {} threads", self.threads);
+        let eval_name = match &self.nnue_path {
+            Some(path) => path.display().to_string(),
+            None => "traditional evaluator".to_string(),
+        };
 
-        // We only want to evaluate positions once
+        log::info!(
+            "Generating samples using {} threads ({})",
+            self.threads,
+            eval_name
+        );
+
+        let mp = MultiProgress::new();
+        let mp_style = ProgressStyle::with_template(
+            " {spinner:.cyan} {wide_bar:.cyan/blue} {eta_precise} | {msg}",
+        )
+        .unwrap();
+
         let global_evaluated = Arc::new(Mutex::new(AHashSet::new()));
 
-        let evaluations = (0..self.threads).into_par_iter().map(|tid| {
-            let evaluator: Box<dyn Evaluator> = match &self.nnue_path {
-                Some(path) => {
-                    let mut varmap = VarMap::new();
-                    let nnue = Box::new(NNUE::new(&varmap, &Device::Cpu));
-                    varmap.load(path).unwrap();
+        let handles: Vec<_> = (0..self.threads)
+            .map(|tid| {
+                let nnue_path = self.nnue_path.clone();
+                let global_evaluated = Arc::clone(&global_evaluated);
 
-                    nnue
-                }
-                None => Box::new(TraditionalEvaluator),
-            };
+                let pb = mp.add(ProgressBar::new(duration));
+                pb.set_prefix(format!("[{}]", tid));
+                pb.set_style(mp_style.clone());
 
-            let global_evaluated_ref = Arc::clone(&global_evaluated);
-            let mut worker = SelfPlayWorker::new(tid, global_evaluated_ref, depth, evaluator);
+                std::thread::spawn(move || {
+                    let evaluator: Box<dyn Evaluator> = match &nnue_path {
+                        Some(path) => {
+                            let mut varmap = VarMap::new();
+                            let nnue = Box::new(NNUE::new(&varmap, &Device::Cpu));
+                            varmap.load(path).unwrap();
+                            nnue
+                        }
+                        None => Box::new(TraditionalEvaluator),
+                    };
 
-            worker.play_games(duration)
-        });
+                    let mut worker = SelfPlayWorker::new(tid, global_evaluated, depth, evaluator);
+                    worker.play_games(duration, &pb)
+                })
+            })
+            .collect();
 
-        evaluations.flatten().collect()
+        let evaluations: Vec<_> = handles
+            .into_iter()
+            .flat_map(|h| h.join().unwrap())
+            .collect();
+
+        mp.clear().unwrap();
+
+        evaluations
     }
 }
 
@@ -95,13 +125,21 @@ impl SelfPlayWorker {
         }
     }
 
-    pub fn play_games(&mut self, duration: u64) -> Vec<(Board, f32)> {
+    pub fn play_games(&mut self, duration: u64, pb: &ProgressBar) -> Vec<(Board, f32)> {
         let start_time = Instant::now();
         let mut evaluations = Vec::new();
 
         self.reset_game();
 
-        while start_time.elapsed().as_secs() < duration {
+        loop {
+            let current_elapsed = start_time.elapsed().as_secs();
+            if current_elapsed >= duration {
+                break;
+            }
+
+            pb.set_message(format!("{:?}", evaluations.len()));
+            pb.set_position(current_elapsed);
+
             let terminal = self.play_single_move(&mut evaluations);
 
             if terminal {
@@ -109,12 +147,13 @@ impl SelfPlayWorker {
             }
         }
 
+        pb.finish_with_message("waiting...");
+
         evaluations
     }
 
     fn play_single_move(&mut self, evaluations: &mut Vec<(Board, f32)>) -> bool {
         if self.game.result().is_some() {
-            log::info!("[{}] Game ended: {:?}", self.tid, self.game.result());
             return true;
         }
 
@@ -123,7 +162,6 @@ impl SelfPlayWorker {
 
         // If we've seen this position in the *current game*, we have a cycle.
         if !self.positions_in_current_game.insert(board_hash) {
-            log::info!("[{}] Cycle detected, resetting game", self.tid);
             return true;
         }
 
