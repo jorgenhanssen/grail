@@ -230,15 +230,13 @@ impl SelfPlayWorker {
         let num_moves = self.positions_in_current_game.len();
 
         // safety net
-        if num_moves > 1000 {
+        if num_moves > 500 {
             return true;
         }
 
         // Abort if moderately long and drawish
-        if num_moves > 500 {
-            if score.abs() < 0.2 {
-                return true;
-            }
+        if num_moves > 200 && score.abs() < 0.2 {
+            return true;
         }
 
         false
