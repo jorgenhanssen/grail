@@ -166,7 +166,12 @@ impl SelfPlayWorker {
         }
 
         // Select and make a move, possibly storing the board's evaluation.
-        let chosen_move = self.select_move(board, evaluations);
+        let (chosen_move, score) = self.select_move(board, evaluations);
+
+        if self.should_abort_game(&score) {
+            return true;
+        }
+
         self.game.make_move(chosen_move);
 
         false
@@ -176,11 +181,11 @@ impl SelfPlayWorker {
         &mut self,
         board: chess::Board,
         evaluations: &mut Vec<(Board, f32)>,
-    ) -> ChessMove {
+    ) -> (ChessMove, f32) {
         let moves: Vec<ChessMove> = MoveGen::new_legal(&board).collect();
 
         if self.position_has_been_evaluated(&board) {
-            return random_move(&moves);
+            return (random_move(&moves), 0.0);
         }
 
         let (engine_move, engine_score) = self.get_engine_move(&board);
@@ -189,9 +194,9 @@ impl SelfPlayWorker {
         evaluations.push((board.clone(), engine_score.tanh()));
 
         if self.should_use_engine_move(&engine_score) {
-            engine_move
+            (engine_move, engine_score)
         } else {
-            random_move(&moves)
+            (random_move(&moves), engine_score)
         }
     }
 
@@ -218,7 +223,25 @@ impl SelfPlayWorker {
 
     #[inline]
     fn should_use_engine_move(&self, score: &f32) -> bool {
-        score.abs() > 0.7
+        rand::thread_rng().gen::<f32>() < 0.3
+    }
+
+    fn should_abort_game(&self, score: &f32) -> bool {
+        let num_moves = self.positions_in_current_game.len();
+
+        // safety net
+        if num_moves > 1000 {
+            return true;
+        }
+
+        // Abort if moderately long and drawish
+        if num_moves > 500 {
+            if score.abs() < 0.2 {
+                return true;
+            }
+        }
+
+        false
     }
 
     #[inline]
