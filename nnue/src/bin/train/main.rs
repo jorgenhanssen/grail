@@ -97,7 +97,6 @@ fn fit(
                 .unwrap(),
         );
 
-        // For each batch
         for batch_idx in 0..num_batches {
             let start = batch_idx * batch_size;
             let x_batch = x_train.narrow(0, start, batch_size)?;
@@ -124,7 +123,7 @@ fn fit(
             ));
         }
 
-        progress_bar.finish_with_message("Done!");
+        progress_bar.finish();
     }
 
     Ok(())

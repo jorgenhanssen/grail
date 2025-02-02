@@ -3,7 +3,7 @@ use crate::{
     Engine,
 };
 use ahash::AHashMap;
-use chess::{Board, BoardStatus, ChessMove};
+use chess::{Board, BoardStatus, ChessMove, Color};
 use evaluation::{Evaluator, TraditionalEvaluator};
 use std::sync::mpsc::Sender;
 use uci::{
@@ -56,7 +56,7 @@ impl SearchController {
     }
 }
 
-pub struct MinimaxEngine {
+pub struct NegamaxEngine {
     board: Board,
     nodes: u32,
     killer_moves: [[Option<ChessMove>; 2]; 100], // 2 per depth
@@ -71,7 +71,7 @@ pub struct MinimaxEngine {
     evaluator: Box<dyn Evaluator>,
 }
 
-impl Default for MinimaxEngine {
+impl Default for NegamaxEngine {
     fn default() -> Self {
         Self {
             board: Board::default(),
@@ -88,7 +88,7 @@ impl Default for MinimaxEngine {
     }
 }
 
-impl Engine for MinimaxEngine {
+impl Engine for NegamaxEngine {
     fn new(evaluator: Box<dyn Evaluator>) -> Self {
         Self {
             evaluator,
@@ -124,12 +124,12 @@ impl Engine for MinimaxEngine {
     }
 }
 
-impl MinimaxEngine {
+impl NegamaxEngine {
     #[inline(always)]
     pub fn init_search(&mut self) {
         self.tt.clear();
         self.qs_tt.clear();
-        self.killer_moves = [[None; 2]; 100];
+        self.killer_moves = [[None; 2]; 100]; // 2 killer moves per depth
         self.nodes = 0;
         self.max_depth_reached = 1;
         self.current_pv.clear();
@@ -141,52 +141,39 @@ impl MinimaxEngine {
 
     pub fn search_root(&mut self, depth: u64) -> (ChessMove, f32) {
         let mut alpha = f32::NEG_INFINITY;
-        let mut beta = f32::INFINITY;
+        let beta = f32::INFINITY;
 
         let mut preferred_moves = AHashMap::with_capacity(1);
         if let Some(move_) = self.current_pv.first() {
-            preferred_moves.insert(move_.clone(), i32::MAX);
+            preferred_moves.insert(*move_, i32::MAX);
         }
         let moves_with_scores = get_ordered_moves(&self.board, Some(&preferred_moves));
 
-        let maximizing = self.board.side_to_move() == chess::Color::White;
-        let mut best_score = if maximizing {
-            f32::NEG_INFINITY
-        } else {
-            f32::INFINITY
-        };
+        if moves_with_scores.is_empty() {
+            return (ChessMove::default(), 0.0);
+        }
+
+        let mut best_score = f32::NEG_INFINITY;
         let mut current_best_move = moves_with_scores[0].0;
 
+        // Negamax at root: call search_subtree with flipped window, then negate result
         for (m, _) in moves_with_scores {
             let new_board = self.board.make_move_new(m);
 
             self.position_stack.push(new_board.get_hash());
-            let (score, mut pv) = self.search_subtree(&new_board, 1, depth, alpha, beta);
+            let (child_value, mut pv) = self.search_subtree(&new_board, 1, depth, -beta, -alpha);
+            let score = -child_value;
             self.position_stack.pop();
 
             pv.insert(0, m);
 
-            if maximizing {
-                if score > best_score {
-                    best_score = score;
-                    current_best_move = m;
-                    self.current_pv = pv;
-                }
-                alpha = alpha.max(best_score);
-            } else {
-                if score < best_score {
-                    best_score = score;
-                    current_best_move = m;
-                    self.current_pv = pv;
-                }
-                beta = beta.min(best_score);
+            if score > best_score {
+                best_score = score;
+                current_best_move = m;
+                self.current_pv = pv;
             }
 
-            log::debug!("Move: {}, Score: {}", m.to_string(), score);
-
-            if alpha >= beta {
-                break;
-            }
+            alpha = alpha.max(best_score);
         }
 
         (current_best_move, best_score)
@@ -198,7 +185,7 @@ impl MinimaxEngine {
         depth: u64,
         max_depth: u64,
         mut alpha: f32,
-        mut beta: f32,
+        beta: f32,
     ) -> (f32, Vec<ChessMove>) {
         let hash = *self.position_stack.last().unwrap();
 
@@ -210,11 +197,7 @@ impl MinimaxEngine {
             BoardStatus::Checkmate => {
                 self.nodes += 1;
                 let remaining_depth = (max_depth - depth) as f32;
-                if board.side_to_move() == chess::Color::White {
-                    return (-CHECKMATE_SCORE * (remaining_depth + 1.0), Vec::new());
-                } else {
-                    return (CHECKMATE_SCORE * (remaining_depth + 1.0), Vec::new());
-                }
+                return (-CHECKMATE_SCORE * (remaining_depth + 1.0), Vec::new());
             }
             BoardStatus::Stalemate => {
                 self.nodes += 1;
@@ -229,30 +212,29 @@ impl MinimaxEngine {
 
         let mut maybe_tt_move = None;
         if let Some((tt_value, tt_bound, tt_move)) = self.probe_tt(hash, depth, max_depth) {
-            maybe_tt_move = tt_move; // Store the move for later use
-                                     // If it's an EXACT result, we can just return.
+            maybe_tt_move = tt_move;
             match tt_bound {
                 Bound::Exact => {
                     return (tt_value, maybe_tt_move.map_or(Vec::new(), |m| vec![m]));
                 }
                 Bound::Lower => {
-                    // This is effectively alpha
                     if tt_value > alpha {
                         alpha = tt_value;
                     }
                 }
                 Bound::Upper => {
-                    // This is effectively beta
-                    if tt_value < beta {
-                        beta = tt_value;
+                    if tt_value <= alpha {
+                        return (tt_value, maybe_tt_move.map_or(Vec::new(), |m| vec![m]));
                     }
                 }
             }
             if alpha >= beta {
-                // We can do a cutoff
                 return (tt_value, maybe_tt_move.map_or(Vec::new(), |m| vec![m]));
             }
         }
+
+        self.nodes += 1;
+        self.max_depth_reached = self.max_depth_reached.max(depth);
 
         let mut preferred_moves = AHashMap::with_capacity(5);
 
@@ -266,98 +248,65 @@ impl MinimaxEngine {
             preferred_moves.insert(maybe_tt_move.unwrap(), i32::MAX - 1);
         }
 
-        // Add killer moves for this specific depth if they are legal
-        // But these are not as good as capture moves!
+        //  Killer moves for this specific depth if they are legal
         for &killer_move_opt in &self.killer_moves[depth as usize] {
             if let Some(killer_move) = killer_move_opt {
-                // don't need to check if legal, it will be used as mask for legal moves.
                 if !preferred_moves.contains_key(&killer_move) {
                     preferred_moves.insert(killer_move, CAPTURE_SCORE - 2);
                 }
             }
         }
 
-        // Proceed with normal alpha-beta:
         let moves = get_ordered_moves(board, Some(&preferred_moves));
 
+        if moves.is_empty() {
+            return (0.0, Vec::new());
+        }
+
+        // Negamax
+        let mut best_value = f32::NEG_INFINITY;
+        let mut best_move = None;
         let mut best_line = Vec::new();
 
-        if board.side_to_move() == chess::Color::White {
-            let mut best_value = f32::NEG_INFINITY;
-            let mut best_move = None;
-            for (move_index, (m, score)) in moves.into_iter().enumerate() {
-                let reduction = calculate_dynamic_lmr_reduction(depth, move_index, score);
-                let current_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
+        for (move_index, (m, score)) in moves.into_iter().enumerate() {
+            let reduction = calculate_dynamic_lmr_reduction(depth, move_index, score);
+            let current_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
 
-                let new_board = board.make_move_new(m);
+            let new_board = board.make_move_new(m);
 
-                self.position_stack.push(new_board.get_hash());
-                let (value, mut line) =
-                    self.search_subtree(&new_board, depth + 1, current_max_depth, alpha, beta);
-                self.position_stack.pop();
+            self.position_stack.push(new_board.get_hash());
+            let (child_value, mut line) =
+                self.search_subtree(&new_board, depth + 1, current_max_depth, -beta, -alpha);
+            let value = -child_value;
+            self.position_stack.pop();
 
-                if value > best_value {
-                    best_value = value;
-                    best_move = Some(m);
-                    line.insert(0, m);
-                    best_line = line;
-                }
-
-                alpha = alpha.max(best_value);
-                if alpha >= beta {
-                    if let Some(m) = best_move {
-                        if !board.piece_on(m.get_dest()).is_some() {
-                            self.add_killer_move(depth as usize, m);
-                        }
-                    }
-                    break;
-                }
+            if value > best_value {
+                best_value = value;
+                best_move = Some(m);
+                line.insert(0, m);
+                best_line = line;
             }
 
-            self.store_tt(hash, depth, max_depth, best_value, alpha, beta, best_move);
-            (best_value, best_line)
-        } else {
-            let mut best_value = f32::INFINITY;
-            let mut best_move = None;
-            for (move_index, (m, score)) in moves.into_iter().enumerate() {
-                let reduction = calculate_dynamic_lmr_reduction(depth, move_index, score);
-                let current_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
-
-                let new_board = board.make_move_new(m);
-
-                self.position_stack.push(new_board.get_hash());
-                let (value, mut line) =
-                    self.search_subtree(&new_board, depth + 1, current_max_depth, alpha, beta);
-                self.position_stack.pop();
-
-                if value < best_value {
-                    best_value = value;
-                    best_move = Some(m);
-                    line.insert(0, m);
-                    best_line = line;
-                }
-
-                beta = beta.min(best_value);
-                if beta <= alpha {
-                    if let Some(m) = best_move {
-                        if !board.piece_on(m.get_dest()).is_some() {
-                            self.add_killer_move(depth as usize, m);
-                        }
+            alpha = alpha.max(best_value);
+            if alpha >= beta {
+                if let Some(m) = best_move {
+                    if !board.piece_on(m.get_dest()).is_some() {
+                        self.add_killer_move(depth as usize, m);
                     }
-                    break;
                 }
+                break;
             }
-
-            self.store_tt(hash, depth, max_depth, best_value, alpha, beta, best_move);
-            (best_value, best_line)
         }
+
+        self.store_tt(hash, depth, max_depth, best_value, alpha, beta, best_move);
+        (best_value, best_line)
     }
 
     fn quiescence_search(
         &mut self,
         board: &Board,
         mut alpha: f32,
-        mut beta: f32,
+        beta: f32,
         depth: u64,
     ) -> (f32, Vec<ChessMove>) {
         let hash = *self.position_stack.last().unwrap();
@@ -366,76 +315,65 @@ impl MinimaxEngine {
         }
 
         self.nodes += 1;
-        self.max_depth_reached = depth.max(self.max_depth_reached);
+        self.max_depth_reached = self.max_depth_reached.max(depth);
 
-        // Prune if visited in some other QS search
-        if let Some(&score) = self.qs_tt.get(&hash) {
-            return (score, Vec::new());
+        if let Some(&cached_score) = self.qs_tt.get(&hash) {
+            return (cached_score, Vec::new());
         }
 
-        // Evaluate the board right away
-        let stand_pat = self.evaluator.evaluate(board);
+        // Multiply the evaluator's White-based score by ±1 to get current side's perspective
+        let color_multiplier = if board.side_to_move() == Color::White {
+            1.0
+        } else {
+            -1.0
+        };
+        let stand_pat = color_multiplier * self.evaluator.evaluate(board);
 
         if stand_pat >= beta {
             return (stand_pat, Vec::new());
         }
-        if alpha < stand_pat {
+        if stand_pat > alpha {
             alpha = stand_pat;
         }
 
-        let moves = get_ordered_moves(board, None);
-
-        let moves_to_search: Vec<(ChessMove, i32)> = moves
+        let moves_with_scores = get_ordered_moves(board, None);
+        let forcing_moves: Vec<(ChessMove, i32)> = moves_with_scores
             .into_iter()
-            .filter(|&(mv, score)| {
-                // We definitely want to search promotion moves and checks
-                if score >= PROMOTION_SCORE || score == CHECK_SCORE {
+            .filter(|(mv, score)| {
+                if *score >= PROMOTION_SCORE || *score == CHECK_SCORE {
                     return true;
                 }
-
-                // We also want to search capture moves if they are good enough
-                if score >= CAPTURE_SCORE {
-                    return see_naive(board, mv) >= 0.0;
+                if *score >= CAPTURE_SCORE {
+                    return see_naive(board, *mv) >= 0.0;
                 }
-
                 false
             })
             .collect();
 
-        if moves_to_search.is_empty() {
+        if forcing_moves.is_empty() {
+            self.qs_tt.insert(hash, stand_pat);
             return (stand_pat, Vec::new());
         }
 
-        let maximizing = board.side_to_move() == chess::Color::White;
-
-        let mut best_line = Vec::new();
         let mut best_eval = stand_pat;
+        let mut best_line = Vec::new();
 
-        // For each forcing move, see if it improves things
-        for (m, _) in moves_to_search {
-            let new_board = board.make_move_new(m);
+        for (mv, _) in forcing_moves {
+            let new_board = board.make_move_new(mv);
 
-            // Recursively call quiescence
             self.position_stack.push(new_board.get_hash());
-            let (score, mut line) = self.quiescence_search(&new_board, alpha, beta, depth + 1);
+            let (child_score, mut child_line) =
+                self.quiescence_search(&new_board, -beta, -alpha, depth + 1);
             self.position_stack.pop();
 
-            line.insert(0, m);
-
-            if maximizing {
-                if score > best_eval {
-                    best_eval = score;
-                    best_line = line;
-                }
-                alpha = alpha.max(best_eval);
-            } else {
-                if score < best_eval {
-                    best_eval = score;
-                    best_line = line;
-                }
-                beta = beta.min(best_eval);
+            let value = -child_score;
+            if value > best_eval {
+                best_eval = value;
+                child_line.insert(0, mv);
+                best_line = child_line;
             }
 
+            alpha = alpha.max(best_eval);
             if alpha >= beta {
                 break;
             }
@@ -453,7 +391,6 @@ impl MinimaxEngine {
         max_depth: u64,
     ) -> Option<(f32, Bound, Option<ChessMove>)> {
         let plies = max_depth - depth;
-
         if let Some(entry) = self.tt.get(&hash) {
             if entry.plies >= plies {
                 return Some((entry.value, entry.bound, entry.best_move));
@@ -509,9 +446,6 @@ impl MinimaxEngine {
 
     #[inline(always)]
     fn is_cycle(&self, hash: u64) -> bool {
-        // We only need to check if there are 2 occurrences of the hash.
-        // No need to explore a position if it exists further up the stack.
-        // In most cases, this is a draw.
         self.position_stack.iter().filter(|&&h| h == hash).count() >= 2
     }
 
@@ -535,7 +469,7 @@ impl MinimaxEngine {
                 score: if found_checkmate {
                     convert_mate_score(&self.board, best_score, &self.current_pv)
                 } else {
-                    convert_centipawn_score(&self.board, best_score)
+                    convert_centipawn_score(best_score)
                 },
                 pv: self.current_pv.clone(),
             }))

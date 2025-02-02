@@ -11,7 +11,7 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use nnue::version::VersionManager;
 use nnue::NNUE;
 use rand::Rng;
-use search::{Engine, MinimaxEngine};
+use search::{Engine, NegamaxEngine};
 use std::sync::Mutex;
 
 use rayon::iter::*;
@@ -99,7 +99,7 @@ impl Generator {
 struct SelfPlayWorker {
     tid: usize,
     global_evaluated: Arc<Mutex<AHashSet<u64>>>,
-    engine: MinimaxEngine,
+    engine: NegamaxEngine,
     depth: u64,
 
     // Specific to ongoing game
@@ -120,7 +120,7 @@ impl SelfPlayWorker {
             game: Game::new(),
             depth,
 
-            engine: MinimaxEngine::new(evaluator),
+            engine: NegamaxEngine::new(evaluator),
             positions_in_current_game: AHashSet::new(),
         }
     }

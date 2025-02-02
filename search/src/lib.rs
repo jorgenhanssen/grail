@@ -1,6 +1,6 @@
 mod def;
-mod minimax;
+mod negamax;
 mod utils;
 
 pub use def::Engine;
-pub use minimax::MinimaxEngine;
+pub use negamax::NegamaxEngine;

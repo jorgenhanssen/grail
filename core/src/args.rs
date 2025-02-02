@@ -16,5 +16,5 @@ pub struct Args {
 
 #[derive(Subcommand, Debug)]
 pub enum Engines {
-    Minimax {},
+    Negamax {},
 }

@@ -11,6 +11,7 @@ opt-level = 3
 search = { path = "../search" }
 nnue = { path = "../nnue" }
 uci = { path = "../uci" }
+evaluation = { path = "../evaluation" }
 
 ahash = { workspace = true }
 chess = { workspace = true }
