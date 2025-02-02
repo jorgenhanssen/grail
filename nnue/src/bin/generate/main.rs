@@ -24,10 +24,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     print_label_distribution(&samples);
 
     let next_version = manager.create_next_version()?;
-    let next_path = manager.file_path(next_version, "data.bin");
+    let next_path = manager.file_path(next_version, "data.csv");
 
     let mut file = File::create(next_path)?;
-    samples.write_to_writer(&mut file)?;
+    samples.write(&mut file)?;
 
     Ok(())
 }

@@ -5,7 +5,7 @@ use clap::Parser;
 #[command(author = "Jørgen Hanssen <jorgen@hanssen.io>")]
 #[command(version = "0.1.0")]
 pub struct Args {
-    #[arg(long, default_value_t = 16)]
+    #[arg(long, default_value_t = 30)]
     pub epochs: usize,
 
     #[arg(long, default_value_t = 128)]

@@ -14,8 +14,6 @@ use rand::Rng;
 use search::{Engine, NegamaxEngine};
 use std::sync::Mutex;
 
-use rayon::iter::*;
-
 pub struct Generator {
     threads: usize,
     nnue_path: Option<PathBuf>,
@@ -39,7 +37,7 @@ impl Generator {
         Ok(generator)
     }
 
-    pub fn run(&self, duration: u64, depth: u64) -> Vec<(Board, f32)> {
+    pub fn run(&self, duration: u64, depth: u64) -> Vec<(String, f32)> {
         let eval_name = match &self.nnue_path {
             Some(path) => path.display().to_string(),
             None => "traditional evaluator".to_string(),
@@ -125,7 +123,7 @@ impl SelfPlayWorker {
         }
     }
 
-    pub fn play_games(&mut self, duration: u64, pb: &ProgressBar) -> Vec<(Board, f32)> {
+    pub fn play_games(&mut self, duration: u64, pb: &ProgressBar) -> Vec<(String, f32)> {
         let start_time = Instant::now();
         let mut evaluations = Vec::new();
 
@@ -152,7 +150,7 @@ impl SelfPlayWorker {
         evaluations
     }
 
-    fn play_single_move(&mut self, evaluations: &mut Vec<(Board, f32)>) -> bool {
+    fn play_single_move(&mut self, evaluations: &mut Vec<(String, f32)>) -> bool {
         if self.game.result().is_some() {
             return true;
         }
@@ -180,7 +178,7 @@ impl SelfPlayWorker {
     fn select_move(
         &mut self,
         board: chess::Board,
-        evaluations: &mut Vec<(Board, f32)>,
+        evaluations: &mut Vec<(String, f32)>,
     ) -> (ChessMove, f32) {
         let moves: Vec<ChessMove> = MoveGen::new_legal(&board).collect();
 
@@ -190,8 +188,13 @@ impl SelfPlayWorker {
 
         let (engine_move, engine_score) = self.get_engine_move(&board);
 
-        // tanh to force mate scores to be in [-1, 1]
-        evaluations.push((board.clone(), engine_score.tanh()));
+        // Convert to white's perspective and tanh to force mate scores to be in [-1, 1]
+        let white_score = if board.side_to_move() == chess::Color::White {
+            engine_score.tanh()
+        } else {
+            -engine_score.tanh()
+        };
+        evaluations.push((board.to_string(), white_score));
 
         if self.should_use_engine_move(&engine_score) {
             (engine_move, engine_score)

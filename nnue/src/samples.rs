@@ -1,13 +1,40 @@
-use std::io::{self, Read, Write};
+use std::io::{self, BufRead, Write};
+use std::str::FromStr;
 
-use crate::encoding::{encode_board, NUM_FEATURES};
 use candle_core::{Device, Result, Tensor};
 use chess::Board;
+use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
+
+use crate::encoding::{encode_board, NUM_FEATURES};
 
 #[derive(Clone, Debug)]
 pub struct Sample {
+    pub fen: String,
     pub score: f32,
-    pub features: [f32; NUM_FEATURES],
+}
+
+impl Sample {
+    pub fn from_board(board: &Board, score: f32) -> Self {
+        let fen = board.to_string();
+        Self { fen, score }
+    }
+
+    pub fn from_fen(fen: &str, score: f32) -> Self {
+        Self {
+            fen: fen.to_string(),
+            score,
+        }
+    }
+
+    pub fn as_features(&self) -> ([f32; NUM_FEATURES], f32) {
+        let board = Board::from_str(&self.fen)
+            .unwrap_or_else(|_| panic!("Invalid FEN in sample: {}", self.fen));
+
+        // Encode into a feature array
+        let encoded = encode_board(&board);
+
+        (encoded, self.score)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -16,88 +43,169 @@ pub struct Samples {
 }
 
 impl Samples {
-    pub fn from_evaluations(evaluations: &Vec<(Board, f32)>) -> Self {
-        let mut samples = Vec::with_capacity(evaluations.len());
-        for (board, score) in evaluations {
-            let encoded = encode_board(board);
-
-            samples.push(Sample {
-                score: *score,
-                features: encoded,
-            });
+    pub fn from_evaluations(evals: &[(String, f32)]) -> Self {
+        let mut samples = Vec::with_capacity(evals.len());
+        for (fen, score) in evals {
+            samples.push(Sample::from_fen(fen, *score));
         }
-
         Self { samples }
     }
 
-    pub fn write_to_writer<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-        // 1) number of samples
-        let num_samples = self.samples.len() as u64;
-        writer.write_all(&num_samples.to_le_bytes())?;
+    pub fn write<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+        writeln!(writer, "fen,score")?; // Header
 
-        // 2) each sample
         for sample in &self.samples {
-            writer.write_all(&sample.score.to_le_bytes())?;
-
-            // Write features array as raw bytes - much faster than individual writes
-            writer.write_all(unsafe {
-                std::slice::from_raw_parts(
-                    sample.features.as_ptr() as *const u8,
-                    std::mem::size_of::<f32>() * NUM_FEATURES,
-                )
-            })?;
+            writeln!(writer, "{},{}", sample.fen, sample.score)?;
         }
 
         Ok(())
     }
 
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.samples.len()
-    }
+    pub fn read<R: BufRead>(mut reader: R) -> io::Result<Self> {
+        let mut samples = Vec::new();
 
-    /// Read samples from an `io::Read` in the matching binary format.
-    pub fn read_from_reader<R: Read>(reader: &mut R) -> io::Result<Self> {
-        // 1) read the u64 number of samples
-        let mut size_buf = [0u8; 8];
-        reader.read_exact(&mut size_buf)?;
-        let num_samples = u64::from_le_bytes(size_buf);
+        // Skip header line
+        let mut header_line = String::new();
+        let _ = reader.read_line(&mut header_line)?;
 
-        // 2) read each sample
-        let mut samples = Vec::with_capacity(num_samples as usize);
+        for line_res in reader.lines() {
+            let line = line_res?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            let mut parts = line.split(',');
+            let fen_str = parts
+                .next()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing fen field"))?;
+            let score_str = parts
+                .next()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing score field"))?;
 
-        for _ in 0..num_samples {
-            let mut score_buf = [0u8; 4];
-            reader.read_exact(&mut score_buf)?;
-            let score = f32::from_le_bytes(score_buf);
-
-            // Read features as f32
-            let mut features = [0.0f32; NUM_FEATURES];
-            reader.read_exact(unsafe {
-                std::slice::from_raw_parts_mut(
-                    features.as_mut_ptr() as *mut u8,
-                    std::mem::size_of::<f32>() * NUM_FEATURES,
-                )
+            let score: f32 = score_str.trim().parse().map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidData, "Score is not a valid float")
             })?;
 
-            samples.push(Sample { score, features });
+            samples.push(Sample::from_fen(fen_str.trim(), score));
         }
 
         Ok(Self { samples })
     }
 
-    pub fn to_xy(&self, device: &Device) -> Result<(Tensor, Tensor)> {
+    pub fn to_xy(self, device: &Device) -> Result<(Tensor, Tensor)> {
         let num_samples = self.samples.len();
 
-        let features = self
-            .samples
-            .iter()
-            .flat_map(|sample| sample.features.iter().copied());
-        let scores = self.samples.iter().map(|sample| sample.score);
+        let mut feature_data = Vec::with_capacity(num_samples * NUM_FEATURES);
+        let mut score_data = Vec::with_capacity(num_samples);
 
-        let x = Tensor::from_iter(features, device)?.reshape((num_samples, NUM_FEATURES))?;
-        let y = Tensor::from_iter(scores, device)?.reshape((num_samples, 1))?;
+        for sample in self.samples {
+            let (features, score) = sample.as_features();
+            feature_data.extend_from_slice(&features);
+            score_data.push(score);
+        }
+
+        let x = Tensor::from_iter(feature_data.into_iter(), device)?
+            .reshape((num_samples, NUM_FEATURES))?;
+        let y = Tensor::from_iter(score_data.into_iter(), device)?.reshape((num_samples, 1))?;
 
         Ok((x, y))
+    }
+
+    pub fn to_xy_batched<'a>(
+        &'a self,
+        batch_size: usize,
+        device: &'a Device,
+    ) -> BatchedSamples<'a> {
+        BatchedSamples {
+            samples: &self.samples,
+            device,
+            batch_size,
+            idx: 0,
+        }
+    }
+
+    pub fn train_test_split(
+        &self,
+        test_ratio: f64,
+        random_seed: Option<u64>,
+    ) -> (Samples, Samples) {
+        let total_len = self.samples.len();
+        let test_len = (total_len as f64 * test_ratio) as usize;
+        let train_len = total_len - test_len;
+
+        // Shuffle the indices
+        let mut indices: Vec<usize> = (0..total_len).collect();
+        if let Some(seed) = random_seed {
+            let mut rng = StdRng::seed_from_u64(seed);
+            indices.shuffle(&mut rng);
+        }
+
+        // Split
+        let (train_indices, test_indices) = indices.split_at(train_len);
+
+        // Gather samples into new structs
+        let train_samples: Vec<Sample> = train_indices
+            .iter()
+            .map(|&idx| self.samples[idx].clone())
+            .collect();
+        let test_samples: Vec<Sample> = test_indices
+            .iter()
+            .map(|&idx| self.samples[idx].clone())
+            .collect();
+
+        (
+            Samples {
+                samples: train_samples,
+            },
+            Samples {
+                samples: test_samples,
+            },
+        )
+    }
+
+    pub fn len(&self) -> usize {
+        self.samples.len()
+    }
+}
+
+pub struct BatchedSamples<'a> {
+    samples: &'a [Sample],
+    device: &'a Device,
+    batch_size: usize,
+    idx: usize,
+}
+
+impl<'a> Iterator for BatchedSamples<'a> {
+    type Item = Result<(Tensor, Tensor)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx >= self.samples.len() {
+            return None;
+        }
+        let end = (self.idx + self.batch_size).min(self.samples.len());
+        let batch_slice = &self.samples[self.idx..end];
+        self.idx = end;
+
+        let mut feature_data = Vec::with_capacity(batch_slice.len() * NUM_FEATURES);
+        let mut score_data = Vec::with_capacity(batch_slice.len());
+
+        for sample in batch_slice {
+            let (features, score) = sample.as_features();
+            feature_data.extend_from_slice(&features);
+            score_data.push(score);
+        }
+
+        let x = match Tensor::from_iter(feature_data.into_iter(), self.device) {
+            Ok(t) => t,
+            Err(e) => return Some(Err(e)),
+        }
+        .reshape((batch_slice.len(), NUM_FEATURES));
+
+        let y = match Tensor::from_iter(score_data.into_iter(), self.device) {
+            Ok(t) => t,
+            Err(e) => return Some(Err(e)),
+        }
+        .reshape((batch_slice.len(), 1));
+
+        Some(x.and_then(|xv| y.map(|yv| (xv, yv))))
     }
 }

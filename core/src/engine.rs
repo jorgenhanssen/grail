@@ -12,7 +12,6 @@ use candle_nn::VarMap;
 static NNUE_BYTES: &[u8] = include_bytes!("../../nnue/versions/v0/model.safetensors");
 
 fn load_varmap_from_bytes(varmap: &mut VarMap, data: &[u8]) -> Result<()> {
-    // Example using `SliceSafetensors`
     let st = SliceSafetensors::new(data)?;
     let mut tensor_data = varmap.data().lock().unwrap();
 
