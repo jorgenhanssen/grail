@@ -7,7 +7,7 @@ use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::LevelFilter;
 use nnue::{network::Network, samples::Samples, version::VersionManager};
-use rand::{seq::SliceRandom, thread_rng};
+use rand::thread_rng;
 use simplelog::{Config, SimpleLogger};
 use std::{error::Error, fs::File, io::BufReader};
 
