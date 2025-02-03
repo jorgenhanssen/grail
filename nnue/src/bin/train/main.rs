@@ -79,7 +79,7 @@ impl Trainer {
 
             // Optionally shuffle your training samples each epoch
             let mut epoch_train = train_only.clone();
-            epoch_train.samples.shuffle(&mut thread_rng());
+            epoch_train.shuffle(&mut thread_rng());
 
             let train_loss = self.train_epoch(net, opt, &epoch_train, device, &progress_bar)?;
 
@@ -178,14 +178,19 @@ fn init() -> Result<Args, Box<dyn Error>> {
 }
 
 fn load_samples(manager: &VersionManager) -> Result<Samples, Box<dyn Error>> {
-    let version = manager.get_latest_version()?.expect("No version found");
-    log::info!("Loading data for version {}", version);
+    let mut samples = Samples::new();
 
-    let path = manager.file_path(version, "data.csv");
-    let file = File::open(&path)?;
-    let samples = Samples::read(BufReader::new(file))?;
+    let versions = manager.get_all_versions().expect("No versions found");
+    for version in versions.iter().rev() {
+        let path = manager.file_path(*version, "data.csv");
+        let file = File::open(&path)?;
+        let version_samples = Samples::read(BufReader::new(file))?;
+        log::info!("Loaded {} samples from {:?}", version_samples.len(), path);
 
-    log::info!("Read {} samples from {:?}", samples.len(), path);
+        samples.extend(version_samples);
+    }
+
+    log::info!("Loaded {} total samples", samples.len());
     Ok(samples)
 }
 
