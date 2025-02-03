@@ -9,6 +9,7 @@ pub use search::NegamaxEngine;
 
 use candle_nn::VarMap;
 
+const NNUE_VERSION: u32 = 0;
 static NNUE_BYTES: &[u8] = include_bytes!("../../nnue/versions/v0/model.safetensors");
 
 fn load_varmap_from_bytes(varmap: &mut VarMap, data: &[u8]) -> Result<()> {
@@ -26,7 +27,7 @@ pub fn create(args: &Args) -> impl Engine {
     match args.engines {
         Engines::Negamax {} => {
             let mut varmap = VarMap::new();
-            let nnue = NNUE::new(&varmap, &Device::Cpu);
+            let nnue = NNUE::new(&varmap, &Device::Cpu, NNUE_VERSION);
 
             load_varmap_from_bytes(&mut varmap, NNUE_BYTES).unwrap();
 

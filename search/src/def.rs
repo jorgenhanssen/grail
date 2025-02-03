@@ -8,4 +8,5 @@ pub trait Engine {
     fn set_position(&mut self, board: Board);
     fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> ChessMove;
     fn stop(&mut self);
+    fn name(&self) -> String;
 }

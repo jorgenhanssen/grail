@@ -11,21 +11,27 @@ use candle_core::{DType, Device, Module, Tensor};
 pub struct NNUE {
     network: Network,
     device: Device,
+    version: u32,
 }
 
 impl NNUE {
-    pub fn new(varmap: &VarMap, device: &Device) -> Self {
+    pub fn new(varmap: &VarMap, device: &Device, version: u32) -> Self {
         let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
         let network = Network::new(&vs).unwrap();
 
         Self {
             network,
             device: device.clone(),
+            version,
         }
     }
 }
 
 impl Evaluator for NNUE {
+    fn name(&self) -> String {
+        format!("NNUE-{}", self.version)
+    }
+
     #[inline]
     fn evaluate(&self, board: &Board) -> f32 {
         let encoded_board =

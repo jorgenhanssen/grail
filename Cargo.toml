@@ -4,7 +4,8 @@ members = [
   "evaluation",
   "search",
   "nnue", 
-  "uci",
+  "uci", 
+  "tournament",
 ]
 
 [workspace.dependencies]

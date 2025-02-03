@@ -17,6 +17,7 @@ use std::sync::Mutex;
 pub struct Generator {
     threads: usize,
     nnue_path: Option<PathBuf>,
+    version: u32,
 }
 
 impl Generator {
@@ -27,10 +28,12 @@ impl Generator {
             Some(version) => Self {
                 threads,
                 nnue_path: Some(manager.file_path(version, "model.safetensors")),
+                version,
             },
             _ => Self {
                 threads,
                 nnue_path: None,
+                version: 0,
             },
         };
 
@@ -60,6 +63,7 @@ impl Generator {
         let handles: Vec<_> = (0..self.threads)
             .map(|tid| {
                 let nnue_path = self.nnue_path.clone();
+                let version = self.version;
                 let global_evaluated = Arc::clone(&global_evaluated);
 
                 let pb = mp.add(ProgressBar::new(duration));
@@ -70,7 +74,7 @@ impl Generator {
                     let evaluator: Box<dyn Evaluator> = match &nnue_path {
                         Some(path) => {
                             let mut varmap = VarMap::new();
-                            let nnue = Box::new(NNUE::new(&varmap, &Device::Cpu));
+                            let nnue = Box::new(NNUE::new(&varmap, &Device::Cpu, version));
                             varmap.load(path).unwrap();
                             nnue
                         }

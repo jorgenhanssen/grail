@@ -96,6 +96,10 @@ impl Engine for NegamaxEngine {
         }
     }
 
+    fn name(&self) -> String {
+        format!("Negamax ({})", self.evaluator.name())
+    }
+
     fn set_position(&mut self, board: Board) {
         self.board = board;
     }

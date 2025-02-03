@@ -42,7 +42,12 @@ build-train:
 run-train:
 	$(call cargo-run,train)
 
-build-all: build-grail build-generate build-train
+build-tournament:
+	$(call cargo-build,tournament)
+run-tournament:
+	$(call cargo-run,tournament)
+
+build-all: build-grail build-generate build-train build-tournament
 
 try: build
 	$(CARGO_ENV)
