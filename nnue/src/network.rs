@@ -4,47 +4,38 @@ use candle_nn::{linear, Linear, Module, VarBuilder};
 use crate::encoding::NUM_FEATURES;
 
 pub struct Network {
-    layers: Vec<Linear>,
-    last_size: usize, // Track the last layer's output size
+    embedding: Linear,
+    hidden1: Linear,
+    hidden2: Linear,
+    output: Linear,
 }
 
 impl Network {
     pub fn new(vs: &VarBuilder) -> Result<Self> {
-        let mut network = Self {
-            layers: Vec::new(),
-            last_size: NUM_FEATURES,
+        let network = Self {
+            embedding: linear(NUM_FEATURES, 128, vs.pp("embedding"))?,
+            hidden1: linear(128, 32, vs.pp("hidden1"))?,
+            hidden2: linear(32, 32, vs.pp("hidden2"))?,
+            output: linear(32, 1, vs.pp("output"))?,
         };
 
-        // Build the network architecture
-        network.add_layer(64, vs)?;
-        network.add_layer(64, vs)?;
-        network.add_layer(1, vs)?;
-
         Ok(network)
-    }
-
-    // Helper method to add layers during construction
-    fn add_layer(&mut self, out_size: usize, vs: &VarBuilder) -> Result<()> {
-        let layer_num = self.layers.len() + 1;
-        let layer = linear(self.last_size, out_size, vs.pp(&format!("l{}", layer_num)))?;
-        self.layers.push(layer);
-        self.last_size = out_size;
-        Ok(())
     }
 }
 
 impl Module for Network {
     #[inline]
     fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        let mut x = x.clone();
+        // Embedding
+        let mut x = x.apply(&self.embedding)?.clamp(0.0, 1.0)?; // Clipped ReLU
 
-        // relu for all layers except the last one
-        let last_idx = self.layers.len() - 1;
-        for i in 0..last_idx {
-            x = x.apply(&self.layers[i])?.relu()?;
-        }
+        // Hidden layers
+        x = x.apply(&self.hidden1)?.relu()?;
+        x = x.apply(&self.hidden2)?.relu()?;
 
-        x = x.apply(&self.layers[last_idx])?;
-        x.tanh()
+        // Output layer
+        x = x.apply(&self.output)?.tanh()?;
+
+        Ok(x)
     }
 }

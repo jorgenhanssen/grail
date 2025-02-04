@@ -12,10 +12,10 @@ impl Arena {
         Self { engines }
     }
 
-    pub fn run_tournament(&mut self, depth: u64) -> HashMap<String, u64> {
-        let mut wins = HashMap::new();
+    pub fn run_tournament(&mut self, depth: u64) -> HashMap<String, i64> {
+        let mut scores = HashMap::new();
         for engine in &self.engines {
-            wins.insert(engine.name(), 0);
+            scores.insert(engine.name(), 0);
         }
 
         let num_engines = self.engines.len();
@@ -34,16 +34,20 @@ impl Arena {
             let (white, black) = get_two_mut(&mut self.engines, white_idx, black_idx);
             let result = Arena::play_game(white, black, depth);
 
-            let winner = match result {
-                chess::GameResult::WhiteCheckmates => white.name(),
-                chess::GameResult::BlackCheckmates => black.name(),
+            match result {
+                chess::GameResult::WhiteCheckmates => {
+                    scores.entry(white.name()).and_modify(|w| *w += 1);
+                    scores.entry(black.name()).and_modify(|w| *w -= 1);
+                }
+                chess::GameResult::BlackCheckmates => {
+                    scores.entry(black.name()).and_modify(|w| *w += 1);
+                    scores.entry(white.name()).and_modify(|w| *w -= 1);
+                }
                 _ => continue,
             };
-
-            wins.entry(winner).and_modify(|w| *w += 1);
         }
 
-        return wins;
+        return scores;
     }
 
     fn play_game(

@@ -12,6 +12,7 @@ use nnue::{version::VersionManager, NNUE};
 use search::Engine;
 use search::NegamaxEngine;
 use simplelog::{Config, SimpleLogger};
+use std::collections::HashMap;
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -22,7 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut arena = Arena::new(engines);
     let results = arena.run_tournament(args.depth);
 
-    println!("{:?}", results);
+    print_results(results);
 
     Ok(())
 }
@@ -54,4 +55,16 @@ fn get_engines(manager: &VersionManager) -> Result<Vec<NegamaxEngine>, Box<dyn E
     }
 
     Ok(engines)
+}
+
+fn print_results(results: HashMap<String, i64>) {
+    // Convert HashMap to Vec and sort by score (descending)
+    let mut sorted_results: Vec<_> = results.into_iter().collect();
+    sorted_results.sort_by(|a, b| b.1.cmp(&a.1));
+
+    println!("\nTournament Results:");
+    println!("------------------");
+    for (engine, score) in sorted_results {
+        println!("{}: {}", engine, score);
+    }
 }
