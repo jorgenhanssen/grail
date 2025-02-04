@@ -20,6 +20,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let manager = VersionManager::new()?;
     let engines = get_engines(&manager)?;
 
+    log::info!("Running tournament!");
+    log::info!("Contestants:");
+    for engine in &engines {
+        log::info!("- {}", engine.name());
+    }
+
     let mut arena = Arena::new(engines);
     let results = arena.run_tournament(args.depth);
 
@@ -62,9 +68,9 @@ fn print_results(results: HashMap<String, i64>) {
     let mut sorted_results: Vec<_> = results.into_iter().collect();
     sorted_results.sort_by(|a, b| b.1.cmp(&a.1));
 
-    println!("\nTournament Results:");
-    println!("------------------");
+    log::info!("\nTournament Results:");
+    log::info!("------------------");
     for (engine, score) in sorted_results {
-        println!("{}: {}", engine, score);
+        log::info!("{}: {}", engine, score);
     }
 }
