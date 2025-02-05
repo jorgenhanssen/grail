@@ -35,7 +35,7 @@ impl SearchController {
 
     #[inline(always)]
     fn continue_search(&self, depth: u64) -> bool {
-        return depth <= 8;
+        return depth <= 6;
         // return self.start_time.elapsed().as_millis() < 10_000;
 
         // Check time limit if it exists
@@ -322,6 +322,16 @@ impl NegamaxEngine {
         self.nodes += 1;
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
+        match board.status() {
+            BoardStatus::Checkmate => {
+                return (-CHECKMATE_SCORE, Vec::new());
+            }
+            BoardStatus::Stalemate => {
+                return (0.0, Vec::new());
+            }
+            BoardStatus::Ongoing => {}
+        }
+
         if let Some(&cached_score) = self.qs_tt.get(&hash) {
             return (cached_score, Vec::new());
         }
@@ -341,16 +351,23 @@ impl NegamaxEngine {
             alpha = stand_pat;
         }
 
+        let is_check = board.checkers().popcnt() > 0;
+
         let moves_with_scores = get_ordered_moves(board, None);
         let forcing_moves: Vec<(ChessMove, i32)> = moves_with_scores
             .into_iter()
             .filter(|(mv, score)| {
+                if is_check {
+                    // All evading moves are forced
+                    return true;
+                }
                 if *score >= PROMOTION_SCORE || *score == CHECK_SCORE {
                     return true;
                 }
                 if *score >= CAPTURE_SCORE {
                     return see_naive(board, *mv) >= 0.0;
                 }
+
                 false
             })
             .collect();
