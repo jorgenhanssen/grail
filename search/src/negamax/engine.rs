@@ -18,6 +18,8 @@ use super::utils::{
 
 pub const CHECKMATE_SCORE: f32 = 1_000_000.0;
 
+const MAX_QSEARCH_DEPTH: u64 = 12;
+
 pub struct SearchController {
     start_time: std::time::Instant,
     allocated_time: Option<u64>,
@@ -349,6 +351,12 @@ impl NegamaxEngine {
         }
         if stand_pat > alpha {
             alpha = stand_pat;
+        }
+
+        // Handles cases where there are "endless" harassing checks that don't repeat, like:
+        // queen+ => evade => queen+ => evade => ...
+        if depth > MAX_QSEARCH_DEPTH {
+            return (stand_pat, Vec::new());
         }
 
         let is_check = board.checkers().popcnt() > 0;
