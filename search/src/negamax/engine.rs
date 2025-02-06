@@ -334,11 +334,11 @@ impl NegamaxEngine {
             BoardStatus::Ongoing => {}
         }
 
+        // Check cache
         if let Some(&cached_score) = self.qs_tt.get(&hash) {
             return (cached_score, Vec::new());
         }
 
-        // Multiply the evaluator's White-based score by ±1 to get current side's perspective
         let color_multiplier = if board.side_to_move() == Color::White {
             1.0
         } else {
@@ -346,46 +346,58 @@ impl NegamaxEngine {
         };
         let stand_pat = color_multiplier * self.evaluator.evaluate(board);
 
-        if stand_pat >= beta {
-            return (stand_pat, Vec::new());
-        }
-        if stand_pat > alpha {
-            alpha = stand_pat;
-        }
-
-        // Handles cases where there are "endless" harassing checks that don't repeat, like:
-        // queen+ => evade => queen+ => evade => ...
-        if depth > MAX_QSEARCH_DEPTH {
+        if depth >= MAX_QSEARCH_DEPTH {
             return (stand_pat, Vec::new());
         }
 
-        let is_check = board.checkers().popcnt() > 0;
+        let in_check = board.checkers().popcnt() > 0;
 
-        let moves_with_scores = get_ordered_moves(board, None);
-        let forcing_moves: Vec<(ChessMove, i32)> = moves_with_scores
+        // Do a "stand-pat" evaluation if not in check
+        if !in_check {
+            if stand_pat >= beta {
+                return (stand_pat, Vec::new());
+            }
+            if stand_pat > alpha {
+                alpha = stand_pat;
+            }
+        }
+
+        let all_moves_with_scores = get_ordered_moves(board, None);
+        let forcing_moves: Vec<(ChessMove, i32)> = all_moves_with_scores
             .into_iter()
             .filter(|(mv, score)| {
-                if is_check {
-                    // All evading moves are forced
+                if in_check {
+                    // Must consider all evasions if currently in check
                     return true;
                 }
+                // Otherwise, only consider captures/promo/strong checks, etc.
                 if *score >= PROMOTION_SCORE || *score == CHECK_SCORE {
                     return true;
                 }
                 if *score >= CAPTURE_SCORE {
                     return see_naive(board, *mv) >= 0.0;
                 }
-
                 false
             })
             .collect();
 
-        if forcing_moves.is_empty() {
+        if forcing_moves.is_empty() && !in_check {
+            // If in_check and no moves, then we are checkmated or stalemated
+            // but that is already handled by board.status() above.
             self.qs_tt.insert(hash, stand_pat);
             return (stand_pat, Vec::new());
         }
 
-        let mut best_eval = stand_pat;
+        // 10) Try each forcing move and pick the best
+        let mut best_eval = if in_check {
+            // If we are in check, we can't simply "stand pat."
+            // Let's start from -∞
+            f32::NEG_INFINITY
+        } else {
+            // Otherwise, start from our stand-pat
+            stand_pat
+        };
+
         let mut best_line = Vec::new();
 
         for (mv, _) in forcing_moves {
@@ -397,6 +409,7 @@ impl NegamaxEngine {
             self.position_stack.pop();
 
             let value = -child_score;
+
             if value > best_eval {
                 best_eval = value;
                 child_line.insert(0, mv);
@@ -405,7 +418,7 @@ impl NegamaxEngine {
 
             alpha = alpha.max(best_eval);
             if alpha >= beta {
-                break;
+                break; // Beta cutoff
             }
         }
 
