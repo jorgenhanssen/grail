@@ -1,4 +1,5 @@
 mod engine;
+mod search_controller;
 mod tt;
 mod utils;
 

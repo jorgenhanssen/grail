@@ -11,53 +11,17 @@ use uci::{
     UciOutput,
 };
 
-use super::tt::{Bound, TTEntry};
 use super::utils::{
     calculate_dynamic_lmr_reduction, convert_centipawn_score, convert_mate_score, see_naive,
+};
+use super::{
+    search_controller::SearchController,
+    tt::{Bound, TTEntry},
 };
 
 pub const CHECKMATE_SCORE: f32 = 1_000_000.0;
 
 const MAX_QSEARCH_DEPTH: u64 = 12;
-
-pub struct SearchController {
-    start_time: std::time::Instant,
-    allocated_time: Option<u64>,
-    max_depth: Option<u64>,
-}
-
-impl SearchController {
-    fn new(params: &GoParams) -> Self {
-        Self {
-            start_time: std::time::Instant::now(),
-            allocated_time: params.move_time,
-            max_depth: params.depth,
-        }
-    }
-
-    #[inline(always)]
-    fn continue_search(&self, depth: u64) -> bool {
-        return depth <= 6;
-        // return self.start_time.elapsed().as_millis() < 10_000;
-
-        // Check time limit if it exists
-        if let Some(allocated_time) = self.allocated_time {
-            if self.start_time.elapsed().as_millis() >= allocated_time as u128 {
-                return false;
-            }
-        }
-
-        // Check depth limit if it exists
-        if let Some(max_depth) = self.max_depth {
-            if depth > max_depth {
-                return false;
-            }
-        }
-
-        // If neither limit is set, use a default time of 10 seconds
-        self.start_time.elapsed().as_millis() < 10_000
-    }
-}
 
 pub struct NegamaxEngine {
     board: Board,
@@ -122,7 +86,7 @@ impl Engine for NegamaxEngine {
             let (mv, score) = self.search_root(depth);
             best_move = Some(mv);
 
-            self.send_search_info(output, depth, score, controller.start_time.elapsed());
+            self.send_search_info(output, depth, score, controller.elapsed());
 
             depth += 1;
         }
