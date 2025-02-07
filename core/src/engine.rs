@@ -31,7 +31,7 @@ pub fn create(args: &Args) -> impl Engine {
 
             load_varmap_from_bytes(&mut varmap, NNUE_BYTES).unwrap();
 
-            NegamaxEngine::new(Box::new(TraditionalEvaluator))
+            NegamaxEngine::new(Box::new(nnue))
         }
     }
 }

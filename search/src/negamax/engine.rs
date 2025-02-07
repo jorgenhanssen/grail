@@ -15,7 +15,7 @@ use super::utils::{
     calculate_dynamic_lmr_reduction, convert_centipawn_score, convert_mate_score, see_naive,
 };
 use super::{
-    search_controller::SearchController,
+    controller::SearchController,
     tt::{Bound, TTEntry},
 };
 
