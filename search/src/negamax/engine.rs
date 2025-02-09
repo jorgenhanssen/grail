@@ -22,6 +22,7 @@ use super::{
 pub const CHECKMATE_SCORE: f32 = 1_000_000.0;
 
 const MAX_QSEARCH_DEPTH: u64 = 12;
+const MAX_QSEARCH_CHECK_STREAK: u64 = 4;
 
 pub struct NegamaxEngine {
     board: Board,
@@ -178,7 +179,7 @@ impl NegamaxEngine {
         }
 
         if depth >= max_depth {
-            return self.quiescence_search(board, alpha, beta, 1);
+            return self.quiescence_search(board, alpha, beta, 1, 0);
         }
 
         let mut maybe_tt_move = None;
@@ -279,6 +280,7 @@ impl NegamaxEngine {
         mut alpha: f32,
         beta: f32,
         depth: u64,
+        check_streak: u64,
     ) -> (f32, Vec<ChessMove>) {
         let hash = *self.position_stack.last().unwrap();
         if self.is_cycle(hash) {
@@ -286,7 +288,6 @@ impl NegamaxEngine {
         }
 
         self.nodes += 1;
-        self.max_depth_reached = self.max_depth_reached.max(depth);
 
         match board.status() {
             BoardStatus::Checkmate => {
@@ -310,7 +311,8 @@ impl NegamaxEngine {
         };
         let stand_pat = color_multiplier * self.evaluator.evaluate(board);
 
-        if depth >= MAX_QSEARCH_DEPTH {
+        if depth >= MAX_QSEARCH_DEPTH || check_streak >= MAX_QSEARCH_CHECK_STREAK {
+            self.qs_tt.insert(hash, stand_pat);
             return (stand_pat, Vec::new());
         }
 
@@ -367,9 +369,17 @@ impl NegamaxEngine {
         for (mv, _) in forcing_moves {
             let new_board = board.make_move_new(mv);
 
+            // Decide how to update check_streak for the child:
+            let delivers_check = new_board.checkers().popcnt() > 0;
+            let new_check_streak = if in_check || delivers_check {
+                check_streak + 1
+            } else {
+                0
+            };
+
             self.position_stack.push(new_board.get_hash());
             let (child_score, mut child_line) =
-                self.quiescence_search(&new_board, -beta, -alpha, depth + 1);
+                self.quiescence_search(&new_board, -beta, -alpha, depth + 1, new_check_streak);
             self.position_stack.pop();
 
             let value = -child_score;
