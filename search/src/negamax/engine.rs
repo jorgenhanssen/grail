@@ -178,7 +178,7 @@ impl NegamaxEngine {
         }
 
         if depth >= max_depth {
-            return self.quiescence_search(board, alpha, beta, depth);
+            return self.quiescence_search(board, alpha, beta, 0);
         }
 
         let mut maybe_tt_move = None;
@@ -369,7 +369,7 @@ impl NegamaxEngine {
 
             self.position_stack.push(new_board.get_hash());
             let (child_score, mut child_line) =
-                self.quiescence_search(&new_board, -beta, -alpha, 0);
+                self.quiescence_search(&new_board, -beta, -alpha, depth + 1);
             self.position_stack.pop();
 
             let value = -child_score;
