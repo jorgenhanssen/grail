@@ -178,7 +178,7 @@ impl NegamaxEngine {
         }
 
         if depth >= max_depth {
-            return self.quiescence_search(board, alpha, beta, 0);
+            return self.quiescence_search(board, alpha, beta, 1);
         }
 
         let mut maybe_tt_move = None;
