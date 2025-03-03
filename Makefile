@@ -49,7 +49,7 @@ run-tournament:
 
 build-all: build-grail build-generate build-train build-tournament
 
-try: build
+try: build-grail
 	$(CARGO_ENV)
 	echo -e "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\ngo movetime 10000\nquit\n" | ./target/release/grail negamax
 
