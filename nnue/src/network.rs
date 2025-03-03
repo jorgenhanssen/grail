@@ -150,7 +150,6 @@ fn simd_relu(values: &mut [f32]) {
     let len = values.len();
     let mut i = 0;
 
-    const SIMD_WIDTH: usize = 8;
     const UNROLL: usize = 4;
 
     let zeros = f32x8::splat(0.0);
@@ -190,7 +189,6 @@ fn simd_dot(a: &[f32], b: &[f32], len: usize) -> f32 {
     let mut sum_vec2 = f32x8::splat(0.0);
     let mut sum_vec3 = f32x8::splat(0.0);
 
-    const SIMD_WIDTH: usize = 8;
     const UNROLL: usize = 4;
 
     let limit = len - (len % (SIMD_WIDTH * UNROLL));
