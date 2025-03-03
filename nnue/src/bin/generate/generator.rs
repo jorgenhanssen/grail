@@ -74,8 +74,9 @@ impl Generator {
                     let evaluator: Box<dyn Evaluator> = match &nnue_path {
                         Some(path) => {
                             let mut varmap = VarMap::new();
-                            let nnue = Box::new(NNUE::new(&varmap, &Device::Cpu, version));
+                            let mut nnue = Box::new(NNUE::new(&varmap, &Device::Cpu, version));
                             varmap.load(path).unwrap();
+                            nnue.enable_nnue();
                             nnue
                         }
                         None => Box::new(TraditionalEvaluator),

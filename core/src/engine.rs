@@ -27,9 +27,11 @@ pub fn create(args: &Args) -> impl Engine {
     match args.engines {
         Engines::Negamax {} => {
             let mut varmap = VarMap::new();
-            let nnue = NNUE::new(&varmap, &Device::Cpu, NNUE_VERSION);
+            let mut nnue = NNUE::new(&varmap, &Device::Cpu, NNUE_VERSION);
 
             load_varmap_from_bytes(&mut varmap, NNUE_BYTES).unwrap();
+
+            nnue.enable_nnue();
 
             NegamaxEngine::new(Box::new(nnue))
         }
