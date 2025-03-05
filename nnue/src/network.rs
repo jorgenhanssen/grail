@@ -103,9 +103,6 @@ pub struct NNUENetwork {
 
     // Previous input state for change detection
     previous_input: Box<[u64]>,
-
-    // Track if this is the first call
-    is_first_eval: bool,
 }
 
 impl NNUENetwork {
@@ -134,7 +131,6 @@ impl NNUENetwork {
             hidden2_buffer,
             output_buffer,
             previous_input,
-            is_first_eval: true,
         })
     }
 
@@ -144,7 +140,6 @@ impl NNUENetwork {
         for bits in self.previous_input.iter_mut() {
             *bits = 0;
         }
-        self.is_first_eval = true;
     }
 
     // Update embedding for a single feature change
@@ -180,40 +175,19 @@ impl NNUENetwork {
             }
         }
 
-        if self.is_first_eval {
-            // First evaluation - initialize the embedding from scratch
-            self.embedding_buffer.fill(0.0);
+        // Always do incremental updates by comparing with previous_input
+        for word_idx in 0..num_u64s {
+            // XOR to find bits that differ
+            let mut changes = self.previous_input[word_idx] ^ current_input[word_idx];
+            while changes != 0 {
+                let bit_idx = changes.trailing_zeros() as usize;
+                changes &= changes - 1;
 
-            // Add contributions from all active features
-            for word_idx in 0..num_u64s {
-                let mut bits = current_input[word_idx];
-                while bits != 0 {
-                    // Find lowest set bit
-                    let bit_idx = bits.trailing_zeros() as usize;
-                    // Clear that bit
-                    bits &= bits - 1;
-
-                    let feature_idx = word_idx * 64 + bit_idx;
-                    self.update_embedding_for_feature(feature_idx, true);
-                }
-            }
-
-            self.is_first_eval = false;
-        } else {
-            // Incremental update - only process features that changed
-            for word_idx in 0..num_u64s {
-                // XOR to find bits that differ
-                let mut changes = self.previous_input[word_idx] ^ current_input[word_idx];
-                while changes != 0 {
-                    let bit_idx = changes.trailing_zeros() as usize;
-                    changes &= changes - 1;
-
-                    let feature_idx = word_idx * 64 + bit_idx;
-                    // Check if it's now active or inactive
-                    let mask = 1u64 << bit_idx;
-                    let is_active = (current_input[word_idx] & mask) != 0;
-                    self.update_embedding_for_feature(feature_idx, is_active);
-                }
+                let feature_idx = word_idx * 64 + bit_idx;
+                // Check if it's now active or inactive
+                let mask = 1u64 << bit_idx;
+                let is_active = (current_input[word_idx] & mask) != 0;
+                self.update_embedding_for_feature(feature_idx, is_active);
             }
         }
 
