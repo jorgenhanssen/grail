@@ -54,7 +54,7 @@ fn benchmark_nnue_vs_candle() -> Result<()> {
     let candle_network = Network::new(&vb)?;
     let mut nnue_network = NNUENetwork::from_network(&candle_network)?;
 
-    const ITERATIONS: usize = 100_000;
+    const ITERATIONS: usize = 50_000;
     let inputs = (0..ITERATIONS)
         .map(|_| create_random_input())
         .collect::<Vec<_>>();

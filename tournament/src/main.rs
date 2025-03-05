@@ -53,9 +53,11 @@ fn get_engines(manager: &VersionManager) -> Result<Vec<NegamaxEngine>, Box<dyn E
     for version in versions {
         let file_path = manager.file_path(version, "model.safetensors");
         let mut varmap = VarMap::new();
-        varmap.load(file_path).unwrap();
 
-        let nnue = Box::new(NNUE::new(&varmap, &Device::Cpu, version));
+        let mut nnue = Box::new(NNUE::new(&varmap, &Device::Cpu, version));
+
+        varmap.load(file_path).unwrap();
+        nnue.enable_nnue();
 
         engines.push(NegamaxEngine::new(nnue));
     }

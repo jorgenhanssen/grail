@@ -95,10 +95,17 @@ pub struct NNUENetwork {
     hidden2: LinearLayer,
     output: LinearLayer,
 
+    // Accumulated state
     embedding_buffer: [f32; EMBEDDING_SIZE],
     hidden1_buffer: [f32; HIDDEN_SIZE],
     hidden2_buffer: [f32; HIDDEN_SIZE],
     output_buffer: [f32; 1],
+
+    // Previous input state for change detection
+    previous_input: Box<[u64]>,
+
+    // Track if this is the first call
+    is_first_eval: bool,
 }
 
 impl NNUENetwork {
@@ -113,6 +120,10 @@ impl NNUENetwork {
         let hidden2_buffer = [0.0; HIDDEN_SIZE];
         let output_buffer = [0.0; 1];
 
+        // Calculate how many u64s needed to represent all features
+        let num_u64s = (NUM_FEATURES + 63) / 64;
+        let previous_input = vec![0u64; num_u64s].into_boxed_slice();
+
         Ok(Self {
             embedding,
             hidden1,
@@ -122,15 +133,106 @@ impl NNUENetwork {
             hidden1_buffer,
             hidden2_buffer,
             output_buffer,
+            previous_input,
+            is_first_eval: true,
         })
     }
 
+    // Reset the NNUE state (useful when starting a new position evaluation)
+    pub fn reset(&mut self) {
+        self.embedding_buffer.fill(0.0);
+        for bits in self.previous_input.iter_mut() {
+            *bits = 0;
+        }
+        self.is_first_eval = true;
+    }
+
+    // Update embedding for a single feature change
+    #[inline(always)]
+    fn update_embedding_for_feature(&mut self, feature_idx: usize, is_active: bool) {
+        if feature_idx >= NUM_FEATURES {
+            return;
+        }
+
+        let sign = if is_active { 1.0 } else { -1.0 };
+
+        // The embedding weights for this feature affect all embedding neurons
+        let weight_offset = feature_idx; // Base index for this feature's weights
+        let weight_stride = NUM_FEATURES; // Stride between consecutive output neurons
+
+        for i in 0..EMBEDDING_SIZE {
+            self.embedding_buffer[i] +=
+                sign * self.embedding.weights[i * weight_stride + weight_offset];
+        }
+    }
+
+    // Main forward function that handles incremental updates
     pub fn forward(&mut self, input: &[f32]) -> f32 {
-        self.embedding.forward(input, &mut self.embedding_buffer);
-        simd_relu(&mut self.embedding_buffer);
+        // Convert float input to bitset
+        let num_u64s = self.previous_input.len();
+        let mut current_input = vec![0u64; num_u64s];
+
+        for (i, &val) in input.iter().enumerate().take(NUM_FEATURES) {
+            if val > 0.0 {
+                let word_idx = i / 64;
+                let bit_idx = i % 64;
+                current_input[word_idx] |= 1u64 << bit_idx;
+            }
+        }
+
+        if self.is_first_eval {
+            // First evaluation - initialize the embedding from scratch
+            self.embedding_buffer.fill(0.0);
+
+            // Add contributions from all active features
+            for word_idx in 0..num_u64s {
+                let bits = current_input[word_idx];
+                if bits != 0 {
+                    for bit_idx in 0..64 {
+                        let mask = 1u64 << bit_idx;
+                        if bits & mask != 0 {
+                            let feature_idx = word_idx * 64 + bit_idx;
+                            self.update_embedding_for_feature(feature_idx, true);
+                        }
+                    }
+                }
+            }
+
+            self.is_first_eval = false;
+        } else {
+            // Incremental update - only process features that changed
+            for word_idx in 0..num_u64s {
+                let changes = self.previous_input[word_idx] ^ current_input[word_idx];
+
+                if changes != 0 {
+                    // Process each bit that changed
+                    for bit_idx in 0..64 {
+                        let mask = 1u64 << bit_idx;
+                        if changes & mask != 0 {
+                            let feature_idx = word_idx * 64 + bit_idx;
+                            // Current state determines if feature is now active
+                            let is_active = (current_input[word_idx] & mask) != 0;
+                            self.update_embedding_for_feature(feature_idx, is_active);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Store current input for next time
+        self.previous_input.copy_from_slice(&current_input);
+
+        // Create a temporary copy of embedding with biases added
+        let mut temp_embedding = [0.0; EMBEDDING_SIZE];
+        for i in 0..EMBEDDING_SIZE {
+            temp_embedding[i] = self.embedding_buffer[i] + self.embedding.biases[i];
+        }
+
+        // Continue with the rest of the network as before
+        simd_relu(&mut temp_embedding);
 
         self.hidden1
-            .forward(&self.embedding_buffer, &mut self.hidden1_buffer);
+            .forward(&temp_embedding, &mut self.hidden1_buffer);
         simd_relu(&mut self.hidden1_buffer);
 
         self.hidden2
