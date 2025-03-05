@@ -39,7 +39,7 @@ impl Evaluator for NNUE {
         format!("NNUE-{}", self.version)
     }
 
-    #[inline]
+    #[inline(always)]
     fn evaluate(&mut self, board: &Board) -> f32 {
         let encoded_board = encode_board(board);
         self.nnue_network.forward(&encoded_board)

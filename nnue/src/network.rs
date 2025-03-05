@@ -135,6 +135,7 @@ impl NNUENetwork {
     }
 
     // Reset the NNUE state (useful when starting a new position evaluation)
+    #[inline(always)]
     pub fn reset(&mut self) {
         self.embedding_buffer.fill(0.0);
         for bits in self.previous_input.iter_mut() {
@@ -162,6 +163,7 @@ impl NNUENetwork {
     }
 
     // Main forward function that handles incremental updates
+    #[inline(always)]
     pub fn forward(&mut self, input: &[f32]) -> f32 {
         // Convert float input to bitset
         let num_u64s = self.previous_input.len();

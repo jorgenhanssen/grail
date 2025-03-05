@@ -36,6 +36,8 @@ const CASTLE_BASE_IDX: usize = 769;
 ///       - 772 = Black can castle queenside
 ///
 ///  Total features = 773.  (No en-passant, no promotion bits.)
+
+#[inline(always)]
 pub fn encode_board(board: &Board) -> [f32; NUM_FEATURES] {
     // 64 squares * 12 piece-types = 768
     // + 1 (side to move)
@@ -76,7 +78,7 @@ pub fn encode_board(board: &Board) -> [f32; NUM_FEATURES] {
     features
 }
 
-#[inline]
+#[inline(always)]
 fn piece_color_to_index(piece: Piece, color: Color) -> usize {
     match (color, piece) {
         (Color::White, Piece::Pawn) => 0,
