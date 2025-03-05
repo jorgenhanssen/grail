@@ -15,10 +15,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = init()?;
     let manager = VersionManager::new()?;
     let version = manager.get_latest_version()?.expect("No version found");
-    let samples = load_samples(&manager)?;
 
-    log::info!("Splitting samples into train and test");
-    let (train_samples, test_samples) = samples.train_test_split(0.01, Some(42));
+    let (train_samples, test_samples) = {
+        let samples = load_samples(&manager)?;
+        log::info!("Splitting samples into train and test");
+        samples.train_test_split(0.01, Some(42))
+    };
 
     log::info!("Creating network");
     let device = Device::Cpu;
@@ -58,16 +60,15 @@ impl Trainer {
         validation_split: f32,
         early_stop_patience: u64,
     ) -> CandleResult<()> {
-        // Split train_samples -> (train_only, val_only)
-        let (train_only, val_only) =
+        let (mut train_only, val_only) =
             train_samples.train_test_split(validation_split as f64, Some(42));
 
+        let num_samples = train_only.len();
         let mut best_val_loss = f32::MAX;
         let mut epochs_no_improve = 0;
 
         for epoch in 1..=self.epochs {
-            // Create a progress bar
-            let total_batches = (train_only.len() + self.batch_size - 1) / self.batch_size;
+            let total_batches = (num_samples + self.batch_size - 1) / self.batch_size;
             let progress_bar = ProgressBar::new(total_batches as u64);
             progress_bar.set_style(
             ProgressStyle::default_bar()
@@ -77,12 +78,9 @@ impl Trainer {
                 .unwrap(),
         );
 
-            // Optionally shuffle your training samples each epoch
-            let mut epoch_train = train_only.clone();
-            epoch_train.shuffle(&mut thread_rng());
+            train_only.shuffle(&mut thread_rng());
 
-            let train_loss = self.train_epoch(net, opt, &epoch_train, device, &progress_bar)?;
-
+            let train_loss = self.train_epoch(net, opt, &train_only, device, &progress_bar)?;
             let val_loss = if val_only.len() > 0 {
                 self.validate(net, &val_only, device)?
             } else {
@@ -90,7 +88,6 @@ impl Trainer {
             };
 
             progress_bar.set_message(format!("val: {:.6}, loss: {:.6}", val_loss, train_loss));
-
             progress_bar.finish();
 
             // Early stopping
@@ -119,23 +116,19 @@ impl Trainer {
         let mut epoch_loss_sum = 0f32;
         let mut batch_count = 0usize;
 
-        // Create the batched iterator
         let mut batched_iter = train_samples.to_xy_batched(self.batch_size, device);
 
-        // Loop over each batch
         while let Some(batch_res) = batched_iter.next() {
             let (x_batch, y_batch) = batch_res?;
             let loss = self.train_step(net, opt, &x_batch, &y_batch)?;
             epoch_loss_sum += loss;
             batch_count += 1;
 
-            // Update the progress bar message
             let current_loss = epoch_loss_sum / batch_count as f32;
             progress_bar.set_message(format!("loss: {:.6}", current_loss));
             progress_bar.inc(1);
         }
 
-        // Average loss for the epoch
         Ok(epoch_loss_sum / (batch_count.max(1) as f32))
     }
 
@@ -206,7 +199,6 @@ fn evaluate(
     let mut total_loss = 0f32;
     let mut total_count = 0usize;
 
-    // Optionally, if you want to save predictions and labels:
     let mut all_labels = Vec::new();
     let mut all_preds = Vec::new();
 
@@ -217,7 +209,6 @@ fn evaluate(
         total_loss += f32::try_from(batch_loss)?;
         total_count += 1;
 
-        // Optional: store predictions for analysis
         let batch_size = x_batch.dim(0)?;
         for i in 0..batch_size {
             let label = f32::try_from(y_batch.get(i)?.squeeze(0)?)?;
@@ -230,7 +221,6 @@ fn evaluate(
     let avg_loss = total_loss / total_count.max(1) as f32;
     log::info!("Test loss: {}", avg_loss);
 
-    // Save the results if desired:
     let version = manager.get_latest_version()?.expect("No version found");
     let file_path = manager.file_path(version, "evaluation.txt");
     let mut file = std::fs::File::create(&file_path)?;

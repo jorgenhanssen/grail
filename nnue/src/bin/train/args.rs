@@ -8,6 +8,6 @@ pub struct Args {
     #[arg(long, default_value_t = 30)]
     pub epochs: usize,
 
-    #[arg(long, default_value_t = 512)]
+    #[arg(long, default_value_t = 1024)]
     pub batch_size: usize,
 }
