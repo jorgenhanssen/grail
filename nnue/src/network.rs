@@ -103,7 +103,8 @@ pub struct NNUENetwork {
     hidden2_buffer: [f32; HIDDEN_SIZE],
     output_buffer: [f32; 1],
 
-    // Previous input state for change detection
+    // Input state for change detection
+    current_input: [u64; NUM_U64S],
     previous_input: [u64; NUM_U64S],
 }
 
@@ -119,6 +120,7 @@ impl NNUENetwork {
         let hidden2_buffer = [0.0; HIDDEN_SIZE];
         let output_buffer = [0.0; 1];
 
+        let current_input = [0u64; NUM_U64S];
         let previous_input = [0u64; NUM_U64S];
 
         Ok(Self {
@@ -130,6 +132,7 @@ impl NNUENetwork {
             hidden1_buffer,
             hidden2_buffer,
             output_buffer,
+            current_input,
             previous_input,
         })
     }
@@ -138,9 +141,8 @@ impl NNUENetwork {
     #[inline(always)]
     pub fn reset(&mut self) {
         self.embedding_buffer.fill(0.0);
-        for bits in self.previous_input.iter_mut() {
-            *bits = 0;
-        }
+        self.previous_input.fill(0);
+        self.current_input.fill(0);
     }
 
     // Update embedding for a single feature change
@@ -165,21 +167,21 @@ impl NNUENetwork {
     // Main forward function that handles incremental updates
     #[inline(always)]
     pub fn forward(&mut self, input: &[f32]) -> f32 {
-        // Convert float input to bitset
-        let mut current_input = [0u64; NUM_U64S];
+        // Convert float input to bitset, using the internal buffer
+        self.current_input.fill(0); // Clear the buffer
 
         for (i, &val) in input.iter().enumerate().take(NUM_FEATURES) {
             if val > 0.0 {
                 let word_idx = i / 64;
                 let bit_idx = i % 64;
-                current_input[word_idx] |= 1u64 << bit_idx;
+                self.current_input[word_idx] |= 1u64 << bit_idx;
             }
         }
 
         // Always do incremental updates by comparing with previous_input
         for word_idx in 0..NUM_U64S {
             // XOR to find bits that differ
-            let mut changes = self.previous_input[word_idx] ^ current_input[word_idx];
+            let mut changes = self.previous_input[word_idx] ^ self.current_input[word_idx];
             while changes != 0 {
                 let bit_idx = changes.trailing_zeros() as usize;
                 changes &= changes - 1;
@@ -187,13 +189,13 @@ impl NNUENetwork {
                 let feature_idx = word_idx * 64 + bit_idx;
                 // Check if it's now active or inactive
                 let mask = 1u64 << bit_idx;
-                let is_active = (current_input[word_idx] & mask) != 0;
+                let is_active = (self.current_input[word_idx] & mask) != 0;
                 self.update_embedding_for_feature(feature_idx, is_active);
             }
         }
 
         // Store current input for next time
-        self.previous_input.copy_from_slice(&current_input);
+        self.previous_input.copy_from_slice(&self.current_input);
 
         // Create a temporary copy of embedding with biases added
         let mut temp_embedding = [0.0; EMBEDDING_SIZE];
