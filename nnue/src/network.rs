@@ -148,19 +148,34 @@ impl NNUENetwork {
     // Update embedding for a single feature change
     #[inline(always)]
     fn update_embedding_for_feature(&mut self, feature_idx: usize, is_active: bool) {
-        if feature_idx >= NUM_FEATURES {
-            return;
+        let sign = if is_active { 1.0 } else { -1.0 };
+        let sign_vec = f32x8::splat(sign);
+
+        let mut i = 0;
+        while i + SIMD_WIDTH <= EMBEDDING_SIZE {
+            // Load current embedding values
+            let mut embedding_chunk = f32x8::from_slice(&self.embedding_buffer[i..i + SIMD_WIDTH]);
+
+            // Load corresponding weights
+            let mut weights = [0.0f32; SIMD_WIDTH];
+            for j in 0..SIMD_WIDTH {
+                weights[j] = self.embedding.weights[(i + j) * NUM_FEATURES + feature_idx];
+            }
+            let weights_chunk = f32x8::from_slice(&weights);
+
+            // Multiply weights by sign and add to embedding
+            embedding_chunk += sign_vec * weights_chunk;
+
+            embedding_chunk.copy_to_slice(&mut self.embedding_buffer[i..i + SIMD_WIDTH]);
+
+            i += SIMD_WIDTH;
         }
 
-        let sign = if is_active { 1.0 } else { -1.0 };
-
-        // The embedding weights for this feature affect all embedding neurons
-        let weight_offset = feature_idx; // Base index for this feature's weights
-        let weight_stride = NUM_FEATURES; // Stride between consecutive output neurons
-
-        for i in 0..EMBEDDING_SIZE {
+        // Handle remaining elements
+        while i < EMBEDDING_SIZE {
             self.embedding_buffer[i] +=
-                sign * self.embedding.weights[i * weight_stride + weight_offset];
+                sign * self.embedding.weights[i * NUM_FEATURES + feature_idx];
+            i += 1;
         }
     }
 
