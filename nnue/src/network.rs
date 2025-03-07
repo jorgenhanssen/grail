@@ -10,6 +10,8 @@ const SIMD_WIDTH: usize = 8;
 const EMBEDDING_SIZE: usize = 256;
 const HIDDEN_SIZE: usize = 32;
 
+const NUM_U64S: usize = (NUM_FEATURES + 63) / 64;
+
 pub struct Network {
     embedding: Linear,
     hidden1: Linear,
@@ -102,7 +104,7 @@ pub struct NNUENetwork {
     output_buffer: [f32; 1],
 
     // Previous input state for change detection
-    previous_input: Box<[u64]>,
+    previous_input: [u64; NUM_U64S],
 }
 
 impl NNUENetwork {
@@ -117,9 +119,7 @@ impl NNUENetwork {
         let hidden2_buffer = [0.0; HIDDEN_SIZE];
         let output_buffer = [0.0; 1];
 
-        // Calculate how many u64s needed to represent all features
-        let num_u64s = (NUM_FEATURES + 63) / 64;
-        let previous_input = vec![0u64; num_u64s].into_boxed_slice();
+        let previous_input = [0u64; NUM_U64S];
 
         Ok(Self {
             embedding,
@@ -166,8 +166,7 @@ impl NNUENetwork {
     #[inline(always)]
     pub fn forward(&mut self, input: &[f32]) -> f32 {
         // Convert float input to bitset
-        let num_u64s = self.previous_input.len();
-        let mut current_input = vec![0u64; num_u64s];
+        let mut current_input = [0u64; NUM_U64S];
 
         for (i, &val) in input.iter().enumerate().take(NUM_FEATURES) {
             if val > 0.0 {
@@ -178,7 +177,7 @@ impl NNUENetwork {
         }
 
         // Always do incremental updates by comparing with previous_input
-        for word_idx in 0..num_u64s {
+        for word_idx in 0..NUM_U64S {
             // XOR to find bits that differ
             let mut changes = self.previous_input[word_idx] ^ current_input[word_idx];
             while changes != 0 {
