@@ -1,13 +1,14 @@
-[package]
-name = "grail"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = [
+  "core",
+  "evaluation",
+  "search",
+  "nnue", 
+  "uci", 
+  "tournament",
+]
 
-[profile.release]
-lto = "fat"
-opt-level = 3
-
-[dependencies]
+[workspace.dependencies]
 ahash = "0.8.11"
 chess = "3.2.0"
 clap = { version = "4.5.23", features = ["derive"] }
@@ -15,3 +16,14 @@ log = "0.4.22"
 rand = "0.8.5"
 rayon = "1.10.0"
 simplelog = "0.12.2"
+num_cpus = "1.16.0"
+candle-core = { git = "https://github.com/huggingface/candle.git", version = "0.8.3", features = ["cuda"] }
+candle-nn = { git = "https://github.com/huggingface/candle.git", version = "0.8.3", features = ["cuda"] }
+indicatif = "0.17.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+incremental = false

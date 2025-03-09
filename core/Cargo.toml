@@ -1,0 +1,24 @@
+[package]
+name = "grail"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+lto = "fat"
+opt-level = 3
+
+[dependencies]
+search = { path = "../search" }
+nnue = { path = "../nnue" }
+uci = { path = "../uci" }
+evaluation = { path = "../evaluation" }
+
+ahash = { workspace = true }
+chess = { workspace = true }
+clap = { workspace = true }
+log = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+simplelog = { workspace = true }
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
