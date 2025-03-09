@@ -1,0 +1,31 @@
+[package]
+name = "nnue"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+search = { path = "../search" }
+evaluation = { path = "../evaluation" }
+
+ahash = { workspace = true }
+chess = { workspace = true }
+log = { workspace = true }
+rayon = { workspace = true }
+rand = { workspace = true }
+num_cpus = { workspace = true }
+simplelog = { workspace = true }
+clap = { workspace = true }
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+indicatif = { workspace = true }
+
+[lib]
+name = "nnue"
+
+[[bin]]
+name = "generate"
+path = "src/bin/generate/main.rs"
+
+[[bin]]
+name = "train"
+path = "src/bin/train/main.rs"
