@@ -3,15 +3,14 @@ use chess::Board;
 use evaluation::Evaluator;
 
 use crate::{
-    encoding::{encode_board, NUM_FEATURES},
+    encoding::encode_board,
     network::{NNUENetwork, Network},
 };
-use candle_core::{DType, Device, Module, Tensor};
+use candle_core::{DType, Device};
 
 pub struct NNUE {
     nnue_network: NNUENetwork,
     network: Network,
-    device: Device,
     version: u32,
 }
 
@@ -24,7 +23,6 @@ impl NNUE {
         Self {
             nnue_network,
             network,
-            device: device.clone(),
             version,
         }
     }

@@ -23,7 +23,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     log::info!("Creating network");
-    let device = Device::Cpu;
+    let device = Device::cuda_if_available(0)?;
+
+    if device.is_cuda() {
+        log::info!("Using CUDA");
+    } else {
+        log::info!("Using CPU");
+    }
+
     let (net, varmap) = create_network(&device)?;
     let mut opt = AdamW::new(varmap.all_vars(), ParamsAdamW::default())?;
 
