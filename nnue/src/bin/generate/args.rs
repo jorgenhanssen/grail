@@ -8,6 +8,6 @@ pub struct Args {
     #[arg(long, default_value_t = 120)]
     pub duration: u64,
 
-    #[arg(long, default_value_t = 6)]
+    #[arg(long, default_value_t = 4)]
     pub depth: u64,
 }

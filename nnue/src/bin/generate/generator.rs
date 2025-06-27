@@ -2,7 +2,7 @@ use std::error::Error;
 use std::time::Instant;
 use std::{path::PathBuf, sync::Arc};
 
-use ahash::AHashSet;
+use ahash::{AHashMap, AHashSet};
 use candle_core::Device;
 use candle_nn::VarMap;
 use chess::{Board, ChessMove, Game, MoveGen};
@@ -13,6 +13,22 @@ use nnue::NNUE;
 use rand::Rng;
 use search::{Engine, NegamaxEngine};
 use std::sync::Mutex;
+
+struct SharedData {
+    // Map of position hash to move evaluations (for move selection)
+    move_evals: AHashMap<u64, Vec<(ChessMove, f32)>>,
+
+    // Map of board FEN to position score (for training data)
+    position_scores: AHashMap<String, f32>,
+}
+impl SharedData {
+    fn new() -> Self {
+        Self {
+            move_evals: AHashMap::new(),
+            position_scores: AHashMap::new(),
+        }
+    }
+}
 
 pub struct Generator {
     threads: usize,
@@ -52,23 +68,26 @@ impl Generator {
             eval_name
         );
 
-        let mp = MultiProgress::new();
-        let mp_style = ProgressStyle::with_template(
-            " {spinner:.cyan} {wide_bar:.cyan/blue} {eta_precise} | {msg}",
-        )
-        .unwrap();
+        // Create a single shared progress bar instead of multiple ones
+        let pb = ProgressBar::new(duration);
+        pb.set_style(
+            ProgressStyle::with_template(
+                " {spinner:.cyan} {wide_bar:.cyan/blue} {eta_precise} | {msg}",
+            )
+            .unwrap(),
+        );
 
-        let global_evaluated = Arc::new(Mutex::new(AHashSet::new()));
+        // Wrap in Arc to share across threads
+        let pb = Arc::new(pb);
+
+        let shared_data = Arc::new(Mutex::new(SharedData::new()));
 
         let handles: Vec<_> = (0..self.threads)
             .map(|tid| {
                 let nnue_path = self.nnue_path.clone();
                 let version = self.version;
-                let global_evaluated = Arc::clone(&global_evaluated);
-
-                let pb = mp.add(ProgressBar::new(duration));
-                pb.set_prefix(format!("[{}]", tid));
-                pb.set_style(mp_style.clone());
+                let shared_data = Arc::clone(&shared_data);
+                let pb = Arc::clone(&pb); // Share the same progress bar
 
                 std::thread::spawn(move || {
                     let evaluator: Box<dyn Evaluator> = match &nnue_path {
@@ -82,18 +101,28 @@ impl Generator {
                         None => Box::new(TraditionalEvaluator),
                     };
 
-                    let mut worker = SelfPlayWorker::new(tid, global_evaluated, depth, evaluator);
+                    let mut worker = SelfPlayWorker::new(tid, shared_data, depth, evaluator);
                     worker.play_games(duration, &pb)
                 })
             })
             .collect();
 
-        let evaluations: Vec<_> = handles
-            .into_iter()
-            .flat_map(|h| h.join().unwrap())
-            .collect();
+        for handle in handles {
+            handle.join().unwrap();
+        }
 
-        mp.clear().unwrap();
+        let shared_data = shared_data.lock().unwrap();
+        let position_count = shared_data.position_scores.len();
+
+        // Update the progress bar one final time
+        pb.finish_with_message(format!("Evaluated {} positions", position_count));
+
+        // Convert the position scores to the expected output format
+        let evaluations: Vec<(String, f32)> = shared_data
+            .position_scores
+            .iter()
+            .map(|(fen, score)| (fen.clone(), *score))
+            .collect();
 
         evaluations
     }
@@ -101,37 +130,41 @@ impl Generator {
 
 struct SelfPlayWorker {
     tid: usize,
-    global_evaluated: Arc<Mutex<AHashSet<u64>>>,
+    shared_data: Arc<Mutex<SharedData>>,
     engine: NegamaxEngine,
     depth: u64,
 
     // Specific to ongoing game
     game: Game,
     positions_in_current_game: AHashSet<u64>,
+
+    // Configuration for move selection
+    temperature: f32,
+    pure_random_chance: f32,
 }
 
 impl SelfPlayWorker {
     pub fn new(
         tid: usize,
-        global_evaluated: Arc<Mutex<AHashSet<u64>>>,
+        shared_data: Arc<Mutex<SharedData>>,
         depth: u64,
         evaluator: Box<dyn Evaluator>,
     ) -> Self {
         Self {
             tid,
-            global_evaluated,
+            shared_data,
             game: Game::new(),
             depth,
 
             engine: NegamaxEngine::new(evaluator),
             positions_in_current_game: AHashSet::new(),
+            temperature: 1.5, // higher = more random
+            pure_random_chance: 0.15,
         }
     }
 
-    pub fn play_games(&mut self, duration: u64, pb: &ProgressBar) -> Vec<(String, f32)> {
+    pub fn play_games(&mut self, duration: u64, pb: &Arc<ProgressBar>) {
         let start_time = Instant::now();
-        let mut evaluations = Vec::new();
-
         self.reset_game();
 
         loop {
@@ -140,22 +173,26 @@ impl SelfPlayWorker {
                 break;
             }
 
-            pb.set_message(format!("{:?}", evaluations.len()));
-            pb.set_position(current_elapsed);
+            // Update progress with position count
+            let position_count = {
+                let data = self.shared_data.lock().unwrap();
+                data.position_scores.len()
+            };
 
-            let terminal = self.play_single_move(&mut evaluations);
+            if self.tid == 0 {
+                pb.set_message(format!("{} positions", position_count));
+                pb.set_position(current_elapsed);
+            }
+
+            let terminal = self.play_single_move();
 
             if terminal {
                 self.reset_game();
             }
         }
-
-        pb.finish_with_message("waiting...");
-
-        evaluations
     }
 
-    fn play_single_move(&mut self, evaluations: &mut Vec<(String, f32)>) -> bool {
+    fn play_single_move(&mut self) -> bool {
         if self.game.result().is_some() {
             return true;
         }
@@ -169,7 +206,7 @@ impl SelfPlayWorker {
         }
 
         // Select and make a move, possibly storing the board's evaluation.
-        let (chosen_move, score) = self.select_move(board, evaluations);
+        let (chosen_move, score) = self.select_move(board);
 
         if self.should_abort_game(&score) {
             return true;
@@ -180,85 +217,180 @@ impl SelfPlayWorker {
         false
     }
 
-    fn select_move(
-        &mut self,
-        board: chess::Board,
-        evaluations: &mut Vec<(String, f32)>,
-    ) -> (ChessMove, f32) {
+    fn select_move(&mut self, board: chess::Board) -> (ChessMove, f32) {
         let moves: Vec<ChessMove> = MoveGen::new_legal(&board).collect();
-
-        if self.position_has_been_evaluated(&board) {
-            return (random_move(&moves), 0.0);
+        if moves.is_empty() {
+            return (ChessMove::default(), 0.0);
         }
 
-        let (engine_move, engine_score) = self.get_engine_move(&board);
+        let board_hash = board.get_hash();
+        let fen = board.to_string();
 
-        // Convert to white's perspective and tanh to force mate scores to be in [-1, 1]
-        let white_score = if board.side_to_move() == chess::Color::White {
-            engine_score.tanh()
+        // First check if position has been globally evaluated
+        if let Some(cached_evals) = self.shared_data.lock().unwrap().move_evals.get(&board_hash) {
+            // If position is already in cache, we can use it directly
+            return self.pick_move(cached_evals);
+        }
+
+        // Position has not been evaluated yet
+        let (_, engine_score, moves_with_scores) = self.get_engine_move(&board);
+
+        // When using negamax, the engine_score is already from the current player's perspective
+        // For training data, we want scores from white's perspective
+        // If black is to move, we need to negate the score for the training data
+        let white_score = if board.side_to_move() == chess::Color::Black {
+            -engine_score
         } else {
-            -engine_score.tanh()
+            engine_score
         };
-        evaluations.push((board.to_string(), white_score));
 
-        if self.should_use_engine_move(&engine_score) {
-            (engine_move, engine_score)
-        } else {
-            (random_move(&moves), engine_score)
+        // Apply tanh to normalize scores
+        let normalized_score = white_score.tanh();
+
+        // Update shared data
+        {
+            let mut data = self.shared_data.lock().unwrap();
+
+            // Add move evaluations if not already present
+            if !data.move_evals.contains_key(&board_hash) {
+                data.move_evals
+                    .insert(board_hash, moves_with_scores.clone());
+            }
+
+            // Add position score if not already present
+            if !data.position_scores.contains_key(&fen) {
+                data.position_scores.insert(fen, normalized_score);
+            }
         }
+
+        self.pick_move(&moves_with_scores)
+    }
+
+    // Helper function to pick a move based on temperature or random chance
+    fn pick_move(&self, moves_with_scores: &Vec<(ChessMove, f32)>) -> (ChessMove, f32) {
+        // Get current board FEN
+        let fen = self.game.current_position().to_string();
+
+        // Decide if we should use pure random selection
+        if rand::thread_rng().gen::<f32>() < self.pure_random_chance {
+            let idx = rand::thread_rng().gen_range(0..moves_with_scores.len());
+            let (selected_move, score) = moves_with_scores[idx].clone();
+            println!(
+                "[Worker {}] Position: {} | Random move selected: {} (score: {})",
+                self.tid, fen, selected_move, score
+            );
+            return (selected_move, score);
+        }
+
+        // Otherwise, select move based on temperature
+        self.select_move_by_temperature(moves_with_scores, &fen)
+    }
+
+    fn select_move_by_temperature(
+        &self,
+        move_scores: &Vec<(ChessMove, f32)>,
+        fen: &str,
+    ) -> (ChessMove, f32) {
+        // Handle empty or singleton move lists
+        if move_scores.is_empty() {
+            return (ChessMove::default(), 0.0);
+        }
+        if move_scores.len() == 1 {
+            let (mv, score) = move_scores[0].clone();
+            println!(
+                "[Worker {}] Position: {} | Only one move available: {} (score: {})",
+                self.tid, fen, mv, score
+            );
+            return (mv, score);
+        }
+
+        // Calculate softmax probabilities
+        let mut sum_exp = 0.0;
+        let mut probabilities = Vec::with_capacity(move_scores.len());
+
+        // Important: With negamax, scores are already from the current player's perspective
+        // Higher scores are always better regardless of who is to move
+
+        // Find max score for numerical stability
+        let max_score = move_scores
+            .iter()
+            .map(|(_, s)| *s)
+            .fold(f32::NEG_INFINITY, f32::max);
+
+        for (_, score) in move_scores {
+            // No need to adjust for black - negamax already did that
+            let exp_value = ((*score - max_score) / self.temperature).exp();
+            sum_exp += exp_value;
+            probabilities.push(exp_value);
+        }
+
+        // Normalize probabilities
+        for prob in &mut probabilities {
+            *prob /= sum_exp;
+        }
+
+        // Select a move based on the calculated probabilities
+        let mut rng = rand::thread_rng();
+        let sample = rng.gen::<f32>();
+        let mut cumulative_prob = 0.0;
+
+        println!(
+            "[Worker {}] Position: {} | Temperature: {}, Move options:",
+            self.tid, fen, self.temperature
+        );
+        for (i, ((mv, score), prob)) in move_scores.iter().zip(probabilities.iter()).enumerate() {
+            println!("  [{}] {} (score: {}, prob: {:.4})", i, mv, score, prob);
+        }
+
+        for (i, prob) in probabilities.iter().enumerate() {
+            cumulative_prob += prob;
+            if sample < cumulative_prob {
+                let (selected_move, score) = move_scores[i].clone();
+                println!("[Worker {}] Position: {} | Temperature-based move selected: {} (score: {}, prob: {:.4}, sample: {:.4})", 
+                    self.tid, fen, selected_move, score, prob, sample);
+                return (selected_move, score);
+            }
+        }
+
+        // Should rarely happen due to floating point precision issues
+        let (selected_move, score) = move_scores.last().unwrap().clone();
+        println!(
+            "[Worker {}] Position: {} | Fallback move selected: {} (score: {})",
+            self.tid, fen, selected_move, score
+        );
+        move_scores.last().unwrap().clone()
     }
 
     #[inline]
-    fn position_has_been_evaluated(&mut self, board: &Board) -> bool {
-        let hash = board.get_hash();
-
-        let mut evaluated_positions = self.global_evaluated.lock().unwrap();
-        if evaluated_positions.contains(&hash) {
-            true
-        } else {
-            // Mark it seen from now on
-            evaluated_positions.insert(hash);
-            false
-        }
-    }
-
-    #[inline]
-    fn get_engine_move(&mut self, board: &Board) -> (ChessMove, f32) {
+    fn get_engine_move(&mut self, board: &Board) -> (ChessMove, f32, Vec<(ChessMove, f32)>) {
         self.engine.set_position(*board);
         self.engine.init_search();
         self.engine.search_root(self.depth)
     }
 
-    #[inline]
-    fn should_use_engine_move(&self, score: &f32) -> bool {
-        rand::thread_rng().gen::<f32>() < 0.3
-    }
-
     fn should_abort_game(&self, score: &f32) -> bool {
         let num_moves = self.positions_in_current_game.len();
 
-        // safety net
+        // Safety net - avoid extremely long games
         if num_moves > 500 {
             return true;
         }
 
-        // Abort if moderately long and drawish
-        if num_moves > 200 && score.abs() < 0.2 {
+        // Long drawish game
+        if num_moves > 200 && score.abs() < 0.1 {
+            return true;
+        }
+
+        // Very long slightly imbalanced game
+        if num_moves > 300 && score.abs() < 0.5 {
             return true;
         }
 
         false
     }
-
     #[inline]
     fn reset_game(&mut self) {
         self.game = Game::new();
         self.positions_in_current_game.clear();
     }
-}
-
-#[inline]
-fn random_move(moves: &[ChessMove]) -> ChessMove {
-    let idx = rand::thread_rng().gen_range(0..moves.len());
-    moves[idx]
 }

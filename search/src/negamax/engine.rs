@@ -84,7 +84,7 @@ impl Engine for NegamaxEngine {
         let mut best_move = None;
 
         while controller.continue_search(depth) {
-            let (mv, score) = self.search_root(depth);
+            let (mv, score, _) = self.search_root(depth);
             best_move = Some(mv);
 
             self.send_search_info(output, depth, score, controller.elapsed());
@@ -111,7 +111,7 @@ impl NegamaxEngine {
         self.position_stack.push(self.board.get_hash());
     }
 
-    pub fn search_root(&mut self, depth: u64) -> (ChessMove, f32) {
+    pub fn search_root(&mut self, depth: u64) -> (ChessMove, f32, Vec<(ChessMove, f32)>) {
         let mut alpha = f32::NEG_INFINITY;
         let beta = f32::INFINITY;
 
@@ -122,11 +122,12 @@ impl NegamaxEngine {
         let moves_with_scores = get_ordered_moves(&self.board, Some(&preferred_moves));
 
         if moves_with_scores.is_empty() {
-            return (ChessMove::default(), 0.0);
+            return (ChessMove::default(), 0.0, Vec::new());
         }
 
         let mut best_score = f32::NEG_INFINITY;
         let mut current_best_move = moves_with_scores[0].0;
+        let mut all_move_scores = Vec::with_capacity(moves_with_scores.len());
 
         // Negamax at root: call search_subtree with flipped window, then negate result
         for (m, _) in moves_with_scores {
@@ -138,6 +139,7 @@ impl NegamaxEngine {
             self.position_stack.pop();
 
             pv.insert(0, m);
+            all_move_scores.push((m, score));
 
             if score > best_score {
                 best_score = score;
@@ -148,7 +150,7 @@ impl NegamaxEngine {
             alpha = alpha.max(best_score);
         }
 
-        (current_best_move, best_score)
+        (current_best_move, best_score, all_move_scores)
     }
 
     fn search_subtree(

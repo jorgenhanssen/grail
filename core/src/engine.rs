@@ -9,8 +9,8 @@ pub use search::NegamaxEngine;
 
 use candle_nn::VarMap;
 
-const NNUE_VERSION: u32 = 0;
-static NNUE_BYTES: &[u8] = include_bytes!("../../nnue/versions/v0/model.safetensors");
+const NNUE_VERSION: u32 = 3;
+static NNUE_BYTES: &[u8] = include_bytes!("../../nnue/versions/v3/model.safetensors");
 
 fn load_varmap_from_bytes(varmap: &mut VarMap, data: &[u8]) -> Result<()> {
     let st = SliceSafetensors::new(data)?;
