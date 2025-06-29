@@ -369,7 +369,7 @@ impl SelfPlayWorker {
         self.engine.set_position(*board);
         self.engine.init_search();
         // Short 2-depth search WITHOUT pruning for exact move probabilities
-        let (_, _, moves_with_scores) = self.engine.search_root(1, false);
+        let (_, _, moves_with_scores) = self.engine.search_root(2, false);
         moves_with_scores
     }
 
