@@ -43,7 +43,10 @@ const fn invert_pst(source: &[f32; 64]) -> [f32; 64] {
     let mut table = [0.0; 64];
     let mut i = 0;
     while i < 64 {
-        table[i] = -source[63 - i];
+        let rank = i / 8;
+        let file = i % 8;
+        let flipped_index = (7 - rank) * 8 + file; // vertical mirror
+        table[i] = source[flipped_index];
         i += 1;
     }
     table
