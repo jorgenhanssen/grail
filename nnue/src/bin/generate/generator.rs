@@ -173,13 +173,13 @@ impl SelfPlayWorker {
                 break;
             }
 
-            // Update progress with position count
-            let position_count = {
-                let data = self.shared_data.lock().unwrap();
-                data.position_scores.len()
-            };
-
             if self.tid == 0 {
+                // Update progress with position count
+                let position_count = {
+                    let data = self.shared_data.lock().unwrap();
+                    data.position_scores.len()
+                };
+
                 pb.set_message(format!("{} positions", position_count));
                 pb.set_position(current_elapsed);
             }
