@@ -10,6 +10,8 @@ use crate::traditional::values::{
 pub fn evaluate_board(board: &Board) -> f32 {
     let is_white = board.side_to_move() == Color::White;
 
+    let phase = game_phase(board);
+
     match board.status() {
         BoardStatus::Checkmate => {
             // If it's White to move and board is checkmated => White lost
@@ -27,8 +29,8 @@ pub fn evaluate_board(board: &Board) -> f32 {
     let black_mask = board.color_combined(Color::Black);
 
     let mut score = 0.0;
-    score += evaluate_material(board, Color::White, &white_mask);
-    score -= evaluate_material(board, Color::Black, &black_mask);
+    score += evaluate_material(board, Color::White, &white_mask, phase);
+    score -= evaluate_material(board, Color::Black, &black_mask, phase);
 
     score += evaluate_pawn_structure(board, &white_mask);
     score -= evaluate_pawn_structure(board, &black_mask);
@@ -42,7 +44,7 @@ pub fn evaluate_board(board: &Board) -> f32 {
     (score / 1_500.0).tanh()
 }
 
-fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard) -> f32 {
+fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard, phase: f32) -> f32 {
     let pawn_mask = board.pieces(Piece::Pawn) & color_mask;
     let knight_mask = board.pieces(Piece::Knight) & color_mask;
     let bishop_mask = board.pieces(Piece::Bishop) & color_mask;
@@ -65,21 +67,21 @@ fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard) -> f32 
     let pst = get_pst(color);
     let mut pst_value = 0.0;
     if num_pawns > 0 {
-        pst_value += sum_pst(pawn_mask, pst.pawn);
+        pst_value += sum_pst(pawn_mask, pst.pawn, phase);
     }
     if num_knights > 0 {
-        pst_value += sum_pst(knight_mask, pst.knight);
+        pst_value += sum_pst(knight_mask, pst.knight, phase);
     }
     if num_bishops > 0 {
-        pst_value += sum_pst(bishop_mask, pst.bishop);
+        pst_value += sum_pst(bishop_mask, pst.bishop, phase);
     }
     if num_rooks > 0 {
-        pst_value += sum_pst(rook_mask, pst.rook);
+        pst_value += sum_pst(rook_mask, pst.rook, phase);
     }
     if num_queens > 0 {
-        pst_value += sum_pst(queen_mask, pst.queen);
+        pst_value += sum_pst(queen_mask, pst.queen, phase);
     }
-    pst_value += sum_pst(king_mask, pst.king);
+    pst_value += sum_pst(king_mask, pst.king, phase);
 
     // bonus for bishop pair
     let bishop_pair_bonus = if num_bishops >= 2 { 50.0 } else { 0.0 };
@@ -264,4 +266,15 @@ fn evaluate_rooks(board: &Board, color: Color) -> f32 {
     }
 
     score
+}
+
+fn game_phase(board: &Board) -> f32 {
+    let knights = board.pieces(Piece::Knight);
+    let bishops = board.pieces(Piece::Bishop);
+    let rooks = board.pieces(Piece::Rook);
+    let queens = board.pieces(Piece::Queen);
+
+    let score = knights.popcnt() + bishops.popcnt() + 2 * rooks.popcnt() + 4 * queens.popcnt();
+
+    (score.min(24) as f32) / 24.0
 }
