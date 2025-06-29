@@ -73,7 +73,7 @@ const PST_TABLE: [PSTRefs; 2] = [
 ];
 
 #[inline(always)]
-pub fn sum_pst(bitboard: BitBoard, pst: &PhasePst, phase: f32) -> f32 {
+pub fn sum_pst(bitboard: BitBoard, pst: &PST, phase: f32) -> f32 {
     let mut total = 0.0;
     for sq in bitboard {
         let mg_blend = pst.mg[sq.to_index()] * phase;
