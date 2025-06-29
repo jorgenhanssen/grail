@@ -52,11 +52,14 @@ impl Generator {
             eval_name
         );
 
-        let mp = MultiProgress::new();
-        let mp_style = ProgressStyle::with_template(
-            " {spinner:.cyan} {wide_bar:.cyan/blue} {eta_precise} | {msg}",
-        )
-        .unwrap();
+        let pb = ProgressBar::new(duration);
+        pb.set_style(
+            ProgressStyle::with_template(
+                " {spinner:.cyan} {wide_bar:.cyan/blue} {eta_precise} | {msg}",
+            )
+            .unwrap(),
+        );
+        let pb = Arc::new(pb);
 
         let global_evaluated = Arc::new(Mutex::new(AHashSet::new()));
 
@@ -65,10 +68,7 @@ impl Generator {
                 let nnue_path = self.nnue_path.clone();
                 let version = self.version;
                 let global_evaluated = Arc::clone(&global_evaluated);
-
-                let pb = mp.add(ProgressBar::new(duration));
-                pb.set_prefix(format!("[{}]", tid));
-                pb.set_style(mp_style.clone());
+                let pb = Arc::clone(&pb);
 
                 std::thread::spawn(move || {
                     let evaluator: Box<dyn Evaluator> = match &nnue_path {
@@ -93,7 +93,7 @@ impl Generator {
             .flat_map(|h| h.join().unwrap())
             .collect();
 
-        mp.clear().unwrap();
+        pb.finish_with_message(format!("Evaluated {} positions", evaluations.len()));
 
         evaluations
     }
@@ -140,8 +140,11 @@ impl SelfPlayWorker {
                 break;
             }
 
-            pb.set_message(format!("{:?}", evaluations.len()));
-            pb.set_position(current_elapsed);
+            if self.tid == 0 {
+                let global_count = self.global_evaluated.lock().unwrap().len();
+                pb.set_message(format!("{} positions", global_count));
+                pb.set_position(current_elapsed);
+            }
 
             let terminal = self.play_single_move(&mut evaluations);
 
