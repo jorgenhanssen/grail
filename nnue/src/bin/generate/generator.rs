@@ -68,7 +68,6 @@ impl Generator {
             eval_name
         );
 
-        // Create a single shared progress bar instead of multiple ones
         let pb = ProgressBar::new(duration);
         pb.set_style(
             ProgressStyle::with_template(
@@ -76,8 +75,6 @@ impl Generator {
             )
             .unwrap(),
         );
-
-        // Wrap in Arc to share across threads
         let pb = Arc::new(pb);
 
         let shared_data = Arc::new(Mutex::new(SharedData::new()));
@@ -87,7 +84,7 @@ impl Generator {
                 let nnue_path = self.nnue_path.clone();
                 let version = self.version;
                 let shared_data = Arc::clone(&shared_data);
-                let pb = Arc::clone(&pb); // Share the same progress bar
+                let pb = Arc::clone(&pb);
 
                 std::thread::spawn(move || {
                     let evaluator: Box<dyn Evaluator> = match &nnue_path {
@@ -174,7 +171,6 @@ impl SelfPlayWorker {
             }
 
             if self.tid == 0 {
-                // Update progress with position count
                 let position_count = {
                     let data = self.shared_data.lock().unwrap();
                     data.position_scores.len()
