@@ -232,31 +232,38 @@ impl SelfPlayWorker {
             return self.pick_move(cached_evals);
         }
 
-        // Position has not been evaluated yet
-        let (_, engine_score, moves_with_scores) = self.get_engine_move(&board);
+        // Position has not been evaluated yet - do two-stage evaluation
 
-        // When using negamax, the engine_score is already from the current player's perspective
+        // Stage 1: Short unpruned search for move selection probabilities
+        let moves_with_scores = self.get_move_probabilities(&board);
+
+        // Store move probabilities immediately so other threads can use them
+        {
+            let mut data = self.shared_data.lock().unwrap();
+            if !data.move_evals.contains_key(&board_hash) {
+                data.move_evals
+                    .insert(board_hash, moves_with_scores.clone());
+            }
+        }
+
+        // Stage 2: Full pruned search for training data
+        let training_score = self.get_training_score(&board);
+
+        // When using negamax, the training_score is already from the current player's perspective
         // For training data, we want scores from white's perspective
         // If black is to move, we need to negate the score for the training data
         let white_score = if board.side_to_move() == chess::Color::Black {
-            -engine_score
+            -training_score
         } else {
-            engine_score
+            training_score
         };
 
         // Apply tanh to normalize scores
         let normalized_score = white_score.tanh();
 
-        // Update shared data
+        // Store training score
         {
             let mut data = self.shared_data.lock().unwrap();
-
-            // Add move evaluations if not already present
-            if !data.move_evals.contains_key(&board_hash) {
-                data.move_evals
-                    .insert(board_hash, moves_with_scores.clone());
-            }
-
             // Add position score if not already present
             if !data.position_scores.contains_key(&fen) {
                 data.position_scores.insert(fen, normalized_score);
@@ -275,10 +282,10 @@ impl SelfPlayWorker {
         if rand::thread_rng().gen::<f32>() < self.pure_random_chance {
             let idx = rand::thread_rng().gen_range(0..moves_with_scores.len());
             let (selected_move, score) = moves_with_scores[idx].clone();
-            println!(
-                "[Worker {}] Position: {} | Random move selected: {} (score: {})",
-                self.tid, fen, selected_move, score
-            );
+            // println!(
+            //     "[Worker {}] Position: {} | Random move selected: {} (score: {})",
+            //     self.tid, fen, selected_move, score
+            // );
             return (selected_move, score);
         }
 
@@ -297,10 +304,10 @@ impl SelfPlayWorker {
         }
         if move_scores.len() == 1 {
             let (mv, score) = move_scores[0].clone();
-            println!(
-                "[Worker {}] Position: {} | Only one move available: {} (score: {})",
-                self.tid, fen, mv, score
-            );
+            // println!(
+            //     "[Worker {}] Position: {} | Only one move available: {} (score: {})",
+            //     self.tid, fen, mv, score
+            // );
             return (mv, score);
         }
 
@@ -334,38 +341,49 @@ impl SelfPlayWorker {
         let sample = rng.gen::<f32>();
         let mut cumulative_prob = 0.0;
 
-        println!(
-            "[Worker {}] Position: {} | Temperature: {}, Move options:",
-            self.tid, fen, self.temperature
-        );
-        for (i, ((mv, score), prob)) in move_scores.iter().zip(probabilities.iter()).enumerate() {
-            println!("  [{}] {} (score: {}, prob: {:.4})", i, mv, score, prob);
-        }
+        // println!(
+        //     "[Worker {}] Position: {} | Temperature: {}, Move options:",
+        //     self.tid, fen, self.temperature
+        // );
+        // for (i, ((mv, score), prob)) in move_scores.iter().zip(probabilities.iter()).enumerate() {
+        //     println!("  [{}] {} (score: {}, prob: {:.4})", i, mv, score, prob);
+        // }
 
         for (i, prob) in probabilities.iter().enumerate() {
             cumulative_prob += prob;
             if sample < cumulative_prob {
                 let (selected_move, score) = move_scores[i].clone();
-                println!("[Worker {}] Position: {} | Temperature-based move selected: {} (score: {}, prob: {:.4}, sample: {:.4})", 
-                    self.tid, fen, selected_move, score, prob, sample);
+                // println!("[Worker {}] Position: {} | Temperature-based move selected: {} (score: {}, prob: {:.4}, sample: {:.4})",
+                //     self.tid, fen, selected_move, score, prob, sample);
                 return (selected_move, score);
             }
         }
 
         // Should rarely happen due to floating point precision issues
         let (selected_move, score) = move_scores.last().unwrap().clone();
-        println!(
-            "[Worker {}] Position: {} | Fallback move selected: {} (score: {})",
-            self.tid, fen, selected_move, score
-        );
+        // println!(
+        //     "[Worker {}] Position: {} | Fallback move selected: {} (score: {})",
+        //     self.tid, fen, selected_move, score
+        // );
         move_scores.last().unwrap().clone()
     }
 
     #[inline]
-    fn get_engine_move(&mut self, board: &Board) -> (ChessMove, f32, Vec<(ChessMove, f32)>) {
+    fn get_move_probabilities(&mut self, board: &Board) -> Vec<(ChessMove, f32)> {
         self.engine.set_position(*board);
         self.engine.init_search();
-        self.engine.search_root(self.depth)
+        // Short 2-depth search WITHOUT pruning for exact move probabilities
+        let (_, _, moves_with_scores) = self.engine.search_root(1, false);
+        moves_with_scores
+    }
+
+    #[inline]
+    fn get_training_score(&mut self, board: &Board) -> f32 {
+        self.engine.set_position(*board);
+        self.engine.init_search();
+        // Full depth search WITH pruning for training data
+        let (_, score, _) = self.engine.search_root(self.depth, true);
+        score
     }
 
     fn should_abort_game(&self, score: &f32) -> bool {

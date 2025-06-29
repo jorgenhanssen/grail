@@ -84,7 +84,7 @@ impl Engine for NegamaxEngine {
         let mut best_move = None;
 
         while controller.continue_search(depth) {
-            let (mv, score, _) = self.search_root(depth);
+            let (mv, score, _) = self.search_root(depth, true);
             best_move = Some(mv);
 
             self.send_search_info(output, depth, score, controller.elapsed());
@@ -111,7 +111,11 @@ impl NegamaxEngine {
         self.position_stack.push(self.board.get_hash());
     }
 
-    pub fn search_root(&mut self, depth: u64) -> (ChessMove, f32, Vec<(ChessMove, f32)>) {
+    pub fn search_root(
+        &mut self,
+        depth: u64,
+        prune: bool,
+    ) -> (ChessMove, f32, Vec<(ChessMove, f32)>) {
         let mut alpha = f32::NEG_INFINITY;
         let beta = f32::INFINITY;
 
@@ -133,8 +137,12 @@ impl NegamaxEngine {
         for (m, _) in moves_with_scores {
             let new_board = self.board.make_move_new(m);
 
+            // Use current alpha if pruning is enabled, otherwise use initial alpha for each move
+            let search_alpha = if prune { alpha } else { f32::NEG_INFINITY };
+
             self.position_stack.push(new_board.get_hash());
-            let (child_value, mut pv) = self.search_subtree(&new_board, 1, depth, -beta, -alpha);
+            let (child_value, mut pv) =
+                self.search_subtree(&new_board, 1, depth, -beta, -search_alpha);
             let score = -child_value;
             self.position_stack.pop();
 
@@ -147,7 +155,10 @@ impl NegamaxEngine {
                 self.current_pv = pv;
             }
 
-            alpha = alpha.max(best_score);
+            // Only update alpha if pruning is enabled
+            if prune {
+                alpha = alpha.max(best_score);
+            }
         }
 
         (current_best_move, best_score, all_move_scores)
