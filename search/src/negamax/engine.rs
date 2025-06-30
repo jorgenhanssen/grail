@@ -5,7 +5,11 @@ use crate::{
 use ahash::AHashMap;
 use chess::{Board, BoardStatus, ChessMove, Color};
 use evaluation::{Evaluator, TraditionalEvaluator};
-use std::sync::mpsc::Sender;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc::Sender,
+    Arc,
+};
 use uci::{
     commands::{GoParams, Info},
     UciOutput,
@@ -37,6 +41,8 @@ pub struct NegamaxEngine {
 
     position_stack: Vec<u64>,
     evaluator: Box<dyn Evaluator>,
+
+    stop: Arc<AtomicBool>,
 }
 
 impl Default for NegamaxEngine {
@@ -52,6 +58,8 @@ impl Default for NegamaxEngine {
 
             position_stack: Vec::with_capacity(100),
             evaluator: Box::new(TraditionalEvaluator),
+
+            stop: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -60,6 +68,7 @@ impl Engine for NegamaxEngine {
     fn new(evaluator: Box<dyn Evaluator>) -> Self {
         Self {
             evaluator,
+            stop: Arc::new(AtomicBool::new(false)),
             ..Default::default()
         }
     }
@@ -73,19 +82,31 @@ impl Engine for NegamaxEngine {
     }
 
     fn stop(&mut self) {
-        // TODO: implement
+        self.stop.store(true, Ordering::Relaxed);
     }
 
     fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> ChessMove {
         self.init_search();
 
-        let controller = SearchController::new(params);
+        let mut controller = SearchController::new(params);
+
+        // Start the async timer if time controls are set
+        let stop = Arc::clone(&self.stop);
+        controller.start_timer(move || {
+            stop.store(true, Ordering::Relaxed);
+        });
+
         let mut depth = 1;
         let mut best_move = None;
 
-        while controller.continue_search(depth) {
+        while !self.stop.load(Ordering::Relaxed) {
             let (mv, score) = self.search_root(depth);
-            best_move = Some(mv);
+
+            if mv.is_none() {
+                break;
+            }
+
+            best_move = mv;
 
             self.send_search_info(output, depth, score, controller.elapsed());
 
@@ -99,6 +120,7 @@ impl Engine for NegamaxEngine {
 impl NegamaxEngine {
     #[inline(always)]
     pub fn init_search(&mut self) {
+        self.stop.store(false, Ordering::Relaxed);
         self.tt.clear();
         self.qs_tt.clear();
         self.killer_moves = [[None; 2]; 100]; // 2 killer moves per depth
@@ -111,7 +133,7 @@ impl NegamaxEngine {
         self.position_stack.push(self.board.get_hash());
     }
 
-    pub fn search_root(&mut self, depth: u64) -> (ChessMove, f32) {
+    pub fn search_root(&mut self, depth: u64) -> (Option<ChessMove>, f32) {
         let mut alpha = f32::NEG_INFINITY;
         let beta = f32::INFINITY;
 
@@ -122,14 +144,18 @@ impl NegamaxEngine {
         let moves_with_scores = get_ordered_moves(&self.board, Some(&preferred_moves));
 
         if moves_with_scores.is_empty() {
-            return (ChessMove::default(), 0.0);
+            return (None, 0.0);
         }
 
         let mut best_score = f32::NEG_INFINITY;
-        let mut current_best_move = moves_with_scores[0].0;
+        let mut current_best_move = None;
 
         // Negamax at root: call search_subtree with flipped window, then negate result
         for (m, _) in moves_with_scores {
+            if self.stop.load(Ordering::Relaxed) {
+                return (None, 0.0);
+            }
+
             let new_board = self.board.make_move_new(m);
 
             self.position_stack.push(new_board.get_hash());
@@ -141,7 +167,7 @@ impl NegamaxEngine {
 
             if score > best_score {
                 best_score = score;
-                current_best_move = m;
+                current_best_move = Some(m);
                 self.current_pv = pv;
             }
 
