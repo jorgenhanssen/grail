@@ -1,44 +1,47 @@
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::thread;
+use std::time::Duration;
 use uci::commands::GoParams;
 
 pub struct SearchController {
     start_time: std::time::Instant,
     allocated_time: Option<u64>,
     max_depth: Option<u64>,
+    _timer_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl SearchController {
     pub fn new(params: &GoParams) -> Self {
         Self {
             start_time: std::time::Instant::now(),
-            allocated_time: params.move_time,
+            // allocated_time: params.move_time,
+            allocated_time: Some(5_000), // hardcoded for now
             max_depth: params.depth,
+            _timer_handle: None,
+        }
+    }
+
+    /// Start async time management by spawning a timer thread that will call the stop_callback after allocated time
+    pub fn start_timer<F>(&mut self, stop_callback: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        if let Some(allocated_time) = self.allocated_time {
+            let duration = Duration::from_millis(allocated_time);
+
+            let handle = thread::spawn(move || {
+                thread::sleep(duration);
+                stop_callback();
+            });
+
+            self._timer_handle = Some(handle);
         }
     }
 
     pub fn elapsed(&self) -> std::time::Duration {
         self.start_time.elapsed()
-    }
-
-    #[inline(always)]
-    pub fn continue_search(&self, depth: u64) -> bool {
-        return depth <= 6;
-        // return self.start_time.elapsed().as_millis() < 10_000;
-
-        // Check time limit if it exists
-        if let Some(allocated_time) = self.allocated_time {
-            if self.start_time.elapsed().as_millis() >= allocated_time as u128 {
-                return false;
-            }
-        }
-
-        // Check depth limit if it exists
-        if let Some(max_depth) = self.max_depth {
-            if depth > max_depth {
-                return false;
-            }
-        }
-
-        // If neither limit is set, use a default time of 10 seconds
-        self.start_time.elapsed().as_millis() < 10_000
     }
 }
