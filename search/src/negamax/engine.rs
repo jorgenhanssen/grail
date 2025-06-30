@@ -79,7 +79,7 @@ impl Engine for NegamaxEngine {
     fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> ChessMove {
         self.init_search();
 
-        let mut controller = SearchController::new(params);
+        let controller = SearchController::new(params);
         let mut depth = 1;
         let mut best_move = None;
 
