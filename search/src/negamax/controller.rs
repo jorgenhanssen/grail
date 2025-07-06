@@ -21,7 +21,7 @@ impl SearchController {
 
     #[inline(always)]
     pub fn continue_search(&self, depth: u64) -> bool {
-        return depth <= 10;
+        return depth <= 8;
         // return self.start_time.elapsed().as_millis() < 10_000;
 
         // Check time limit if it exists
