@@ -88,19 +88,5 @@ fn score(mov: ChessMove, board: &Board) -> i32 {
         return CAPTURE_SCORE + MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)];
     }
 
-    // Then look for checks
-    if board.make_move_new(mov).checkers().popcnt() > 0 {
-        return CHECK_SCORE;
-    }
-
-    // For non-capture moves, return a small positive value based on the piece type
-    // This encourages moving more valuable pieces first in quiet positions
-    match attacker {
-        Piece::Queen => PIECE_SCORE_QUEEN,
-        Piece::Rook => PIECE_SCORE_ROOK,
-        Piece::Bishop => PIECE_SCORE_BISHOP,
-        Piece::Knight => PIECE_SCORE_KNIGHT,
-        Piece::Pawn => PIECE_SCORE_PAWN,
-        Piece::King => PIECE_SCORE_KING,
-    }
+    return 0;
 }
