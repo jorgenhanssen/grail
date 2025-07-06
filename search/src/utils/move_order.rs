@@ -1,17 +1,17 @@
-use ahash::AHashMap;
 use chess::{Board, ChessMove, MoveGen, Piece};
 
 pub fn get_ordered_moves(
     board: &Board,
-    preferred_moves: Option<&AHashMap<ChessMove, i32>>,
+    preferred_moves: Option<&[(ChessMove, i32)]>,
 ) -> Vec<(ChessMove, i32)> {
     let legal_moves = MoveGen::new_legal(board);
     let mut scored_moves = Vec::with_capacity(legal_moves.len());
 
-    if let Some(prioritized_moves) = preferred_moves {
+    if let Some(prioritized) = preferred_moves {
         for m in legal_moves {
-            if let Some(&priority_score) = prioritized_moves.get(&m) {
-                scored_moves.push((m, priority_score));
+            // scan for a match in 1–4 entries
+            if let Some(&(_, score)) = prioritized.iter().find(|&&(pm, _)| pm == m) {
+                scored_moves.push((m, score));
             } else {
                 scored_moves.push((m, score(m, board)));
             }

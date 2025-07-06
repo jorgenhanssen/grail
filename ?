@@ -223,8 +223,8 @@ impl NegamaxEngine {
         //  Killer moves for this specific depth if they are legal
         for &killer_move_opt in &self.killer_moves[depth as usize] {
             if let Some(killer_move) = killer_move_opt {
-                let already_there = preferred_moves.iter().any(|&(pm, _)| pm == killer_move);
-                if !already_there {
+                let already_there = preferred.iter().any(|&(pm, _)| pm == killer_move);
+                if already_there {
                     preferred_moves.push((killer_move, CAPTURE_SCORE - 2));
                 }
             }
