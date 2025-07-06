@@ -2,29 +2,54 @@ use chess::{Board, ChessMove, MoveGen, Piece};
 
 pub fn get_ordered_moves(
     board: &Board,
-    preferred_moves: Option<&[(ChessMove, i32)]>,
+    preferred: Option<&[(ChessMove, i32)]>,
 ) -> Vec<(ChessMove, i32)> {
-    let legal_moves = MoveGen::new_legal(board);
-    let mut scored_moves = Vec::with_capacity(legal_moves.len());
+    let legal = MoveGen::new_legal(board);
+    let cap   = legal.len();
 
-    if let Some(prioritized) = preferred_moves {
-        for m in legal_moves {
-            // scan for a match in 1–4 entries
-            if let Some(&(_, score)) = prioritized.iter().find(|&&(pm, _)| pm == m) {
-                scored_moves.push((m, score));
-            } else {
-                scored_moves.push((m, score(m, board)));
+    // Separate buckets: high = score > 0, quiet = score == 0
+    let mut high  = Vec::with_capacity(cap);
+    let mut quiet = Vec::with_capacity(cap);
+
+    let (pref_ptr, pref_len) = if let Some(p) = preferred {
+        (p.as_ptr(), p.len()) // raw ptr so the compiler can unroll
+    } else {
+        (core::ptr::null(), 0)
+    };
+
+    // ------------ main loop ------------
+    for m in legal {
+        // ---- tiny hand scan of preferred (k <= 4) ----
+        let mut sc = 0;
+        if pref_len != 0 {
+            // SAFETY: pref_ptr came from a valid slice, len is correct
+            for i in 0..pref_len {
+                // LLVM can vectorise / unroll this
+                let (pm, s) = unsafe { *pref_ptr.add(i) };
+                if pm == m {
+                    sc = s;
+                    break;
+                }
             }
         }
-    } else {
-        for m in legal_moves {
-            scored_moves.push((m, score(m, board)));
+        if sc == 0 {
+            sc = score(m, board); // your existing scoring fn
+        }
+
+        // ---- bucket by score ----
+        if sc > 0 {
+            high.push((m, sc));
+        } else {
+            quiet.push((m, 0));
         }
     }
 
-    // Sort moves by score in descending order
-    scored_moves.sort_unstable_by(|a, b| b.1.cmp(&a.1));
-    scored_moves
+    // Sort only the forcing moves (usually a small subset)
+    high.sort_unstable_by_key(|&(_, s)| -s);
+
+    // Append the quiet bucket without sorting
+    high.extend(quiet);
+    high
 }
 
 pub const PROMOTION_SCORE: i32 = 10000;
