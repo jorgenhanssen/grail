@@ -254,10 +254,13 @@ impl NegamaxEngine {
         let mut best_line = Vec::new();
 
         for (move_index, (m, score)) in moves.into_iter().enumerate() {
-            let reduction = calculate_dynamic_lmr_reduction(depth, move_index, score);
-            let current_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
-
             let new_board = board.make_move_new(m);
+            let in_check = new_board.checkers().popcnt() > 0;
+
+
+            let lmr = calculate_dynamic_lmr_reduction(depth, move_index, score, in_check);
+            let current_max_depth = max_depth.saturating_sub(lmr).max(depth + 1);
+
 
             self.position_stack.push(new_board.get_hash());
             let (child_value, mut line) =

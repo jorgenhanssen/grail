@@ -14,17 +14,23 @@ pub fn see_naive(board: &Board, capture_move: ChessMove) -> f32 {
     }
 }
 
-// Same as Weiss
 #[inline(always)]
-pub fn calculate_dynamic_lmr_reduction(depth: u64, move_index: usize, score: i32) -> u64 {
-    // TODO: Fix this later
-    return 0;
+pub fn calculate_dynamic_lmr_reduction(depth: u64, move_index: usize, score: i32, in_check: bool) -> u64 {
+    if depth <= 3 {
+        // do not reduce  immediate moves
+        return 0;
+    }
+    if in_check {
+        // do not reduce checks
+        return 0;
+    }
+    if score > 0 {
+        // do not reduce important moves
+        return 0;
+    }
 
-    // if score < CHECK_SCORE {
-    //     (1.35 + (depth as f64).ln() * (move_index as f64).ln() / 2.75).ceil() as u32
-    // } else {
-    //     (0.20 + (depth as f64).ln() * (move_index as f64).ln() / 3.35).ceil() as u32
-    // }
+    // quiet moves, reduce by 1 ply
+    return 1;
 }
 
 #[inline(always)]
