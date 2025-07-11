@@ -2,28 +2,44 @@ use chess::{Board, ChessMove, MoveGen, Piece};
 
 pub fn get_ordered_moves(
     board: &Board,
-    preferred_moves: Option<&[(ChessMove, i32)]>,
+    preferred: Option<&[(ChessMove, i32)]>,
 ) -> Vec<(ChessMove, i32)> {
-    let legal_moves = MoveGen::new_legal(board);
-    let mut scored_moves = Vec::with_capacity(legal_moves.len());
+    let legal = MoveGen::new_legal(board);
+    let cap = legal.len();
 
-    if let Some(prioritized) = preferred_moves {
-        for m in legal_moves {
-            if let Some(&(_, score)) = prioritized.iter().find(|&&(pm, _)| pm == m) {
-                scored_moves.push((m, score));
-            } else {
-                scored_moves.push((m, score(m, board)));
+    // Separate buckets: high = score > 0, quiet = score == 0
+    let mut high = Vec::with_capacity(cap);
+    let mut quiet = Vec::with_capacity(cap);
+
+    for m in legal {
+        // Try to find the move in the preferred list
+        let mut move_score = 0;
+        if let Some(preferred) = preferred {
+            for &(pm, s) in preferred {
+                if pm == m {
+                    move_score = s;
+                    break;
+                }
             }
         }
-    } else {
-        for m in legal_moves {
-            scored_moves.push((m, score(m, board)));
+        if move_score == 0 {
+            move_score = score(m, board);
+        }
+
+        // bucket by score
+        if move_score > 0 {
+            high.push((m, move_score));
+        } else {
+            quiet.push((m, 0));
         }
     }
 
-    // Sort moves by score in descending order
-    scored_moves.sort_unstable_by(|a, b| b.1.cmp(&a.1));
-    scored_moves
+    // Sort only the forcing moves
+    high.sort_unstable_by_key(|&(_, s)| -s);
+
+    // Append quiet moves last
+    high.extend(quiet);
+    high
 }
 
 pub const PROMOTION_SCORE: i32 = 10000;
@@ -35,14 +51,6 @@ const PROMOTION_SCORE_KNIGHT: i32 = PROMOTION_SCORE + 1;
 pub const CAPTURE_SCORE: i32 = 1000;
 
 pub const CHECK_SCORE: i32 = 100;
-
-pub const PIECE_SCORE: i32 = 10;
-const PIECE_SCORE_QUEEN: i32 = PIECE_SCORE + 6;
-const PIECE_SCORE_ROOK: i32 = PIECE_SCORE + 5;
-const PIECE_SCORE_BISHOP: i32 = PIECE_SCORE + 4;
-const PIECE_SCORE_KNIGHT: i32 = PIECE_SCORE + 3;
-const PIECE_SCORE_PAWN: i32 = PIECE_SCORE + 2;
-const PIECE_SCORE_KING: i32 = PIECE_SCORE + 1;
 
 // MVV-LVA table
 // king, queen, rook, bishop, knight, pawn
@@ -87,19 +95,6 @@ fn score(mov: ChessMove, board: &Board) -> i32 {
         return CAPTURE_SCORE + MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)];
     }
 
-    // Then look for checks
-    if board.make_move_new(mov).checkers().popcnt() > 0 {
-        return CHECK_SCORE;
-    }
-
-    // For non-capture moves, return a small positive value based on the piece type
-    // This encourages moving more valuable pieces first in quiet positions
-    match attacker {
-        Piece::Queen => PIECE_SCORE_QUEEN,
-        Piece::Rook => PIECE_SCORE_ROOK,
-        Piece::Bishop => PIECE_SCORE_BISHOP,
-        Piece::Knight => PIECE_SCORE_KNIGHT,
-        Piece::Pawn => PIECE_SCORE_PAWN,
-        Piece::King => PIECE_SCORE_KING,
-    }
+    // Quiet moves are not scored
+    return 0;
 }
