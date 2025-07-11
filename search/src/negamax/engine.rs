@@ -5,6 +5,7 @@ use crate::{
 use ahash::AHashMap;
 use chess::{Board, BoardStatus, ChessMove, Color};
 use evaluation::{Evaluator, TraditionalEvaluator};
+use std::array;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc::Sender,
@@ -23,6 +24,8 @@ use super::{
     tt::{Bound, TTEntry},
 };
 
+const MAX_DEPTH: usize = 100;
+
 pub const CHECKMATE_SCORE: f32 = 1_000_000.0;
 
 const MAX_QSEARCH_DEPTH: u64 = 12;
@@ -31,13 +34,16 @@ const MAX_QSEARCH_CHECK_STREAK: u64 = 4;
 pub struct NegamaxEngine {
     board: Board,
     nodes: u32,
-    killer_moves: [[Option<ChessMove>; 2]; 100], // 2 per depth
+    killer_moves: [[Option<ChessMove>; 2]; MAX_DEPTH], // 2 per depth
     current_pv: Vec<ChessMove>,
 
     tt: AHashMap<u64, TTEntry>,
     qs_tt: AHashMap<u64, f32>,
 
     max_depth_reached: u64,
+
+    // move sorting buffer per depth
+    preferred_buffer: [Vec<(ChessMove, i32)>; MAX_DEPTH],
 
     position_stack: Vec<u64>,
     evaluator: Box<dyn Evaluator>,
@@ -52,9 +58,10 @@ impl Default for NegamaxEngine {
             nodes: 0,
             tt: AHashMap::with_capacity(6_000_000),
             qs_tt: AHashMap::with_capacity(12_000_000),
-            killer_moves: [[None; 2]; 100], // 100 is a good depth
+            killer_moves: [[None; 2]; MAX_DEPTH], // 100 is a good depth
             max_depth_reached: 1,
             current_pv: Vec::new(),
+            preferred_buffer: array::from_fn(|_| Vec::with_capacity(MAX_DEPTH)),
 
             position_stack: Vec::with_capacity(100),
             evaluator: Box::new(TraditionalEvaluator),
@@ -132,7 +139,7 @@ impl NegamaxEngine {
         self.stop.store(false, Ordering::Relaxed);
         self.tt.clear();
         self.qs_tt.clear();
-        self.killer_moves = [[None; 2]; 100]; // 2 killer moves per depth
+        self.killer_moves = [[None; 2]; MAX_DEPTH]; // 2 killer moves per depth
         self.nodes = 0;
         self.max_depth_reached = 1;
         self.current_pv.clear();
@@ -146,11 +153,13 @@ impl NegamaxEngine {
         let mut alpha = f32::NEG_INFINITY;
         let beta = f32::INFINITY;
 
-        let mut preferred_moves = Vec::with_capacity(1);
-        if let Some(move_) = self.current_pv.first() {
-            preferred_moves.push((*move_, i32::MAX));
+        let pref = &mut self.preferred_buffer[0];
+        pref.clear();
+
+        if let Some(&pv) = self.current_pv.first() {
+            pref.push((pv, i32::MAX));
         }
-        let moves_with_scores = get_ordered_moves(&self.board, Some(&preferred_moves));
+        let moves_with_scores = get_ordered_moves(&self.board, Some(&pref[..]));
 
         if moves_with_scores.is_empty() {
             return (None, 0.0);
@@ -249,29 +258,30 @@ impl NegamaxEngine {
         self.nodes += 1;
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
-        let mut preferred_moves = Vec::with_capacity(5);
+        let pref = &mut self.preferred_buffer[depth as usize];
+        pref.clear();
 
         // First priority is the current PV move
         if let Some(&move_) = self.current_pv.get(depth as usize) {
-            preferred_moves.push((move_, i32::MAX));
+            pref.push((move_, i32::MAX));
         }
 
         // Then any hash move from the tt
         if maybe_tt_move.is_some() {
-            preferred_moves.push((maybe_tt_move.unwrap(), i32::MAX - 1));
+            pref.push((maybe_tt_move.unwrap(), i32::MAX - 1));
         }
 
         //  Killer moves for this specific depth if they are legal
         for &killer_move_opt in &self.killer_moves[depth as usize] {
             if let Some(killer_move) = killer_move_opt {
-                let already_there = preferred_moves.iter().any(|&(pm, _)| pm == killer_move);
+                let already_there = pref.iter().any(|&(pm, _)| pm == killer_move);
                 if !already_there {
-                    preferred_moves.push((killer_move, CAPTURE_SCORE - 2));
+                    pref.push((killer_move, CAPTURE_SCORE - 2));
                 }
             }
         }
 
-        let moves = get_ordered_moves(board, Some(&preferred_moves));
+        let moves = get_ordered_moves(board, Some(&pref[..]));
 
         if moves.is_empty() {
             return (0.0, Vec::new());
