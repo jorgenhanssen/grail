@@ -90,16 +90,25 @@ impl Engine for NegamaxEngine {
 
         let mut controller = SearchController::new(params);
 
-        // Start the async timer if time controls are set
         let stop = Arc::clone(&self.stop);
-        controller.start_timer(move || {
+        controller.on_stop(move || {
             stop.store(true, Ordering::Relaxed);
         });
+
+        controller.start_timer();
 
         let mut depth = 1;
         let mut best_move = None;
 
         while !self.stop.load(Ordering::Relaxed) {
+            // Check depth limits - this will call on_stop if max depth reached
+            controller.check_depth(depth);
+
+            // Stop if the depth check set the stop flag
+            if self.stop.load(Ordering::Relaxed) {
+                break;
+            }
+
             let (mv, score) = self.search_root(depth);
 
             if mv.is_none() {
