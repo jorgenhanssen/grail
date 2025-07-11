@@ -146,9 +146,9 @@ impl NegamaxEngine {
         let mut alpha = f32::NEG_INFINITY;
         let beta = f32::INFINITY;
 
-        let mut preferred_moves = AHashMap::with_capacity(1);
+        let mut preferred_moves = Vec::with_capacity(1);
         if let Some(move_) = self.current_pv.first() {
-            preferred_moves.insert(*move_, i32::MAX);
+            preferred_moves.push((*move_, i32::MAX));
         }
         let moves_with_scores = get_ordered_moves(&self.board, Some(&preferred_moves));
 
@@ -249,23 +249,24 @@ impl NegamaxEngine {
         self.nodes += 1;
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
-        let mut preferred_moves = AHashMap::with_capacity(5);
+        let mut preferred_moves = Vec::with_capacity(5);
 
         // First priority is the current PV move
         if let Some(&move_) = self.current_pv.get(depth as usize) {
-            preferred_moves.insert(move_, i32::MAX);
+            preferred_moves.push((move_, i32::MAX));
         }
 
         // Then any hash move from the tt
         if maybe_tt_move.is_some() {
-            preferred_moves.insert(maybe_tt_move.unwrap(), i32::MAX - 1);
+            preferred_moves.push((maybe_tt_move.unwrap(), i32::MAX - 1));
         }
 
         //  Killer moves for this specific depth if they are legal
         for &killer_move_opt in &self.killer_moves[depth as usize] {
             if let Some(killer_move) = killer_move_opt {
-                if !preferred_moves.contains_key(&killer_move) {
-                    preferred_moves.insert(killer_move, CAPTURE_SCORE - 2);
+                let already_there = preferred_moves.iter().any(|&(pm, _)| pm == killer_move);
+                if !already_there {
+                    preferred_moves.push((killer_move, CAPTURE_SCORE - 2));
                 }
             }
         }
