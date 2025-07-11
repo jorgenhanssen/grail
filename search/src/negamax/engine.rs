@@ -366,12 +366,12 @@ impl NegamaxEngine {
             return (cached_score, Vec::new());
         }
 
-        let color_multiplier = if board.side_to_move() == Color::White {
-            1.0
+        let eval = self.evaluator.evaluate(board);
+        let stand_pat = if board.side_to_move() == Color::White {
+            eval
         } else {
-            -1.0
+            -eval
         };
-        let stand_pat = color_multiplier * self.evaluator.evaluate(board);
 
         if depth >= MAX_QSEARCH_DEPTH || check_streak >= MAX_QSEARCH_CHECK_STREAK {
             self.qs_tt.insert(hash, stand_pat);
