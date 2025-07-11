@@ -5,8 +5,12 @@ use crate::{
 use ahash::AHashMap;
 use chess::{Board, BoardStatus, ChessMove, Color};
 use evaluation::{Evaluator, TraditionalEvaluator};
-use std::sync::mpsc::Sender;
 use std::array;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc::Sender,
+    Arc,
+};
 use uci::{
     commands::{GoParams, Info},
     UciOutput,
@@ -41,6 +45,7 @@ pub struct NegamaxEngine {
 
     // move sorting bufger per depth
     preferred_buf: [Vec<(ChessMove, i32)>; 100],
+    stop: Arc<AtomicBool>,
 }
 
 impl Default for NegamaxEngine {
@@ -57,6 +62,8 @@ impl Default for NegamaxEngine {
             position_stack: Vec::with_capacity(100),
             evaluator: Box::new(TraditionalEvaluator),
             preferred_buf: array::from_fn(|_| Vec::with_capacity(5)),
+
+            stop: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -65,6 +72,7 @@ impl Engine for NegamaxEngine {
     fn new(evaluator: Box<dyn Evaluator>) -> Self {
         Self {
             evaluator,
+            stop: Arc::new(AtomicBool::new(false)),
             ..Default::default()
         }
     }
@@ -78,19 +86,31 @@ impl Engine for NegamaxEngine {
     }
 
     fn stop(&mut self) {
-        // TODO: implement
+        self.stop.store(true, Ordering::Relaxed);
     }
 
     fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> ChessMove {
         self.init_search();
 
-        let controller = SearchController::new(params);
+        let mut controller = SearchController::new(params);
+
+        // Start the async timer if time controls are set
+        let stop = Arc::clone(&self.stop);
+        controller.start_timer(move || {
+            stop.store(true, Ordering::Relaxed);
+        });
+
         let mut depth = 1;
         let mut best_move = None;
 
-        while controller.continue_search(depth) {
+        while !self.stop.load(Ordering::Relaxed) {
             let (mv, score) = self.search_root(depth);
-            best_move = Some(mv);
+
+            if mv.is_none() {
+                break;
+            }
+
+            best_move = mv;
 
             self.send_search_info(output, depth, score, controller.elapsed());
 
@@ -104,6 +124,7 @@ impl Engine for NegamaxEngine {
 impl NegamaxEngine {
     #[inline(always)]
     pub fn init_search(&mut self) {
+        self.stop.store(false, Ordering::Relaxed);
         self.tt.clear();
         self.qs_tt.clear();
         self.killer_moves = [[None; 2]; 100]; // 2 killer moves per depth
@@ -116,7 +137,7 @@ impl NegamaxEngine {
         self.position_stack.push(self.board.get_hash());
     }
 
-    pub fn search_root(&mut self, depth: u64) -> (ChessMove, f32) {
+    pub fn search_root(&mut self, depth: u64) -> (Option<ChessMove>, f32) {
         let mut alpha = f32::NEG_INFINITY;
         let beta = f32::INFINITY;
 
@@ -129,11 +150,11 @@ impl NegamaxEngine {
         let moves_with_scores = get_ordered_moves(&self.board, Some(&pref[..]));
 
         if moves_with_scores.is_empty() {
-            return (ChessMove::default(), 0.0);
+            return (None, 0.0);
         }
 
         let mut best_score = f32::NEG_INFINITY;
-        let mut current_best_move = moves_with_scores[0].0;
+        let mut current_best_move = None;
 
         // Negamax at root: call search_subtree with flipped window, then negate result
         for (m, _) in moves_with_scores {
@@ -144,11 +165,16 @@ impl NegamaxEngine {
             let score = -child_value;
             self.position_stack.pop();
 
+            // Check if we were stopped during the subtree search
+            if self.stop.load(Ordering::Relaxed) {
+                return (None, 0.0);
+            }
+
             pv.insert(0, m);
 
             if score > best_score {
                 best_score = score;
-                current_best_move = m;
+                current_best_move = Some(m);
                 self.current_pv = pv;
             }
 
@@ -166,6 +192,11 @@ impl NegamaxEngine {
         mut alpha: f32,
         beta: f32,
     ) -> (f32, Vec<ChessMove>) {
+        // Check if we should stop searching
+        if self.stop.load(Ordering::Relaxed) {
+            return (0.0, Vec::new());
+        }
+
         let hash = *self.position_stack.last().unwrap();
 
         if self.is_cycle(hash) {
@@ -220,8 +251,6 @@ impl NegamaxEngine {
         let pref = &mut self.preferred_buf[depth as usize];
         pref.clear();
 
-
-
         // First priority is the current PV move
         if let Some(&move_) = self.current_pv.get(depth as usize) {
             pref.push((move_, i32::MAX));
@@ -257,16 +286,19 @@ impl NegamaxEngine {
             let new_board = board.make_move_new(m);
             let in_check = new_board.checkers().popcnt() > 0;
 
-
             let lmr = calculate_dynamic_lmr_reduction(depth, move_index, score, in_check);
             let current_max_depth = max_depth.saturating_sub(lmr).max(depth + 1);
-
 
             self.position_stack.push(new_board.get_hash());
             let (child_value, mut line) =
                 self.search_subtree(&new_board, depth + 1, current_max_depth, -beta, -alpha);
             let value = -child_value;
             self.position_stack.pop();
+
+            // Check if we were stopped during the recursive search
+            if self.stop.load(Ordering::Relaxed) {
+                break;
+            }
 
             if value > best_value {
                 best_value = value;
@@ -286,7 +318,15 @@ impl NegamaxEngine {
             }
         }
 
-        self.store_tt(hash, depth, max_depth, best_value, original_alpha, beta, best_move);
+        self.store_tt(
+            hash,
+            depth,
+            max_depth,
+            best_value,
+            original_alpha,
+            beta,
+            best_move,
+        );
         (best_value, best_line)
     }
 
@@ -298,6 +338,11 @@ impl NegamaxEngine {
         depth: u64,
         check_streak: u64,
     ) -> (f32, Vec<ChessMove>) {
+        // Check if we should stop searching
+        if self.stop.load(Ordering::Relaxed) {
+            return (0.0, Vec::new());
+        }
+
         let hash = *self.position_stack.last().unwrap();
         if self.is_cycle(hash) {
             return (0.0, Vec::new()); // Treat as a draw
@@ -321,7 +366,11 @@ impl NegamaxEngine {
         }
 
         let eval = self.evaluator.evaluate(board);
-        let stand_pat = if board.side_to_move() == Color::White { eval } else { -eval };
+        let stand_pat = if board.side_to_move() == Color::White {
+            eval
+        } else {
+            -eval
+        };
 
         if depth >= MAX_QSEARCH_DEPTH || check_streak >= MAX_QSEARCH_CHECK_STREAK {
             self.qs_tt.insert(hash, stand_pat);
@@ -395,6 +444,11 @@ impl NegamaxEngine {
             self.position_stack.pop();
 
             let value = -child_score;
+
+            // Check if we were stopped during the recursive search
+            if self.stop.load(Ordering::Relaxed) {
+                break;
+            }
 
             if value > best_eval {
                 best_eval = value;
