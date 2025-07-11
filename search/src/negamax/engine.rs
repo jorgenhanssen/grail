@@ -152,16 +152,17 @@ impl NegamaxEngine {
 
         // Negamax at root: call search_subtree with flipped window, then negate result
         for (m, _) in moves_with_scores {
-            if self.stop.load(Ordering::Relaxed) {
-                return (None, 0.0);
-            }
-
             let new_board = self.board.make_move_new(m);
 
             self.position_stack.push(new_board.get_hash());
             let (child_value, mut pv) = self.search_subtree(&new_board, 1, depth, -beta, -alpha);
             let score = -child_value;
             self.position_stack.pop();
+
+            // Check if we were stopped during the subtree search
+            if self.stop.load(Ordering::Relaxed) {
+                return (None, 0.0);
+            }
 
             pv.insert(0, m);
 
@@ -185,6 +186,11 @@ impl NegamaxEngine {
         mut alpha: f32,
         beta: f32,
     ) -> (f32, Vec<ChessMove>) {
+        // Check if we should stop searching
+        if self.stop.load(Ordering::Relaxed) {
+            return (0.0, Vec::new());
+        }
+
         let hash = *self.position_stack.last().unwrap();
 
         if self.is_cycle(hash) {
@@ -278,6 +284,11 @@ impl NegamaxEngine {
             let value = -child_value;
             self.position_stack.pop();
 
+            // Check if we were stopped during the recursive search
+            if self.stop.load(Ordering::Relaxed) {
+                break;
+            }
+
             if value > best_value {
                 best_value = value;
                 best_move = Some(m);
@@ -308,6 +319,11 @@ impl NegamaxEngine {
         depth: u64,
         check_streak: u64,
     ) -> (f32, Vec<ChessMove>) {
+        // Check if we should stop searching
+        if self.stop.load(Ordering::Relaxed) {
+            return (0.0, Vec::new());
+        }
+
         let hash = *self.position_stack.last().unwrap();
         if self.is_cycle(hash) {
             return (0.0, Vec::new()); // Treat as a draw
@@ -409,6 +425,11 @@ impl NegamaxEngine {
             self.position_stack.pop();
 
             let value = -child_score;
+
+            // Check if we were stopped during the recursive search
+            if self.stop.load(Ordering::Relaxed) {
+                break;
+            }
 
             if value > best_eval {
                 best_eval = value;
