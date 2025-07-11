@@ -232,6 +232,8 @@ impl NegamaxEngine {
             return self.quiescence_search(board, alpha, beta, 1, 0);
         }
 
+        let original_alpha = alpha;
+
         let mut maybe_tt_move = None;
         if let Some((tt_value, tt_bound, tt_move)) = self.probe_tt(hash, depth, max_depth) {
             maybe_tt_move = tt_move;
@@ -319,7 +321,7 @@ impl NegamaxEngine {
             alpha = alpha.max(best_value);
             if alpha >= beta {
                 if let Some(m) = best_move {
-                    if !board.piece_on(m.get_dest()).is_some() {
+                    if board.piece_on(m.get_dest()).is_none() {
                         self.add_killer_move(depth as usize, m);
                     }
                 }
@@ -327,7 +329,15 @@ impl NegamaxEngine {
             }
         }
 
-        self.store_tt(hash, depth, max_depth, best_value, alpha, beta, best_move);
+        self.store_tt(
+            hash,
+            depth,
+            max_depth,
+            best_value,
+            original_alpha,
+            beta,
+            best_move,
+        );
         (best_value, best_line)
     }
 
