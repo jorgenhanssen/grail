@@ -24,7 +24,3 @@ Cargo.lock
 
 # nnue models and data
 nnue/versions/
-
-
-
-benchmark.sh
