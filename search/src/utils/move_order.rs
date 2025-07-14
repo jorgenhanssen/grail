@@ -1,10 +1,15 @@
-use chess::{Board, ChessMove, MoveGen, Piece};
+use chess::{BitBoard, Board, ChessMove, MoveGen, Piece};
 
 pub fn get_ordered_moves(
     board: &Board,
     preferred: Option<&[(ChessMove, i32)]>,
+    mask: Option<BitBoard>,
 ) -> Vec<(ChessMove, i32)> {
-    let legal = MoveGen::new_legal(board);
+    let mut legal = MoveGen::new_legal(board);
+    if let Some(mask) = mask {
+        legal.set_iterator_mask(mask);
+    }
+
     let cap = legal.len();
 
     // Separate buckets: high = score > 0, quiet = score == 0
@@ -42,15 +47,13 @@ pub fn get_ordered_moves(
     high
 }
 
-pub const PROMOTION_SCORE: i32 = 10000;
+const PROMOTION_SCORE: i32 = 10000;
 const PROMOTION_SCORE_QUEEN: i32 = PROMOTION_SCORE + 4;
 const PROMOTION_SCORE_ROOK: i32 = PROMOTION_SCORE + 3;
 const PROMOTION_SCORE_BISHOP: i32 = PROMOTION_SCORE + 2;
 const PROMOTION_SCORE_KNIGHT: i32 = PROMOTION_SCORE + 1;
 
 pub const CAPTURE_SCORE: i32 = 1000;
-
-pub const CHECK_SCORE: i32 = 100;
 
 // MVV-LVA table
 // king, queen, rook, bishop, knight, pawn

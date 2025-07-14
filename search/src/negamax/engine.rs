@@ -1,5 +1,5 @@
 use crate::{
-    utils::{get_ordered_moves, CAPTURE_SCORE, CHECK_SCORE, PROMOTION_SCORE},
+    utils::{get_ordered_moves, CAPTURE_SCORE},
     Engine,
 };
 use ahash::AHashMap;
@@ -27,9 +27,6 @@ use super::{
 const MAX_DEPTH: usize = 100;
 
 pub const CHECKMATE_SCORE: f32 = 1_000_000.0;
-
-const MAX_QSEARCH_DEPTH: u64 = 12;
-const MAX_QSEARCH_CHECK_STREAK: u64 = 4;
 
 pub struct NegamaxEngine {
     board: Board,
@@ -159,7 +156,7 @@ impl NegamaxEngine {
         if let Some(&pv) = self.current_pv.first() {
             pref.push((pv, i32::MAX));
         }
-        let moves_with_scores = get_ordered_moves(&self.board, Some(&pref[..]));
+        let moves_with_scores = get_ordered_moves(&self.board, Some(&pref[..]), None);
 
         if moves_with_scores.is_empty() {
             return (None, 0.0);
@@ -229,7 +226,7 @@ impl NegamaxEngine {
         }
 
         if depth >= max_depth {
-            return self.quiescence_search(board, alpha, beta, 1, 0);
+            return self.quiescence_search(board, alpha, beta, 1);
         }
 
         let original_alpha = alpha;
@@ -283,7 +280,7 @@ impl NegamaxEngine {
             }
         }
 
-        let moves = get_ordered_moves(board, Some(&pref[..]));
+        let moves = get_ordered_moves(board, Some(&pref[..]), None);
 
         if moves.is_empty() {
             return (0.0, Vec::new());
@@ -347,7 +344,6 @@ impl NegamaxEngine {
         mut alpha: f32,
         beta: f32,
         depth: u64,
-        check_streak: u64,
     ) -> (f32, Vec<ChessMove>) {
         // Check if we should stop searching
         if self.stop.load(Ordering::Relaxed) {
@@ -383,11 +379,6 @@ impl NegamaxEngine {
             -eval
         };
 
-        if depth >= MAX_QSEARCH_DEPTH || check_streak >= MAX_QSEARCH_CHECK_STREAK {
-            self.qs_tt.insert(hash, stand_pat);
-            return (stand_pat, Vec::new());
-        }
-
         let in_check = board.checkers().popcnt() > 0;
 
         // Do a "stand-pat" evaluation if not in check
@@ -400,58 +391,28 @@ impl NegamaxEngine {
             }
         }
 
-        let all_moves_with_scores = get_ordered_moves(board, None);
-        let forcing_moves: Vec<(ChessMove, i32)> = all_moves_with_scores
-            .into_iter()
-            .filter(|(mv, score)| {
-                if in_check {
-                    // Must consider all evasions if currently in check
-                    return true;
-                }
-                // Otherwise, only consider captures/promo/strong checks, etc.
-                if *score >= PROMOTION_SCORE || *score == CHECK_SCORE {
-                    return true;
-                }
-                if *score >= CAPTURE_SCORE {
-                    return see_naive(board, *mv) >= 0.0;
-                }
-                false
-            })
-            .collect();
-
-        if forcing_moves.is_empty() && !in_check {
-            // If in_check and no moves, then we are checkmated or stalemated
-            // but that is already handled by board.status() above.
-            self.qs_tt.insert(hash, stand_pat);
-            return (stand_pat, Vec::new());
-        }
-
-        // 10) Try each forcing move and pick the best
-        let mut best_eval = if in_check {
-            // If we are in check, we can't simply "stand pat."
-            // Let's start from -∞
-            f32::NEG_INFINITY
-        } else {
-            // Otherwise, start from our stand-pat
-            stand_pat
+        let mut best_line = Vec::new();
+        let mut best_eval = match in_check {
+            true => f32::NEG_INFINITY, // If we are in check, we can't simply "stand pat"
+            false => stand_pat,        // Otherwise, start from our stand-pat
         };
 
-        let mut best_line = Vec::new();
+        let mask = match in_check {
+            true => None, // We should check all moves
+            false => Some(*board.color_combined(!board.side_to_move())), // Only captures
+        };
+        let forcing_moves = get_ordered_moves(board, None, mask);
 
         for (mv, _) in forcing_moves {
-            let new_board = board.make_move_new(mv);
+            if !in_check && see_naive(board, mv) < 0.0 {
+                continue;
+            }
 
-            // Decide how to update check_streak for the child:
-            let delivers_check = new_board.checkers().popcnt() > 0;
-            let new_check_streak = if in_check || delivers_check {
-                check_streak + 1
-            } else {
-                0
-            };
+            let new_board = board.make_move_new(mv);
 
             self.position_stack.push(new_board.get_hash());
             let (child_score, mut child_line) =
-                self.quiescence_search(&new_board, -beta, -alpha, depth + 1, new_check_streak);
+                self.quiescence_search(&new_board, -beta, -alpha, depth + 1);
             self.position_stack.pop();
 
             let value = -child_score;
