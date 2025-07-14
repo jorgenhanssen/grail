@@ -1,4 +1,7 @@
-use chess::{BitBoard, Board, BoardStatus, Color, Piece, EMPTY};
+use chess::{
+    get_adjacent_files, get_file, BitBoard, Board, BoardStatus, Color, Piece, Rank, ALL_FILES,
+    EMPTY,
+};
 
 use crate::traditional::pst::{get_pst, sum_pst};
 use crate::traditional::values::{
@@ -32,8 +35,8 @@ pub fn evaluate_board(board: &Board) -> f32 {
     score += evaluate_material(board, Color::White, &white_mask, phase);
     score -= evaluate_material(board, Color::Black, &black_mask, phase);
 
-    score += evaluate_pawn_structure(board, &white_mask);
-    score -= evaluate_pawn_structure(board, &black_mask);
+    score += evaluate_pawn_structure(board, Color::White);
+    score -= evaluate_pawn_structure(board, Color::Black);
 
     score += evaluate_rooks(board, Color::White);
     score -= evaluate_rooks(board, Color::Black);
@@ -89,61 +92,91 @@ fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard, phase: 
     return piece_value + pst_value + bishop_pair_bonus;
 }
 
-fn evaluate_pawn_structure(board: &Board, color_mask: &BitBoard) -> f32 {
-    let mut score = 0.0;
-    let pawns = board.pieces(Piece::Pawn) & color_mask;
-    let color = if color_mask == board.color_combined(Color::White) {
-        Color::White
-    } else {
-        Color::Black
-    };
-
-    // double, tripled, isolated
-    let mut files = [0; 8];
-    for sq in pawns {
-        let file = sq.get_file() as usize;
-        files[file] += 1;
+fn evaluate_pawn_structure(board: &Board, color: Color) -> f32 {
+    let my_pawns = board.pieces(Piece::Pawn) & board.color_combined(color);
+    if my_pawns == EMPTY {
+        return 0.0;
     }
 
-    for file in 0..8 {
-        match files[file] {
-            0 => continue,
+    let enemy_pawns = board.pieces(Piece::Pawn) & board.color_combined(!color);
+    let mut score = 0.0;
+
+    // doubled / tripled / isolated penalties
+    for file_idx in ALL_FILES {
+        let pawns_in_file = my_pawns & get_file(file_idx);
+        let cnt = pawns_in_file.popcnt();
+        if cnt == 0 {
+            continue;
+        }
+
+        score -= match cnt {
             1 => {
-                // Check for isolated pawns
-                let isolated = if file == 0 {
-                    files[file + 1] == 0
-                } else if file == 7 {
-                    files[file - 1] == 0
+                if (my_pawns & get_adjacent_files(file_idx)).popcnt() == 0 {
+                    30.0
                 } else {
-                    files[file - 1] == 0 && files[file + 1] == 0
-                };
-                if isolated {
-                    score -= 30.0;
+                    0.0
                 }
             }
-            2 => score -= 20.0, // doubled pawns
-            _ => score -= 40.0, // tripled or more
-        }
+            2 => 20.0,
+            _ => 40.0,
+        };
     }
 
-    // For each pawn, check if it's "passed".
-    let enemy_pawns = board.pieces(Piece::Pawn) & board.color_combined(!color);
-
-    for sq in pawns {
-        if is_passed_pawn(sq, color, enemy_pawns) {
-            // Rank from White's perspective is sq.get_rank(), from 0..7 (White=bottom).
-            // For Black we might invert it: rank = 7 - sq.get_rank().
-            let rank = sq.get_rank() as usize;
-            let rank_from_white_persp = if color == Color::White {
-                rank
+    // passed-pawn bonus
+    for sq in my_pawns {
+        let blockers = PASSED_PAWN_MASKS[color as usize][sq.to_index()];
+        if (enemy_pawns & blockers).popcnt() == 0 {
+            // convert to white’s perspective: rank 0..7
+            let rank_from_white = if color == Color::White {
+                sq.get_rank() as usize
             } else {
-                7 - rank
+                7 - sq.get_rank() as usize
             };
-            score += PASSED_PAWN_BONUS[rank_from_white_persp];
+            score += PASSED_PAWN_BONUS[rank_from_white];
         }
     }
 
     score
+}
+
+/// Pre-computed passed-pawn masks: [color][square].
+pub const PASSED_PAWN_MASKS: [[BitBoard; 64]; 2] = {
+    let mut table = [[BitBoard(0); 64]; 2];
+    let mut square_idx = 0;
+    while square_idx < 64 {
+        let file_idx = (square_idx % 8) as i8;
+        let rank_idx = (square_idx / 8) as i8;
+
+        table[Color::White as usize][square_idx] =
+            BitBoard(make_passed_pawn_mask(rank_idx, file_idx, 1));
+        table[Color::Black as usize][square_idx] =
+            BitBoard(make_passed_pawn_mask(rank_idx, file_idx, -1));
+
+        square_idx += 1;
+    }
+    table
+};
+/// Bit-mask of every square that must be free of enemy pawns
+/// for the pawn on (rank_idx, file_idx) to be counted as passed.
+const fn make_passed_pawn_mask(
+    mut rank_idx: i8, // starting rank of the pawn
+    file_idx: i8,     // starting file of the pawn
+    step: i8,         // +1 for white, -1 for black
+) -> u64 {
+    let mut mask = 0u64;
+    rank_idx += step; // start one rank in front
+    while rank_idx >= 0 && rank_idx < 8 {
+        // stay on the board
+        let mut scan_file = file_idx - 1; // current file in the -1..+1 window
+        while scan_file <= file_idx + 1 {
+            if scan_file >= 0 && scan_file < 8 {
+                mask |= 1u64 << ((rank_idx as u64) * 8 + scan_file as u64);
+            }
+            scan_file += 1;
+        }
+        rank_idx += step; // move window one rank forward
+    }
+    mask
 }
 
 fn evaluate_king_safety(board: &Board, color: Color) -> f32 {
@@ -199,72 +232,37 @@ const KING_ZONES: [BitBoard; 64] = {
     zones
 };
 
-fn is_passed_pawn(pawn_square: chess::Square, color: Color, enemy_pawns: BitBoard) -> bool {
-    let file = pawn_square.get_file() as i8;
-    let rank = pawn_square.get_rank() as i8;
-
-    // Define the range of ranks to check based on color
-    let ranks_to_check = if color == Color::White {
-        (rank + 1)..8
-    } else {
-        1..rank
-    };
-
-    for r in ranks_to_check {
-        for f in (file - 1)..=(file + 1) {
-            if f < 0 || f > 7 {
-                continue;
-            }
-            let sq_index = (r * 8 + f) as u8;
-            let sq_bb = BitBoard(1 << sq_index);
-            if (sq_bb & enemy_pawns).popcnt() > 0 {
-                return false;
-            }
-        }
+#[inline(always)]
+fn evaluate_rooks(board: &Board, colour: Color) -> f32 {
+    let rooks = board.pieces(Piece::Rook) & board.color_combined(colour);
+    if rooks == EMPTY {
+        return 0.0;
     }
-    true
-}
 
-fn evaluate_rooks(board: &Board, color: Color) -> f32 {
+    let our_pawns = board.pieces(Piece::Pawn) & board.color_combined(colour);
+    let their_pawns = board.pieces(Piece::Pawn) & board.color_combined(!colour);
+
     let mut score = 0.0;
-    let rooks = board.pieces(Piece::Rook) & board.color_combined(color);
-
-    let all_pawns = board.pieces(Piece::Pawn);
-    let our_pawns = all_pawns & board.color_combined(color);
-    let their_pawns = all_pawns & board.color_combined(!color);
-
     for sq in rooks {
-        let file = sq.get_file() as usize;
+        let file_mask = get_file(sq.get_file());
 
-        // Count how many pawns are on this file for each side.
-        let mut our_file_pawns = 0;
-        let mut their_file_pawns = 0;
-        for rank in 0..8 {
-            let sq_index = rank * 8 + file;
-            let sq_bb = BitBoard(1 << sq_index);
-            if (sq_bb & our_pawns).popcnt() > 0 {
-                our_file_pawns += 1;
-            }
-            if (sq_bb & their_pawns).popcnt() > 0 {
-                their_file_pawns += 1;
-            }
-        }
+        let our_file_pawns = (our_pawns & file_mask).popcnt();
+        let their_file_pawns = (their_pawns & file_mask).popcnt();
 
-        if our_file_pawns == 0 && their_file_pawns == 0 {
-            // fully open file
-            score += ROOK_OPEN_FILE_BONUS;
-        } else if our_file_pawns == 0 && their_file_pawns > 0 {
-            // semi-open file
-            score += ROOK_SEMI_OPEN_FILE_BONUS;
-        }
+        score += match (our_file_pawns == 0, their_file_pawns == 0) {
+            (true, true) => ROOK_OPEN_FILE_BONUS,
+            (true, false) => ROOK_SEMI_OPEN_FILE_BONUS,
+            _ => 0.0,
+        };
 
-        // Rook on seventh (or second for Black) rank
-        let rank = sq.get_rank() as u8;
-        if (color == Color::White && rank == 6) || (color == Color::Black && rank == 1) {
+        // rook on seventh (second for Black)
+        let rank = sq.get_rank();
+        if (colour == Color::White && rank == Rank::Seventh)
+            || (colour == Color::Black && rank == Rank::Second)
+        {
             score += ROOK_ON_SEVENTH_BONUS;
         }
     }
-
     score
 }
 
