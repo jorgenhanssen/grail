@@ -200,6 +200,8 @@ impl NegamaxEngine {
             return (0.0, Vec::new());
         }
 
+        self.nodes += 1;
+
         let hash = *self.position_stack.last().unwrap();
 
         if self.is_cycle(hash) {
@@ -208,12 +210,10 @@ impl NegamaxEngine {
 
         match board.status() {
             BoardStatus::Checkmate => {
-                self.nodes += 1;
                 let remaining_depth = (max_depth - depth) as f32;
                 return (-CHECKMATE_SCORE * (remaining_depth + 1.0), Vec::new());
             }
             BoardStatus::Stalemate => {
-                self.nodes += 1;
                 return (0.0, Vec::new());
             }
             BoardStatus::Ongoing => {}
@@ -245,8 +245,6 @@ impl NegamaxEngine {
                 return (tt_value, maybe_tt_move.map_or(Vec::new(), |m| vec![m]));
             }
         }
-
-        self.nodes += 1;
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
         let mut preferred_moves = AHashMap::with_capacity(5);
@@ -333,12 +331,12 @@ impl NegamaxEngine {
             return (0.0, Vec::new());
         }
 
+        self.nodes += 1;
+
         let hash = *self.position_stack.last().unwrap();
         if self.is_cycle(hash) {
             return (0.0, Vec::new()); // Treat as a draw
         }
-
-        self.nodes += 1;
 
         match board.status() {
             BoardStatus::Checkmate => {
