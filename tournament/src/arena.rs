@@ -92,7 +92,7 @@ impl Arena {
             player.init_search();
 
             let (mv, _, _) = player.search_root(depth, true);
-            game.make_move(mv);
+            game.make_move(mv.unwrap());
 
             num_moves += 1;
         }
