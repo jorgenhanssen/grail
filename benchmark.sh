@@ -6,9 +6,9 @@ COMMAND="negamax"
 DEPTH=8
 
 # --- Baselines
-baseline_time=(2108 19791 7478 19871)
-baseline_nodes=(1548068 15816462 5897979 15583366)
-baseline_nps=(734298 799158 788651 784206)
+baseline_time=(1933 19009 7049 18726)
+baseline_nodes=(2564467 25906631 8428856 24351006)
+baseline_nps=(1326252 1362834 1195696 1300363)
 
 FENS=(
   "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
