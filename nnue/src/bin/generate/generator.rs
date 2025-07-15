@@ -229,7 +229,6 @@ impl SelfPlayWorker {
     #[inline]
     fn get_engine_move(&mut self, board: &Board) -> (ChessMove, f32) {
         self.engine.set_position(*board);
-        self.engine.init_search();
 
         let params = GoParams {
             depth: Some(self.depth),
