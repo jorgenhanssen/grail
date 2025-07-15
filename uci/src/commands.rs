@@ -43,6 +43,20 @@ pub struct Info {
     pub score: Score,
 }
 
+impl Default for Info {
+    fn default() -> Self {
+        Self {
+            depth: 0,
+            sel_depth: 0,
+            nodes: 0,
+            nodes_per_second: 0,
+            time: 0,
+            pv: Vec::new(),
+            score: Score::Centipawns(0),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Score {
     Centipawns(i32), // centipawns
