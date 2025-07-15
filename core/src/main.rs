@@ -36,10 +36,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             UciInput::Go(params) => {
                 let best_move = engine.search(params, &output);
 
-                output.send(UciOutput::BestMove {
-                    best_move: best_move,
-                    ponder: None,
-                })?;
+                if let Some(best_move) = best_move {
+                    output.send(UciOutput::BestMove {
+                        best_move: best_move,
+                        ponder: None,
+                    })?;
+                }
             }
             UciInput::Stop => {
                 engine.stop();
