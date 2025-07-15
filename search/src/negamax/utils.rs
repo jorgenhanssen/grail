@@ -29,14 +29,14 @@ pub fn lmr(remaining_depth: u64, score: i32, in_check: bool) -> u64 {
 }
 
 #[inline(always)]
-pub fn convert_mate_score(board: &Board, score: f32, pv: &Vec<ChessMove>) -> Score {
-    let is_winning = (score > 0.0) == (board.side_to_move() == chess::Color::White);
-    let mate_in = if is_winning {
-        pv.len() as i32 - 1
+pub fn convert_mate_score(score: f32, pv: &Vec<ChessMove>) -> Score {
+    let mate_in = (pv.len() as i32 + 1) / 2;
+
+    if score > 0.0 {
+        Score::Mate(mate_in)
     } else {
-        -((pv.len() as i32) - 1)
-    };
-    Score::Mate(mate_in)
+        Score::Mate(-mate_in)
+    }
 }
 
 #[inline(always)]

@@ -12,7 +12,7 @@ use std::sync::{
     Arc,
 };
 use uci::{
-    commands::{GoParams, Info},
+    commands::{GoParams, Info, Score},
     UciOutput,
 };
 
@@ -87,7 +87,17 @@ impl Engine for NegamaxEngine {
         self.stop.store(true, Ordering::Relaxed);
     }
 
-    fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> ChessMove {
+    fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> Option<ChessMove> {
+        if self.board.status() == BoardStatus::Checkmate {
+            output
+                .send(UciOutput::Info(Info {
+                    score: Score::Mate(0),
+                    ..Default::default()
+                }))
+                .unwrap();
+            return None;
+        }
+
         self.init_search();
 
         let mut controller = SearchController::new(params);
@@ -124,7 +134,7 @@ impl Engine for NegamaxEngine {
             depth += 1;
         }
 
-        best_move.unwrap()
+        best_move
     }
 }
 
@@ -530,7 +540,7 @@ impl NegamaxEngine {
                 nodes_per_second: nps,
                 time: elapsed.as_millis() as u32,
                 score: if found_checkmate {
-                    convert_mate_score(&self.board, best_score, &self.current_pv)
+                    convert_mate_score(best_score, &self.current_pv)
                 } else {
                     convert_centipawn_score(best_score)
                 },
