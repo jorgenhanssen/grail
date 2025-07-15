@@ -520,7 +520,7 @@ impl NegamaxEngine {
                 nodes_per_second: nps,
                 time: elapsed.as_millis() as u32,
                 score: if found_checkmate {
-                    convert_mate_score(&self.board, best_score, &self.current_pv)
+                    convert_mate_score(best_score, &self.current_pv)
                 } else {
                     convert_centipawn_score(best_score)
                 },
