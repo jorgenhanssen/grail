@@ -16,9 +16,7 @@ use uci::{
     UciOutput,
 };
 
-use super::utils::{
-    calculate_dynamic_lmr_reduction, convert_centipawn_score, convert_mate_score, see_naive,
-};
+use super::utils::{convert_centipawn_score, convert_mate_score, lmr, see_naive};
 use super::{
     controller::SearchController,
     tt::{Bound, TTEntry},
@@ -284,21 +282,33 @@ impl NegamaxEngine {
             return (0.0, Vec::new());
         }
 
+        let remaining_depth = max_depth - depth;
+        let in_check = board.checkers().popcnt() > 0;
+
         // Negamax
         let mut best_value = f32::NEG_INFINITY;
         let mut best_move = None;
         let mut best_line = Vec::new();
-
-        for (move_index, (m, score)) in moves.into_iter().enumerate() {
-            let reduction = calculate_dynamic_lmr_reduction(depth, move_index, score);
-            let current_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
-
+        for (m, score) in moves {
             let new_board = board.make_move_new(m);
+            let gives_check = board.checkers().popcnt() > 0;
+
+            let reduction = lmr(remaining_depth, score, in_check || gives_check);
+            let current_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
 
             self.position_stack.push(new_board.get_hash());
             let (child_value, mut line) =
                 self.search_subtree(&new_board, depth + 1, current_max_depth, -beta, -alpha);
-            let value = -child_value;
+            let mut value = -child_value;
+
+            // Re-search at full depth if reduced search failed high
+            if reduction > 0 && value > alpha {
+                let (re_child_value, re_line) =
+                    self.search_subtree(&new_board, depth + 1, max_depth, -beta, -alpha);
+                value = -re_child_value;
+                line = re_line;
+            }
+
             self.position_stack.pop();
 
             // Check if we were stopped during the recursive search
@@ -315,9 +325,9 @@ impl NegamaxEngine {
 
             alpha = alpha.max(best_value);
             if alpha >= beta {
-                if let Some(m) = best_move {
-                    if board.piece_on(m.get_dest()).is_none() {
-                        self.add_killer_move(depth as usize, m);
+                if let Some(best_m) = best_move {
+                    if board.piece_on(best_m.get_dest()).is_none() {
+                        self.add_killer_move(depth as usize, best_m);
                     }
                 }
                 break;
