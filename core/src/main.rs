@@ -34,7 +34,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 engine.set_position(board.clone());
             }
             UciInput::Go(params) => {
-                let best_move = engine.search(params, &output);
+                let best_move = engine.search(params, Some(&output));
 
                 if let Some(best_move) = best_move {
                     output.send(UciOutput::BestMove {

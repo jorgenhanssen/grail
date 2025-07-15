@@ -99,5 +99,23 @@ pub struct GoParams {
     pub move_time: Option<u64>,
 }
 
+impl Default for GoParams {
+    fn default() -> Self {
+        Self {
+            ponder: false,
+            infinite: false,
+            search_moves: None,
+            wtime: None,
+            btime: None,
+            winc: None,
+            binc: None,
+            moves_to_go: None,
+            depth: None,
+            nodes: None,
+            move_time: None,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct EngineOptions {}

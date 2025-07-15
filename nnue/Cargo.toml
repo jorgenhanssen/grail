@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 search = { path = "../search" }
 evaluation = { path = "../evaluation" }
+uci = { path = "../uci" }
 
 ahash = { workspace = true }
 chess = { workspace = true }

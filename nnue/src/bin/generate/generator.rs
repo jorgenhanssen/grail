@@ -13,6 +13,7 @@ use nnue::NNUE;
 use rand::Rng;
 use search::{Engine, NegamaxEngine};
 use std::sync::Mutex;
+use uci::commands::GoParams;
 
 pub struct Generator {
     threads: usize,
@@ -230,8 +231,12 @@ impl SelfPlayWorker {
         self.engine.set_position(*board);
         self.engine.init_search();
 
-        let (mv, score) = self.engine.search_root(self.depth);
-        (mv.unwrap(), score)
+        let params = GoParams {
+            depth: Some(self.depth),
+            ..Default::default()
+        };
+
+        self.engine.search(&params, None).unwrap()
     }
 
     #[inline]
