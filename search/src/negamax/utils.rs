@@ -44,7 +44,7 @@ pub fn convert_centipawn_score(score: i16) -> Score {
 }
 
 #[inline(always)]
-pub fn in_zugzwang(board: &Board) -> bool {
+pub fn is_zugzwang(board: &Board) -> bool {
     let side_bits = *board.color_combined(board.side_to_move());
     let pawn_bits = *board.pieces(Piece::Pawn) & side_bits;
     (side_bits ^ pawn_bits).popcnt() == 0

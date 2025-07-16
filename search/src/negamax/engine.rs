@@ -1,6 +1,6 @@
 use crate::{
-    negamax::utils::in_zugzwang,
-    utils::{get_ordered_moves, CAPTURE_SCORE},
+    negamax::utils::is_zugzwang,
+    utils::{ordered_moves, CAPTURE_PRIORITY, MAX_PRIORITY},
     Engine,
 };
 use ahash::AHashMap;
@@ -166,7 +166,7 @@ impl NegamaxEngine {
         if let Some(&pv) = self.current_pv.first() {
             pref.push((pv, POS_INFINITY));
         }
-        let moves_with_scores = get_ordered_moves(&self.board, Some(&pref[..]), None);
+        let moves_with_scores = ordered_moves(&self.board, Some(&pref[..]), None);
 
         if moves_with_scores.is_empty() {
             return (None, 0);
@@ -256,27 +256,31 @@ impl NegamaxEngine {
             return (score, Vec::new());
         }
 
-        // Move ordering
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
+        // Move ordering
         let pref = &mut self.preferred_buffer[depth as usize];
         pref.clear();
 
-        if let Some(&mv) = self.current_pv.get(depth as usize) {
-            pref.push((mv, POS_INFINITY));
+        if let Some(&move_) = self.current_pv.get(depth as usize) {
+            pref.push((move_, MAX_PRIORITY + 2));
         }
-        if let Some(tt_mv) = maybe_tt_move {
-            pref.push((tt_mv, POS_INFINITY - 1));
+
+        if let Some(tt_move) = maybe_tt_move {
+            pref.push((tt_move, MAX_PRIORITY + 1));
         }
-        for &km in &self.killer_moves[depth as usize] {
-            if let Some(km) = km {
-                if !pref.iter().any(|&(m, _)| m == km) {
-                    pref.push((km, CAPTURE_SCORE - 2));
+
+        for &killer_move_opt in &self.killer_moves[depth as usize] {
+            if let Some(killer_move) = killer_move_opt {
+                let already_there = pref.iter().any(|&(pm, _)| pm == killer_move);
+                if !already_there {
+                    pref.push((killer_move, CAPTURE_PRIORITY - 1));
                 }
             }
         }
 
-        let moves = get_ordered_moves(board, Some(&pref[..]), None);
+        let moves = ordered_moves(board, Some(&pref[..]), None);
+
         if moves.is_empty() {
             return (0, Vec::new());
         }
@@ -388,7 +392,7 @@ impl NegamaxEngine {
         } else {
             Some(*board.color_combined(!board.side_to_move())) // Only captures
         };
-        let forcing_moves = get_ordered_moves(board, None, mask);
+        let forcing_moves = ordered_moves(board, None, mask);
 
         for (mv, _) in forcing_moves {
             if !in_check && see_naive(board, mv) < 0 {
@@ -529,7 +533,7 @@ impl NegamaxEngine {
         let in_check = board.checkers().popcnt() > 0;
 
         // We should not prune if we are in zugzwang, in check or near the horizon
-        if remaining_depth < 3 || in_check || in_zugzwang(board) {
+        if remaining_depth < 3 || in_check || is_zugzwang(board) {
             return None;
         }
 
