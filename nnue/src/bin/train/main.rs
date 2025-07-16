@@ -32,7 +32,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let (net, varmap) = create_network(&device)?;
-    let mut opt = AdamW::new(varmap.all_vars(), ParamsAdamW::default())?;
+
+    let mut opt = AdamW::new(
+        varmap.all_vars(),
+        ParamsAdamW {
+            lr: args.learning_rate,
+            ..ParamsAdamW::default()
+        },
+    )?;
 
     log::info!("Training network");
     let trainer = Trainer::new(args.batch_size, args.epochs);
