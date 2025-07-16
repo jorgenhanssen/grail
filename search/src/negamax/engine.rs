@@ -1,4 +1,7 @@
 use crate::{
+    negamax::aspiration::{
+        AspirationWindow, Pass, ASP_ENABLED_FROM, ASP_HALF_START, ASP_MAX_RETRIES, ASP_WIDEN,
+    },
     utils::{ordered_moves, CAPTURE_PRIORITY, MAX_PRIORITY},
     Engine,
 };
@@ -33,6 +36,7 @@ pub struct NegamaxEngine {
     killer_moves: [[Option<ChessMove>; 2]; MAX_DEPTH], // 2 per depth
     current_pv: Vec<ChessMove>,
 
+    window: AspirationWindow,
     tt: AHashMap<u64, TTEntry>,
     qs_tt: AHashMap<u64, i16>,
 
@@ -52,9 +56,10 @@ impl Default for NegamaxEngine {
         Self {
             board: Board::default(),
             nodes: 0,
+            window: AspirationWindow::new(ASP_HALF_START, ASP_WIDEN, ASP_ENABLED_FROM),
             tt: AHashMap::with_capacity(200_000),
             qs_tt: AHashMap::with_capacity(100_000),
-            killer_moves: [[None; 2]; MAX_DEPTH], // 100 is a good depth
+            killer_moves: [[None; 2]; MAX_DEPTH],
             max_depth_reached: 1,
             current_pv: Vec::new(),
             preferred_buffer: array::from_fn(|_| Vec::with_capacity(MAX_DEPTH)),
@@ -108,37 +113,49 @@ impl Engine for NegamaxEngine {
         self.init_search();
 
         let mut controller = SearchController::new(params);
-
         let stop = Arc::clone(&self.stop);
-        controller.on_stop(move || {
-            stop.store(true, Ordering::Relaxed);
-        });
-
+        controller.on_stop(move || stop.store(true, Ordering::Relaxed));
         controller.start_timer();
 
-        let mut depth = 1u8;
+        let mut depth = 1;
         let mut best_move = None;
         let mut best_score = 0;
 
         while !self.stop.load(Ordering::Relaxed) {
-            // Check depth limits - this will call on_stop if max depth reached
             controller.check_depth(depth);
-
-            // Stop if the depth check set the stop flag
             if self.stop.load(Ordering::Relaxed) {
                 break;
             }
 
-            let (mv, score) = self.search_root(depth);
+            self.window.begin_depth(depth, best_score);
+            let mut retries = 0;
 
-            if mv.is_none() {
-                break;
-            }
+            loop {
+                let (alpha, beta) = self.window.bounds();
+                let (mv, score) = self.search_root(depth, alpha, beta);
 
-            best_move = mv;
-            best_score = score;
-            if let Some(output) = output {
-                self.send_search_info(output, depth, score, controller.elapsed());
+                if mv.is_none() {
+                    break;
+                }
+
+                match self.window.analyse_pass(score) {
+                    Pass::Hit(s) => {
+                        best_move = mv;
+                        best_score = s;
+                        if let Some(out) = output {
+                            self.send_search_info(out, depth, s, controller.elapsed());
+                        }
+                        break;
+                    }
+                    _ => {
+                        retries += 1;
+
+                        if retries >= ASP_MAX_RETRIES {
+                            self.window.fully_extend();
+                            retries = 0;
+                        }
+                    }
+                }
             }
 
             depth += 1;
@@ -168,10 +185,12 @@ impl NegamaxEngine {
         self.position_stack.push(self.board.get_hash());
     }
 
-    pub fn search_root(&mut self, depth: u8) -> (Option<ChessMove>, i16) {
-        let mut alpha = -MATE_VALUE - 1;
-        let beta = MATE_VALUE + 1;
-
+    pub fn search_root(
+        &mut self,
+        depth: u8,
+        mut alpha: i16,
+        beta: i16,
+    ) -> (Option<ChessMove>, i16) {
         let pref = &mut self.preferred_buffer[0];
         pref.clear();
 
