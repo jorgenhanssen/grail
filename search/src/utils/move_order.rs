@@ -78,6 +78,7 @@ fn mvva_lva_index(piece: Piece) -> usize {
     }
 }
 
+#[inline(always)]
 fn score(mov: ChessMove, board: &Board) -> i32 {
     // Check for promotions first
     if let Some(promotion) = mov.get_promotion() {
@@ -91,13 +92,10 @@ fn score(mov: ChessMove, board: &Board) -> i32 {
     }
 
     let attacker = board.piece_on(mov.get_source()).unwrap();
-    let victim = board.piece_on(mov.get_dest());
-
-    // Next look at captures (MVV-LVA)
-    if let Some(victim) = victim {
+    if let Some(victim) = board.piece_on(mov.get_dest()) {
         return CAPTURE_SCORE + MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)];
     }
 
     // Quiet moves are not scored
-    return 0;
+    0
 }

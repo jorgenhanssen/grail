@@ -3,13 +3,12 @@ use chess::{
     EMPTY,
 };
 
+use crate::scores::MATE_VALUE;
 use crate::traditional::pst::{get_pst, sum_pst};
 use crate::traditional::values::{
     piece_value, BISHOP_VALUE, KNIGHT_VALUE, PASSED_PAWN_BONUS, PAWN_VALUE, QUEEN_VALUE,
     ROOK_ON_SEVENTH_BONUS, ROOK_OPEN_FILE_BONUS, ROOK_SEMI_OPEN_FILE_BONUS, ROOK_VALUE,
 };
-
-pub const MATE_VALUE: i32 = 30_000;
 
 // Return final evaluation (positive = good for White, negative = good for Black)
 pub fn evaluate_board(board: &Board) -> i32 {

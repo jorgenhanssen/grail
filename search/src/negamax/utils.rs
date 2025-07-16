@@ -8,7 +8,7 @@ pub fn see_naive(board: &Board, capture_move: ChessMove) -> i32 {
         board.piece_on(capture_move.get_dest()),
         board.piece_on(capture_move.get_source()),
     ) {
-        (piece_value(captured_piece) - piece_value(capturing_piece)) as i32
+        piece_value(captured_piece) - piece_value(capturing_piece)
     } else {
         0
     }
