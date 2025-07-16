@@ -35,12 +35,14 @@ impl AspirationWindow {
 
     pub fn begin_depth(&mut self, depth: u8, prev_score: i16) {
         if depth < self.enabled_from {
-            self.fallback_to_full();
+            self.alpha = NEG_INFINITY;
+            self.beta = POS_INFINITY;
             return;
         }
-        let delta = self.start_half.saturating_mul(depth as i16);
-        self.alpha = prev_score.saturating_sub(delta);
-        self.beta = prev_score.saturating_add(delta);
+
+        let half = (self.start_half + 10 * depth as i16).min(POS_INFINITY);
+        self.alpha = prev_score.saturating_sub(half);
+        self.beta = prev_score.saturating_add(half);
     }
 
     #[inline(always)]
@@ -52,13 +54,15 @@ impl AspirationWindow {
         if score > self.alpha && score < self.beta {
             return Pass::Hit(score);
         }
-        let mut delta = (self.beta - self.alpha).abs() / 2;
-        delta = delta.max(self.start_half) * self.widen;
-        self.alpha = score.saturating_sub(delta);
-        self.beta = score.saturating_add(delta);
         if score <= self.alpha {
+            // fail‑low – widen only the low side
+            let span = (self.beta - score).abs().max(self.start_half) * self.widen;
+            self.alpha = score.saturating_sub(span);
             Pass::FailLow
         } else {
+            // fail‑high
+            let span = (score - self.alpha).abs().max(self.start_half) * self.widen;
+            self.beta = score.saturating_add(span);
             Pass::FailHigh
         }
     }
