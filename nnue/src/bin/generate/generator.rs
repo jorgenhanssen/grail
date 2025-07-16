@@ -13,6 +13,7 @@ use nnue::NNUE;
 use rand::Rng;
 use search::{Engine, NegamaxEngine};
 use std::sync::Mutex;
+use uci::commands::GoParams;
 
 pub struct Generator {
     threads: usize,
@@ -228,10 +229,13 @@ impl SelfPlayWorker {
     #[inline]
     fn get_engine_move(&mut self, board: &Board) -> (ChessMove, i16) {
         self.engine.set_position(*board);
-        self.engine.init_search();
 
-        let (mv, score) = self.engine.search_root(self.depth);
-        (mv.unwrap(), score)
+        let params = GoParams {
+            depth: Some(self.depth),
+            ..Default::default()
+        };
+
+        self.engine.search(&params, None).unwrap()
     }
 
     fn should_abort_game(&self, score: &i16) -> bool {
