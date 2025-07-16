@@ -10,7 +10,7 @@ pub trait Engine {
         &mut self,
         params: &GoParams,
         output: Option<&Sender<UciOutput>>,
-    ) -> Option<(ChessMove, f32)>;
+    ) -> Option<(ChessMove, i16)>;
     fn stop(&mut self);
     fn name(&self) -> String;
 }

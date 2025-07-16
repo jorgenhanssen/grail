@@ -1,10 +1,10 @@
 use chess::{BitBoard, Board, ChessMove, MoveGen, Piece};
 
-pub fn get_ordered_moves(
+pub fn ordered_moves(
     board: &Board,
-    preferred: Option<&[(ChessMove, i32)]>,
+    preferred: Option<&[(ChessMove, i16)]>,
     mask: Option<BitBoard>,
-) -> Vec<(ChessMove, i32)> {
+) -> Vec<(ChessMove, i16)> {
     let mut legal = MoveGen::new_legal(board);
     if let Some(mask) = mask {
         legal.set_iterator_mask(mask);
@@ -12,52 +12,63 @@ pub fn get_ordered_moves(
 
     let cap = legal.len();
 
-    // Separate buckets: high = score > 0, quiet = score == 0
+    // Separate buckets: high = priority > 0, low = priority == 0
     let mut high = Vec::with_capacity(cap);
-    let mut quiet = Vec::with_capacity(cap);
+    let mut low = Vec::with_capacity(cap);
 
     for m in legal {
         // Try to find the move in the preferred list
-        let mut move_score = 0;
+        let mut priority = 0;
         if let Some(preferred) = preferred {
             for &(pm, s) in preferred {
                 if pm == m {
-                    move_score = s;
+                    priority = s;
                     break;
                 }
             }
         }
-        if move_score == 0 {
-            move_score = score(m, board);
+        if priority == 0 {
+            priority = move_priority(m, board);
         }
 
-        // bucket by score
-        if move_score > 0 {
-            high.push((m, move_score));
+        // bucket by priority
+        if priority > MIN_PRIORITY {
+            high.push((m, priority));
         } else {
-            quiet.push((m, 0));
+            low.push((m, priority));
         }
     }
 
-    // Sort only the forcing moves
+    // Only sort high priority moves
     high.sort_unstable_by_key(|&(_, s)| -s);
 
-    // Append quiet moves last
-    high.extend(quiet);
+    // Append low priority moves last
+    high.extend(low);
     high
 }
 
-const PROMOTION_SCORE: i32 = 10000;
-const PROMOTION_SCORE_QUEEN: i32 = PROMOTION_SCORE + 4;
-const PROMOTION_SCORE_ROOK: i32 = PROMOTION_SCORE + 3;
-const PROMOTION_SCORE_BISHOP: i32 = PROMOTION_SCORE + 2;
-const PROMOTION_SCORE_KNIGHT: i32 = PROMOTION_SCORE + 1;
+// Piece moves get base priority (lowest)
+pub const MIN_PRIORITY: i16 = 0;
+const PIECE_PRIORITY_KNIGHT: i16 = MIN_PRIORITY + 1;
+const PIECE_PRIORITY_BISHOP: i16 = MIN_PRIORITY + 2;
+const PIECE_PRIORITY_ROOK: i16 = MIN_PRIORITY + 3;
+const PIECE_PRIORITY_QUEEN: i16 = MIN_PRIORITY + 4;
 
-pub const CAPTURE_SCORE: i32 = 1000;
+// Captures get medium priority (MVV-LVA values 10-55)
+pub const CAPTURE_PRIORITY: i16 = MIN_PRIORITY + 100;
+
+// Promotions get highest priority
+pub const PROMOTION_PRIORITY: i16 = MIN_PRIORITY + 200;
+const PROMOTION_PRIORITY_KNIGHT: i16 = PROMOTION_PRIORITY + 1;
+const PROMOTION_PRIORITY_BISHOP: i16 = PROMOTION_PRIORITY + 2;
+const PROMOTION_PRIORITY_ROOK: i16 = PROMOTION_PRIORITY + 3;
+const PROMOTION_PRIORITY_QUEEN: i16 = PROMOTION_PRIORITY + 4;
+
+pub const MAX_PRIORITY: i16 = PROMOTION_PRIORITY_QUEEN;
 
 // MVV-LVA table
 // king, queen, rook, bishop, knight, pawn
-const MVV_LVA: [[i32; 6]; 6] = [
+const MVV_LVA: [[i16; 6]; 6] = [
     [0, 0, 0, 0, 0, 0],       // victim King
     [50, 51, 52, 53, 54, 55], // victim Queen
     [40, 41, 42, 43, 44, 45], // victim Rook
@@ -78,26 +89,30 @@ fn mvva_lva_index(piece: Piece) -> usize {
     }
 }
 
-fn score(mov: ChessMove, board: &Board) -> i32 {
+#[inline(always)]
+fn move_priority(mov: ChessMove, board: &Board) -> i16 {
     // Check for promotions first
     if let Some(promotion) = mov.get_promotion() {
         return match promotion {
-            Piece::Queen => PROMOTION_SCORE_QUEEN,
-            Piece::Rook => PROMOTION_SCORE_ROOK,
-            Piece::Bishop => PROMOTION_SCORE_BISHOP,
-            Piece::Knight => PROMOTION_SCORE_KNIGHT,
+            Piece::Queen => PROMOTION_PRIORITY_QUEEN,
+            Piece::Rook => PROMOTION_PRIORITY_ROOK,
+            Piece::Bishop => PROMOTION_PRIORITY_BISHOP,
+            Piece::Knight => PROMOTION_PRIORITY_KNIGHT,
             _ => 0,
         };
     }
 
     let attacker = board.piece_on(mov.get_source()).unwrap();
-    let victim = board.piece_on(mov.get_dest());
-
-    // Next look at captures (MVV-LVA)
-    if let Some(victim) = victim {
-        return CAPTURE_SCORE + MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)];
+    if let Some(victim) = board.piece_on(mov.get_dest()) {
+        return CAPTURE_PRIORITY + MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)];
     }
 
-    // Quiet moves are not scored
-    return 0;
+    // Nudge move ordering to prefer more valuable pieces
+    match attacker {
+        Piece::Queen => PIECE_PRIORITY_QUEEN,
+        Piece::Rook => PIECE_PRIORITY_ROOK,
+        Piece::Bishop => PIECE_PRIORITY_BISHOP,
+        Piece::Knight => PIECE_PRIORITY_KNIGHT,
+        _ => MIN_PRIORITY,
+    }
 }
