@@ -1,5 +1,5 @@
 // aspiration.rs
-use evaluation::scores::MATE_VALUE;
+use evaluation::scores::{NEG_INFINITY, POS_INFINITY};
 
 pub const ASP_HALF_START: i16 = 50; // ±0.50 pawn
 pub const ASP_WIDEN: i16 = 2; // ×2 each miss
@@ -17,33 +17,30 @@ pub enum Pass {
 pub struct AspirationWindow {
     alpha: i16,
     beta: i16,
-    start_half: i16,  // ±50 cp at depth 1
-    widen: i16,       // *2 each miss
-    enabled_from: u8, // start at depth 4
+    start_half: i16,
+    widen: i16,
+    enabled_from: u8,
 }
 
 impl AspirationWindow {
     pub fn new(start_half: i16, widen: i16, enabled_from: u8) -> Self {
         Self {
-            alpha: -MATE_VALUE - 1,
-            beta: MATE_VALUE + 1,
+            alpha: NEG_INFINITY,
+            beta: POS_INFINITY,
             start_half,
             widen,
             enabled_from,
         }
     }
 
-    /// Call once at the top of each depth
     pub fn begin_depth(&mut self, depth: u8, prev_score: i16) {
         if depth < self.enabled_from {
-            self.alpha = -MATE_VALUE - 1;
-            self.beta = MATE_VALUE + 1;
+            self.fallback_to_full();
             return;
         }
-
-        let half = (self.start_half + 10 * depth as i16).min(MATE_VALUE);
-        self.alpha = prev_score.saturating_sub(half);
-        self.beta = prev_score.saturating_add(half);
+        let delta = self.start_half.saturating_mul(depth as i16);
+        self.alpha = prev_score.saturating_sub(delta);
+        self.beta = prev_score.saturating_add(delta);
     }
 
     #[inline(always)]
@@ -51,27 +48,23 @@ impl AspirationWindow {
         (self.alpha, self.beta)
     }
 
-    /// Update window after each pass
     pub fn analyse_pass(&mut self, score: i16) -> Pass {
         if score > self.alpha && score < self.beta {
             return Pass::Hit(score);
         }
+        let mut delta = (self.beta - self.alpha).abs() / 2;
+        delta = delta.max(self.start_half) * self.widen;
+        self.alpha = score.saturating_sub(delta);
+        self.beta = score.saturating_add(delta);
         if score <= self.alpha {
-            // fail‑low – widen only the low side
-            let span = (self.beta - score).abs().max(self.start_half) * self.widen;
-            self.alpha = score.saturating_sub(span);
             Pass::FailLow
         } else {
-            // fail‑high
-            let span = (score - self.alpha).abs().max(self.start_half) * self.widen;
-            self.beta = score.saturating_add(span);
             Pass::FailHigh
         }
     }
 
-    /// Force a full range on the next pass
     pub fn fallback_to_full(&mut self) {
-        self.alpha = -MATE_VALUE - 1;
-        self.beta = MATE_VALUE + 1;
+        self.alpha = NEG_INFINITY;
+        self.beta = POS_INFINITY;
     }
 }

@@ -2,7 +2,7 @@ use crate::{
     negamax::aspiration::{
         AspirationWindow, Pass, ASP_ENABLED_FROM, ASP_HALF_START, ASP_MAX_RETRIES, ASP_WIDEN,
     },
-    utils::{get_ordered_moves, CAPTURE_SCORE},
+    utils::{ordered_moves, CAPTURE_PRIORITY, MAX_PRIORITY},
     Engine,
 };
 use ahash::AHashMap;
@@ -93,15 +93,20 @@ impl Engine for NegamaxEngine {
         self.stop.store(true, Ordering::Relaxed);
     }
 
-    fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> Option<ChessMove> {
-        // Handle immediate mate
+    fn search(
+        &mut self,
+        params: &GoParams,
+        output: Option<&Sender<UciOutput>>,
+    ) -> Option<(ChessMove, i16)> {
         if self.board.status() == BoardStatus::Checkmate {
-            output
-                .send(UciOutput::Info(Info {
-                    score: Score::Mate(0),
-                    ..Default::default()
-                }))
-                .unwrap();
+            if let Some(output) = output {
+                output
+                    .send(UciOutput::Info(Info {
+                        score: Score::Mate(0),
+                        ..Default::default()
+                    }))
+                    .unwrap();
+            }
             return None;
         }
 
@@ -114,7 +119,7 @@ impl Engine for NegamaxEngine {
 
         let mut depth: u8 = 1;
         let mut best_move = None;
-        let mut last_score: i16 = 0;
+        let mut best_score: i16 = 0;
 
         while !self.stop.load(Ordering::Relaxed) {
             controller.check_depth(depth);
@@ -122,54 +127,50 @@ impl Engine for NegamaxEngine {
                 break;
             }
 
-            // Narrow or wide window for this depth
-            self.window.begin_depth(depth, last_score);
+            self.window.begin_depth(depth, best_score);
             let mut retries = 0;
-            let mut hit = false;
 
             loop {
                 let (alpha, beta) = self.window.bounds();
-
                 let (mv, score) = self.search_root(depth, alpha, beta);
 
-                // No legal moves or external stop
+                // Stop conditions
                 if mv.is_none() || self.stop.load(Ordering::Relaxed) {
                     break;
                 }
-                retries += 1;
 
                 match self.window.analyse_pass(score) {
                     Pass::Hit(s) => {
-                        // Exact score – done with this depth
+                        // exact score - depth finished
                         best_move = mv;
-                        last_score = s;
-                        hit = true;
-                        self.send_search_info(output, depth, s, controller.elapsed());
+                        best_score = s;
+                        if let Some(out) = output {
+                            self.send_search_info(out, depth, s, controller.elapsed());
+                        }
                         break;
                     }
-                    Pass::FailLow | Pass::FailHigh if retries >= ASP_MAX_RETRIES => {
-                        self.window.fallback_to_full();
-                    }
-                    _ => { /* retry */ }
-                }
-            }
 
-            // If we broke the loop without a hit, do one full‑width search
-            if !hit && !self.stop.load(Ordering::Relaxed) {
-                let (alpha, beta) = (-MATE_VALUE - 1, MATE_VALUE + 1);
-                let (mv, score) = self.search_root(depth, alpha, beta);
-                if mv.is_none() {
-                    break;
+                    // miss - widen and maybe fall back
+                    _ => {
+                        retries += 1;
+
+                        if retries >= ASP_MAX_RETRIES {
+                            self.window.fallback_to_full();
+                            retries = 0; // reset so we do not overflow
+                        }
+                        // continue with wider window
+                    }
                 }
-                best_move = mv;
-                last_score = score;
-                self.send_search_info(output, depth, score, controller.elapsed());
             }
 
             depth += 1;
         }
 
-        best_move
+        if let Some(mv) = best_move {
+            Some((mv, best_score))
+        } else {
+            None
+        }
     }
 }
 
@@ -201,7 +202,7 @@ impl NegamaxEngine {
         if let Some(&pv) = self.current_pv.first() {
             pref.push((pv, POS_INFINITY));
         }
-        let moves_with_scores = get_ordered_moves(&self.board, Some(&pref[..]), None);
+        let moves_with_scores = ordered_moves(&self.board, Some(&pref[..]), None);
 
         if moves_with_scores.is_empty() {
             return (None, 0);
@@ -302,12 +303,12 @@ impl NegamaxEngine {
 
         // First priority is the current PV move
         if let Some(&move_) = self.current_pv.get(depth as usize) {
-            pref.push((move_, POS_INFINITY));
+            pref.push((move_, MAX_PRIORITY + 2));
         }
 
         // Then any hash move from the tt
         if let Some(tt_move) = maybe_tt_move {
-            pref.push((tt_move, POS_INFINITY - 1));
+            pref.push((tt_move, MAX_PRIORITY + 1));
         }
 
         //  Killer moves for this specific depth if they are legal
@@ -315,12 +316,12 @@ impl NegamaxEngine {
             if let Some(killer_move) = killer_move_opt {
                 let already_there = pref.iter().any(|&(pm, _)| pm == killer_move);
                 if !already_there {
-                    pref.push((killer_move, CAPTURE_SCORE - 2));
+                    pref.push((killer_move, CAPTURE_PRIORITY - 1));
                 }
             }
         }
 
-        let moves = get_ordered_moves(board, Some(&pref[..]), None);
+        let moves = ordered_moves(board, Some(&pref[..]), None);
 
         if moves.is_empty() {
             return (0, Vec::new());
@@ -438,7 +439,7 @@ impl NegamaxEngine {
         } else {
             Some(*board.color_combined(!board.side_to_move())) // Only captures
         };
-        let forcing_moves = get_ordered_moves(board, None, mask);
+        let forcing_moves = ordered_moves(board, None, mask);
 
         for (mv, _) in forcing_moves {
             if !in_check && see_naive(board, mv) < 0 {
