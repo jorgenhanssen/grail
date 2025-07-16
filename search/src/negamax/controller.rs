@@ -6,7 +6,7 @@ use uci::commands::GoParams;
 pub struct SearchController {
     start_time: std::time::Instant,
     allocated_time: Option<u64>,
-    max_depth: Option<u64>,
+    max_depth: Option<u8>,
     _timer_handle: Option<thread::JoinHandle<()>>,
     on_stop_callback: Option<Arc<dyn Fn() + Send + Sync>>,
 }
@@ -48,7 +48,7 @@ impl SearchController {
         self._timer_handle = Some(handle);
     }
 
-    pub fn check_depth(&self, current_depth: u64) {
+    pub fn check_depth(&self, current_depth: u8) {
         let Some(max_depth) = self.max_depth else {
             return;
         };

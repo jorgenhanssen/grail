@@ -34,8 +34,8 @@ pub enum UciOutput {
 
 #[derive(Debug)]
 pub struct Info {
-    pub depth: u64,
-    pub sel_depth: u64,
+    pub depth: u8,
+    pub sel_depth: u8,
     pub nodes: u32,
     pub nodes_per_second: u32,
     pub time: u32,
@@ -59,8 +59,8 @@ impl Default for Info {
 
 #[derive(Debug)]
 pub enum Score {
-    Centipawns(i32), // centipawns
-    Mate(i32),       // Positive for mate-in-n, negative for mated-in-n
+    Centipawns(i16), // centipawns
+    Mate(i16),       // Positive for mate-in-n, negative for mated-in-n
 }
 
 #[derive(Debug)]
@@ -90,7 +90,7 @@ pub struct GoParams {
     pub moves_to_go: Option<u64>,
 
     // Search depth ply only.
-    pub depth: Option<u64>,
+    pub depth: Option<u8>,
 
     // Search so many nodes only.
     pub nodes: Option<u64>,

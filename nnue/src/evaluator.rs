@@ -38,8 +38,10 @@ impl Evaluator for NNUE {
     }
 
     #[inline(always)]
-    fn evaluate(&mut self, board: &Board) -> f32 {
+    fn evaluate(&mut self, board: &Board) -> i16 {
         let encoded_board = encode_board(board);
-        self.nnue_network.forward(&encoded_board)
+        self.nnue_network
+            .forward(&encoded_board)
+            .clamp(i16::MIN as f32, i16::MAX as f32) as i16
     }
 }
