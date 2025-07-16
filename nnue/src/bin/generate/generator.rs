@@ -7,7 +7,7 @@ use candle_core::Device;
 use candle_nn::VarMap;
 use chess::{Board, ChessMove, Game, MoveGen};
 use evaluation::{Evaluator, TraditionalEvaluator};
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressStyle};
 use nnue::version::VersionManager;
 use nnue::NNUE;
 use rand::Rng;
@@ -41,7 +41,7 @@ impl Generator {
         Ok(generator)
     }
 
-    pub fn run(&self, duration: u64, depth: u64) -> Vec<(String, f32)> {
+    pub fn run(&self, duration: u64, depth: u8) -> Vec<(String, i16)> {
         let eval_name = match &self.nnue_path {
             Some(path) => path.display().to_string(),
             None => "traditional evaluator".to_string(),
@@ -104,7 +104,7 @@ struct SelfPlayWorker {
     tid: usize,
     global_evaluated: Arc<Mutex<AHashSet<u64>>>,
     engine: NegamaxEngine,
-    depth: u64,
+    depth: u8,
 
     // Specific to ongoing game
     game: Game,
@@ -115,7 +115,7 @@ impl SelfPlayWorker {
     pub fn new(
         tid: usize,
         global_evaluated: Arc<Mutex<AHashSet<u64>>>,
-        depth: u64,
+        depth: u8,
         evaluator: Box<dyn Evaluator>,
     ) -> Self {
         Self {
@@ -129,7 +129,7 @@ impl SelfPlayWorker {
         }
     }
 
-    pub fn play_games(&mut self, duration: u64, pb: &ProgressBar) -> Vec<(String, f32)> {
+    pub fn play_games(&mut self, duration: u64, pb: &ProgressBar) -> Vec<(String, i16)> {
         let start_time = Instant::now();
         let mut evaluations = Vec::new();
 
@@ -159,7 +159,7 @@ impl SelfPlayWorker {
         evaluations
     }
 
-    fn play_single_move(&mut self, evaluations: &mut Vec<(String, f32)>) -> bool {
+    fn play_single_move(&mut self, evaluations: &mut Vec<(String, i16)>) -> bool {
         if self.game.result().is_some() {
             return true;
         }
@@ -187,25 +187,25 @@ impl SelfPlayWorker {
     fn select_move(
         &mut self,
         board: chess::Board,
-        evaluations: &mut Vec<(String, f32)>,
-    ) -> (ChessMove, f32) {
+        evaluations: &mut Vec<(String, i16)>,
+    ) -> (ChessMove, i16) {
         let moves: Vec<ChessMove> = MoveGen::new_legal(&board).collect();
 
         if self.position_has_been_evaluated(&board) {
-            return (random_move(&moves), 0.0);
+            return (random_move(&moves), 0);
         }
 
         let (engine_move, engine_score) = self.get_engine_move(&board);
 
         // Convert to white's perspective and tanh to force mate scores to be in [-1, 1]
         let white_score = if board.side_to_move() == chess::Color::White {
-            engine_score.tanh()
+            engine_score
         } else {
-            -engine_score.tanh()
+            -engine_score
         };
         evaluations.push((board.to_string(), white_score));
 
-        if self.should_use_engine_move(&engine_score) {
+        if should_use_engine_move() {
             (engine_move, engine_score)
         } else {
             (random_move(&moves), engine_score)
@@ -227,7 +227,7 @@ impl SelfPlayWorker {
     }
 
     #[inline]
-    fn get_engine_move(&mut self, board: &Board) -> (ChessMove, f32) {
+    fn get_engine_move(&mut self, board: &Board) -> (ChessMove, i16) {
         self.engine.set_position(*board);
 
         let params = GoParams {
@@ -238,13 +238,8 @@ impl SelfPlayWorker {
         self.engine.search(&params, None).unwrap()
     }
 
-    #[inline]
-    fn should_use_engine_move(&self, score: &f32) -> bool {
-        rand::thread_rng().gen::<f32>() < 0.3
-    }
-
-    fn should_abort_game(&self, score: &f32) -> bool {
-        let num_moves = self.positions_in_current_game.len();
+    fn should_abort_game(&self, score: &i16) -> bool {
+        let num_moves: usize = self.positions_in_current_game.len();
 
         // safety net
         if num_moves > 500 {
@@ -252,7 +247,7 @@ impl SelfPlayWorker {
         }
 
         // Abort if moderately long and drawish
-        if num_moves > 200 && score.abs() < 0.2 {
+        if num_moves > 200 && score.abs() < 20 {
             return true;
         }
 
@@ -264,6 +259,11 @@ impl SelfPlayWorker {
         self.game = Game::new();
         self.positions_in_current_game.clear();
     }
+}
+
+#[inline]
+fn should_use_engine_move() -> bool {
+    rand::thread_rng().gen::<f32>() < 0.3
 }
 
 #[inline]

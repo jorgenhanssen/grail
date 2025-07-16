@@ -9,9 +9,12 @@ use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 
 use crate::encoding::{encode_board, NUM_FEATURES};
 
+pub const CP_MAX: i16 = 5000;
+pub const CP_MIN: i16 = -5000;
+
 #[derive(Clone, Debug)]
 pub struct Samples {
-    pub samples: HashMap<String, f32>,
+    pub samples: HashMap<String, i16>,
 }
 
 impl Samples {
@@ -21,10 +24,10 @@ impl Samples {
         }
     }
 
-    pub fn from_evaluations(evals: &[(String, f32)]) -> Self {
+    pub fn from_evaluations(evals: &[(String, i16)]) -> Self {
         let samples = evals
             .iter()
-            .map(|(fen, score)| (fen.clone(), *score))
+            .map(|(fen, score)| (fen.clone(), (*score).clamp(CP_MIN, CP_MAX)))
             .collect();
         Self { samples }
     }
@@ -59,11 +62,11 @@ impl Samples {
                 .next()
                 .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing score field"))?;
 
-            let score: f32 = score_str.trim().parse().map_err(|_| {
-                io::Error::new(io::ErrorKind::InvalidData, "Score is not a valid float")
+            let score: i16 = score_str.trim().parse().map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidData, "Score is not a valid integer")
             })?;
 
-            samples.insert(fen_str.trim().to_string(), score);
+            samples.insert(fen_str.trim().to_string(), score.clamp(CP_MIN, CP_MAX));
         }
 
         Ok(Self { samples })
@@ -73,14 +76,14 @@ impl Samples {
         let num_samples = self.samples.len();
 
         let mut feature_data = Vec::with_capacity(num_samples * NUM_FEATURES);
-        let mut score_data = Vec::with_capacity(num_samples);
+        let mut score_data: Vec<f32> = Vec::with_capacity(num_samples);
 
         for (fen, score) in self.samples {
             let board =
                 Board::from_str(&fen).unwrap_or_else(|_| panic!("Invalid FEN in sample: {}", fen));
             let features = encode_board(&board);
             feature_data.extend_from_slice(&features);
-            score_data.push(score);
+            score_data.push(score as f32);
         }
 
         let x = Tensor::from_iter(feature_data.into_iter(), device)?
@@ -168,7 +171,7 @@ impl Samples {
 }
 
 pub struct BatchedSamples<'a> {
-    samples: &'a HashMap<String, f32>,
+    samples: &'a HashMap<String, i16>,
     device: &'a Device,
     batch_size: usize,
     idx: usize,
@@ -187,7 +190,7 @@ impl<'a> Iterator for BatchedSamples<'a> {
         self.idx = end;
 
         let mut feature_data = Vec::with_capacity(batch_keys.len() * NUM_FEATURES);
-        let mut score_data = Vec::with_capacity(batch_keys.len());
+        let mut score_data: Vec<f32> = Vec::with_capacity(batch_keys.len());
 
         for key in batch_keys {
             let score = self.samples.get(*key).unwrap();
@@ -195,7 +198,7 @@ impl<'a> Iterator for BatchedSamples<'a> {
                 Board::from_str(key).unwrap_or_else(|_| panic!("Invalid FEN in sample: {}", key));
             let features = encode_board(&board);
             feature_data.extend_from_slice(&features);
-            score_data.push(*score);
+            score_data.push(*score as f32);
         }
 
         let x = match Tensor::from_iter(feature_data.into_iter(), self.device) {

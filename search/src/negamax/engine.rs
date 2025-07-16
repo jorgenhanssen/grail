@@ -4,6 +4,7 @@ use crate::{
 };
 use ahash::AHashMap;
 use chess::{Board, BoardStatus, ChessMove, Color};
+use evaluation::scores::{MATE_VALUE, NEG_INFINITY, POS_INFINITY};
 use evaluation::{Evaluator, TraditionalEvaluator};
 use std::array;
 use std::sync::{
@@ -26,8 +27,6 @@ use super::{
 
 const MAX_DEPTH: usize = 100;
 
-pub const CHECKMATE_SCORE: f32 = 1_000_000.0;
-
 pub struct NegamaxEngine {
     board: Board,
     nodes: u32,
@@ -35,12 +34,12 @@ pub struct NegamaxEngine {
     current_pv: Vec<ChessMove>,
 
     tt: AHashMap<u64, TTEntry>,
-    qs_tt: AHashMap<u64, f32>,
+    qs_tt: AHashMap<u64, i16>,
 
-    max_depth_reached: u64,
+    max_depth_reached: u8,
 
     // move sorting buffer per depth
-    preferred_buffer: [Vec<(ChessMove, i32)>; MAX_DEPTH],
+    preferred_buffer: [Vec<(ChessMove, i16)>; MAX_DEPTH],
 
     position_stack: Vec<u64>,
     evaluator: Box<dyn Evaluator>,
@@ -117,7 +116,7 @@ impl Engine for NegamaxEngine {
 
         controller.start_timer();
 
-        let mut depth = 1;
+        let mut depth = 1u8;
         let mut best_move = None;
         let mut best_score = 0.0;
 
@@ -169,23 +168,23 @@ impl NegamaxEngine {
         self.position_stack.push(self.board.get_hash());
     }
 
-    pub fn search_root(&mut self, depth: u64) -> (Option<ChessMove>, f32) {
-        let mut alpha = f32::NEG_INFINITY;
-        let beta = f32::INFINITY;
+    pub fn search_root(&mut self, depth: u8) -> (Option<ChessMove>, i16) {
+        let mut alpha = -MATE_VALUE - 1;
+        let beta = MATE_VALUE + 1;
 
         let pref = &mut self.preferred_buffer[0];
         pref.clear();
 
         if let Some(&pv) = self.current_pv.first() {
-            pref.push((pv, i32::MAX));
+            pref.push((pv, POS_INFINITY));
         }
         let moves_with_scores = get_ordered_moves(&self.board, Some(&pref[..]), None);
 
         if moves_with_scores.is_empty() {
-            return (None, 0.0);
+            return (None, 0);
         }
 
-        let mut best_score = f32::NEG_INFINITY;
+        let mut best_score = NEG_INFINITY;
         let mut current_best_move = None;
 
         // Negamax at root: call search_subtree with flipped window, then negate result
@@ -199,7 +198,7 @@ impl NegamaxEngine {
 
             // Check if we were stopped during the subtree search
             if self.stop.load(Ordering::Relaxed) {
-                return (None, 0.0);
+                return (None, 0);
             }
 
             pv.insert(0, m);
@@ -219,14 +218,14 @@ impl NegamaxEngine {
     fn search_subtree(
         &mut self,
         board: &Board,
-        depth: u64,
-        max_depth: u64,
-        mut alpha: f32,
-        beta: f32,
-    ) -> (f32, Vec<ChessMove>) {
+        depth: u8,
+        max_depth: u8,
+        mut alpha: i16,
+        beta: i16,
+    ) -> (i16, Vec<ChessMove>) {
         // Check if we should stop searching
         if self.stop.load(Ordering::Relaxed) {
-            return (0.0, Vec::new());
+            return (0, Vec::new());
         }
 
         self.nodes += 1;
@@ -234,16 +233,15 @@ impl NegamaxEngine {
         let hash = *self.position_stack.last().unwrap();
 
         if self.is_cycle(hash) {
-            return (0.0, Vec::new()); // Treat as a draw
+            return (0, Vec::new()); // Treat as a draw
         }
 
         match board.status() {
             BoardStatus::Checkmate => {
-                let remaining_depth = (max_depth - depth) as f32;
-                return (-CHECKMATE_SCORE * (remaining_depth + 1.0), Vec::new());
+                return (-MATE_VALUE + depth as i16, Vec::new());
             }
             BoardStatus::Stalemate => {
-                return (0.0, Vec::new());
+                return (0, Vec::new());
             }
             BoardStatus::Ongoing => {}
         }
@@ -262,9 +260,7 @@ impl NegamaxEngine {
                     return (tt_value, maybe_tt_move.map_or(Vec::new(), |m| vec![m]));
                 }
                 Bound::Lower => {
-                    if tt_value > alpha {
-                        alpha = tt_value;
-                    }
+                    alpha = alpha.max(tt_value);
                 }
                 Bound::Upper => {
                     if tt_value <= alpha {
@@ -283,12 +279,12 @@ impl NegamaxEngine {
 
         // First priority is the current PV move
         if let Some(&move_) = self.current_pv.get(depth as usize) {
-            pref.push((move_, i32::MAX));
+            pref.push((move_, POS_INFINITY));
         }
 
         // Then any hash move from the tt
-        if maybe_tt_move.is_some() {
-            pref.push((maybe_tt_move.unwrap(), i32::MAX - 1));
+        if let Some(tt_move) = maybe_tt_move {
+            pref.push((tt_move, POS_INFINITY - 1));
         }
 
         //  Killer moves for this specific depth if they are legal
@@ -304,11 +300,11 @@ impl NegamaxEngine {
         let moves = get_ordered_moves(board, Some(&pref[..]), None);
 
         if moves.is_empty() {
-            return (0.0, Vec::new());
+            return (0, Vec::new());
         }
 
         // Negamax
-        let mut best_value = f32::NEG_INFINITY;
+        let mut best_value = NEG_INFINITY;
         let mut best_move = None;
         let mut best_line = Vec::new();
 
@@ -321,6 +317,7 @@ impl NegamaxEngine {
             self.position_stack.push(new_board.get_hash());
             let (child_value, mut line) =
                 self.search_subtree(&new_board, depth + 1, current_max_depth, -beta, -alpha);
+
             let value = -child_value;
             self.position_stack.pop();
 
@@ -362,28 +359,28 @@ impl NegamaxEngine {
     fn quiescence_search(
         &mut self,
         board: &Board,
-        mut alpha: f32,
-        beta: f32,
+        mut alpha: i16,
+        beta: i16,
         depth: u64,
-    ) -> (f32, Vec<ChessMove>) {
+    ) -> (i16, Vec<ChessMove>) {
         // Check if we should stop searching
         if self.stop.load(Ordering::Relaxed) {
-            return (0.0, Vec::new());
+            return (0, Vec::new());
         }
 
         self.nodes += 1;
 
         let hash = *self.position_stack.last().unwrap();
         if self.is_cycle(hash) {
-            return (0.0, Vec::new()); // Treat as a draw
+            return (0, Vec::new()); // Treat as a draw
         }
 
         match board.status() {
             BoardStatus::Checkmate => {
-                return (-CHECKMATE_SCORE, Vec::new());
+                return (-MATE_VALUE + depth as i16, Vec::new());
             }
             BoardStatus::Stalemate => {
-                return (0.0, Vec::new());
+                return (0, Vec::new());
             }
             BoardStatus::Ongoing => {}
         }
@@ -407,25 +404,21 @@ impl NegamaxEngine {
             if stand_pat >= beta {
                 return (stand_pat, Vec::new());
             }
-            if stand_pat > alpha {
-                alpha = stand_pat;
-            }
+            alpha = alpha.max(stand_pat);
         }
 
         let mut best_line = Vec::new();
-        let mut best_eval = match in_check {
-            true => f32::NEG_INFINITY, // If we are in check, we can't simply "stand pat"
-            false => stand_pat,        // Otherwise, start from our stand-pat
-        };
+        let mut best_eval = if in_check { NEG_INFINITY } else { stand_pat };
 
-        let mask = match in_check {
-            true => None, // We should check all moves
-            false => Some(*board.color_combined(!board.side_to_move())), // Only captures
+        let mask = if in_check {
+            None // We should check all moves
+        } else {
+            Some(*board.color_combined(!board.side_to_move())) // Only captures
         };
         let forcing_moves = get_ordered_moves(board, None, mask);
 
         for (mv, _) in forcing_moves {
-            if !in_check && see_naive(board, mv) < 0.0 {
+            if !in_check && see_naive(board, mv) < 0 {
                 continue;
             }
 
@@ -447,9 +440,9 @@ impl NegamaxEngine {
                 best_eval = value;
                 child_line.insert(0, mv);
                 best_line = child_line;
+                alpha = alpha.max(best_eval);
             }
 
-            alpha = alpha.max(best_eval);
             if alpha >= beta {
                 break; // Beta cutoff
             }
@@ -463,9 +456,9 @@ impl NegamaxEngine {
     fn probe_tt(
         &mut self,
         hash: u64,
-        depth: u64,
-        max_depth: u64,
-    ) -> Option<(f32, Bound, Option<ChessMove>)> {
+        depth: u8,
+        max_depth: u8,
+    ) -> Option<(i16, Bound, Option<ChessMove>)> {
         let plies = max_depth - depth;
         if let Some(entry) = self.tt.get(&hash) {
             if entry.plies >= plies {
@@ -478,11 +471,11 @@ impl NegamaxEngine {
     fn store_tt(
         &mut self,
         hash: u64,
-        depth: u64,
-        max_depth: u64,
-        value: f32,
-        alpha: f32,
-        beta: f32,
+        depth: u8,
+        max_depth: u8,
+        value: i16,
+        alpha: i16,
+        beta: i16,
         best_move: Option<ChessMove>,
     ) {
         let plies = max_depth - depth;
@@ -495,12 +488,7 @@ impl NegamaxEngine {
             Bound::Exact
         };
 
-        let entry = TTEntry {
-            plies,
-            value,
-            bound,
-            best_move,
-        };
+        let entry = TTEntry::new(plies, value, bound, best_move);
 
         if let Some(old_entry) = self.tt.get(&hash) {
             if old_entry.plies <= plies {
@@ -528,11 +516,11 @@ impl NegamaxEngine {
     fn send_search_info(
         &self,
         output: &Sender<UciOutput>,
-        current_depth: u64,
-        best_score: f32,
+        current_depth: u8,
+        best_score: i16,
         elapsed: std::time::Duration,
     ) {
-        let found_checkmate = best_score.abs() >= CHECKMATE_SCORE;
+        let found_checkmate = best_score.abs() >= MATE_VALUE - MAX_DEPTH as i16;
         let nps = (self.nodes as f32 / elapsed.as_secs_f32()) as u32;
 
         output
