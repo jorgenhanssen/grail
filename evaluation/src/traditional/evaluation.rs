@@ -9,10 +9,10 @@ use crate::traditional::values::{
     ROOK_ON_SEVENTH_BONUS, ROOK_OPEN_FILE_BONUS, ROOK_SEMI_OPEN_FILE_BONUS, ROOK_VALUE,
 };
 
-pub const MATE_VALUE: i16 = 30_000;
+pub const MATE_VALUE: i32 = 30_000;
 
 // Return final evaluation (positive = good for White, negative = good for Black)
-pub fn evaluate_board(board: &Board) -> i16 {
+pub fn evaluate_board(board: &Board) -> i32 {
     let is_white = board.side_to_move() == Color::White;
 
     match board.status() {
@@ -46,7 +46,7 @@ pub fn evaluate_board(board: &Board) -> i16 {
     cp += evaluate_king_safety(board, Color::White);
     cp -= evaluate_king_safety(board, Color::Black);
 
-    cp.clamp(i16::MIN as i32 + 1, i16::MAX as i32 - 1) as i16
+    cp
 }
 
 #[inline(always)]
@@ -70,21 +70,21 @@ fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard, phase: 
     // --- Piece–square tables ---------------------------------------------
     let pst = get_pst(color);
     if pawn_mask != EMPTY {
-        cp += sum_pst(pawn_mask, pst.pawn, phase) as i32;
+        cp += sum_pst(pawn_mask, pst.pawn, phase);
     }
     if knight_mask != EMPTY {
-        cp += sum_pst(knight_mask, pst.knight, phase) as i32;
+        cp += sum_pst(knight_mask, pst.knight, phase);
     }
     if bishop_mask != EMPTY {
-        cp += sum_pst(bishop_mask, pst.bishop, phase) as i32;
+        cp += sum_pst(bishop_mask, pst.bishop, phase);
     }
     if rook_mask != EMPTY {
-        cp += sum_pst(rook_mask, pst.rook, phase) as i32;
+        cp += sum_pst(rook_mask, pst.rook, phase);
     }
     if queen_mask != EMPTY {
-        cp += sum_pst(queen_mask, pst.queen, phase) as i32;
+        cp += sum_pst(queen_mask, pst.queen, phase);
     }
-    cp += sum_pst(king_mask, pst.king, phase) as i32; // king always present
+    cp += sum_pst(king_mask, pst.king, phase); // king always present
 
     // --- Bishop pair bonus ----------------------------------------------
     if bishop_mask.popcnt() >= 2 {
@@ -134,7 +134,7 @@ fn evaluate_pawn_structure(board: &Board, color: Color) -> i32 {
             } else {
                 7 - sq.get_rank() as usize
             };
-            score += PASSED_PAWN_BONUS[rank_from_white] as i32;
+            score += PASSED_PAWN_BONUS[rank_from_white];
         }
     }
 
@@ -255,14 +255,14 @@ fn evaluate_rooks(board: &Board, color: Color) -> i32 {
             (true, true) => ROOK_OPEN_FILE_BONUS,
             (true, false) => ROOK_SEMI_OPEN_FILE_BONUS,
             _ => 0,
-        } as i32;
+        };
 
         // rook on seventh (second for Black)
         let rank = sq.get_rank();
         if (color == Color::White && rank == Rank::Seventh)
             || (color == Color::Black && rank == Rank::Second)
         {
-            cp += ROOK_ON_SEVENTH_BONUS as i32;
+            cp += ROOK_ON_SEVENTH_BONUS;
         }
     }
     cp

@@ -33,7 +33,7 @@ pub struct NegamaxEngine {
     current_pv: Vec<ChessMove>,
 
     tt: AHashMap<u64, TTEntry>,
-    qs_tt: AHashMap<u64, i16>,
+    qs_tt: AHashMap<u64, i32>,
 
     max_depth_reached: u64,
 
@@ -154,7 +154,7 @@ impl NegamaxEngine {
         self.position_stack.push(self.board.get_hash());
     }
 
-    pub fn search_root(&mut self, depth: u64) -> (Option<ChessMove>, i16) {
+    pub fn search_root(&mut self, depth: u64) -> (Option<ChessMove>, i32) {
         let mut alpha = -MATE_VALUE - 1;
         let beta = MATE_VALUE + 1;
 
@@ -170,7 +170,7 @@ impl NegamaxEngine {
             return (None, 0);
         }
 
-        let mut best_score = i16::MIN;
+        let mut best_score = i32::MIN;
         let mut current_best_move = None;
 
         // Negamax at root: call search_subtree with flipped window, then negate result
@@ -206,9 +206,9 @@ impl NegamaxEngine {
         board: &Board,
         depth: u64,
         max_depth: u64,
-        mut alpha: i16,
-        beta: i16,
-    ) -> (i16, Vec<ChessMove>) {
+        mut alpha: i32,
+        beta: i32,
+    ) -> (i32, Vec<ChessMove>) {
         // Check if we should stop searching
         if self.stop.load(Ordering::Relaxed) {
             return (0, Vec::new());
@@ -224,7 +224,7 @@ impl NegamaxEngine {
 
         match board.status() {
             BoardStatus::Checkmate => {
-                return (-MATE_VALUE + depth as i16, Vec::new());
+                return (-MATE_VALUE + depth as i32, Vec::new());
             }
             BoardStatus::Stalemate => {
                 return (0, Vec::new());
@@ -292,7 +292,7 @@ impl NegamaxEngine {
         }
 
         // Negamax
-        let mut best_value = i16::MIN;
+        let mut best_value = i32::MIN;
         let mut best_move = None;
         let mut best_line = Vec::new();
 
@@ -346,10 +346,10 @@ impl NegamaxEngine {
     fn quiescence_search(
         &mut self,
         board: &Board,
-        mut alpha: i16,
-        beta: i16,
+        mut alpha: i32,
+        beta: i32,
         depth: u64,
-    ) -> (i16, Vec<ChessMove>) {
+    ) -> (i32, Vec<ChessMove>) {
         // Check if we should stop searching
         if self.stop.load(Ordering::Relaxed) {
             return (0, Vec::new());
@@ -364,7 +364,7 @@ impl NegamaxEngine {
 
         match board.status() {
             BoardStatus::Checkmate => {
-                return (-MATE_VALUE + depth as i16, Vec::new());
+                return (-MATE_VALUE + depth as i32, Vec::new());
             }
             BoardStatus::Stalemate => {
                 return (0, Vec::new());
@@ -398,7 +398,7 @@ impl NegamaxEngine {
 
         let mut best_line = Vec::new();
         let mut best_eval = match in_check {
-            true => i16::MIN,   // If we are in check, we can't simply "stand pat"
+            true => i32::MIN,   // If we are in check, we can't simply "stand pat"
             false => stand_pat, // Otherwise, start from our stand-pat
         };
 
@@ -449,7 +449,7 @@ impl NegamaxEngine {
         hash: u64,
         depth: u64,
         max_depth: u64,
-    ) -> Option<(i16, Bound, Option<ChessMove>)> {
+    ) -> Option<(i32, Bound, Option<ChessMove>)> {
         let plies = max_depth - depth;
         if let Some(entry) = self.tt.get(&hash) {
             if entry.plies >= plies {
@@ -464,9 +464,9 @@ impl NegamaxEngine {
         hash: u64,
         depth: u64,
         max_depth: u64,
-        value: i16,
-        alpha: i16,
-        beta: i16,
+        value: i32,
+        alpha: i32,
+        beta: i32,
         best_move: Option<ChessMove>,
     ) {
         let plies = max_depth - depth;
@@ -513,10 +513,10 @@ impl NegamaxEngine {
         &self,
         output: &Sender<UciOutput>,
         current_depth: u64,
-        best_score: i16,
+        best_score: i32,
         elapsed: std::time::Duration,
     ) {
-        let found_checkmate = best_score.abs() >= MATE_VALUE - MAX_DEPTH as i16;
+        let found_checkmate = best_score.abs() >= MATE_VALUE - MAX_DEPTH as i32;
         let nps = (self.nodes as f32 / elapsed.as_secs_f32()) as u32;
 
         output
