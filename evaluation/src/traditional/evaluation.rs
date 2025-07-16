@@ -27,7 +27,7 @@ pub fn evaluate_board(board: &Board) -> i16 {
         BoardStatus::Ongoing => {}
     }
 
-    let phase = game_phase(board); // 0.0 - 1.0
+    let phase = game_phase(board);
 
     let white_mask = board.color_combined(Color::White);
     let black_mask = board.color_combined(Color::Black);
@@ -124,7 +124,7 @@ fn evaluate_pawn_structure(board: &Board, color: Color) -> i16 {
         };
     }
 
-    // passed‑pawn bonus
+    // passed-pawn bonus
     for sq in my_pawns {
         let blockers = PASSED_PAWN_MASKS[color as usize][sq.to_index()];
         if (enemy_pawns & blockers).popcnt() == 0 {
@@ -188,21 +188,21 @@ fn evaluate_king_safety(board: &Board, color: Color) -> i16 {
     let enemy_color = !color;
     let enemy_pieces = board.color_combined(enemy_color);
 
-    let queens = (enemy_pieces & board.pieces(Piece::Queen) & king_zone).popcnt();
-    let rooks = (enemy_pieces & board.pieces(Piece::Rook) & king_zone).popcnt();
-    let bishops = (enemy_pieces & board.pieces(Piece::Bishop) & king_zone).popcnt();
-    let knights = (enemy_pieces & board.pieces(Piece::Knight) & king_zone).popcnt();
-    let pawns = (enemy_pieces & board.pieces(Piece::Pawn) & king_zone).popcnt();
+    let queens = (enemy_pieces & board.pieces(Piece::Queen) & king_zone).popcnt() as i16;
+    let rooks = (enemy_pieces & board.pieces(Piece::Rook) & king_zone).popcnt() as i16;
+    let bishops = (enemy_pieces & board.pieces(Piece::Bishop) & king_zone).popcnt() as i16;
+    let knights = (enemy_pieces & board.pieces(Piece::Knight) & king_zone).popcnt() as i16;
+    let pawns = (enemy_pieces & board.pieces(Piece::Pawn) & king_zone).popcnt() as i16;
 
-    // Threat severity weights (0.3) carried over from your original code
-    let mut cp = 0.0f32;
-    cp -= queens as f32 * piece_value(Piece::Queen) as f32 * 0.3;
-    cp -= rooks as f32 * piece_value(Piece::Rook) as f32 * 0.3;
-    cp -= bishops as f32 * piece_value(Piece::Bishop) as f32 * 0.3;
-    cp -= knights as f32 * piece_value(Piece::Knight) as f32 * 0.3;
-    cp -= pawns as f32 * piece_value(Piece::Pawn) as f32 * 0.3;
+    let mut cp = 0i16;
+    cp -= queens * piece_value(Piece::Queen);
+    cp -= rooks * piece_value(Piece::Rook);
+    cp -= bishops * piece_value(Piece::Bishop);
+    cp -= knights * piece_value(Piece::Knight);
+    cp -= pawns * piece_value(Piece::Pawn);
 
-    cp.round() as i16
+    // Let's do 30% of the value of the pieces
+    (0.3 * (cp as f32)).round() as i16
 }
 const KING_ZONE_RADIUS: i8 = 2;
 const KING_ZONES: [BitBoard; 64] = {
