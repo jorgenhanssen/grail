@@ -2,9 +2,9 @@ use chess::{BitBoard, Board, ChessMove, MoveGen, Piece};
 
 pub fn get_ordered_moves(
     board: &Board,
-    preferred: Option<&[(ChessMove, i32)]>,
+    preferred: Option<&[(ChessMove, i16)]>,
     mask: Option<BitBoard>,
-) -> Vec<(ChessMove, i32)> {
+) -> Vec<(ChessMove, i16)> {
     let mut legal = MoveGen::new_legal(board);
     if let Some(mask) = mask {
         legal.set_iterator_mask(mask);
@@ -47,17 +47,17 @@ pub fn get_ordered_moves(
     high
 }
 
-const PROMOTION_SCORE: i32 = 10000;
-const PROMOTION_SCORE_QUEEN: i32 = PROMOTION_SCORE + 4;
-const PROMOTION_SCORE_ROOK: i32 = PROMOTION_SCORE + 3;
-const PROMOTION_SCORE_BISHOP: i32 = PROMOTION_SCORE + 2;
-const PROMOTION_SCORE_KNIGHT: i32 = PROMOTION_SCORE + 1;
+const PROMOTION_SCORE: i16 = 10000;
+const PROMOTION_SCORE_QUEEN: i16 = PROMOTION_SCORE + 4;
+const PROMOTION_SCORE_ROOK: i16 = PROMOTION_SCORE + 3;
+const PROMOTION_SCORE_BISHOP: i16 = PROMOTION_SCORE + 2;
+const PROMOTION_SCORE_KNIGHT: i16 = PROMOTION_SCORE + 1;
 
-pub const CAPTURE_SCORE: i32 = 1000;
+pub const CAPTURE_SCORE: i16 = 1000;
 
 // MVV-LVA table
 // king, queen, rook, bishop, knight, pawn
-const MVV_LVA: [[i32; 6]; 6] = [
+const MVV_LVA: [[i16; 6]; 6] = [
     [0, 0, 0, 0, 0, 0],       // victim King
     [50, 51, 52, 53, 54, 55], // victim Queen
     [40, 41, 42, 43, 44, 45], // victim Rook
@@ -78,7 +78,8 @@ fn mvva_lva_index(piece: Piece) -> usize {
     }
 }
 
-fn score(mov: ChessMove, board: &Board) -> i32 {
+#[inline(always)]
+fn score(mov: ChessMove, board: &Board) -> i16 {
     // Check for promotions first
     if let Some(promotion) = mov.get_promotion() {
         return match promotion {
@@ -91,13 +92,10 @@ fn score(mov: ChessMove, board: &Board) -> i32 {
     }
 
     let attacker = board.piece_on(mov.get_source()).unwrap();
-    let victim = board.piece_on(mov.get_dest());
-
-    // Next look at captures (MVV-LVA)
-    if let Some(victim) = victim {
+    if let Some(victim) = board.piece_on(mov.get_dest()) {
         return CAPTURE_SCORE + MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)];
     }
 
     // Quiet moves are not scored
-    return 0;
+    0
 }

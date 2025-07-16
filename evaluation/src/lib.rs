@@ -1,4 +1,5 @@
 pub mod def;
+pub mod scores;
 pub mod traditional;
 
 pub use def::Evaluator;

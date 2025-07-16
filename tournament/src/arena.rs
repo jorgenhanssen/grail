@@ -12,7 +12,7 @@ impl Arena {
         Self { engines }
     }
 
-    pub fn run_tournament(&mut self, depth: u64) -> HashMap<String, i64> {
+    pub fn run_tournament(&mut self, depth: u8) -> HashMap<String, i64> {
         let mut scores = HashMap::new();
         for engine in &self.engines {
             scores.insert(engine.name(), 0);
@@ -53,7 +53,7 @@ impl Arena {
     fn play_game(
         white: &mut NegamaxEngine,
         black: &mut NegamaxEngine,
-        depth: u64,
+        depth: u8,
     ) -> chess::GameResult {
         let mut game = Game::new();
         let mut num_moves = 0;
