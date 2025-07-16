@@ -3,6 +3,7 @@ use chess::{
     EMPTY,
 };
 
+use crate::scores::MATE_VALUE;
 use crate::traditional::pst::{get_pst, sum_pst};
 use crate::traditional::values::{
     piece_value, BISHOP_VALUE, KNIGHT_VALUE, PASSED_PAWN_BONUS, PAWN_VALUE, QUEEN_VALUE,
@@ -10,44 +11,45 @@ use crate::traditional::values::{
 };
 
 // Return final evaluation (positive = good for White, negative = good for Black)
-pub fn evaluate_board(board: &Board) -> f32 {
+pub fn evaluate_board(board: &Board) -> i16 {
     let is_white = board.side_to_move() == Color::White;
-
-    let phase = game_phase(board);
 
     match board.status() {
         BoardStatus::Checkmate => {
             // If it's White to move and board is checkmated => White lost
             if is_white {
-                return -1.0;
+                return -MATE_VALUE;
             } else {
-                return 1.0;
+                return MATE_VALUE;
             }
         }
-        BoardStatus::Stalemate => return 0.0,
+        BoardStatus::Stalemate => return 0,
         BoardStatus::Ongoing => {}
     }
+
+    let phase = game_phase(board);
 
     let white_mask = board.color_combined(Color::White);
     let black_mask = board.color_combined(Color::Black);
 
-    let mut score = 0.0;
-    score += evaluate_material(board, Color::White, &white_mask, phase);
-    score -= evaluate_material(board, Color::Black, &black_mask, phase);
+    let mut cp: i16 = 0;
+    cp += evaluate_material(board, Color::White, &white_mask, phase);
+    cp -= evaluate_material(board, Color::Black, &black_mask, phase);
 
-    score += evaluate_pawn_structure(board, Color::White);
-    score -= evaluate_pawn_structure(board, Color::Black);
+    cp += evaluate_pawn_structure(board, Color::White);
+    cp -= evaluate_pawn_structure(board, Color::Black);
 
-    score += evaluate_rooks(board, Color::White);
-    score -= evaluate_rooks(board, Color::Black);
+    cp += evaluate_rooks(board, Color::White);
+    cp -= evaluate_rooks(board, Color::Black);
 
-    score += evaluate_king_safety(board, Color::White);
-    score -= evaluate_king_safety(board, Color::Black);
+    cp += evaluate_king_safety(board, Color::White);
+    cp -= evaluate_king_safety(board, Color::Black);
 
-    (score / 1_500.0).tanh()
+    cp
 }
 
-fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard, phase: f32) -> f32 {
+#[inline(always)]
+fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard, phase: f32) -> i16 {
     let pawn_mask = board.pieces(Piece::Pawn) & color_mask;
     let knight_mask = board.pieces(Piece::Knight) & color_mask;
     let bishop_mask = board.pieces(Piece::Bishop) & color_mask;
@@ -55,51 +57,49 @@ fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard, phase: 
     let queen_mask = board.pieces(Piece::Queen) & color_mask;
     let king_mask = board.pieces(Piece::King) & color_mask;
 
-    let num_pawns = pawn_mask.popcnt();
-    let num_knights = knight_mask.popcnt();
-    let num_bishops = bishop_mask.popcnt();
-    let num_rooks = rook_mask.popcnt();
-    let num_queens = queen_mask.popcnt();
+    let mut cp = 0i16;
 
-    let piece_value = PAWN_VALUE * num_pawns as f32
-        + KNIGHT_VALUE * num_knights as f32
-        + BISHOP_VALUE * num_bishops as f32
-        + ROOK_VALUE * num_rooks as f32
-        + QUEEN_VALUE * num_queens as f32;
+    cp += PAWN_VALUE * pawn_mask.popcnt() as i16;
+    cp += KNIGHT_VALUE * knight_mask.popcnt() as i16;
+    cp += BISHOP_VALUE * bishop_mask.popcnt() as i16;
+    cp += ROOK_VALUE * rook_mask.popcnt() as i16;
+    cp += QUEEN_VALUE * queen_mask.popcnt() as i16;
 
     let pst = get_pst(color);
-    let mut pst_value = 0.0;
-    if num_pawns > 0 {
-        pst_value += sum_pst(pawn_mask, pst.pawn, phase);
+    if pawn_mask != EMPTY {
+        cp += sum_pst(pawn_mask, pst.pawn, phase);
     }
-    if num_knights > 0 {
-        pst_value += sum_pst(knight_mask, pst.knight, phase);
+    if knight_mask != EMPTY {
+        cp += sum_pst(knight_mask, pst.knight, phase);
     }
-    if num_bishops > 0 {
-        pst_value += sum_pst(bishop_mask, pst.bishop, phase);
+    if bishop_mask != EMPTY {
+        cp += sum_pst(bishop_mask, pst.bishop, phase);
     }
-    if num_rooks > 0 {
-        pst_value += sum_pst(rook_mask, pst.rook, phase);
+    if rook_mask != EMPTY {
+        cp += sum_pst(rook_mask, pst.rook, phase);
     }
-    if num_queens > 0 {
-        pst_value += sum_pst(queen_mask, pst.queen, phase);
+    if queen_mask != EMPTY {
+        cp += sum_pst(queen_mask, pst.queen, phase);
     }
-    pst_value += sum_pst(king_mask, pst.king, phase);
+    cp += sum_pst(king_mask, pst.king, phase); // king always present
 
     // bonus for bishop pair
-    let bishop_pair_bonus = if num_bishops >= 2 { 50.0 } else { 0.0 };
+    if bishop_mask.popcnt() >= 2 {
+        cp += 50;
+    }
 
-    return piece_value + pst_value + bishop_pair_bonus;
+    cp
 }
 
-fn evaluate_pawn_structure(board: &Board, color: Color) -> f32 {
+#[inline(always)]
+fn evaluate_pawn_structure(board: &Board, color: Color) -> i16 {
     let my_pawns = board.pieces(Piece::Pawn) & board.color_combined(color);
     if my_pawns == EMPTY {
-        return 0.0;
+        return 0;
     }
 
     let enemy_pawns = board.pieces(Piece::Pawn) & board.color_combined(!color);
-    let mut score = 0.0;
+    let mut score = 0i16;
 
     // doubled / tripled / isolated penalties
     for file_idx in ALL_FILES {
@@ -112,13 +112,13 @@ fn evaluate_pawn_structure(board: &Board, color: Color) -> f32 {
         score -= match cnt {
             1 => {
                 if (my_pawns & get_adjacent_files(file_idx)).popcnt() == 0 {
-                    30.0
+                    30
                 } else {
-                    0.0
+                    0
                 }
             }
-            2 => 20.0,
-            _ => 40.0,
+            2 => 20,
+            _ => 40,
         };
     }
 
@@ -156,6 +156,7 @@ pub const PASSED_PAWN_MASKS: [[BitBoard; 64]; 2] = {
     }
     table
 };
+
 /// Bit-mask of every square that must be free of enemy pawns
 /// for the pawn on (rank_idx, file_idx) to be counted as passed.
 const fn make_passed_pawn_mask(
@@ -179,30 +180,29 @@ const fn make_passed_pawn_mask(
     mask
 }
 
-fn evaluate_king_safety(board: &Board, color: Color) -> f32 {
-    let mut score = 0.0;
+#[inline(always)]
+fn evaluate_king_safety(board: &Board, color: Color) -> i16 {
     let king_square = board.king_square(color);
     let king_zone = KING_ZONES[king_square.to_index()];
     let enemy_color = !color;
     let enemy_pieces = board.color_combined(enemy_color);
 
-    // Weight threats by piece type
-    let enemy_queens = enemy_pieces & board.pieces(Piece::Queen) & king_zone;
-    let enemy_rooks = enemy_pieces & board.pieces(Piece::Rook) & king_zone;
-    let enemy_bishops = enemy_pieces & board.pieces(Piece::Bishop) & king_zone;
-    let enemy_knights = enemy_pieces & board.pieces(Piece::Knight) & king_zone;
-    let enemy_pawns = enemy_pieces & board.pieces(Piece::Pawn) & king_zone;
+    let queens = (enemy_pieces & board.pieces(Piece::Queen) & king_zone).popcnt() as i16;
+    let rooks = (enemy_pieces & board.pieces(Piece::Rook) & king_zone).popcnt() as i16;
+    let bishops = (enemy_pieces & board.pieces(Piece::Bishop) & king_zone).popcnt() as i16;
+    let knights = (enemy_pieces & board.pieces(Piece::Knight) & king_zone).popcnt() as i16;
+    let pawns = (enemy_pieces & board.pieces(Piece::Pawn) & king_zone).popcnt() as i16;
 
-    // Apply different penalties based on piece type
-    score -= (enemy_queens.popcnt() as f32) * piece_value(Piece::Queen);
-    score -= (enemy_rooks.popcnt() as f32) * piece_value(Piece::Rook);
-    score -= (enemy_bishops.popcnt() as f32) * piece_value(Piece::Bishop);
-    score -= (enemy_knights.popcnt() as f32) * piece_value(Piece::Knight);
-    score -= (enemy_pawns.popcnt() as f32) * piece_value(Piece::Pawn);
+    let mut cp = 0i16;
+    cp -= queens * piece_value(Piece::Queen);
+    cp -= rooks * piece_value(Piece::Rook);
+    cp -= bishops * piece_value(Piece::Bishop);
+    cp -= knights * piece_value(Piece::Knight);
+    cp -= pawns * piece_value(Piece::Pawn);
 
-    score * 0.3
+    // Let's do 30% of the value of the pieces
+    (0.3 * (cp as f32)).round() as i16
 }
-
 const KING_ZONE_RADIUS: i8 = 2;
 const KING_ZONES: [BitBoard; 64] = {
     let mut zones = [EMPTY; 64];
@@ -233,37 +233,37 @@ const KING_ZONES: [BitBoard; 64] = {
 };
 
 #[inline(always)]
-fn evaluate_rooks(board: &Board, colour: Color) -> f32 {
-    let rooks = board.pieces(Piece::Rook) & board.color_combined(colour);
+fn evaluate_rooks(board: &Board, color: Color) -> i16 {
+    let rooks = board.pieces(Piece::Rook) & board.color_combined(color);
     if rooks == EMPTY {
-        return 0.0;
+        return 0;
     }
 
-    let our_pawns = board.pieces(Piece::Pawn) & board.color_combined(colour);
-    let their_pawns = board.pieces(Piece::Pawn) & board.color_combined(!colour);
+    let our_pawns = board.pieces(Piece::Pawn) & board.color_combined(color);
+    let their_pawns = board.pieces(Piece::Pawn) & board.color_combined(!color);
 
-    let mut score = 0.0;
+    let mut cp = 0i16;
     for sq in rooks {
         let file_mask = get_file(sq.get_file());
 
         let our_file_pawns = (our_pawns & file_mask).popcnt();
         let their_file_pawns = (their_pawns & file_mask).popcnt();
 
-        score += match (our_file_pawns == 0, their_file_pawns == 0) {
+        cp += match (our_file_pawns == 0, their_file_pawns == 0) {
             (true, true) => ROOK_OPEN_FILE_BONUS,
             (true, false) => ROOK_SEMI_OPEN_FILE_BONUS,
-            _ => 0.0,
+            _ => 0,
         };
 
         // rook on seventh (second for Black)
         let rank = sq.get_rank();
-        if (colour == Color::White && rank == Rank::Seventh)
-            || (colour == Color::Black && rank == Rank::Second)
+        if (color == Color::White && rank == Rank::Seventh)
+            || (color == Color::Black && rank == Rank::Second)
         {
-            score += ROOK_ON_SEVENTH_BONUS;
+            cp += ROOK_ON_SEVENTH_BONUS;
         }
     }
-    score
+    cp
 }
 
 fn game_phase(board: &Board) -> f32 {
