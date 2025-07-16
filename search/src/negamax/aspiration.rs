@@ -67,7 +67,7 @@ impl AspirationWindow {
         }
     }
 
-    pub fn fallback_to_full(&mut self) {
+    pub fn fully_extend(&mut self) {
         self.alpha = NEG_INFINITY;
         self.beta = POS_INFINITY;
     }

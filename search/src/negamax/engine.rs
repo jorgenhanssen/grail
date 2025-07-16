@@ -151,7 +151,7 @@ impl Engine for NegamaxEngine {
                         retries += 1;
 
                         if retries >= ASP_MAX_RETRIES {
-                            self.window.fallback_to_full();
+                            self.window.fully_extend();
                             retries = 0;
                         }
                     }
