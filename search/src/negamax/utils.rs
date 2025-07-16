@@ -2,6 +2,8 @@ use chess::{Board, ChessMove};
 use evaluation::piece_value;
 use uci::commands::Score;
 
+use crate::utils::MAX_PIECE_PRIORITY;
+
 #[inline(always)]
 pub fn see_naive(board: &Board, capture_move: ChessMove) -> i16 {
     if let (Some(captured_piece), Some(capturing_piece)) = (
@@ -20,7 +22,7 @@ pub fn lmr(remaining_depth: u8, score: i16, in_check: bool) -> u8 {
     // - At low depth
     // - In check
     // - Tactical moves (captures, promotions, PV/TT moves with score > 0)
-    if remaining_depth < 3 || in_check || score > 0 {
+    if remaining_depth < 3 || in_check || score > MAX_PIECE_PRIORITY {
         return 0;
     }
 
