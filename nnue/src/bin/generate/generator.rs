@@ -40,7 +40,7 @@ impl Generator {
         Ok(generator)
     }
 
-    pub fn run(&self, duration: u64, depth: u64) -> Vec<(String, i32)> {
+    pub fn run(&self, duration: u64, depth: u8) -> Vec<(String, i32)> {
         let eval_name = match &self.nnue_path {
             Some(path) => path.display().to_string(),
             None => "traditional evaluator".to_string(),
@@ -103,7 +103,7 @@ struct SelfPlayWorker {
     tid: usize,
     global_evaluated: Arc<Mutex<AHashSet<u64>>>,
     engine: NegamaxEngine,
-    depth: u64,
+    depth: u8,
 
     // Specific to ongoing game
     game: Game,
@@ -114,7 +114,7 @@ impl SelfPlayWorker {
     pub fn new(
         tid: usize,
         global_evaluated: Arc<Mutex<AHashSet<u64>>>,
-        depth: u64,
+        depth: u8,
         evaluator: Box<dyn Evaluator>,
     ) -> Self {
         Self {

@@ -16,7 +16,7 @@ pub fn see_naive(board: &Board, capture_move: ChessMove) -> i32 {
 
 // Same as Weiss
 #[inline(always)]
-pub fn calculate_dynamic_lmr_reduction(depth: u64, move_index: usize, score: i32) -> u64 {
+pub fn calculate_dynamic_lmr_reduction(depth: u8, move_index: usize, score: i32) -> u8 {
     // TODO: Fix this later
     return 0;
 

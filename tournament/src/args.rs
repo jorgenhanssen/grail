@@ -6,5 +6,5 @@ use clap::Parser;
 #[command(version = "0.1.0")]
 pub struct Args {
     #[arg(long, default_value_t = 5)]
-    pub depth: u64,
+    pub depth: u8,
 }

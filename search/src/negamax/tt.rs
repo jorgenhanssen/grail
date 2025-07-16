@@ -11,7 +11,7 @@ pub enum Bound {
 
 #[derive(Clone, Copy)]
 pub struct TTEntry {
-    pub plies: u64,
+    pub plies: u8,
     pub value: i32,
     pub best_move: Option<ChessMove>,
     pub bound: Bound,
@@ -19,7 +19,7 @@ pub struct TTEntry {
 
 impl TTEntry {
     #[inline(always)]
-    pub fn new(plies: u64, value: i32, bound: Bound, best_move: Option<ChessMove>) -> Self {
+    pub fn new(plies: u8, value: i32, bound: Bound, best_move: Option<ChessMove>) -> Self {
         Self {
             plies,
             value,

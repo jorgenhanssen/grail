@@ -9,5 +9,5 @@ pub struct Args {
     pub duration: u64,
 
     #[arg(long, default_value_t = 4)]
-    pub depth: u64,
+    pub depth: u8,
 }

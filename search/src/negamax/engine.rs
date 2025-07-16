@@ -36,7 +36,7 @@ pub struct NegamaxEngine {
     tt: AHashMap<u64, TTEntry>,
     qs_tt: AHashMap<u64, i32>,
 
-    max_depth_reached: u64,
+    max_depth_reached: u8,
 
     // move sorting buffer per depth
     preferred_buffer: [Vec<(ChessMove, i32)>; MAX_DEPTH],
@@ -110,7 +110,7 @@ impl Engine for NegamaxEngine {
 
         controller.start_timer();
 
-        let mut depth = 1;
+        let mut depth = 1u8;
         let mut best_move = None;
 
         while !self.stop.load(Ordering::Relaxed) {
@@ -155,7 +155,7 @@ impl NegamaxEngine {
         self.position_stack.push(self.board.get_hash());
     }
 
-    pub fn search_root(&mut self, depth: u64) -> (Option<ChessMove>, i32) {
+    pub fn search_root(&mut self, depth: u8) -> (Option<ChessMove>, i32) {
         let mut alpha = -MATE_VALUE - 1;
         let beta = MATE_VALUE + 1;
 
@@ -205,8 +205,8 @@ impl NegamaxEngine {
     fn search_subtree(
         &mut self,
         board: &Board,
-        depth: u64,
-        max_depth: u64,
+        depth: u8,
+        max_depth: u8,
         mut alpha: i32,
         beta: i32,
     ) -> (i32, Vec<ChessMove>) {
@@ -443,8 +443,8 @@ impl NegamaxEngine {
     fn probe_tt(
         &mut self,
         hash: u64,
-        depth: u64,
-        max_depth: u64,
+        depth: u8,
+        max_depth: u8,
     ) -> Option<(i32, Bound, Option<ChessMove>)> {
         let plies = max_depth - depth;
         if let Some(entry) = self.tt.get(&hash) {
@@ -458,8 +458,8 @@ impl NegamaxEngine {
     fn store_tt(
         &mut self,
         hash: u64,
-        depth: u64,
-        max_depth: u64,
+        depth: u8,
+        max_depth: u8,
         value: i32,
         alpha: i32,
         beta: i32,
@@ -503,7 +503,7 @@ impl NegamaxEngine {
     fn send_search_info(
         &self,
         output: &Sender<UciOutput>,
-        current_depth: u64,
+        current_depth: u8,
         best_score: i32,
         elapsed: std::time::Duration,
     ) {
