@@ -15,7 +15,7 @@ impl Evaluator for TraditionalEvaluator {
         "Traditional".to_string()
     }
 
-    fn evaluate(&mut self, board: &Board) -> i32 {
+    fn evaluate(&mut self, board: &Board) -> i16 {
         evaluate_board(board)
     }
 }

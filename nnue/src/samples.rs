@@ -9,12 +9,12 @@ use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 
 use crate::encoding::{encode_board, NUM_FEATURES};
 
-pub const CP_MAX: i32 = 5000;
-pub const CP_MIN: i32 = -5000;
+pub const CP_MAX: i16 = 5000;
+pub const CP_MIN: i16 = -5000;
 
 #[derive(Clone, Debug)]
 pub struct Samples {
-    pub samples: HashMap<String, i32>,
+    pub samples: HashMap<String, i16>,
 }
 
 impl Samples {
@@ -24,7 +24,7 @@ impl Samples {
         }
     }
 
-    pub fn from_evaluations(evals: &[(String, i32)]) -> Self {
+    pub fn from_evaluations(evals: &[(String, i16)]) -> Self {
         let samples = evals
             .iter()
             .map(|(fen, score)| (fen.clone(), (*score).clamp(CP_MIN, CP_MAX)))
@@ -62,7 +62,7 @@ impl Samples {
                 .next()
                 .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing score field"))?;
 
-            let score: i32 = score_str.trim().parse().map_err(|_| {
+            let score: i16 = score_str.trim().parse().map_err(|_| {
                 io::Error::new(io::ErrorKind::InvalidData, "Score is not a valid integer")
             })?;
 
@@ -171,7 +171,7 @@ impl Samples {
 }
 
 pub struct BatchedSamples<'a> {
-    samples: &'a HashMap<String, i32>,
+    samples: &'a HashMap<String, i16>,
     device: &'a Device,
     batch_size: usize,
     idx: usize,

@@ -40,7 +40,7 @@ impl Generator {
         Ok(generator)
     }
 
-    pub fn run(&self, duration: u64, depth: u8) -> Vec<(String, i32)> {
+    pub fn run(&self, duration: u64, depth: u8) -> Vec<(String, i16)> {
         let eval_name = match &self.nnue_path {
             Some(path) => path.display().to_string(),
             None => "traditional evaluator".to_string(),
@@ -128,7 +128,7 @@ impl SelfPlayWorker {
         }
     }
 
-    pub fn play_games(&mut self, duration: u64, pb: &ProgressBar) -> Vec<(String, i32)> {
+    pub fn play_games(&mut self, duration: u64, pb: &ProgressBar) -> Vec<(String, i16)> {
         let start_time = Instant::now();
         let mut evaluations = Vec::new();
 
@@ -158,7 +158,7 @@ impl SelfPlayWorker {
         evaluations
     }
 
-    fn play_single_move(&mut self, evaluations: &mut Vec<(String, i32)>) -> bool {
+    fn play_single_move(&mut self, evaluations: &mut Vec<(String, i16)>) -> bool {
         if self.game.result().is_some() {
             return true;
         }
@@ -186,8 +186,8 @@ impl SelfPlayWorker {
     fn select_move(
         &mut self,
         board: chess::Board,
-        evaluations: &mut Vec<(String, i32)>,
-    ) -> (ChessMove, i32) {
+        evaluations: &mut Vec<(String, i16)>,
+    ) -> (ChessMove, i16) {
         let moves: Vec<ChessMove> = MoveGen::new_legal(&board).collect();
 
         if self.position_has_been_evaluated(&board) {
@@ -226,7 +226,7 @@ impl SelfPlayWorker {
     }
 
     #[inline]
-    fn get_engine_move(&mut self, board: &Board) -> (ChessMove, i32) {
+    fn get_engine_move(&mut self, board: &Board) -> (ChessMove, i16) {
         self.engine.set_position(*board);
         self.engine.init_search();
 
@@ -234,7 +234,7 @@ impl SelfPlayWorker {
         (mv.unwrap(), score)
     }
 
-    fn should_abort_game(&self, score: &i32) -> bool {
+    fn should_abort_game(&self, score: &i16) -> bool {
         let num_moves: usize = self.positions_in_current_game.len();
 
         // safety net

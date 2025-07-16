@@ -34,12 +34,12 @@ pub struct NegamaxEngine {
     current_pv: Vec<ChessMove>,
 
     tt: AHashMap<u64, TTEntry>,
-    qs_tt: AHashMap<u64, i32>,
+    qs_tt: AHashMap<u64, i16>,
 
     max_depth_reached: u8,
 
     // move sorting buffer per depth
-    preferred_buffer: [Vec<(ChessMove, i32)>; MAX_DEPTH],
+    preferred_buffer: [Vec<(ChessMove, i16)>; MAX_DEPTH],
 
     position_stack: Vec<u64>,
     evaluator: Box<dyn Evaluator>,
@@ -155,7 +155,7 @@ impl NegamaxEngine {
         self.position_stack.push(self.board.get_hash());
     }
 
-    pub fn search_root(&mut self, depth: u8) -> (Option<ChessMove>, i32) {
+    pub fn search_root(&mut self, depth: u8) -> (Option<ChessMove>, i16) {
         let mut alpha = -MATE_VALUE - 1;
         let beta = MATE_VALUE + 1;
 
@@ -207,9 +207,9 @@ impl NegamaxEngine {
         board: &Board,
         depth: u8,
         max_depth: u8,
-        mut alpha: i32,
-        beta: i32,
-    ) -> (i32, Vec<ChessMove>) {
+        mut alpha: i16,
+        beta: i16,
+    ) -> (i16, Vec<ChessMove>) {
         // Check if we should stop searching
         if self.stop.load(Ordering::Relaxed) {
             return (0, Vec::new());
@@ -225,7 +225,7 @@ impl NegamaxEngine {
 
         match board.status() {
             BoardStatus::Checkmate => {
-                return (-MATE_VALUE + depth as i32, Vec::new());
+                return (-MATE_VALUE + depth as i16, Vec::new());
             }
             BoardStatus::Stalemate => {
                 return (0, Vec::new());
@@ -346,10 +346,10 @@ impl NegamaxEngine {
     fn quiescence_search(
         &mut self,
         board: &Board,
-        mut alpha: i32,
-        beta: i32,
+        mut alpha: i16,
+        beta: i16,
         depth: u64,
-    ) -> (i32, Vec<ChessMove>) {
+    ) -> (i16, Vec<ChessMove>) {
         // Check if we should stop searching
         if self.stop.load(Ordering::Relaxed) {
             return (0, Vec::new());
@@ -364,7 +364,7 @@ impl NegamaxEngine {
 
         match board.status() {
             BoardStatus::Checkmate => {
-                return (-MATE_VALUE + depth as i32, Vec::new());
+                return (-MATE_VALUE + depth as i16, Vec::new());
             }
             BoardStatus::Stalemate => {
                 return (0, Vec::new());
@@ -445,7 +445,7 @@ impl NegamaxEngine {
         hash: u64,
         depth: u8,
         max_depth: u8,
-    ) -> Option<(i32, Bound, Option<ChessMove>)> {
+    ) -> Option<(i16, Bound, Option<ChessMove>)> {
         let plies = max_depth - depth;
         if let Some(entry) = self.tt.get(&hash) {
             if entry.plies >= plies {
@@ -460,9 +460,9 @@ impl NegamaxEngine {
         hash: u64,
         depth: u8,
         max_depth: u8,
-        value: i32,
-        alpha: i32,
-        beta: i32,
+        value: i16,
+        alpha: i16,
+        beta: i16,
         best_move: Option<ChessMove>,
     ) {
         let plies = max_depth - depth;
@@ -504,10 +504,10 @@ impl NegamaxEngine {
         &self,
         output: &Sender<UciOutput>,
         current_depth: u8,
-        best_score: i32,
+        best_score: i16,
         elapsed: std::time::Duration,
     ) {
-        let found_checkmate = best_score.abs() >= MATE_VALUE - MAX_DEPTH as i32;
+        let found_checkmate = best_score.abs() >= MATE_VALUE - MAX_DEPTH as i16;
         let nps = (self.nodes as f32 / elapsed.as_secs_f32()) as u32;
 
         output

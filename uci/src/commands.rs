@@ -59,8 +59,8 @@ impl Default for Info {
 
 #[derive(Debug)]
 pub enum Score {
-    Centipawns(i32), // centipawns
-    Mate(i32),       // Positive for mate-in-n, negative for mated-in-n
+    Centipawns(i16), // centipawns
+    Mate(i16),       // Positive for mate-in-n, negative for mated-in-n
 }
 
 #[derive(Debug)]

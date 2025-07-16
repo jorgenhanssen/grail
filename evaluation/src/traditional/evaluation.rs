@@ -11,7 +11,7 @@ use crate::traditional::values::{
 };
 
 // Return final evaluation (positive = good for White, negative = good for Black)
-pub fn evaluate_board(board: &Board) -> i32 {
+pub fn evaluate_board(board: &Board) -> i16 {
     let is_white = board.side_to_move() == Color::White;
 
     match board.status() {
@@ -32,7 +32,7 @@ pub fn evaluate_board(board: &Board) -> i32 {
     let white_mask = board.color_combined(Color::White);
     let black_mask = board.color_combined(Color::Black);
 
-    let mut cp: i32 = 0;
+    let mut cp: i16 = 0;
     cp += evaluate_material(board, Color::White, &white_mask, phase);
     cp -= evaluate_material(board, Color::Black, &black_mask, phase);
 
@@ -49,7 +49,7 @@ pub fn evaluate_board(board: &Board) -> i32 {
 }
 
 #[inline(always)]
-fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard, phase: f32) -> i32 {
+fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard, phase: f32) -> i16 {
     let pawn_mask = board.pieces(Piece::Pawn) & color_mask;
     let knight_mask = board.pieces(Piece::Knight) & color_mask;
     let bishop_mask = board.pieces(Piece::Bishop) & color_mask;
@@ -57,14 +57,14 @@ fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard, phase: 
     let queen_mask = board.pieces(Piece::Queen) & color_mask;
     let king_mask = board.pieces(Piece::King) & color_mask;
 
-    let mut cp = 0i32;
+    let mut cp = 0i16;
 
     // --- Base piece values ------------------------------------------------
-    cp += PAWN_VALUE * pawn_mask.popcnt() as i32;
-    cp += KNIGHT_VALUE * knight_mask.popcnt() as i32;
-    cp += BISHOP_VALUE * bishop_mask.popcnt() as i32;
-    cp += ROOK_VALUE * rook_mask.popcnt() as i32;
-    cp += QUEEN_VALUE * queen_mask.popcnt() as i32;
+    cp += PAWN_VALUE * pawn_mask.popcnt() as i16;
+    cp += KNIGHT_VALUE * knight_mask.popcnt() as i16;
+    cp += BISHOP_VALUE * bishop_mask.popcnt() as i16;
+    cp += ROOK_VALUE * rook_mask.popcnt() as i16;
+    cp += QUEEN_VALUE * queen_mask.popcnt() as i16;
 
     // --- Piece–square tables ---------------------------------------------
     let pst = get_pst(color);
@@ -94,14 +94,14 @@ fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard, phase: 
 }
 
 #[inline(always)]
-fn evaluate_pawn_structure(board: &Board, color: Color) -> i32 {
+fn evaluate_pawn_structure(board: &Board, color: Color) -> i16 {
     let my_pawns = board.pieces(Piece::Pawn) & board.color_combined(color);
     if my_pawns == EMPTY {
         return 0;
     }
 
     let enemy_pawns = board.pieces(Piece::Pawn) & board.color_combined(!color);
-    let mut score = 0i32;
+    let mut score = 0i16;
 
     // doubled / tripled / isolated penalties
     for file_idx in ALL_FILES {
@@ -182,7 +182,7 @@ const fn make_passed_pawn_mask(
 }
 
 #[inline(always)]
-fn evaluate_king_safety(board: &Board, color: Color) -> i32 {
+fn evaluate_king_safety(board: &Board, color: Color) -> i16 {
     let king_square = board.king_square(color);
     let king_zone = KING_ZONES[king_square.to_index()];
     let enemy_color = !color;
@@ -202,7 +202,7 @@ fn evaluate_king_safety(board: &Board, color: Color) -> i32 {
     cp -= knights as f32 * piece_value(Piece::Knight) as f32 * 0.3;
     cp -= pawns as f32 * piece_value(Piece::Pawn) as f32 * 0.3;
 
-    cp.round() as i32
+    cp.round() as i16
 }
 const KING_ZONE_RADIUS: i8 = 2;
 const KING_ZONES: [BitBoard; 64] = {
@@ -234,7 +234,7 @@ const KING_ZONES: [BitBoard; 64] = {
 };
 
 #[inline(always)]
-fn evaluate_rooks(board: &Board, color: Color) -> i32 {
+fn evaluate_rooks(board: &Board, color: Color) -> i16 {
     let rooks = board.pieces(Piece::Rook) & board.color_combined(color);
     if rooks == EMPTY {
         return 0;
@@ -243,7 +243,7 @@ fn evaluate_rooks(board: &Board, color: Color) -> i32 {
     let our_pawns = board.pieces(Piece::Pawn) & board.color_combined(color);
     let their_pawns = board.pieces(Piece::Pawn) & board.color_combined(!color);
 
-    let mut cp = 0i32;
+    let mut cp = 0i16;
     for sq in rooks {
         let file_mask = get_file(sq.get_file());
 
