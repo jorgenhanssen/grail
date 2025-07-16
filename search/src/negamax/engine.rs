@@ -88,14 +88,20 @@ impl Engine for NegamaxEngine {
         self.stop.store(true, Ordering::Relaxed);
     }
 
-    fn search(&mut self, params: &GoParams, output: &Sender<UciOutput>) -> Option<ChessMove> {
+    fn search(
+        &mut self,
+        params: &GoParams,
+        output: Option<&Sender<UciOutput>>,
+    ) -> Option<(ChessMove, i16)> {
         if self.board.status() == BoardStatus::Checkmate {
-            output
-                .send(UciOutput::Info(Info {
-                    score: Score::Mate(0),
-                    ..Default::default()
-                }))
-                .unwrap();
+            if let Some(output) = output {
+                output
+                    .send(UciOutput::Info(Info {
+                        score: Score::Mate(0),
+                        ..Default::default()
+                    }))
+                    .unwrap();
+            }
             return None;
         }
 
@@ -112,6 +118,7 @@ impl Engine for NegamaxEngine {
 
         let mut depth = 1u8;
         let mut best_move = None;
+        let mut best_score = 0;
 
         while !self.stop.load(Ordering::Relaxed) {
             // Check depth limits - this will call on_stop if max depth reached
@@ -129,13 +136,19 @@ impl Engine for NegamaxEngine {
             }
 
             best_move = mv;
-
-            self.send_search_info(output, depth, score, controller.elapsed());
+            best_score = score;
+            if let Some(output) = output {
+                self.send_search_info(output, depth, score, controller.elapsed());
+            }
 
             depth += 1;
         }
 
-        best_move
+        if let Some(mv) = best_move {
+            Some((mv, best_score))
+        } else {
+            None
+        }
     }
 }
 
