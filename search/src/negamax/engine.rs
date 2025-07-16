@@ -1,5 +1,5 @@
 use crate::{
-    utils::{get_ordered_moves, CAPTURE_SCORE},
+    utils::{ordered_moves, CAPTURE_PRIORITY, MAX_PRIORITY},
     Engine,
 };
 use ahash::AHashMap;
@@ -165,7 +165,7 @@ impl NegamaxEngine {
         if let Some(&pv) = self.current_pv.first() {
             pref.push((pv, POS_INFINITY));
         }
-        let moves_with_scores = get_ordered_moves(&self.board, Some(&pref[..]), None);
+        let moves_with_scores = ordered_moves(&self.board, Some(&pref[..]), None);
 
         if moves_with_scores.is_empty() {
             return (None, 0);
@@ -266,12 +266,12 @@ impl NegamaxEngine {
 
         // First priority is the current PV move
         if let Some(&move_) = self.current_pv.get(depth as usize) {
-            pref.push((move_, POS_INFINITY));
+            pref.push((move_, MAX_PRIORITY + 2));
         }
 
         // Then any hash move from the tt
         if let Some(tt_move) = maybe_tt_move {
-            pref.push((tt_move, POS_INFINITY - 1));
+            pref.push((tt_move, MAX_PRIORITY + 1));
         }
 
         //  Killer moves for this specific depth if they are legal
@@ -279,12 +279,12 @@ impl NegamaxEngine {
             if let Some(killer_move) = killer_move_opt {
                 let already_there = pref.iter().any(|&(pm, _)| pm == killer_move);
                 if !already_there {
-                    pref.push((killer_move, CAPTURE_SCORE - 2));
+                    pref.push((killer_move, CAPTURE_PRIORITY - 1));
                 }
             }
         }
 
-        let moves = get_ordered_moves(board, Some(&pref[..]), None);
+        let moves = ordered_moves(board, Some(&pref[..]), None);
 
         if moves.is_empty() {
             return (0, Vec::new());
@@ -402,7 +402,7 @@ impl NegamaxEngine {
         } else {
             Some(*board.color_combined(!board.side_to_move())) // Only captures
         };
-        let forcing_moves = get_ordered_moves(board, None, mask);
+        let forcing_moves = ordered_moves(board, None, mask);
 
         for (mv, _) in forcing_moves {
             if !in_check && see_naive(board, mv) < 0 {
