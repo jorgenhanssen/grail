@@ -117,9 +117,9 @@ impl Engine for NegamaxEngine {
         controller.on_stop(move || stop.store(true, Ordering::Relaxed));
         controller.start_timer();
 
-        let mut depth: u8 = 1;
+        let mut depth = 1;
         let mut best_move = None;
-        let mut best_score: i16 = 0;
+        let mut best_score = 0;
 
         while !self.stop.load(Ordering::Relaxed) {
             controller.check_depth(depth);
@@ -134,14 +134,12 @@ impl Engine for NegamaxEngine {
                 let (alpha, beta) = self.window.bounds();
                 let (mv, score) = self.search_root(depth, alpha, beta);
 
-                // Stop conditions
-                if mv.is_none() || self.stop.load(Ordering::Relaxed) {
+                if mv.is_none() {
                     break;
                 }
 
                 match self.window.analyse_pass(score) {
                     Pass::Hit(s) => {
-                        // exact score - depth finished
                         best_move = mv;
                         best_score = s;
                         if let Some(out) = output {
@@ -149,16 +147,13 @@ impl Engine for NegamaxEngine {
                         }
                         break;
                     }
-
-                    // miss - widen and maybe fall back
                     _ => {
                         retries += 1;
 
                         if retries >= ASP_MAX_RETRIES {
                             self.window.fallback_to_full();
-                            retries = 0; // reset so we do not overflow
+                            retries = 0;
                         }
-                        // continue with wider window
                     }
                 }
             }
