@@ -59,14 +59,12 @@ fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard, phase: 
 
     let mut cp = 0i16;
 
-    // --- Base piece values ------------------------------------------------
     cp += PAWN_VALUE * pawn_mask.popcnt() as i16;
     cp += KNIGHT_VALUE * knight_mask.popcnt() as i16;
     cp += BISHOP_VALUE * bishop_mask.popcnt() as i16;
     cp += ROOK_VALUE * rook_mask.popcnt() as i16;
     cp += QUEEN_VALUE * queen_mask.popcnt() as i16;
 
-    // --- Piece–square tables ---------------------------------------------
     let pst = get_pst(color);
     if pawn_mask != EMPTY {
         cp += sum_pst(pawn_mask, pst.pawn, phase);
@@ -85,7 +83,7 @@ fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard, phase: 
     }
     cp += sum_pst(king_mask, pst.king, phase); // king always present
 
-    // --- Bishop pair bonus ----------------------------------------------
+    // bonus for bishop pair
     if bishop_mask.popcnt() >= 2 {
         cp += 50;
     }
@@ -128,6 +126,7 @@ fn evaluate_pawn_structure(board: &Board, color: Color) -> i16 {
     for sq in my_pawns {
         let blockers = PASSED_PAWN_MASKS[color as usize][sq.to_index()];
         if (enemy_pawns & blockers).popcnt() == 0 {
+            // convert to white’s perspective: rank 0..7
             let rank_from_white = if color == Color::White {
                 sq.get_rank() as usize
             } else {
