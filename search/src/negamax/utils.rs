@@ -1,4 +1,4 @@
-use chess::{Board, ChessMove};
+use chess::{Board, ChessMove, Piece};
 use evaluation::piece_value;
 use uci::commands::Score;
 
@@ -44,4 +44,14 @@ pub fn convert_mate_score(score: i16, pv: &Vec<ChessMove>) -> Score {
 #[inline(always)]
 pub fn convert_centipawn_score(score: i16) -> Score {
     Score::Centipawns(score)
+}
+
+#[inline(always)]
+pub fn is_zugzwang(board: &Board) -> bool {
+    let side_bits = *board.color_combined(board.side_to_move());
+    let pawn_bits = *board.pieces(Piece::Pawn) & side_bits;
+    let king_bits = *board.pieces(Piece::King) & side_bits;
+
+    // King + pawn endgame is typical zugzwang
+    (side_bits ^ pawn_bits ^ king_bits).popcnt() == 0
 }
