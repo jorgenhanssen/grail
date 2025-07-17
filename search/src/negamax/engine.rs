@@ -264,7 +264,7 @@ impl NegamaxEngine {
             BoardStatus::Ongoing => {}
         }
         if depth >= max_depth {
-            return self.quiescence_search(board, alpha, beta, 1);
+            return self.quiescence_search(board, alpha, beta, depth);
         }
 
         // Transposition table probe
@@ -287,10 +287,10 @@ impl NegamaxEngine {
         }
 
         // Null-move pruning
-        if let Some(score) =
-            self.try_null_move_pruning(board, depth, max_depth, alpha, beta, hash, try_null_move)
-        {
-            return (score, Vec::new());
+        if try_null_move {
+            if let Some(score) = self.try_null_move(board, depth, max_depth, alpha, beta, hash) {
+                return (score, Vec::new());
+            }
         }
 
         self.max_depth_reached = self.max_depth_reached.max(depth);
@@ -375,7 +375,7 @@ impl NegamaxEngine {
         board: &Board,
         mut alpha: i16,
         beta: i16,
-        depth: u64,
+        depth: u8,
     ) -> (i16, Vec<ChessMove>) {
         // Check if we should stop searching
         if self.stop.load(Ordering::Relaxed) {
@@ -383,6 +383,7 @@ impl NegamaxEngine {
         }
 
         self.nodes += 1;
+        self.max_depth_reached = self.max_depth_reached.max(depth);
 
         let hash = *self.position_stack.last().unwrap();
         if self.is_cycle(hash) {
@@ -555,7 +556,7 @@ impl NegamaxEngine {
     }
 
     #[inline(always)]
-    fn try_null_move_pruning(
+    fn try_null_move(
         &mut self,
         board: &Board,
         depth: u8,
@@ -563,13 +564,8 @@ impl NegamaxEngine {
         alpha: i16,
         beta: i16,
         hash: u64,
-        allow_null_move: bool,
     ) -> Option<i16> {
         // Null move pruning: if giving opponent a free move still can't reach beta, we can prune
-
-        if !allow_null_move {
-            return None;
-        }
 
         let remaining_depth = max_depth - depth;
         let in_check = board.checkers().popcnt() > 0;
