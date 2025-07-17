@@ -48,7 +48,7 @@ pub fn convert_centipawn_score(score: i16) -> Score {
 
 #[inline(always)]
 pub fn can_null_move_prune(board: &Board, remaining_depth: u8, in_check: bool) -> bool {
-    remaining_depth > 3 && !in_check && !is_zugzwang(board)
+    remaining_depth >= 3 && !in_check && !is_zugzwang(board)
 }
 
 #[inline(always)]
