@@ -212,7 +212,8 @@ impl NegamaxEngine {
             let new_board = self.board.make_move_new(m);
 
             self.position_stack.push(new_board.get_hash());
-            let (child_value, mut pv) = self.search_subtree(&new_board, 1, depth, -beta, -alpha);
+            let (child_value, mut pv) =
+                self.search_subtree(&new_board, 1, depth, -beta, -alpha, true);
             let score = -child_value;
             self.position_stack.pop();
 
@@ -242,6 +243,7 @@ impl NegamaxEngine {
         max_depth: u8,
         mut alpha: i16,
         beta: i16,
+        try_null_move: bool,
     ) -> (i16, Vec<ChessMove>) {
         if self.stop.load(Ordering::Relaxed) {
             return (0, Vec::new());
@@ -283,7 +285,8 @@ impl NegamaxEngine {
         }
 
         // Null-move pruning
-        if let Some(score) = self.try_null_move_pruning(board, depth, max_depth, alpha, beta, hash)
+        if let Some(score) =
+            self.try_null_move_pruning(board, depth, max_depth, alpha, beta, hash, try_null_move)
         {
             return (score, Vec::new());
         }
@@ -328,7 +331,7 @@ impl NegamaxEngine {
             let new_board = board.make_move_new(m);
             self.position_stack.push(new_board.get_hash());
             let (child_value, mut line) =
-                self.search_subtree(&new_board, depth + 1, child_max_depth, -beta, -alpha);
+                self.search_subtree(&new_board, depth + 1, child_max_depth, -beta, -alpha, true);
             self.position_stack.pop();
 
             if self.stop.load(Ordering::Relaxed) {
@@ -558,8 +561,13 @@ impl NegamaxEngine {
         alpha: i16,
         beta: i16,
         hash: u64,
+        allow_null_move: bool,
     ) -> Option<i16> {
         // Null move pruning: if giving opponent a free move still can't reach beta, we can prune
+
+        if !allow_null_move {
+            return None;
+        }
 
         let remaining_depth = max_depth - depth;
         let in_check = board.checkers().popcnt() > 0;
@@ -584,6 +592,7 @@ impl NegamaxEngine {
                 max_depth - r,
                 -beta,
                 -beta + 1, // null window
+                false,     // Null moves cannot be done in sequence, so disable for next move
             );
             self.position_stack.pop();
 
