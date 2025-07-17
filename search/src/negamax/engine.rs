@@ -3,7 +3,7 @@ use crate::{
         aspiration::{
             AspirationWindow, Pass, ASP_ENABLED_FROM, ASP_HALF_START, ASP_MAX_RETRIES, ASP_WIDEN,
         },
-        utils::{can_null_move_prune, is_zugzwang},
+        utils::can_null_move_prune,
     },
     utils::{ordered_moves, CAPTURE_PRIORITY, MAX_PRIORITY},
     Engine,
@@ -176,7 +176,7 @@ impl NegamaxEngine {
         self.stop.store(false, Ordering::Relaxed);
 
         self.tt.clear();
-        // Don't clear qs_tt - capture sequences are deterministic
+        self.qs_tt.clear();
 
         self.killer_moves = [[None; 2]; MAX_DEPTH]; // 2 killer moves per depth
         self.nodes = 0;
