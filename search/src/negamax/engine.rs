@@ -174,8 +174,10 @@ impl NegamaxEngine {
     #[inline(always)]
     pub fn init_search(&mut self) {
         self.stop.store(false, Ordering::Relaxed);
+
         self.tt.clear();
-        self.qs_tt.clear();
+        // Don't clear qs_tt - capture sequences are deterministic
+
         self.killer_moves = [[None; 2]; MAX_DEPTH]; // 2 killer moves per depth
         self.nodes = 0;
         self.max_depth_reached = 1;
