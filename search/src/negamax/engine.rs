@@ -1,8 +1,10 @@
 use crate::{
-    negamax::aspiration::{
-        AspirationWindow, Pass, ASP_ENABLED_FROM, ASP_HALF_START, ASP_MAX_RETRIES, ASP_WIDEN,
+    negamax::{
+        aspiration::{
+            AspirationWindow, Pass, ASP_ENABLED_FROM, ASP_HALF_START, ASP_MAX_RETRIES, ASP_WIDEN,
+        },
+        utils::{can_null_move_prune, is_zugzwang},
     },
-    negamax::utils::is_zugzwang,
     utils::{ordered_moves, CAPTURE_PRIORITY, MAX_PRIORITY},
     Engine,
 };
@@ -285,8 +287,11 @@ impl NegamaxEngine {
         }
 
         // Null-move pruning
-        if try_null_move {
-            if let Some(score) = self.try_null_move(board, depth, max_depth, alpha, beta, hash) {
+        let remaining_depth = max_depth - depth;
+        let in_check = board.checkers().popcnt() > 0;
+
+        if try_null_move && can_null_move_prune(board, remaining_depth, in_check) {
+            if let Some(score) = self.null_move_prune(board, depth, max_depth, alpha, beta, hash) {
                 return (score, Vec::new());
             }
         }
@@ -319,10 +324,6 @@ impl NegamaxEngine {
         if moves.is_empty() {
             return (0, Vec::new());
         }
-
-        // TODO: Move above null move pruning and re-use
-        let remaining_depth = max_depth - depth;
-        let in_check = board.checkers().popcnt() > 0;
 
         let mut best_value = NEG_INFINITY;
         let mut best_move = None;
@@ -570,7 +571,7 @@ impl NegamaxEngine {
     }
 
     #[inline(always)]
-    fn try_null_move(
+    fn null_move_prune(
         &mut self,
         board: &Board,
         depth: u8,
@@ -581,16 +582,8 @@ impl NegamaxEngine {
     ) -> Option<i16> {
         // Null move pruning: if giving opponent a free move still can't reach beta, we can prune
 
-        let remaining_depth = max_depth - depth;
-        let in_check = board.checkers().popcnt() > 0;
-
-        // We should not prune if we are in zugzwang, in check or near the horizon
-        if remaining_depth < 3 || in_check || is_zugzwang(board) {
-            return None;
-        }
-
         // Less reduction near horizon
-        let r = match remaining_depth {
+        let r = match max_depth - depth {
             3..7 => 2,
             _ => 3,
         };

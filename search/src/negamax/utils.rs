@@ -47,6 +47,11 @@ pub fn convert_centipawn_score(score: i16) -> Score {
 }
 
 #[inline(always)]
+pub fn can_null_move_prune(board: &Board, remaining_depth: u8, in_check: bool) -> bool {
+    remaining_depth > 3 && !in_check && !is_zugzwang(board)
+}
+
+#[inline(always)]
 pub fn is_zugzwang(board: &Board) -> bool {
     let side_bits = *board.color_combined(board.side_to_move());
     let pawn_bits = *board.pieces(Piece::Pawn) & side_bits;
