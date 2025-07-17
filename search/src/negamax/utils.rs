@@ -18,15 +18,11 @@ pub fn see_naive(board: &Board, capture_move: ChessMove) -> i16 {
 
 #[inline(always)]
 pub fn lmr(remaining_depth: u8, score: i16, check: bool) -> u8 {
-    // Don't reduce if:
-    // - At low depth
-    // - In check
-    // - Tactical moves (captures, promotions, PV/TT moves with score > 0)
-    if remaining_depth < 3 || check || score > MAX_PIECE_PRIORITY {
+    // Don't reduce if check, near horizon, or tactical moves
+    if check || remaining_depth < 3 || score > MAX_PIECE_PRIORITY {
         return 0;
     }
 
-    // Reduce quiet moves by 1 ply.
     return 1;
 }
 
