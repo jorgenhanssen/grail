@@ -330,7 +330,7 @@ impl NegamaxEngine {
 
         for (m, score) in moves {
             let new_board = board.make_move_new(m);
-            let gives_check = board.checkers().popcnt() > 0;
+            let gives_check = new_board.checkers().popcnt() > 0;
 
             let reduction = lmr(remaining_depth, score, in_check || gives_check);
             let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
