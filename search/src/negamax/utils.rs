@@ -47,5 +47,8 @@ pub fn convert_centipawn_score(score: i16) -> Score {
 pub fn is_zugzwang(board: &Board) -> bool {
     let side_bits = *board.color_combined(board.side_to_move());
     let pawn_bits = *board.pieces(Piece::Pawn) & side_bits;
-    (side_bits ^ pawn_bits).popcnt() == 0
+    let king_bits = *board.pieces(Piece::King) & side_bits;
+
+    // King + pawn endgame is typical zugzwang
+    (side_bits ^ pawn_bits ^ king_bits).popcnt() == 0
 }
