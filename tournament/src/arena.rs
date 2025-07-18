@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use chess::Game;
 use search::{Engine, NegamaxEngine};
+use uci::commands::GoParams;
 
 pub struct Arena {
     engines: Vec<NegamaxEngine>,
@@ -89,10 +90,14 @@ impl Arena {
             };
 
             player.set_position(board);
-            player.init_search();
 
-            let (mv, _) = player.search_root(depth);
-            game.make_move(mv.unwrap());
+            let params = GoParams {
+                depth: Some(depth),
+                ..Default::default()
+            };
+
+            let (mv, _) = player.search(&params, None).unwrap();
+            game.make_move(mv);
 
             num_moves += 1;
         }
