@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 
 #[derive(Parser, Debug)]
@@ -5,6 +7,12 @@ use clap::Parser;
 #[command(author = "Jørgen Hanssen <jorgen@hanssen.io>")]
 #[command(version = "0.1.0")]
 pub struct Args {
-    #[arg(long, default_value_t = 5)]
-    pub depth: u8,
+    #[arg(long, default_value_t = 1000)]
+    pub move_time: u64,
+
+    #[arg(long, short = 'a')]
+    pub engine_a: PathBuf,
+
+    #[arg(long, short = 'b')]
+    pub engine_b: PathBuf,
 }
