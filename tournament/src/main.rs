@@ -5,7 +5,6 @@ mod outcome;
 mod pairing;
 mod positions;
 mod summary;
-mod utils;
 
 use std::{error::Error, fs::File, io::Write};
 
@@ -21,7 +20,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let positions = get_positions();
 
-    let pairing = Pairing::new(positions, args.a, args.b, args.move_time);
+    let pairing = Pairing::new(positions, args.engine_a, args.engine_b, args.move_time);
 
     let outcomes = pairing.run();
     let summary = Summary::new(&outcomes);

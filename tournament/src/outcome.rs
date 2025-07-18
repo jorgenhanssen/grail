@@ -1,11 +1,12 @@
 use std::fmt;
 
-use chess::{Board, ChessMove, Color, File, GameResult, MoveGen, Piece, Rank, Square};
+use chess::{Board, ChessMove, File, GameResult, MoveGen, Piece, Rank, Square};
 
-use crate::utils::index_to_color;
+const STANDARD_POSITION_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 #[derive(Debug)]
 pub struct GameOutcome {
+    pub starting_position: String,
     pub white_name: String,
     pub black_name: String,
     pub result: GameResult,
@@ -15,7 +16,7 @@ pub struct GameOutcome {
 
 impl GameOutcome {
     pub fn to_pgn(&self) -> String {
-        let mut pgn = String::new();
+        let mut pgn = String::with_capacity(512);
 
         pgn.push_str(&format!("[White \"{}\"]\n", self.white_name));
         pgn.push_str(&format!("[Black \"{}\"]\n", self.black_name));
@@ -23,19 +24,63 @@ impl GameOutcome {
         let result_str = game_result_to_pgn(self.result);
         pgn.push_str(&format!("[Result \"{}\"]\n", result_str));
 
-        pgn.push_str("\n");
+        // Add variant and FEN headers if not starting from standard position
+        let is_standard_position = self.starting_position == STANDARD_POSITION_FEN;
+
+        if !is_standard_position {
+            pgn.push_str("[Variant \"From Position\"]\n");
+            pgn.push_str(&format!("[FEN \"{}\"]\n", &self.starting_position));
+        }
+
+        pgn.push('\n');
+
+        // Extract fullmove number from original FEN (last component, safer than index 5)
+        let fen_parts: Vec<&str> = self.starting_position.split_whitespace().collect();
+        let starting_move_number: u32 = fen_parts.last().and_then(|s| s.parse().ok()).unwrap_or(1);
+
+        // Check if the starting position has white or black to move (from original FEN part 1)
+        let starting_color_str = fen_parts.get(1).unwrap_or(&"w");
+        let white_started = *starting_color_str == "w";
+
+        // Build movetext separately to allow trimming trailing space
+        let mut movetext = String::with_capacity(256);
 
         for (i, mv) in self.moves.iter().enumerate() {
             let board = &self.positions[i];
             let san_move = to_san(board, *mv);
 
-            match index_to_color(i % 2) {
-                Color::White => pgn.push_str(&format!("{}. {} ", (i / 2) + 1, san_move)),
-                Color::Black => pgn.push_str(&format!("{} ", san_move)),
+            // In PGN if black started, the first move skips white and is noted as N... MOVE
+            if i == 0 && !white_started {
+                movetext.push_str(&format!("{}... {} ", starting_move_number, san_move));
+                continue;
+            }
+
+            let move_number = if white_started {
+                starting_move_number + (i / 2) as u32
+            } else {
+                starting_move_number + ((i + 1) / 2) as u32
+            };
+
+            // Determine if this is the start of a pair (white's move, needs "N. " prefix)
+            let is_prefix_move = if white_started {
+                i % 2 == 0
+            } else {
+                i % 2 != 0
+            };
+
+            if is_prefix_move {
+                movetext.push_str(&format!("{}. {} ", move_number, san_move));
+            } else {
+                movetext.push_str(&format!("{} ", san_move));
             }
         }
 
-        pgn.push_str(&format!("{}", result_str));
+        let movetext = movetext.trim_end();
+        pgn.push_str(movetext);
+        if !movetext.is_empty() {
+            pgn.push(' ');
+        }
+        pgn.push_str(result_str);
 
         pgn
     }

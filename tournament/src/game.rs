@@ -1,8 +1,7 @@
-use std::{error::Error, path::PathBuf, str::FromStr};
+use chess::Game;
+use std::{collections::HashMap, error::Error, path::Path, str::FromStr};
 
-use chess::Board;
-
-use crate::{engine::EngineProcess, outcome::GameOutcome, utils::color_to_index};
+use crate::{engine::EngineProcess, outcome::GameOutcome};
 
 #[derive(Debug)]
 pub struct GameArgs {
@@ -11,60 +10,62 @@ pub struct GameArgs {
 }
 
 pub struct GameRunner {
-    white: PathBuf,
-    black: PathBuf,
+    white: String,
+    black: String,
 }
 
 impl GameRunner {
-    pub fn new(white: PathBuf, black: PathBuf) -> Self {
-        Self { white, black }
+    pub fn new(white: impl AsRef<Path>, black: impl AsRef<Path>) -> Self {
+        Self {
+            white: white.as_ref().to_string_lossy().to_string(),
+            black: black.as_ref().to_string_lossy().to_string(),
+        }
     }
 
     pub fn run(&self, args: GameArgs) -> Result<GameOutcome, Box<dyn Error>> {
-        use chess::Game;
+        let mut game =
+            Game::from_str(&args.start_position_fen).map_err(|e| format!("Invalid FEN: {}", e))?;
+
+        let mut white_engine = EngineProcess::new(&self.white)?;
+        let mut black_engine = EngineProcess::new(&self.black)?;
 
         let mut moves_played = Vec::new();
         let mut positions = Vec::new();
+        let mut position_counts = HashMap::new();
 
-        let mut game = match Game::from_str(&args.start_position_fen) {
-            Ok(game) => game,
-            Err(e) => return Err(format!("Invalid FEN: {}", e).into()),
-        };
-
-        let mut players = [
-            (EngineProcess::new(&self.white)?),
-            (EngineProcess::new(&self.black)?),
-        ];
+        let initial_board = game.current_position();
+        positions.push(initial_board);
+        *position_counts.entry(initial_board).or_insert(0) += 1;
 
         while game.result().is_none() {
             let board = game.current_position();
-
-            if has_threefold_repetition(&positions, &board) {
-                game.declare_draw();
-            }
-
-            positions.push(board);
-
-            let player = &mut players[color_to_index(board.side_to_move())];
-            let mv = player.best_move(&board.to_string(), args.move_time);
+            let engine = match board.side_to_move() {
+                chess::Color::White => &mut white_engine,
+                chess::Color::Black => &mut black_engine,
+            };
+            let mv = engine.best_move(&board.to_string(), args.move_time)?;
 
             game.make_move(mv);
             moves_played.push(mv);
+
+            let new_board = game.current_position();
+            positions.push(new_board);
+            *position_counts.entry(new_board).or_insert(0) += 1;
+
+            if position_counts[&new_board] >= 3 {
+                game.declare_draw();
+            }
         }
 
-        let result = game.result().unwrap();
+        let result = game.result().ok_or("Game ended without a result")?;
 
         Ok(GameOutcome {
-            white_name: self.white.to_string_lossy().to_string(),
-            black_name: self.black.to_string_lossy().to_string(),
+            starting_position: args.start_position_fen,
+            white_name: self.white.clone(),
+            black_name: self.black.clone(),
             result,
             moves: moves_played,
             positions,
         })
     }
-}
-
-#[inline]
-fn has_threefold_repetition(positions: &Vec<Board>, current_position: &Board) -> bool {
-    positions.iter().filter(|&p| p == current_position).count() >= 3
 }

@@ -1,10 +1,13 @@
-use std::error::Error;
-use std::io::{BufRead, BufReader, BufWriter, Write};
-use std::path::PathBuf;
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
-
 use chess::ChessMove;
-use std::str::FromStr;
+use std::{
+    error::Error,
+    io::{self, BufRead, BufReader, BufWriter, Write},
+    path::Path,
+    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    str::FromStr,
+    thread,
+    time::Duration,
+};
 
 pub struct EngineProcess {
     child: Child,
@@ -13,81 +16,78 @@ pub struct EngineProcess {
 }
 
 impl EngineProcess {
-    pub fn new(path: &PathBuf) -> Result<Self, Box<dyn Error>> {
+    pub fn new(path: impl AsRef<Path>) -> io::Result<Self> {
+        let path = path.as_ref();
         let mut child = Command::new(path)
             .arg("negamax")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()?;
 
-        let stdin = BufWriter::new(child.stdin.take().expect("Failed to open stdin"));
-        let stdout = BufReader::new(child.stdout.take().expect("Failed to open stdout"));
+        let stdin = child.stdin.take().ok_or(io::Error::new(
+            io::ErrorKind::BrokenPipe,
+            "Failed to open stdin",
+        ))?;
+        let stdout = child.stdout.take().ok_or(io::Error::new(
+            io::ErrorKind::BrokenPipe,
+            "Failed to open stdout",
+        ))?;
 
         Ok(Self {
             child,
-            stdin,
-            stdout,
+            stdin: BufWriter::new(stdin),
+            stdout: BufReader::new(stdout),
         })
     }
 
-    #[inline]
-    fn send_command(&mut self, command: &str) {
-        self.stdin
-            .write_all(command.as_bytes())
-            .expect("Failed to write to stdin");
-        self.stdin.flush().expect("Failed to flush stdin");
+    fn send_command(&mut self, command: &str) -> io::Result<()> {
+        self.stdin.write_all(command.as_bytes())?;
+        self.stdin.flush()?;
+        Ok(())
     }
 
-    #[inline]
-    fn read_line(&mut self) -> String {
+    fn read_line(&mut self) -> io::Result<String> {
         let mut line = String::new();
-        self.stdout
-            .read_line(&mut line)
-            .expect("Failed to read line");
-
-        line.trim().to_string()
+        self.stdout.read_line(&mut line)?;
+        Ok(line.trim().to_string())
     }
 
-    pub fn best_move(&mut self, fen: &str, time: u64) -> ChessMove {
-        self.send_command(&format!("position fen {}\n", fen));
-        self.send_command(&format!("go movetime {}\n", time));
+    pub fn best_move(&mut self, fen: &str, time: u64) -> Result<ChessMove, Box<dyn Error>> {
+        self.send_command(&format!("position fen {}\n", fen))?;
+        self.send_command(&format!("go movetime {}\n", time))?;
 
-        let mut line = String::new();
-        while !line.contains("bestmove") {
-            line = self.read_line();
+        loop {
+            let line = self.read_line()?;
+            if line.starts_with("bestmove") {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    match ChessMove::from_str(parts[1]) {
+                        Ok(mv) => return Ok(mv),
+                        Err(_) => return Err("Unable to parse move".into()),
+                    }
+                } else {
+                    return Err("Invalid bestmove response".into());
+                }
+            }
         }
-
-        let txt = line.split("bestmove ").nth(1).unwrap().to_string();
-        ChessMove::from_str(&txt).unwrap()
     }
 }
 
 impl Drop for EngineProcess {
     fn drop(&mut self) {
-        // Send quit command to gracefully shutdown the engine
-        if let Err(_) = self.stdin.write_all(b"quit\n") {
-            // If we can't send quit, force kill the process
-            let _ = self.child.kill();
-        } else {
-            let _ = self.stdin.flush();
-            // Give the engine a moment to quit gracefully
-            std::thread::sleep(std::time::Duration::from_millis(100));
+        // Attempt to send quit command
+        if self.send_command("quit\n").is_ok() {
+            // Give the engine time to shut down
+            thread::sleep(Duration::from_millis(100));
 
-            // Check if the process has exited
-            match self.child.try_wait() {
-                Ok(Some(_)) => {
-                    // Process has exited
-                }
-                Ok(None) => {
-                    // Process is still running, force kill it
-                    let _ = self.child.kill();
-                    let _ = self.child.wait();
-                }
-                Err(_) => {
-                    // Error checking status, try to kill it
-                    let _ = self.child.kill();
-                }
+            // Check if process has exited
+            if let Ok(Some(_)) = self.child.try_wait() {
+                return;
             }
         }
+
+        // If quit failed or process still running, kill it
+        let _ = self.child.kill();
+        let _ = self.child.wait();
     }
 }

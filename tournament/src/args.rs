@@ -10,9 +10,9 @@ pub struct Args {
     #[arg(long, default_value_t = 1000)]
     pub move_time: u64,
 
-    #[arg(long)]
-    pub a: PathBuf,
+    #[arg(long, short = 'a')]
+    pub engine_a: PathBuf,
 
-    #[arg(long)]
-    pub b: PathBuf,
+    #[arg(long, short = 'b')]
+    pub engine_b: PathBuf,
 }
