@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let outcomes = pairing.run();
     let summary = Summary::new(&outcomes);
 
-    println!("{}", summary);
+    println!("\n\n{}", summary);
     save_tournament_games(&outcomes)?;
 
     Ok(())

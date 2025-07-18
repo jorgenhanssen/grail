@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt};
 
-use chess::GameResult;
+use chess::{Color, GameResult};
 
 use crate::outcome::GameOutcome;
 
@@ -9,16 +9,40 @@ struct EngineSummary {
     wins_as_white: u32,
     wins_as_black: u32,
     draws: u32,
-    games_played: u32,
+    num_games: u32,
 }
 
 impl EngineSummary {
-    fn score(&self) -> f64 {
-        (self.wins_as_white + self.wins_as_black) as f64 + (self.draws as f64 * 0.5)
+    fn record_game(&mut self, result: GameResult, playing_as: Color) {
+        self.num_games += 1;
+
+        if is_draw(result) {
+            self.draws += 1;
+        } else if is_win_for(result, playing_as) {
+            match playing_as {
+                Color::White => self.wins_as_white += 1,
+                Color::Black => self.wins_as_black += 1,
+            }
+        }
     }
 
+    #[inline]
+    fn score(&self) -> f64 {
+        self.total_wins() as f64 + self.draws as f64 * 0.5
+    }
+
+    #[inline]
     fn total_wins(&self) -> u32 {
         self.wins_as_white + self.wins_as_black
+    }
+
+    #[inline]
+    fn win_rate(&self) -> f64 {
+        if self.num_games == 0 {
+            0.0
+        } else {
+            (self.total_wins() as f64 / self.num_games as f64) * 100.0
+        }
     }
 }
 
@@ -28,30 +52,21 @@ pub struct Summary {
 }
 
 impl Summary {
-    pub fn new(outcomes: &Vec<GameOutcome>) -> Self {
-        let mut engines = HashMap::<String, EngineSummary>::new();
+    pub fn new(outcomes: &[GameOutcome]) -> Self {
+        let mut engines = HashMap::new();
 
         for outcome in outcomes {
-            let white_entry = engines.entry(outcome.white_name.clone()).or_default();
-            let black_entry = engines.entry(outcome.black_name.clone()).or_default();
+            // Record game for white engine
+            engines
+                .entry(outcome.white_name.clone())
+                .or_insert_with(EngineSummary::default)
+                .record_game(outcome.result, Color::White);
 
-            // Increment games played for both engines
-            white_entry.games_played += 1;
-            black_entry.games_played += 1;
-
-            // Update statistics based on game result
-            match outcome.result {
-                GameResult::WhiteCheckmates | GameResult::BlackResigns => {
-                    white_entry.wins_as_white += 1;
-                }
-                GameResult::BlackCheckmates | GameResult::WhiteResigns => {
-                    black_entry.wins_as_black += 1;
-                }
-                GameResult::DrawDeclared | GameResult::DrawAccepted | GameResult::Stalemate => {
-                    white_entry.draws += 1;
-                    black_entry.draws += 1;
-                }
-            }
+            // Record game for black engine
+            engines
+                .entry(outcome.black_name.clone())
+                .or_insert_with(EngineSummary::default)
+                .record_game(outcome.result, Color::Black);
         }
 
         Summary {
@@ -60,16 +75,14 @@ impl Summary {
         }
     }
 
-    pub fn get_engine_summary(&self, engine_name: &str) -> Option<&EngineSummary> {
-        self.engines.get(engine_name)
-    }
-
-    pub fn get_sorted_engines(&self) -> Vec<(&String, &EngineSummary)> {
+    #[inline]
+    fn get_sorted_engines(&self) -> Vec<(&String, &EngineSummary)> {
         let mut engines: Vec<_> = self.engines.iter().collect();
         engines.sort_by(|a, b| {
             b.1.score()
                 .partial_cmp(&a.1.score())
                 .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.0.cmp(b.0))
         });
         engines
     }
@@ -85,29 +98,32 @@ impl fmt::Display for Summary {
         let sorted_engines = self.get_sorted_engines();
 
         for (rank, (engine_name, summary)) in sorted_engines.iter().enumerate() {
-            let score = summary.score();
-            let win_rate = if summary.games_played > 0 {
-                (summary.total_wins() as f64 / summary.games_played as f64) * 100.0
-            } else {
-                0.0
-            };
-
             writeln!(f, "{}. Engine: {}", rank + 1, engine_name)?;
-            writeln!(f, "   Games Played: {}", summary.games_played)?;
             writeln!(f, "   Wins as White: {}", summary.wins_as_white)?;
             writeln!(f, "   Wins as Black: {}", summary.wins_as_black)?;
             writeln!(f, "   Draws: {}", summary.draws)?;
-            writeln!(
-                f,
-                "   Score: {:.1}/{} ({:.1}%)",
-                score,
-                summary.games_played,
-                (score / summary.games_played as f64) * 100.0
-            )?;
-            writeln!(f, "   Win Rate: {:.1}%", win_rate)?;
+            writeln!(f, "   Score: {:.1}/{}", summary.score(), summary.num_games)?;
+            writeln!(f, "   Win Rate: {:.1}%", summary.win_rate())?;
             writeln!(f)?;
         }
 
         Ok(())
     }
+}
+
+#[inline]
+fn is_win_for(result: GameResult, color: Color) -> bool {
+    match (color, result) {
+        (Color::White, GameResult::WhiteCheckmates | GameResult::BlackResigns) => true,
+        (Color::Black, GameResult::BlackCheckmates | GameResult::WhiteResigns) => true,
+        _ => false,
+    }
+}
+
+#[inline]
+fn is_draw(result: GameResult) -> bool {
+    matches!(
+        result,
+        GameResult::DrawAccepted | GameResult::DrawDeclared | GameResult::Stalemate
+    )
 }
