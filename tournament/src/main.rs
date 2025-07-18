@@ -1,35 +1,32 @@
-mod arena;
 mod args;
+mod engine;
+mod game;
+mod outcome;
+mod pairing;
+mod positions;
+mod summary;
 
-use arena::Arena;
+use std::{error::Error, fs::File, io::Write};
+
 use args::Args;
-use candle_core::Device;
-use candle_nn::VarMap;
 use clap::Parser;
-use evaluation::TraditionalEvaluator;
 use log::LevelFilter;
-use nnue::{version::VersionManager, NNUE};
-use search::Engine;
-use search::NegamaxEngine;
 use simplelog::{Config, SimpleLogger};
-use std::collections::HashMap;
-use std::error::Error;
+
+use crate::{outcome::GameOutcome, pairing::Pairing, positions::get_positions, summary::Summary};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = init()?;
-    let manager = VersionManager::new()?;
-    let engines = get_engines(&manager)?;
 
-    log::info!("Running tournament!");
-    log::info!("Contestants:");
-    for engine in &engines {
-        log::info!("- {}", engine.name());
-    }
+    let positions = get_positions();
 
-    let mut arena = Arena::new(engines);
-    let results = arena.run_tournament(args.depth);
+    let pairing = Pairing::new(positions, args.engine_a, args.engine_b, args.move_time);
 
-    print_results(results);
+    let outcomes = pairing.run();
+    let summary = Summary::new(&outcomes);
+
+    println!("\n\n{}", summary);
+    save_tournament_games(&outcomes)?;
 
     Ok(())
 }
@@ -42,37 +39,12 @@ fn init() -> Result<Args, Box<dyn Error>> {
     Ok(args)
 }
 
-fn get_engines(manager: &VersionManager) -> Result<Vec<NegamaxEngine>, Box<dyn Error>> {
-    let mut engines: Vec<NegamaxEngine> = Vec::new();
-
-    // Add traditional evaluator
-    engines.push(NegamaxEngine::new(Box::new(TraditionalEvaluator)));
-
-    // Add all NNUEs
-    let versions = manager.get_all_versions()?;
-    for version in versions {
-        let file_path = manager.file_path(version, "model.safetensors");
-        let mut varmap = VarMap::new();
-
-        let mut nnue = Box::new(NNUE::new(&varmap, &Device::Cpu, version));
-
-        varmap.load(file_path).unwrap();
-        nnue.enable_nnue();
-
-        engines.push(NegamaxEngine::new(nnue));
+#[inline]
+fn save_tournament_games(outcomes: &[GameOutcome]) -> Result<(), Box<dyn Error>> {
+    let mut file = File::create("tournament-games.txt")?;
+    for outcome in outcomes {
+        file.write_all(outcome.to_pgn().as_bytes())?;
+        file.write_all(b"\n\n")?;
     }
-
-    Ok(engines)
-}
-
-fn print_results(results: HashMap<String, i64>) {
-    // Convert HashMap to Vec and sort by score (descending)
-    let mut sorted_results: Vec<_> = results.into_iter().collect();
-    sorted_results.sort_by(|a, b| b.1.cmp(&a.1));
-
-    log::info!("\nTournament Results:");
-    log::info!("------------------");
-    for (engine, score) in sorted_results {
-        log::info!("{}: {}", engine, score);
-    }
+    Ok(())
 }
