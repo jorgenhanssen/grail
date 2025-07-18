@@ -44,8 +44,6 @@ run-train:
 
 build-tournament:
 	$(call cargo-build,tournament)
-run-tournament:
-	$(call cargo-run,tournament)
 
 build-all: build-grail build-generate build-train build-tournament
 
