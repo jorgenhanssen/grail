@@ -1,4 +1,7 @@
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     game::{GameArgs, GameRunner},
@@ -45,6 +48,9 @@ impl Pairing {
             ));
         }
 
+        let num_games = games.len();
+        let progress = Arc::new(Mutex::new(0));
+
         games
             .par_iter()
             .filter_map(|(white, black, position)| {
@@ -56,7 +62,10 @@ impl Pairing {
 
                 let outcome = game_runner.run(game_args).ok()?;
 
-                log::info!("{}", outcome);
+                let mut progress = progress.lock().unwrap();
+                *progress += 1;
+
+                log::info!("[Game {}/{}] {}", *progress, num_games, outcome);
 
                 Some(outcome)
             })
