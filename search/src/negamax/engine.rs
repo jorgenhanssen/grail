@@ -1,8 +1,10 @@
 use crate::{
-    negamax::aspiration::{
-        AspirationWindow, Pass, ASP_ENABLED_FROM, ASP_HALF_START, ASP_MAX_RETRIES, ASP_WIDEN,
+    negamax::{
+        aspiration::{
+            AspirationWindow, Pass, ASP_ENABLED_FROM, ASP_HALF_START, ASP_MAX_RETRIES, ASP_WIDEN,
+        },
+        utils::can_null_move_prune,
     },
-    negamax::utils::is_zugzwang,
     utils::{ordered_moves, CAPTURE_PRIORITY, MAX_PRIORITY},
     Engine,
 };
@@ -21,9 +23,7 @@ use uci::{
     UciOutput,
 };
 
-use super::utils::{
-    calculate_dynamic_lmr_reduction, convert_centipawn_score, convert_mate_score, see_naive,
-};
+use super::utils::{convert_centipawn_score, convert_mate_score, lmr, see_naive};
 use super::{
     controller::SearchController,
     tt::{Bound, TTEntry},
@@ -176,7 +176,7 @@ impl NegamaxEngine {
         self.stop.store(false, Ordering::Relaxed);
 
         self.tt.clear();
-        // Don't clear qs_tt - capture sequences are deterministic
+        self.qs_tt.clear();
 
         self.killer_moves = [[None; 2]; MAX_DEPTH]; // 2 killer moves per depth
         self.nodes = 0;
@@ -287,8 +287,11 @@ impl NegamaxEngine {
         }
 
         // Null-move pruning
-        if try_null_move {
-            if let Some(score) = self.try_null_move(board, depth, max_depth, alpha, beta, hash) {
+        let remaining_depth = max_depth - depth;
+        let in_check = board.checkers().popcnt() > 0;
+
+        if try_null_move && can_null_move_prune(board, remaining_depth, in_check) {
+            if let Some(score) = self.null_move_prune(board, depth, max_depth, alpha, beta, hash) {
                 return (score, Vec::new());
             }
         }
@@ -326,21 +329,33 @@ impl NegamaxEngine {
         let mut best_move = None;
         let mut best_line = Vec::new();
 
-        for (index, (m, score)) in moves.into_iter().enumerate() {
-            let reduction = calculate_dynamic_lmr_reduction(depth, index, score);
+        for (m, score) in moves {
+            let new_board = board.make_move_new(m);
+            let gives_check = new_board.checkers().popcnt() > 0;
+
+            let reduction = lmr(remaining_depth, score, in_check || gives_check);
             let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
 
-            let new_board = board.make_move_new(m);
             self.position_stack.push(new_board.get_hash());
+
             let (child_value, mut line) =
                 self.search_subtree(&new_board, depth + 1, child_max_depth, -beta, -alpha, true);
+            let mut value = -child_value;
+
+            // Re-search at full depth if reduced search failed high
+            if reduction > 0 && value > alpha {
+                let (re_child_value, re_line) =
+                    self.search_subtree(&new_board, depth + 1, max_depth, -beta, -alpha, true);
+                value = -re_child_value;
+                line = re_line;
+            }
+
             self.position_stack.pop();
 
             if self.stop.load(Ordering::Relaxed) {
                 break;
             }
 
-            let value = -child_value;
             if value > best_value {
                 best_value = value;
                 best_move = Some(m);
@@ -556,7 +571,7 @@ impl NegamaxEngine {
     }
 
     #[inline(always)]
-    fn try_null_move(
+    fn null_move_prune(
         &mut self,
         board: &Board,
         depth: u8,
@@ -567,16 +582,8 @@ impl NegamaxEngine {
     ) -> Option<i16> {
         // Null move pruning: if giving opponent a free move still can't reach beta, we can prune
 
-        let remaining_depth = max_depth - depth;
-        let in_check = board.checkers().popcnt() > 0;
-
-        // We should not prune if we are in zugzwang, in check or near the horizon
-        if remaining_depth < 3 || in_check || is_zugzwang(board) {
-            return None;
-        }
-
         // Less reduction near horizon
-        let r = match remaining_depth {
+        let r = match max_depth - depth {
             3..7 => 2,
             _ => 3,
         };
