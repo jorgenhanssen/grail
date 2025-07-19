@@ -1,12 +1,12 @@
 use chess::Game;
 use std::{collections::HashMap, error::Error, path::Path, str::FromStr};
 
-use crate::{engine::EngineProcess, outcome::GameOutcome};
+use crate::{engine::EngineProcess, openings::Opening, outcome::GameOutcome};
 
 #[derive(Debug)]
 pub struct GameArgs {
     pub move_time: u64,
-    pub start_position_fen: String,
+    pub opening: Opening,
 }
 
 pub struct GameRunner {
@@ -24,7 +24,7 @@ impl GameRunner {
 
     pub fn run(&self, args: GameArgs) -> Result<GameOutcome, Box<dyn Error>> {
         let mut game =
-            Game::from_str(&args.start_position_fen).map_err(|e| format!("Invalid FEN: {}", e))?;
+            Game::from_str(&args.opening.fen).map_err(|e| format!("Invalid FEN: {}", e))?;
 
         let mut white_engine = EngineProcess::new(&self.white)?;
         let mut black_engine = EngineProcess::new(&self.black)?;
@@ -60,7 +60,7 @@ impl GameRunner {
         let result = game.result().ok_or("Game ended without a result")?;
 
         Ok(GameOutcome {
-            starting_position: args.start_position_fen,
+            opening: args.opening.clone(),
             white_name: self.white.clone(),
             black_name: self.black.clone(),
             result,
