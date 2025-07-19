@@ -2,6 +2,8 @@ use chess::{Board, ChessMove, Piece};
 use evaluation::piece_value;
 use uci::commands::Score;
 
+use crate::utils::MAX_PIECE_PRIORITY;
+
 #[inline(always)]
 pub fn see_naive(board: &Board, capture_move: ChessMove) -> i16 {
     if let (Some(captured_piece), Some(capturing_piece)) = (
@@ -14,17 +16,14 @@ pub fn see_naive(board: &Board, capture_move: ChessMove) -> i16 {
     }
 }
 
-// Same as Weiss
 #[inline(always)]
-pub fn calculate_dynamic_lmr_reduction(depth: u8, move_index: usize, score: i16) -> u8 {
-    // TODO: Fix this later
-    return 0;
+pub fn lmr(remaining_depth: u8, score: i16, check: bool) -> u8 {
+    // Don't reduce if check, near horizon, or tactical moves
+    if check || remaining_depth < 3 || score > MAX_PIECE_PRIORITY {
+        return 0;
+    }
 
-    // if score < CHECK_SCORE {
-    //     (1.35 + (depth as f64).ln() * (move_index as f64).ln() / 2.75).ceil() as u32
-    // } else {
-    //     (0.20 + (depth as f64).ln() * (move_index as f64).ln() / 3.35).ceil() as u32
-    // }
+    return 1;
 }
 
 #[inline(always)]
@@ -41,6 +40,11 @@ pub fn convert_mate_score(score: i16, pv: &Vec<ChessMove>) -> Score {
 #[inline(always)]
 pub fn convert_centipawn_score(score: i16) -> Score {
     Score::Centipawns(score)
+}
+
+#[inline(always)]
+pub fn can_null_move_prune(board: &Board, remaining_depth: u8, in_check: bool) -> bool {
+    remaining_depth >= 3 && !in_check && !is_zugzwang(board)
 }
 
 #[inline(always)]
