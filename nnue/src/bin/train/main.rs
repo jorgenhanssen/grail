@@ -101,7 +101,7 @@ impl Trainer {
                 0.0
             };
 
-            progress_bar.set_message(format!("val: {:.6}, loss: {:.6}", val_loss, train_loss));
+            progress_bar.set_message(format!("val: {:.0}, loss: {:.0}", val_loss, train_loss));
             progress_bar.finish();
 
             // Early stopping
@@ -139,7 +139,7 @@ impl Trainer {
             batch_count += 1;
 
             let current_loss = epoch_loss_sum / batch_count as f32;
-            progress_bar.set_message(format!("loss: {:.6}", current_loss));
+            progress_bar.set_message(format!("loss: {:.0}", current_loss));
             progress_bar.inc(1);
         }
 
@@ -243,7 +243,7 @@ fn evaluate(
     writeln!(file, "Label      Prediction")?;
     writeln!(file, "--------------------")?;
     for (label, pred) in all_labels.iter().zip(all_preds.iter()) {
-        writeln!(file, "{:<10.6} {:.6}", label, pred)?;
+        writeln!(file, "{:<10.0} {:.0}", label, pred)?;
     }
 
     log::info!("Evaluation written to {}", file_path.display());
