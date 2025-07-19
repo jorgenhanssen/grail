@@ -5,12 +5,13 @@ use std::{
 
 use crate::{
     game::{GameArgs, GameRunner},
+    openings::Opening,
     outcome::GameOutcome,
 };
 use rayon::prelude::*;
 
 pub struct Pairing {
-    positions: Vec<String>,
+    openings: Vec<Opening>,
     engine_a: PathBuf,
     engine_b: PathBuf,
     move_time: u64,
@@ -18,13 +19,13 @@ pub struct Pairing {
 
 impl Pairing {
     pub fn new(
-        positions: Vec<String>,
+        openings: Vec<Opening>,
         engine_a: PathBuf,
         engine_b: PathBuf,
         move_time: u64,
     ) -> Self {
         Self {
-            positions,
+            openings,
             engine_a,
             engine_b,
             move_time,
@@ -34,17 +35,17 @@ impl Pairing {
     pub fn run(&self) -> Vec<GameOutcome> {
         let mut games = Vec::new();
 
-        for position in &self.positions {
+        for opening in &self.openings {
             games.push((
                 self.engine_a.clone(),
                 self.engine_b.clone(),
-                position.clone(),
+                opening.clone(),
             ));
 
             games.push((
                 self.engine_b.clone(),
                 self.engine_a.clone(),
-                position.clone(),
+                opening.clone(),
             ));
         }
 
@@ -53,11 +54,11 @@ impl Pairing {
 
         games
             .par_iter()
-            .filter_map(|(white, black, position)| {
+            .filter_map(|(white, black, opening)| {
                 let game_runner = GameRunner::new(white.clone(), black.clone());
                 let game_args = GameArgs {
                     move_time: self.move_time,
-                    start_position_fen: position.clone(),
+                    opening: opening.clone(),
                 };
 
                 let outcome = game_runner.run(game_args).ok()?;
@@ -65,7 +66,8 @@ impl Pairing {
                 let mut progress = progress.lock().unwrap();
                 *progress += 1;
 
-                log::info!("[Game {}/{}] {}", *progress, num_games, outcome);
+                log::info!("{} [{}/{}]", opening, *progress, num_games);
+                log::info!("{}\n", outcome);
 
                 Some(outcome)
             })

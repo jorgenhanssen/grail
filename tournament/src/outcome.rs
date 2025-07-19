@@ -2,11 +2,13 @@ use std::fmt;
 
 use chess::{Board, ChessMove, File, GameResult, MoveGen, Piece, Rank, Square};
 
+use crate::openings::Opening;
+
 const STANDARD_POSITION_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 #[derive(Debug)]
 pub struct GameOutcome {
-    pub starting_position: String,
+    pub opening: Opening,
     pub white_name: String,
     pub black_name: String,
     pub result: GameResult,
@@ -18,6 +20,7 @@ impl GameOutcome {
     pub fn to_pgn(&self) -> String {
         let mut pgn = String::with_capacity(512);
 
+        pgn.push_str(&format!("[Opening \"{}\"]\n", self.opening.name));
         pgn.push_str(&format!("[White \"{}\"]\n", self.white_name));
         pgn.push_str(&format!("[Black \"{}\"]\n", self.black_name));
 
@@ -25,17 +28,17 @@ impl GameOutcome {
         pgn.push_str(&format!("[Result \"{}\"]\n", result_str));
 
         // Add variant and FEN headers if not starting from standard position
-        let is_standard_position = self.starting_position == STANDARD_POSITION_FEN;
+        let is_standard_position = self.opening.fen == STANDARD_POSITION_FEN;
 
         if !is_standard_position {
             pgn.push_str("[Variant \"From Position\"]\n");
-            pgn.push_str(&format!("[FEN \"{}\"]\n", &self.starting_position));
+            pgn.push_str(&format!("[FEN \"{}\"]\n", &self.opening.fen));
         }
 
         pgn.push('\n');
 
         // Extract fullmove number from original FEN (last component, safer than index 5)
-        let fen_parts: Vec<&str> = self.starting_position.split_whitespace().collect();
+        let fen_parts: Vec<&str> = self.opening.fen.split_whitespace().collect();
         let starting_move_number: u32 = fen_parts.last().and_then(|s| s.parse().ok()).unwrap_or(1);
 
         // Check if the starting position has white or black to move (from original FEN part 1)
@@ -90,13 +93,19 @@ impl fmt::Display for GameOutcome {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{} vs {} - {} moves: {}",
-            self.white_name,
-            self.black_name,
+            "{} vs {}: {} ({} moves)",
+            trim_engine_name(&self.white_name),
+            trim_engine_name(&self.black_name),
+            game_result_to_pgn(self.result),
             self.moves.len(),
-            game_result_to_pgn(self.result)
         )
     }
+}
+
+fn trim_engine_name(name: &str) -> String {
+    // all engines reside in target/release/, so the name comes after the last /
+    let last_slash = name.rfind('/').unwrap_or(0);
+    name[last_slash + 1..].to_string()
 }
 
 // Backwards code from Chess crate which only has from_san:
