@@ -112,13 +112,13 @@ fn evaluate_pawn_structure(board: &Board, color: Color) -> i16 {
         score -= match cnt {
             1 => {
                 if (my_pawns & get_adjacent_files(file_idx)).popcnt() == 0 {
-                    30
+                    40 // Isolated
                 } else {
                     0
                 }
             }
-            2 => 20,
-            _ => 40,
+            2 => 30, // Doubled
+            _ => 60, // Tripled+
         };
     }
 
