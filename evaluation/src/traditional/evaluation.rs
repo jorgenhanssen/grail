@@ -3,12 +3,14 @@ use chess::{
     EMPTY,
 };
 
-use crate::scores::MATE_VALUE;
-use crate::traditional::pst::{get_pst, sum_pst};
-use crate::traditional::values::{
-    piece_value, BISHOP_VALUE, KNIGHT_VALUE, PASSED_PAWN_BONUS, PAWN_VALUE, QUEEN_VALUE,
-    ROOK_ON_SEVENTH_BONUS, ROOK_OPEN_FILE_BONUS, ROOK_SEMI_OPEN_FILE_BONUS, ROOK_VALUE,
+use crate::piece_values::{
+    piece_value, BISHOP_VALUE, KNIGHT_VALUE, PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE,
 };
+use crate::scores::MATE_VALUE;
+use crate::traditional::bonus::{
+    PASSED_PAWN_BONUS, ROOK_ON_SEVENTH_BONUS, ROOK_OPEN_FILE_BONUS, ROOK_SEMI_OPEN_FILE_BONUS,
+};
+use crate::traditional::pst::{get_pst, sum_pst};
 
 // Return final evaluation (positive = good for White, negative = good for Black)
 pub fn evaluate_board(board: &Board, white_has_castled: bool, black_has_castled: bool) -> i16 {
