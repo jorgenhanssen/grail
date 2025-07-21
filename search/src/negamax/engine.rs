@@ -3,14 +3,18 @@ use crate::{
         aspiration::{
             AspirationWindow, Pass, ASP_ENABLED_FROM, ASP_HALF_START, ASP_MAX_RETRIES, ASP_WIDEN,
         },
-        utils::can_null_move_prune,
+        utils::{can_delta_prune, can_null_move_prune},
     },
     utils::{ordered_moves, Castle, CAPTURE_PRIORITY, MAX_PRIORITY},
     Engine,
 };
 use ahash::AHashMap;
-use chess::{Board, BoardStatus, ChessMove, Color};
-use evaluation::scores::{MATE_VALUE, NEG_INFINITY, POS_INFINITY};
+use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank};
+use evaluation::{
+    piece_value,
+    scores::{MATE_VALUE, NEG_INFINITY, POS_INFINITY},
+    PAWN_VALUE, QUEEN_VALUE,
+};
 use evaluation::{Evaluator, TraditionalEvaluator};
 use std::array;
 use std::sync::{
@@ -406,6 +410,7 @@ impl NegamaxEngine {
         );
         (best_value, best_line)
     }
+
     fn quiescence_search(
         &mut self,
         board: &Board,
@@ -458,8 +463,32 @@ impl NegamaxEngine {
         // Do a "stand-pat" evaluation if not in check
         if !in_check {
             if stand_pat >= beta {
+                self.qs_tt.insert(hash, stand_pat);
                 return (stand_pat, Vec::new());
             }
+
+            // Node-level delta pruning (big delta)
+            if can_delta_prune(board, in_check) {
+                let mut big_delta = QUEEN_VALUE;
+                let promotion_rank = if board.side_to_move() == Color::White {
+                    Rank::Seventh
+                } else {
+                    Rank::Second
+                };
+                let pawns = board.pieces(Piece::Pawn) & board.color_combined(board.side_to_move());
+                let rank_mask = get_rank(promotion_rank);
+                let promoting_pawns = pawns & rank_mask;
+
+                if promoting_pawns != chess::EMPTY {
+                    big_delta += QUEEN_VALUE - PAWN_VALUE;
+                }
+
+                if stand_pat + big_delta < alpha {
+                    self.qs_tt.insert(hash, stand_pat);
+                    return (stand_pat, Vec::new());
+                }
+            }
+
             alpha = alpha.max(stand_pat);
         }
 
@@ -469,11 +498,35 @@ impl NegamaxEngine {
         let mask = if in_check {
             None // We should check all moves
         } else {
-            Some(*board.color_combined(!board.side_to_move())) // Only captures
+            // Include both captures and promotion squares
+            let captures = *board.color_combined(!board.side_to_move());
+            let promotion_rank = if board.side_to_move() == Color::White {
+                get_rank(Rank::Eighth)
+            } else {
+                get_rank(Rank::First)
+            };
+            Some(captures | promotion_rank)
         };
         let forcing_moves = ordered_moves(board, None, mask);
 
         for (mv, _) in forcing_moves {
+            // Per-move delta pruning (skip if capture can't possibly improve alpha)
+            if can_delta_prune(board, in_check) {
+                let captured = board.piece_on(mv.get_dest());
+                if let Some(piece) = captured {
+                    let mut delta = piece_value(piece) + 200; // delta margin
+                    if mv.get_promotion().is_some() {
+                        delta += QUEEN_VALUE - PAWN_VALUE; // promotion bonus
+                    }
+                    if stand_pat + delta < alpha {
+                        continue;
+                    }
+                } else {
+                    // Not a capture (should not happen with mask, but skip for safety)
+                    continue;
+                }
+            }
+
             if !in_check && see_naive(board, mv) < 0 {
                 continue;
             }

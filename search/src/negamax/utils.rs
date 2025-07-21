@@ -1,5 +1,5 @@
 use chess::{Board, ChessMove, Piece};
-use evaluation::piece_value;
+use evaluation::{piece_value, total_material};
 use uci::commands::Score;
 
 use crate::utils::MAX_PIECE_PRIORITY;
@@ -40,6 +40,10 @@ pub fn convert_mate_score(score: i16, pv: &Vec<ChessMove>) -> Score {
 #[inline(always)]
 pub fn convert_centipawn_score(score: i16) -> Score {
     Score::Centipawns(score)
+}
+
+pub fn can_delta_prune(board: &Board, in_check: bool) -> bool {
+    !in_check && total_material(board) >= 1500
 }
 
 #[inline(always)]
