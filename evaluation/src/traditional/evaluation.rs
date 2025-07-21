@@ -11,7 +11,7 @@ use crate::traditional::values::{
 };
 
 // Return final evaluation (positive = good for White, negative = good for Black)
-pub fn evaluate_board(board: &Board) -> i16 {
+pub fn evaluate_board(board: &Board, white_has_castled: bool, black_has_castled: bool) -> i16 {
     let is_white = board.side_to_move() == Color::White;
 
     match board.status() {
@@ -44,6 +44,13 @@ pub fn evaluate_board(board: &Board) -> i16 {
 
     cp += evaluate_king_safety(board, Color::White);
     cp -= evaluate_king_safety(board, Color::Black);
+
+    if white_has_castled {
+        cp += 50;
+    }
+    if black_has_castled {
+        cp -= 50;
+    }
 
     cp
 }
