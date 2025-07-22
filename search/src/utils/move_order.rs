@@ -41,9 +41,6 @@ pub fn ordered_moves(
     moves_with_priority.into_iter().map(|(m, _)| m).collect()
 }
 
-// (Your constants and move_priority function remain unchanged;
-// they're already efficient. Here's a quick copy for completeness.)
-
 // Piece moves get base priority (lowest)
 pub const MIN_PRIORITY: i32 = 0;
 

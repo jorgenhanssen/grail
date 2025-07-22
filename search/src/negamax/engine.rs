@@ -401,6 +401,7 @@ impl NegamaxEngine {
 
                         let history_entry =
                             &mut self.hh[color as usize][source.to_index()][dest.to_index()];
+
                         *history_entry = history_entry.saturating_add(h_score);
                     }
                 }
