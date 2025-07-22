@@ -12,11 +12,10 @@ use ahash::AHashMap;
 use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank};
 use evaluation::{
     piece_value,
-    scores::{MATE_VALUE, NEG_INFINITY, POS_INFINITY},
+    scores::{MATE_VALUE, NEG_INFINITY},
     PAWN_VALUE, QUEEN_VALUE,
 };
 use evaluation::{Evaluator, TraditionalEvaluator};
-use std::array;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc::Sender,
@@ -47,9 +46,6 @@ pub struct NegamaxEngine {
 
     max_depth_reached: u8,
 
-    // move sorting buffer per depth
-    preferred_buffer: [Vec<(ChessMove, i16)>; MAX_DEPTH],
-
     position_stack: Vec<u64>,
     evaluator: Box<dyn Evaluator>,
 
@@ -67,7 +63,6 @@ impl Default for NegamaxEngine {
             killer_moves: [[None; 2]; MAX_DEPTH],
             max_depth_reached: 1,
             current_pv: Vec::new(),
-            preferred_buffer: array::from_fn(|_| Vec::with_capacity(MAX_DEPTH)),
 
             position_stack: Vec::with_capacity(100),
             evaluator: Box::new(TraditionalEvaluator),
@@ -198,13 +193,14 @@ impl NegamaxEngine {
         mut alpha: i16,
         beta: i16,
     ) -> (Option<ChessMove>, i16) {
-        let pref = &mut self.preferred_buffer[0];
-        pref.clear();
-
-        if let Some(&pv) = self.current_pv.first() {
-            pref.push((pv, POS_INFINITY));
-        }
-        let moves_with_scores = ordered_moves(&self.board, Some(&pref[..]), None);
+        let moves_with_scores = ordered_moves(
+            &self.board,
+            None,
+            0,
+            &self.current_pv,
+            None,
+            &self.killer_moves,
+        );
 
         if moves_with_scores.is_empty() {
             return (None, 0);
@@ -214,7 +210,7 @@ impl NegamaxEngine {
         let mut current_best_move = None;
 
         // Negamax at root: call search_subtree with flipped window, then negate result
-        for (m, _) in moves_with_scores {
+        for m in moves_with_scores {
             let castle = Castle::new().update(&self.board, m);
 
             let new_board = self.board.make_move_new(m);
@@ -307,28 +303,35 @@ impl NegamaxEngine {
 
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
-        // Move ordering
-        let pref = &mut self.preferred_buffer[depth as usize];
-        pref.clear();
+        // // Move ordering
+        // let pref = &mut self.preferred_buffer[depth as usize];
+        // pref.clear();
 
-        if let Some(&move_) = self.current_pv.get(depth as usize) {
-            pref.push((move_, MAX_PRIORITY + 2));
-        }
+        // if let Some(&move_) = self.current_pv.get(depth as usize) {
+        //     pref.push((move_, MAX_PRIORITY + 2));
+        // }
 
-        if let Some(tt_move) = maybe_tt_move {
-            pref.push((tt_move, MAX_PRIORITY + 1));
-        }
+        // if let Some(tt_move) = maybe_tt_move {
+        //     pref.push((tt_move, MAX_PRIORITY + 1));
+        // }
 
-        for &killer_move_opt in &self.killer_moves[depth as usize] {
-            if let Some(killer_move) = killer_move_opt {
-                let already_there = pref.iter().any(|&(pm, _)| pm == killer_move);
-                if !already_there {
-                    pref.push((killer_move, CAPTURE_PRIORITY - 1));
-                }
-            }
-        }
+        // for &killer_move_opt in &self.killer_moves[depth as usize] {
+        //     if let Some(killer_move) = killer_move_opt {
+        //         let already_there = pref.iter().any(|&(pm, _)| pm == killer_move);
+        //         if !already_there {
+        //             pref.push((killer_move, CAPTURE_PRIORITY - 1));
+        //         }
+        //     }
+        // }
 
-        let moves = ordered_moves(board, Some(&pref[..]), None);
+        let moves = ordered_moves(
+            board,
+            None,
+            depth,
+            &self.current_pv,
+            maybe_tt_move,
+            &self.killer_moves,
+        );
 
         if moves.is_empty() {
             return (0, Vec::new());
@@ -338,13 +341,21 @@ impl NegamaxEngine {
         let mut best_move = None;
         let mut best_line = Vec::new();
 
-        for (m, score) in moves {
+        let mut move_index = -1;
+        for m in moves {
+            move_index += 1;
+
             let new_castle = castle.update(board, m);
 
             let new_board = board.make_move_new(m);
             let gives_check = new_board.checkers().popcnt() > 0;
 
-            let reduction = lmr(remaining_depth, score, in_check || gives_check);
+            // Consider move tactical if it's check, capture, or promotion
+            let is_capture = board.piece_on(m.get_dest()).is_some();
+            let is_promotion = m.get_promotion().is_some();
+            let is_tactical = in_check || gives_check || is_capture || is_promotion;
+
+            let reduction = lmr(remaining_depth, is_tactical, move_index);
             let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
 
             self.position_stack.push(new_board.get_hash());
@@ -498,18 +509,19 @@ impl NegamaxEngine {
         let mask = if in_check {
             None // We should check all moves
         } else {
-            // Include both captures and promotion squares
-            let captures = *board.color_combined(!board.side_to_move());
-            let promotion_rank = if board.side_to_move() == Color::White {
-                get_rank(Rank::Eighth)
-            } else {
-                get_rank(Rank::First)
-            };
-            Some(captures | promotion_rank)
+            // Only captgures
+            Some(*board.color_combined(!board.side_to_move()))
         };
-        let forcing_moves = ordered_moves(board, None, mask);
+        let forcing_moves = ordered_moves(
+            board,
+            mask,
+            depth,
+            &self.current_pv,
+            None,
+            &self.killer_moves,
+        );
 
-        for (mv, _) in forcing_moves {
+        for mv in forcing_moves {
             // Per-move delta pruning (skip if capture can't possibly improve alpha)
             if can_delta_prune(board, in_check) {
                 let captured = board.piece_on(mv.get_dest());

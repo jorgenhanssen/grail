@@ -37,6 +37,7 @@ impl GameRunner {
         positions.push(initial_board);
         *position_counts.entry(initial_board).or_insert(0) += 1;
 
+        let mut move_count = 0;
         while game.result().is_none() {
             let board = game.current_position();
             let engine = match board.side_to_move() {
@@ -52,9 +53,11 @@ impl GameRunner {
             positions.push(new_board);
             *position_counts.entry(new_board).or_insert(0) += 1;
 
-            if position_counts[&new_board] >= 3 {
+            if position_counts[&new_board] >= 2 || move_count > 300 {
                 game.declare_draw();
             }
+
+            move_count += 1;
         }
 
         let result = game.result().ok_or("Game ended without a result")?;
