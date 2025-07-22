@@ -303,27 +303,6 @@ impl NegamaxEngine {
 
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
-        // // Move ordering
-        // let pref = &mut self.preferred_buffer[depth as usize];
-        // pref.clear();
-
-        // if let Some(&move_) = self.current_pv.get(depth as usize) {
-        //     pref.push((move_, MAX_PRIORITY + 2));
-        // }
-
-        // if let Some(tt_move) = maybe_tt_move {
-        //     pref.push((tt_move, MAX_PRIORITY + 1));
-        // }
-
-        // for &killer_move_opt in &self.killer_moves[depth as usize] {
-        //     if let Some(killer_move) = killer_move_opt {
-        //         let already_there = pref.iter().any(|&(pm, _)| pm == killer_move);
-        //         if !already_there {
-        //             pref.push((killer_move, CAPTURE_PRIORITY - 1));
-        //         }
-        //     }
-        // }
-
         let moves = ordered_moves(
             board,
             None,
