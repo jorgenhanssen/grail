@@ -50,6 +50,9 @@ pub struct NegamaxEngine {
     evaluator: Box<dyn Evaluator>,
 
     stop: Arc<AtomicBool>,
+
+    // history heuristic [color][from][to]
+    hh: [[[i16; 64]; 64]; 2],
 }
 
 impl Default for NegamaxEngine {
@@ -68,6 +71,8 @@ impl Default for NegamaxEngine {
             evaluator: Box::new(TraditionalEvaluator),
 
             stop: Arc::new(AtomicBool::new(false)),
+
+            hh: [[[0; 64]; 64]; 2],
         }
     }
 }
@@ -185,6 +190,8 @@ impl NegamaxEngine {
         // Init position stack
         self.position_stack.clear();
         self.position_stack.push(self.board.get_hash());
+
+        self.hh = [[[0; 64]; 64]; 2];
     }
 
     pub fn search_root(
@@ -200,6 +207,7 @@ impl NegamaxEngine {
             &self.current_pv,
             None,
             &self.killer_moves,
+            &self.hh,
         );
 
         if moves_with_scores.is_empty() {
@@ -310,6 +318,7 @@ impl NegamaxEngine {
             &self.current_pv,
             maybe_tt_move,
             &self.killer_moves,
+            &self.hh,
         );
 
         if moves.is_empty() {
@@ -381,8 +390,19 @@ impl NegamaxEngine {
             alpha = alpha.max(best_value);
             if alpha >= beta {
                 if let Some(mv) = best_move {
-                    if board.piece_on(mv.get_dest()).is_none() {
+                    let dest = mv.get_dest();
+
+                    if board.piece_on(dest).is_none() {
                         self.add_killer_move(depth as usize, mv);
+
+                        let source = mv.get_source();
+                        let color = board.side_to_move();
+                        let h_score = remaining_depth as i16 * remaining_depth as i16;
+
+                        let history_entry =
+                            &mut self.hh[color as usize][source.to_index()][dest.to_index()];
+
+                        *history_entry = history_entry.saturating_add(h_score);
                     }
                 }
                 break; // beta cut-off
@@ -498,6 +518,7 @@ impl NegamaxEngine {
             &self.current_pv,
             None,
             &self.killer_moves,
+            &self.hh,
         );
 
         for mv in forcing_moves {
