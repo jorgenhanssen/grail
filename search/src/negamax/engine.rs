@@ -5,7 +5,7 @@ use crate::{
         },
         utils::{can_delta_prune, can_null_move_prune},
     },
-    utils::{ordered_moves, Castle, CAPTURE_PRIORITY, MAX_PRIORITY},
+    utils::{ordered_moves, Castle},
     Engine,
 };
 use ahash::AHashMap;
