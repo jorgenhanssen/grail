@@ -1,51 +1,47 @@
 use chess::{BitBoard, Board, ChessMove, MoveGen, Piece};
 
+#[inline(always)]
 pub fn ordered_moves(
     board: &Board,
-    preferred: Option<&[(ChessMove, i16)]>,
     mask: Option<BitBoard>,
-) -> Vec<(ChessMove, i16)> {
+    depth: u8,
+    pv_move: &[ChessMove],
+    tt_move: Option<ChessMove>,
+    killer_moves: &[[Option<ChessMove>; 2]],
+) -> Vec<ChessMove> {
     let mut legal = MoveGen::new_legal(board);
     if let Some(mask) = mask {
         legal.set_iterator_mask(mask);
     }
 
-    let cap = legal.len();
+    let mut moves_with_priority: Vec<(ChessMove, i16)> = Vec::with_capacity(64); // Rough estimate; chess max ~218
 
-    // Separate buckets: high = priority > 0, low = priority == 0
-    let mut high = Vec::with_capacity(cap);
-    let mut low = Vec::with_capacity(cap);
+    let killers = &killer_moves[depth as usize];
+    let pv = pv_move.get(depth as usize).cloned();
 
-    for m in legal {
-        // Try to find the move in the preferred list
-        let mut priority = 0;
-        if let Some(preferred) = preferred {
-            for &(pm, s) in preferred {
-                if pm == m {
-                    priority = s;
-                    break;
-                }
-            }
+    for mov in legal {
+        let mut priority = move_priority(&mov, board);
+
+        if Some(mov) == tt_move {
+            priority = priority.max(MAX_PRIORITY + 1);
         }
-        if priority == 0 {
-            priority = move_priority(m, board);
+        if Some(mov) == pv {
+            priority = priority.max(MAX_PRIORITY + 2);
+        }
+        if killers.iter().any(|&k| k == Some(mov)) {
+            priority = priority.max(CAPTURE_PRIORITY - 1);
         }
 
-        // bucket by priority
-        if priority > MIN_PRIORITY {
-            high.push((m, priority));
-        } else {
-            low.push((m, priority));
-        }
+        moves_with_priority.push((mov, priority));
     }
 
-    // Only sort high priority moves
-    high.sort_unstable_by_key(|&(_, s)| -s);
+    moves_with_priority.sort_unstable_by_key(|&(_, p)| -p);
 
-    // Append low priority moves last
-    high.extend(low);
-    high
+    moves_with_priority.into_iter().map(|(m, _)| m).collect()
 }
+
+// (Your constants and move_priority function remain unchanged;
+// they're already efficient. Here's a quick copy for completeness.)
 
 // Piece moves get base priority (lowest)
 pub const MIN_PRIORITY: i16 = 0;
@@ -82,6 +78,7 @@ const MVV_LVA: [[i16; 6]; 6] = [
     [20, 21, 22, 23, 24, 25], // victim Knight
     [10, 11, 12, 13, 14, 15], // victim Pawn
 ];
+
 // Helper function to convert Piece to array index
 #[inline]
 fn mvva_lva_index(piece: Piece) -> usize {
@@ -96,7 +93,7 @@ fn mvva_lva_index(piece: Piece) -> usize {
 }
 
 #[inline(always)]
-fn move_priority(mov: ChessMove, board: &Board) -> i16 {
+fn move_priority(mov: &ChessMove, board: &Board) -> i16 {
     // Check for promotions first
     if let Some(promotion) = mov.get_promotion() {
         return match promotion {
