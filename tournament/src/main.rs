@@ -41,7 +41,7 @@ fn init() -> Result<Args, Box<dyn Error>> {
 
 #[inline]
 fn save_tournament_games(outcomes: &[GameOutcome]) -> Result<(), Box<dyn Error>> {
-    let mut file = File::create("tournament-games.txt")?;
+    let mut file = File::create("tournament-games.pgn")?;
     for outcome in outcomes {
         file.write_all(outcome.to_pgn().as_bytes())?;
         file.write_all(b"\n\n")?;
