@@ -5,7 +5,7 @@ use crate::{
         },
         utils::{can_delta_prune, can_null_move_prune},
     },
-    utils::{ordered_moves, Castle},
+    utils::{ordered_moves, Castle, HistoryHeuristic},
     Engine,
 };
 use ahash::AHashMap;
@@ -51,8 +51,7 @@ pub struct NegamaxEngine {
 
     stop: Arc<AtomicBool>,
 
-    // history heuristic [color][from][to]
-    hh: [[[i16; 64]; 64]; 2],
+    history_heuristic: HistoryHeuristic,
 }
 
 impl Default for NegamaxEngine {
@@ -72,7 +71,7 @@ impl Default for NegamaxEngine {
 
             stop: Arc::new(AtomicBool::new(false)),
 
-            hh: [[[0; 64]; 64]; 2],
+            history_heuristic: HistoryHeuristic::new(),
         }
     }
 }
@@ -190,8 +189,6 @@ impl NegamaxEngine {
         // Init position stack
         self.position_stack.clear();
         self.position_stack.push(self.board.get_hash());
-
-        self.hh = [[[0; 64]; 64]; 2];
     }
 
     pub fn search_root(
@@ -207,7 +204,7 @@ impl NegamaxEngine {
             &self.current_pv,
             None,
             &self.killer_moves,
-            &self.hh,
+            &self.history_heuristic,
         );
 
         if moves_with_scores.is_empty() {
@@ -318,7 +315,7 @@ impl NegamaxEngine {
             &self.current_pv,
             maybe_tt_move,
             &self.killer_moves,
-            &self.hh,
+            &self.history_heuristic,
         );
 
         if moves.is_empty() {
@@ -388,24 +385,28 @@ impl NegamaxEngine {
             }
 
             alpha = alpha.max(best_value);
+
+            let dest = m.get_dest();
             if alpha >= beta {
-                if let Some(mv) = best_move {
-                    let dest = mv.get_dest();
+                if board.piece_on(dest).is_none() {
+                    self.add_killer_move(depth as usize, m);
 
-                    if board.piece_on(dest).is_none() {
-                        self.add_killer_move(depth as usize, mv);
+                    let color = board.side_to_move();
+                    let source = m.get_source();
+                    let bonus = self.history_heuristic.get_bonus(remaining_depth);
 
-                        let source = mv.get_source();
-                        let color = board.side_to_move();
-                        let h_score = remaining_depth as i16 * remaining_depth as i16;
-
-                        let history_entry =
-                            &mut self.hh[color as usize][source.to_index()][dest.to_index()];
-
-                        *history_entry = history_entry.saturating_add(h_score);
-                    }
+                    self.history_heuristic.update(color, source, dest, bonus);
                 }
+
                 break; // beta cut-off
+            }
+
+            if value < beta && board.piece_on(dest).is_none() {
+                let color = board.side_to_move();
+                let source = m.get_source();
+                let malus = self.history_heuristic.get_malus(remaining_depth);
+
+                self.history_heuristic.update(color, source, dest, malus); // loser
             }
         }
 
@@ -518,7 +519,7 @@ impl NegamaxEngine {
             &self.current_pv,
             None,
             &self.killer_moves,
-            &self.hh,
+            &self.history_heuristic,
         );
 
         for mv in forcing_moves {
