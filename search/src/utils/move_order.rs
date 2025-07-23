@@ -1,5 +1,7 @@
 use chess::{BitBoard, Board, ChessMove, MoveGen, Piece};
 
+use crate::utils::HistoryHeuristic;
+
 #[inline(always)]
 pub fn ordered_moves(
     board: &Board,
@@ -8,7 +10,7 @@ pub fn ordered_moves(
     pv_move: &[ChessMove],
     tt_move: Option<ChessMove>,
     killer_moves: &[[Option<ChessMove>; 2]],
-    history_heuristic: &[[[i16; 64]; 64]; 2],
+    history_heuristic: &HistoryHeuristic,
 ) -> Vec<ChessMove> {
     let mut legal = MoveGen::new_legal(board);
     if let Some(mask) = mask {
@@ -91,7 +93,7 @@ fn mvva_lva_index(piece: Piece) -> usize {
 }
 
 #[inline(always)]
-fn move_priority(mov: &ChessMove, board: &Board, history_heuristic: &[[[i16; 64]; 64]; 2]) -> i32 {
+fn move_priority(mov: &ChessMove, board: &Board, history_heuristic: &HistoryHeuristic) -> i32 {
     // Check for promotions first
     if let Some(promotion) = mov.get_promotion() {
         return match promotion {
@@ -112,18 +114,5 @@ fn move_priority(mov: &ChessMove, board: &Board, history_heuristic: &[[[i16; 64]
     }
 
     let color = board.side_to_move();
-    let history_score = history_heuristic[color as usize][source.to_index()][dest.to_index()];
-
-    if history_score > 0 {
-        return MAX_PIECE_PRIORITY + history_score as i32;
-    } else {
-        // Nudge move ordering to prefer more valuable pieces
-        match attacker {
-            Piece::Queen => PIECE_PRIORITY_QUEEN,
-            Piece::Rook => PIECE_PRIORITY_ROOK,
-            Piece::Bishop => PIECE_PRIORITY_BISHOP,
-            Piece::Knight => PIECE_PRIORITY_KNIGHT,
-            _ => MIN_PRIORITY,
-        }
-    }
+    return history_heuristic.get(color, source, dest) as i32;
 }
