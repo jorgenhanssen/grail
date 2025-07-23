@@ -46,16 +46,26 @@ impl HistoryHeuristic {
 
     #[inline(always)]
     pub fn get_malus(&self, remaining_depth: u8) -> i32 {
-        -BONUS[remaining_depth.min(MAX_DEPTH as u8) as usize]
+        MALUS[remaining_depth.min(MAX_DEPTH as u8) as usize]
     }
 }
 
-static BONUS: [i32; MAX_DEPTH + 1] = {
+const BONUS: [i32; MAX_DEPTH + 1] = {
     let mut table = [0; MAX_DEPTH + 1];
     let mut i = 0;
     while i <= MAX_DEPTH {
         let depth = i as i32;
         table[i] = 32 * depth * depth + 16 * depth;
+        i += 1;
+    }
+    table
+};
+const MALUS: [i32; MAX_DEPTH + 1] = {
+    let mut table = [0; MAX_DEPTH + 1];
+    let mut i = 0;
+    while i <= MAX_DEPTH {
+        let depth = i as i32;
+        table[i] = -(16 * depth * depth + 8 * depth);
         i += 1;
     }
     table
