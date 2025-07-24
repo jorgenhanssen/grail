@@ -1,9 +1,9 @@
 use chess::{Board, ChessMove, Piece};
-use evaluation::{piece_value, scores::MATE_VALUE, total_material};
+use evaluation::{piece_value, scores::MATE_VALUE, total_material, PAWN_VALUE};
 use uci::commands::Score;
 
 pub const RAZOR_MAX_DEPTH: u8 = 3;
-pub const RAZOR_BASE_MARGIN: i16 = 300; // Base margin (e.g., 3 pawns); tune down for safety
+pub const RAZOR_BASE_MARGIN: i16 = 3 * PAWN_VALUE;
 pub const RAZOR_NEAR_MATE: i16 = MATE_VALUE - 200;
 
 #[inline(always)]

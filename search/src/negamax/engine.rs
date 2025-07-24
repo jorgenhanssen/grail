@@ -27,8 +27,7 @@ use uci::{
 };
 
 use super::utils::{
-    convert_centipawn_score, convert_mate_score, lmr, see_naive, RAZOR_BASE_MARGIN,
-    RAZOR_MAX_DEPTH, RAZOR_NEAR_MATE,
+    convert_centipawn_score, convert_mate_score, lmr, see_naive, RAZOR_BASE_MARGIN, RAZOR_NEAR_MATE,
 };
 use super::{
     controller::SearchController,
