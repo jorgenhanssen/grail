@@ -1,6 +1,10 @@
 use chess::{Board, ChessMove, Piece};
-use evaluation::{piece_value, total_material};
+use evaluation::{piece_value, scores::MATE_VALUE, total_material};
 use uci::commands::Score;
+
+pub const RAZOR_MAX_DEPTH: u8 = 3;
+pub const RAZOR_BASE_MARGIN: i16 = 300; // Base margin (e.g., 3 pawns); tune down for safety
+pub const RAZOR_NEAR_MATE: i16 = MATE_VALUE - 200;
 
 #[inline(always)]
 pub fn see_naive(board: &Board, capture_move: ChessMove) -> i16 {
@@ -53,6 +57,16 @@ pub fn can_delta_prune(board: &Board, in_check: bool) -> bool {
 #[inline(always)]
 pub fn can_null_move_prune(board: &Board, remaining_depth: u8, in_check: bool) -> bool {
     remaining_depth >= 3 && !in_check && !is_zugzwang(board)
+}
+
+#[inline(always)]
+pub fn can_razor_prune(remaining_depth: u8, in_check: bool, alpha: i16, beta: i16) -> bool {
+    remaining_depth <= RAZOR_MAX_DEPTH
+        && remaining_depth > 0
+        && !in_check
+        && alpha.abs() < RAZOR_NEAR_MATE
+        && beta.abs() < RAZOR_NEAR_MATE
+        && beta - alpha == 1 // Only in null-window (non-PV) nodes
 }
 
 #[inline(always)]
