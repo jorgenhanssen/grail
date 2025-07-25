@@ -1,6 +1,20 @@
 use chess::{Board, ChessMove, Piece};
-use evaluation::{piece_value, total_material};
+use evaluation::{piece_value, scores::MATE_VALUE, total_material};
 use uci::commands::Score;
+
+pub const RAZOR_MAX_DEPTH: u8 = 3;
+pub const RAZOR_NEAR_MATE: i16 = MATE_VALUE - 200;
+
+// Margins from Stockfish: https://www.chessprogramming.org/Razoring#Stockfish
+pub const RAZOR_MARGINS: [i16; RAZOR_MAX_DEPTH as usize + 1] = {
+    let mut margins = [0i16; RAZOR_MAX_DEPTH as usize + 1];
+    let mut depth = 1;
+    while depth <= RAZOR_MAX_DEPTH as i16 {
+        margins[depth as usize] = 512 + 293 * (depth * depth);
+        depth += 1;
+    }
+    margins
+};
 
 #[inline(always)]
 pub fn see_naive(board: &Board, capture_move: ChessMove) -> i16 {
@@ -53,6 +67,11 @@ pub fn can_delta_prune(board: &Board, in_check: bool) -> bool {
 #[inline(always)]
 pub fn can_null_move_prune(board: &Board, remaining_depth: u8, in_check: bool) -> bool {
     remaining_depth >= 3 && !in_check && !is_zugzwang(board)
+}
+
+#[inline(always)]
+pub fn can_razor_prune(remaining_depth: u8, in_check: bool) -> bool {
+    remaining_depth <= RAZOR_MAX_DEPTH && remaining_depth > 0 && !in_check
 }
 
 #[inline(always)]

@@ -3,7 +3,7 @@ use crate::{
         aspiration::{
             AspirationWindow, Pass, ASP_ENABLED_FROM, ASP_HALF_START, ASP_MAX_RETRIES, ASP_WIDEN,
         },
-        utils::{can_delta_prune, can_null_move_prune},
+        utils::{can_delta_prune, can_null_move_prune, can_razor_prune, RAZOR_MARGINS},
     },
     utils::{ordered_moves, Castle, HistoryHeuristic},
     Engine,
@@ -26,7 +26,7 @@ use uci::{
     UciOutput,
 };
 
-use super::utils::{convert_centipawn_score, convert_mate_score, lmr, see_naive};
+use super::utils::{convert_centipawn_score, convert_mate_score, lmr, see_naive, RAZOR_NEAR_MATE};
 use super::{
     controller::SearchController,
     tt::{Bound, TTEntry},
@@ -294,10 +294,17 @@ impl NegamaxEngine {
             }
         }
 
-        // Null-move pruning
         let remaining_depth = max_depth - depth;
         let in_check = board.checkers().popcnt() > 0;
 
+        // Razoring
+        if can_razor_prune(remaining_depth, in_check) {
+            if let Some(score) = self.razor_prune(board, remaining_depth, alpha, depth, castle) {
+                return (score, Vec::new());
+            }
+        }
+
+        // Null-move pruning
         if try_null_move && can_null_move_prune(board, remaining_depth, in_check) {
             if let Some(score) =
                 self.null_move_prune(board, depth, max_depth, alpha, beta, hash, castle)
@@ -703,5 +710,40 @@ impl NegamaxEngine {
         }
 
         None
+    }
+
+    #[inline(always)]
+    fn razor_prune(
+        &mut self,
+        board: &Board,
+        remaining_depth: u8,
+        alpha: i16,
+        depth: u8,
+        castle: Castle,
+    ) -> Option<i16> {
+        let eval = self.evaluator.evaluate(
+            board,
+            castle.white_has_castled(),
+            castle.black_has_castled(),
+        );
+        let static_eval = if board.side_to_move() == Color::White {
+            eval
+        } else {
+            -eval
+        };
+
+        if static_eval >= alpha - RAZOR_MARGINS[remaining_depth as usize] {
+            return None; // Static eval too high, no point in razoring
+        }
+
+        // Q search with null window
+        let (value, _) = self.quiescence_search(board, alpha - 1, alpha, depth, castle);
+
+        if value < alpha && value.abs() < RAZOR_NEAR_MATE {
+            // Our position is still terrible, so we can prune
+            Some(value)
+        } else {
+            None
+        }
     }
 }
