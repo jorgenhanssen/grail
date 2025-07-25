@@ -54,6 +54,15 @@ pub fn evaluate_board(board: &Board, white_has_castled: bool, black_has_castled:
         cp -= 50;
     }
 
+    let is_check = board.checkers().popcnt() > 0;
+
+    if is_check && board.side_to_move() == Color::White {
+        cp -= 75;
+    }
+    if is_check && board.side_to_move() == Color::Black {
+        cp += 75;
+    }
+
     cp
 }
 
