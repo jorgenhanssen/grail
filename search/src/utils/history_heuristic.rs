@@ -65,7 +65,7 @@ const MALUS: [i32; MAX_DEPTH + 1] = {
     let mut i = 0;
     while i <= MAX_DEPTH {
         let depth = i as i32;
-        table[i] = -(16 * depth * depth + 8 * depth);
+        table[i] = -(12 * depth * depth + 6 * depth);
         i += 1;
     }
     table
