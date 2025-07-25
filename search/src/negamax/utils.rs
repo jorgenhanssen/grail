@@ -1,10 +1,20 @@
 use chess::{Board, ChessMove, Piece};
-use evaluation::{piece_value, scores::MATE_VALUE, total_material, PAWN_VALUE};
+use evaluation::{piece_value, scores::MATE_VALUE, total_material};
 use uci::commands::Score;
 
 pub const RAZOR_MAX_DEPTH: u8 = 3;
-pub const RAZOR_BASE_MARGIN: i16 = 3 * PAWN_VALUE;
 pub const RAZOR_NEAR_MATE: i16 = MATE_VALUE - 200;
+
+// Margins from Stockfish: https://www.chessprogramming.org/Razoring#Stockfish
+pub const RAZOR_MARGINS: [i16; RAZOR_MAX_DEPTH as usize + 1] = {
+    let mut margins = [0i16; RAZOR_MAX_DEPTH as usize + 1];
+    let mut depth = 1;
+    while depth <= RAZOR_MAX_DEPTH as i16 {
+        margins[depth as usize] = 512 + 293 * (depth * depth);
+        depth += 1;
+    }
+    margins
+};
 
 #[inline(always)]
 pub fn see_naive(board: &Board, capture_move: ChessMove) -> i16 {
@@ -61,12 +71,8 @@ pub fn can_null_move_prune(board: &Board, remaining_depth: u8, in_check: bool) -
 
 #[inline(always)]
 pub fn can_razor_prune(remaining_depth: u8, in_check: bool, alpha: i16, beta: i16) -> bool {
-    remaining_depth <= RAZOR_MAX_DEPTH
-        && remaining_depth > 0
-        && !in_check
-        && alpha.abs() < RAZOR_NEAR_MATE
-        && beta.abs() < RAZOR_NEAR_MATE
-        && beta - alpha == 1 // Only in null-window (non-PV) nodes
+    remaining_depth <= RAZOR_MAX_DEPTH && remaining_depth > 0 && !in_check
+    // && beta - alpha == 1 // Only in null-window (non-PV) nodes
 }
 
 #[inline(always)]

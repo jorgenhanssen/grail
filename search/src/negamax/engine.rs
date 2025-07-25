@@ -3,7 +3,7 @@ use crate::{
         aspiration::{
             AspirationWindow, Pass, ASP_ENABLED_FROM, ASP_HALF_START, ASP_MAX_RETRIES, ASP_WIDEN,
         },
-        utils::{can_delta_prune, can_null_move_prune, can_razor_prune},
+        utils::{can_delta_prune, can_null_move_prune, can_razor_prune, RAZOR_MARGINS},
     },
     utils::{ordered_moves, Castle, HistoryHeuristic},
     Engine,
@@ -26,9 +26,7 @@ use uci::{
     UciOutput,
 };
 
-use super::utils::{
-    convert_centipawn_score, convert_mate_score, lmr, see_naive, RAZOR_BASE_MARGIN, RAZOR_NEAR_MATE,
-};
+use super::utils::{convert_centipawn_score, convert_mate_score, lmr, see_naive, RAZOR_NEAR_MATE};
 use super::{
     controller::SearchController,
     tt::{Bound, TTEntry},
@@ -734,16 +732,15 @@ impl NegamaxEngine {
             -eval
         };
 
-        // Stockfish-inspired quadratic margin
-        let margin = RAZOR_BASE_MARGIN + (remaining_depth as i16 * remaining_depth as i16 * 100);
-
-        if static_eval >= alpha - margin {
+        if static_eval >= alpha - RAZOR_MARGINS[remaining_depth as usize] {
             return None; // Static eval too high, no point in razoring
         }
 
+        // Q search with null window
         let (value, _) = self.quiescence_search(board, alpha - 1, alpha, depth, castle);
 
         if value < alpha && value.abs() < RAZOR_NEAR_MATE {
+            // Our position is still terrible, so we can prune
             Some(value)
         } else {
             None
