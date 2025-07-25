@@ -70,9 +70,8 @@ pub fn can_null_move_prune(board: &Board, remaining_depth: u8, in_check: bool) -
 }
 
 #[inline(always)]
-pub fn can_razor_prune(remaining_depth: u8, in_check: bool, alpha: i16, beta: i16) -> bool {
+pub fn can_razor_prune(remaining_depth: u8, in_check: bool) -> bool {
     remaining_depth <= RAZOR_MAX_DEPTH && remaining_depth > 0 && !in_check
-    // && beta - alpha == 1 // Only in null-window (non-PV) nodes
 }
 
 #[inline(always)]

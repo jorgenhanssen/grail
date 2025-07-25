@@ -298,7 +298,7 @@ impl NegamaxEngine {
         let in_check = board.checkers().popcnt() > 0;
 
         // Razoring
-        if can_razor_prune(remaining_depth, in_check, alpha, beta) {
+        if can_razor_prune(remaining_depth, in_check) {
             if let Some(score) = self.razor_prune(board, remaining_depth, alpha, depth, castle) {
                 return (score, Vec::new());
             }
