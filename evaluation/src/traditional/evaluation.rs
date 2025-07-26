@@ -3,9 +3,7 @@ use chess::{
     EMPTY,
 };
 
-use crate::piece_values::{
-    piece_value, BISHOP_VALUE, KNIGHT_VALUE, PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE,
-};
+use crate::piece_values::piece_value;
 use crate::scores::MATE_VALUE;
 use crate::traditional::bonus::{
     PASSED_PAWN_BONUS, ROOK_ON_SEVENTH_BONUS, ROOK_OPEN_FILE_BONUS, ROOK_SEMI_OPEN_FILE_BONUS,
@@ -13,7 +11,12 @@ use crate::traditional::bonus::{
 use crate::traditional::pst::{get_pst, sum_pst};
 
 // Return final evaluation (positive = good for White, negative = good for Black)
-pub fn evaluate_board(board: &Board, white_has_castled: bool, black_has_castled: bool) -> i16 {
+pub fn evaluate_board(
+    board: &Board,
+    white_has_castled: bool,
+    black_has_castled: bool,
+    phase: f32,
+) -> i16 {
     let is_white = board.side_to_move() == Color::White;
 
     match board.status() {
@@ -29,8 +32,6 @@ pub fn evaluate_board(board: &Board, white_has_castled: bool, black_has_castled:
         BoardStatus::Ongoing => {}
     }
 
-    let phase = game_phase(board);
-
     let white_mask = board.color_combined(Color::White);
     let black_mask = board.color_combined(Color::Black);
 
@@ -44,8 +45,8 @@ pub fn evaluate_board(board: &Board, white_has_castled: bool, black_has_castled:
     cp += evaluate_rooks(board, Color::White);
     cp -= evaluate_rooks(board, Color::Black);
 
-    cp += evaluate_king_safety(board, Color::White);
-    cp -= evaluate_king_safety(board, Color::Black);
+    cp += evaluate_king_safety(board, Color::White, phase);
+    cp -= evaluate_king_safety(board, Color::Black, phase);
 
     if white_has_castled {
         cp += 50;
@@ -68,11 +69,11 @@ fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard, phase: 
 
     let mut cp = 0i16;
 
-    cp += PAWN_VALUE * pawn_mask.popcnt() as i16;
-    cp += KNIGHT_VALUE * knight_mask.popcnt() as i16;
-    cp += BISHOP_VALUE * bishop_mask.popcnt() as i16;
-    cp += ROOK_VALUE * rook_mask.popcnt() as i16;
-    cp += QUEEN_VALUE * queen_mask.popcnt() as i16;
+    cp += piece_value(Piece::Pawn, phase) * pawn_mask.popcnt() as i16;
+    cp += piece_value(Piece::Knight, phase) * knight_mask.popcnt() as i16;
+    cp += piece_value(Piece::Bishop, phase) * bishop_mask.popcnt() as i16;
+    cp += piece_value(Piece::Rook, phase) * rook_mask.popcnt() as i16;
+    cp += piece_value(Piece::Queen, phase) * queen_mask.popcnt() as i16;
 
     let pst = get_pst(color);
     if pawn_mask != EMPTY {
@@ -190,7 +191,7 @@ const fn make_passed_pawn_mask(
 }
 
 #[inline(always)]
-fn evaluate_king_safety(board: &Board, color: Color) -> i16 {
+fn evaluate_king_safety(board: &Board, color: Color, phase: f32) -> i16 {
     let king_square = board.king_square(color);
     let king_zone = KING_ZONES[king_square.to_index()];
     let enemy_color = !color;
@@ -203,11 +204,11 @@ fn evaluate_king_safety(board: &Board, color: Color) -> i16 {
     let pawns = (enemy_pieces & board.pieces(Piece::Pawn) & king_zone).popcnt() as i16;
 
     let mut cp = 0i16;
-    cp -= queens * piece_value(Piece::Queen);
-    cp -= rooks * piece_value(Piece::Rook);
-    cp -= bishops * piece_value(Piece::Bishop);
-    cp -= knights * piece_value(Piece::Knight);
-    cp -= pawns * piece_value(Piece::Pawn);
+    cp -= queens * piece_value(Piece::Queen, phase);
+    cp -= rooks * piece_value(Piece::Rook, phase);
+    cp -= bishops * piece_value(Piece::Bishop, phase);
+    cp -= knights * piece_value(Piece::Knight, phase);
+    cp -= pawns * piece_value(Piece::Pawn, phase);
 
     // Let's do 30% of the value of the pieces
     (0.3 * (cp as f32)).round() as i16
@@ -273,15 +274,4 @@ fn evaluate_rooks(board: &Board, color: Color) -> i16 {
         }
     }
     cp
-}
-
-fn game_phase(board: &Board) -> f32 {
-    let knights = board.pieces(Piece::Knight);
-    let bishops = board.pieces(Piece::Bishop);
-    let rooks = board.pieces(Piece::Rook);
-    let queens = board.pieces(Piece::Queen);
-
-    let score = knights.popcnt() + bishops.popcnt() + 2 * rooks.popcnt() + 4 * queens.popcnt();
-
-    (score.min(24) as f32) / 24.0
 }

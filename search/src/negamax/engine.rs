@@ -5,7 +5,10 @@ use crate::{
         },
         utils::{can_delta_prune, can_null_move_prune, can_razor_prune, RAZOR_MARGINS},
     },
-    utils::{ordered_moves, Castle, HistoryHeuristic},
+    utils::{
+        convert_centipawn_score, convert_mate_score, game_phase, ordered_moves, see_naive, Castle,
+        HistoryHeuristic,
+    },
     Engine,
 };
 use ahash::AHashMap;
@@ -13,7 +16,6 @@ use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank};
 use evaluation::{
     piece_value,
     scores::{MATE_VALUE, NEG_INFINITY},
-    PAWN_VALUE, QUEEN_VALUE,
 };
 use evaluation::{Evaluator, TraditionalEvaluator};
 use std::sync::{
@@ -26,7 +28,7 @@ use uci::{
     UciOutput,
 };
 
-use super::utils::{convert_centipawn_score, convert_mate_score, lmr, see_naive, RAZOR_NEAR_MATE};
+use super::utils::{lmr, RAZOR_NEAR_MATE};
 use super::{
     controller::SearchController,
     tt::{Bound, TTEntry},
@@ -299,7 +301,10 @@ impl NegamaxEngine {
 
         // Razoring
         if can_razor_prune(remaining_depth, in_check) {
-            if let Some(score) = self.razor_prune(board, remaining_depth, alpha, depth, castle) {
+            let phase = game_phase(board);
+            if let Some(score) =
+                self.razor_prune(board, remaining_depth, alpha, depth, castle, phase)
+            {
                 return (score, Vec::new());
             }
         }
@@ -465,10 +470,13 @@ impl NegamaxEngine {
             return (cached_score, Vec::new());
         }
 
+        let phase = game_phase(board);
+
         let eval = self.evaluator.evaluate(
             board,
             castle.white_has_castled(),
             castle.black_has_castled(),
+            phase,
         );
         let stand_pat = if board.side_to_move() == Color::White {
             eval
@@ -486,8 +494,8 @@ impl NegamaxEngine {
             }
 
             // Node-level delta pruning (big delta)
-            if can_delta_prune(board, in_check) {
-                let mut big_delta = QUEEN_VALUE;
+            if can_delta_prune(board, in_check, phase) {
+                let mut big_delta = piece_value(Piece::Queen, phase);
                 let promotion_rank = if board.side_to_move() == Color::White {
                     Rank::Seventh
                 } else {
@@ -498,7 +506,7 @@ impl NegamaxEngine {
                 let promoting_pawns = pawns & rank_mask;
 
                 if promoting_pawns != chess::EMPTY {
-                    big_delta += QUEEN_VALUE - PAWN_VALUE;
+                    big_delta += piece_value(Piece::Queen, phase) - piece_value(Piece::Pawn, phase);
                 }
 
                 if stand_pat + big_delta < alpha {
@@ -531,12 +539,13 @@ impl NegamaxEngine {
 
         for mv in forcing_moves {
             // Per-move delta pruning (skip if capture can't possibly improve alpha)
-            if can_delta_prune(board, in_check) {
+            if can_delta_prune(board, in_check, phase) {
                 let captured = board.piece_on(mv.get_dest());
                 if let Some(piece) = captured {
-                    let mut delta = piece_value(piece) + 200; // delta margin
+                    let mut delta = piece_value(piece, phase) + 200; // delta margin
                     if mv.get_promotion().is_some() {
-                        delta += QUEEN_VALUE - PAWN_VALUE; // promotion bonus
+                        delta += piece_value(Piece::Queen, phase) - piece_value(Piece::Pawn, phase);
+                        // promotion bonus
                     }
                     if stand_pat + delta < alpha {
                         continue;
@@ -547,7 +556,7 @@ impl NegamaxEngine {
                 }
             }
 
-            if !in_check && see_naive(board, mv) < 0 {
+            if !in_check && see_naive(board, mv, phase) < 0 {
                 continue;
             }
 
@@ -720,11 +729,13 @@ impl NegamaxEngine {
         alpha: i16,
         depth: u8,
         castle: Castle,
+        phase: f32,
     ) -> Option<i16> {
         let eval = self.evaluator.evaluate(
             board,
             castle.white_has_castled(),
             castle.black_has_castled(),
+            phase,
         );
         let static_eval = if board.side_to_move() == Color::White {
             eval
