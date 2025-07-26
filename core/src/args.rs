@@ -11,7 +11,7 @@ pub struct Args {
     pub log_file: Option<PathBuf>,
 
     #[command(subcommand)]
-    pub engines: Engines,
+    pub engines: Option<Engines>,
 }
 
 #[derive(Subcommand, Debug)]

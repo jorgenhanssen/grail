@@ -24,7 +24,7 @@ fn load_varmap_from_bytes(varmap: &mut VarMap, data: &[u8]) -> Result<()> {
 }
 
 pub fn create(args: &Args) -> impl Engine {
-    match args.engines {
+    match args.engines.as_ref().unwrap_or(&Engines::Negamax {}) {
         Engines::Negamax {} => {
             // let mut varmap = VarMap::new();
             // let mut nnue = NNUE::new(&varmap, &Device::Cpu, NNUE_VERSION);
