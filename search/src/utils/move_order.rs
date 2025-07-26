@@ -46,13 +46,6 @@ pub fn ordered_moves(
 // Piece moves get base priority (lowest)
 pub const MIN_PRIORITY: i32 = 0;
 
-pub const MIN_PIECE_PRIORITY: i32 = MIN_PRIORITY;
-const PIECE_PRIORITY_KNIGHT: i32 = MIN_PIECE_PRIORITY + 1;
-const PIECE_PRIORITY_BISHOP: i32 = MIN_PIECE_PRIORITY + 2;
-const PIECE_PRIORITY_ROOK: i32 = MIN_PIECE_PRIORITY + 3;
-const PIECE_PRIORITY_QUEEN: i32 = MIN_PIECE_PRIORITY + 4;
-pub const MAX_PIECE_PRIORITY: i32 = PIECE_PRIORITY_QUEEN;
-
 // Captures get medium priority (MVV-LVA values 10-55)
 pub const MIN_CAPTURE_PRIORITY: i32 = MIN_PRIORITY + 1_000_000;
 pub const CAPTURE_PRIORITY: i32 = MIN_CAPTURE_PRIORITY;
