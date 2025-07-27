@@ -1,5 +1,6 @@
 use chess::{
-    get_adjacent_files, get_file, BitBoard, Board, BoardStatus, Color, Piece, Rank, ALL_FILES,
+    get_adjacent_files, get_bishop_moves, get_file, get_knight_moves, get_pawn_attacks,
+    get_rook_moves, BitBoard, Board, BoardStatus, Color, File, Piece, Rank, Square, ALL_FILES,
     EMPTY,
 };
 
@@ -48,11 +49,24 @@ pub fn evaluate_board(
     cp += evaluate_king_safety(board, Color::White, phase);
     cp -= evaluate_king_safety(board, Color::Black, phase);
 
+    cp += evaluate_mobility(board, Color::White, phase);
+    cp -= evaluate_mobility(board, Color::Black, phase);
+
+    cp += evaluate_knight_outposts(board, Color::White, phase);
+    cp -= evaluate_knight_outposts(board, Color::Black, phase);
+
     if white_has_castled {
         cp += 50;
     }
     if black_has_castled {
         cp -= 50;
+    }
+
+    // Tempo bonus
+    if is_white {
+        cp += (10.0 * phase).round() as i16;
+    } else {
+        cp -= (10.0 * phase).round() as i16;
     }
 
     cp
@@ -274,4 +288,87 @@ fn evaluate_rooks(board: &Board, color: Color) -> i16 {
         }
     }
     cp
+}
+
+#[inline(always)]
+fn evaluate_mobility(board: &Board, color: Color, phase: f32) -> i16 {
+    let my_pieces = board.color_combined(color);
+    let occupied = my_pieces | board.color_combined(!color);
+
+    let mut cp = 0i16;
+
+    // Knights: +4 per extra beyond 3, -1 per below 3 (very light penalty to avoid over-punishing defense)
+    let knights = board.pieces(Piece::Knight) & my_pieces;
+    for sq in knights {
+        let attacks = get_knight_moves(sq) & !my_pieces;
+        let count = attacks.popcnt() as i16;
+        let bonus = (count - 3).max(0) * 4 + (3 - count).max(0) * -1;
+        cp += (bonus as f32 * (0.8 * phase + 0.2 * (1.0 - phase))).round() as i16;
+    }
+
+    // Bishops: +3 per extra beyond 5, -1 per below 5
+    let bishops = board.pieces(Piece::Bishop) & my_pieces;
+    for sq in bishops {
+        let attacks = get_bishop_moves(sq, occupied) & !my_pieces;
+        let count = attacks.popcnt() as i16;
+        let bonus = (count - 5).max(0) * 3 + (5 - count).max(0) * -1;
+        cp += (bonus as f32 * (0.8 * phase + 0.2 * (1.0 - phase))).round() as i16;
+    }
+
+    // Rooks: +3 per extra beyond 7, -1 per below 7
+    let rooks = board.pieces(Piece::Rook) & my_pieces;
+    for sq in rooks {
+        let attacks = get_rook_moves(sq, occupied) & !my_pieces;
+        let count = attacks.popcnt() as i16;
+        let bonus = (count - 7).max(0) * 3 + (7 - count).max(0) * -1;
+        cp += (bonus as f32 * (0.8 * phase + 0.2 * (1.0 - phase))).round() as i16;
+    }
+
+    // Queens: +2 per extra beyond 14, -1 per below 14
+    let queens = board.pieces(Piece::Queen) & my_pieces;
+    for sq in queens {
+        let attacks = get_queen_moves(sq, occupied) & !my_pieces;
+        let count = attacks.popcnt() as i16;
+        let bonus = (count - 14).max(0) * 2 + (14 - count).max(0) * -1;
+        cp += (bonus as f32 * (0.8 * phase + 0.2 * (1.0 - phase))).round() as i16;
+    }
+
+    cp
+}
+
+#[inline(always)]
+fn evaluate_knight_outposts(board: &Board, color: Color, phase: f32) -> i16 {
+    let my_pieces = board.color_combined(color);
+    let enemy_pawns = board.pieces(Piece::Pawn) & board.color_combined(!color);
+    let my_pawns = board.pieces(Piece::Pawn) & my_pieces;
+
+    let knights = board.pieces(Piece::Knight) & my_pieces;
+    let mut cp = 0i16;
+
+    for sq in knights {
+        let rank = sq.get_rank();
+        let is_outpost = sq.get_file() >= File::C
+            && sq.get_file() <= File::F
+            && match color {
+                Color::White => rank >= Rank::Fourth && rank <= Rank::Sixth,
+                Color::Black => rank <= Rank::Fifth && rank >= Rank::Third,
+            };
+        if is_outpost {
+            let supported = get_pawn_attacks(sq, !color, my_pawns) != EMPTY;
+            let safe = get_pawn_attacks(sq, color, enemy_pawns) == EMPTY;
+            if supported && safe {
+                cp += (25.0 * phase).round() as i16;
+                if color == Color::Black {
+                    cp += 10; // Small extra for black to help defense
+                }
+            }
+        }
+    }
+
+    cp
+}
+
+#[inline(always)]
+fn get_queen_moves(sq: Square, blockers: BitBoard) -> BitBoard {
+    get_rook_moves(sq, blockers) | get_bishop_moves(sq, blockers)
 }

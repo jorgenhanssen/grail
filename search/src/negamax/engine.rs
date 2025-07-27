@@ -191,6 +191,8 @@ impl NegamaxEngine {
         // Init position stack
         self.position_stack.clear();
         self.position_stack.push(self.board.get_hash());
+
+        self.history_heuristic.reset();
     }
 
     pub fn search_root(
