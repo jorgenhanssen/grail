@@ -1,6 +1,6 @@
 use chess::{
-    get_adjacent_files, get_file, BitBoard, Board, BoardStatus, Color, Piece, Rank, ALL_FILES,
-    EMPTY,
+    get_adjacent_files, get_bishop_moves, get_file, get_rook_moves, BitBoard, Board, BoardStatus,
+    Color, Piece, Rank, ALL_FILES, EMPTY,
 };
 
 use crate::piece_values::piece_value;
@@ -44,6 +44,9 @@ pub fn evaluate_board(
 
     cp += evaluate_rooks(board, Color::White);
     cp -= evaluate_rooks(board, Color::Black);
+
+    cp += evaluate_bishops(board, Color::White);
+    cp -= evaluate_bishops(board, Color::Black);
 
     cp += evaluate_king_safety(board, Color::White, phase);
     cp -= evaluate_king_safety(board, Color::Black, phase);
@@ -92,11 +95,6 @@ fn evaluate_material(board: &Board, color: Color, color_mask: &BitBoard, phase: 
         cp += sum_pst(queen_mask, pst.queen, phase);
     }
     cp += sum_pst(king_mask, pst.king, phase); // king always present
-
-    // bonus for bishop pair
-    if bishop_mask.popcnt() >= 2 {
-        cp += 50;
-    }
 
     cp
 }
@@ -251,6 +249,7 @@ fn evaluate_rooks(board: &Board, color: Color) -> i16 {
 
     let our_pawns = board.pieces(Piece::Pawn) & board.color_combined(color);
     let their_pawns = board.pieces(Piece::Pawn) & board.color_combined(!color);
+    let occupied = *board.combined();
 
     let mut cp = 0i16;
     for sq in rooks {
@@ -272,6 +271,34 @@ fn evaluate_rooks(board: &Board, color: Color) -> i16 {
         {
             cp += ROOK_ON_SEVENTH_BONUS;
         }
+
+        // Rook mobility bonus
+        let mobility = get_rook_moves(sq, occupied).popcnt() as i16;
+        cp += 5 * mobility;
     }
+    cp
+}
+
+#[inline(always)]
+fn evaluate_bishops(board: &Board, color: Color) -> i16 {
+    let bishops = board.pieces(Piece::Bishop) & board.color_combined(color);
+    if bishops == EMPTY {
+        return 0;
+    }
+
+    let occupied = *board.combined();
+    let mut cp = 0i16;
+
+    // Bishop pair bonus
+    if bishops.popcnt() >= 2 {
+        cp += 50;
+    }
+
+    // Bishop mobility bonus
+    for sq in bishops {
+        let mobility = get_bishop_moves(sq, occupied).popcnt() as i16;
+        cp += 5 * mobility;
+    }
+
     cp
 }
