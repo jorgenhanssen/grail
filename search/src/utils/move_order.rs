@@ -31,7 +31,7 @@ pub fn ordered_moves(
         if Some(mov) == pv {
             priority = priority.max(MAX_PRIORITY + 2);
         }
-        if killers.iter().any(|&k| k == Some(mov)) {
+        if killers.contains(&Some(mov)) {
             priority = priority.max(CAPTURE_PRIORITY - 1);
         }
 
@@ -107,5 +107,6 @@ fn move_priority(mov: &ChessMove, board: &Board, history_heuristic: &HistoryHeur
     }
 
     let color = board.side_to_move();
-    return history_heuristic.get(color, source, dest) as i32;
+
+    history_heuristic.get(color, source, dest) as i32
 }

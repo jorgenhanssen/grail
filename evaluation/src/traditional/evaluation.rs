@@ -36,8 +36,8 @@ pub fn evaluate_board(
     let black_mask = board.color_combined(Color::Black);
 
     let mut cp: i16 = 0;
-    cp += evaluate_material(board, Color::White, &white_mask, phase);
-    cp -= evaluate_material(board, Color::Black, &black_mask, phase);
+    cp += evaluate_material(board, Color::White, white_mask, phase);
+    cp -= evaluate_material(board, Color::Black, black_mask, phase);
 
     cp += evaluate_pawn_structure(board, Color::White);
     cp -= evaluate_pawn_structure(board, Color::Black);

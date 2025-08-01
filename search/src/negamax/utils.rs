@@ -1,5 +1,5 @@
-use chess::{Board, ChessMove};
-use evaluation::{piece_value, scores::MATE_VALUE, total_material};
+use chess::Board;
+use evaluation::{scores::MATE_VALUE, total_material};
 
 use crate::utils::is_zugzwang;
 
@@ -30,7 +30,7 @@ pub fn lmr(remaining_depth: u8, tactical: bool, move_index: i32) -> u8 {
 
     // Clamp between 0 and half the remaining depth
     let half_depth = (remaining_depth / 2).max(1);
-    reduction.min(half_depth).max(0)
+    reduction.min(half_depth)
 }
 
 pub fn can_delta_prune(board: &Board, in_check: bool, phase: f32) -> bool {

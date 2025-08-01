@@ -165,8 +165,7 @@ fn to_san(board: &Board, mv: ChessMove) -> String {
     san
 }
 
-#[inline]
-
+#[inline(always)]
 fn piece_to_char(piece: Piece) -> char {
     match piece {
         Piece::Pawn => 'P',
@@ -178,7 +177,7 @@ fn piece_to_char(piece: Piece) -> char {
     }
 }
 
-#[inline]
+#[inline(always)]
 fn file_to_char(file: File) -> char {
     match file {
         File::A => 'a',
