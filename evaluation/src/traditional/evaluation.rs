@@ -1,6 +1,6 @@
 use chess::{
-    get_adjacent_files, get_bishop_moves, get_file, get_rook_moves, BitBoard, Board, BoardStatus,
-    Color, Piece, Rank, ALL_FILES, EMPTY,
+    get_adjacent_files, get_bishop_moves, get_file, get_knight_moves, get_rook_moves, BitBoard,
+    Board, BoardStatus, Color, Piece, Rank, ALL_FILES, EMPTY,
 };
 
 use crate::piece_values::piece_value;
@@ -47,6 +47,9 @@ pub fn evaluate_board(
 
     cp += evaluate_bishops(board, Color::White);
     cp -= evaluate_bishops(board, Color::Black);
+
+    cp += evaluate_knights(board, Color::White);
+    cp -= evaluate_knights(board, Color::Black);
 
     cp += evaluate_king_safety(board, Color::White, phase);
     cp -= evaluate_king_safety(board, Color::Black, phase);
@@ -298,6 +301,24 @@ fn evaluate_bishops(board: &Board, color: Color) -> i16 {
     for sq in bishops {
         let mobility = get_bishop_moves(sq, occupied).popcnt() as i16;
         cp += 5 * mobility;
+    }
+
+    cp
+}
+
+fn evaluate_knights(board: &Board, color: Color) -> i16 {
+    let my_pieces = board.color_combined(color);
+    let knights = board.pieces(Piece::Knight) & my_pieces;
+    if knights == EMPTY {
+        return 0;
+    }
+
+    let mut cp = 0i16;
+
+    for sq in knights {
+        let squares = get_knight_moves(sq);
+        let mobility = (squares & !my_pieces).popcnt() as i16;
+        cp += 8 * mobility;
     }
 
     cp

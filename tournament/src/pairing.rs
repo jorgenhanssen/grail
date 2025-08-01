@@ -66,7 +66,7 @@ impl Pairing {
                 let mut progress = progress.lock().unwrap();
                 *progress += 1;
 
-                log::info!("{} [{}/{}]", opening, *progress, num_games);
+                log::info!("[{}/{}] {}", *progress, num_games, opening);
                 log::info!("{}\n", outcome);
 
                 Some(outcome)
