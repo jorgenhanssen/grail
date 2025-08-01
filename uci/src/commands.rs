@@ -63,7 +63,7 @@ pub enum Score {
     Mate(i16),       // Positive for mate-in-n, negative for mated-in-n
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GoParams {
     // Bool to enable pondering mode. The engine will not stop pondering in the background until a stop command is received.
     pub ponder: bool,
@@ -97,24 +97,6 @@ pub struct GoParams {
 
     // Search exactly movetime milliseconds.
     pub move_time: Option<u64>,
-}
-
-impl Default for GoParams {
-    fn default() -> Self {
-        Self {
-            ponder: false,
-            infinite: false,
-            search_moves: None,
-            wtime: None,
-            btime: None,
-            winc: None,
-            binc: None,
-            moves_to_go: None,
-            depth: None,
-            nodes: None,
-            move_time: None,
-        }
-    }
 }
 
 #[derive(Debug, Default)]

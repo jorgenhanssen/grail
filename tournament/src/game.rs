@@ -24,7 +24,7 @@ impl GameRunner {
 
     pub fn run(&self, args: GameArgs) -> Result<GameOutcome, Box<dyn Error>> {
         let mut game =
-            Game::from_str(&args.opening.fen).map_err(|e| format!("Invalid FEN: {}", e))?;
+            Game::from_str(args.opening.fen).map_err(|e| format!("Invalid FEN: {}", e))?;
 
         let mut white_engine = EngineProcess::new(&self.white)?;
         let mut black_engine = EngineProcess::new(&self.black)?;

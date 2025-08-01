@@ -167,11 +167,7 @@ impl Engine for NegamaxEngine {
             depth += 1;
         }
 
-        if let Some(mv) = best_move {
-            Some((mv, best_score))
-        } else {
-            None
-        }
+        best_move.map(|mv| (mv, best_score))
     }
 }
 
@@ -249,6 +245,7 @@ impl NegamaxEngine {
         (current_best_move, best_score)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn search_subtree(
         &mut self,
         board: &Board,
@@ -608,6 +605,7 @@ impl NegamaxEngine {
         None
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn store_tt(
         &mut self,
         hash: u64,
@@ -680,6 +678,7 @@ impl NegamaxEngine {
             .unwrap();
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     fn null_move_prune(
         &mut self,
