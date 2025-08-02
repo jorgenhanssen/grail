@@ -280,7 +280,7 @@ fn evaluate_rooks(board: &Board, color: Color) -> i16 {
 
         // Rook mobility bonus
         let mobility = get_rook_moves(sq, occupied).popcnt() as i16;
-        cp += 5 * mobility;
+        cp += 3 * mobility;
     }
     cp
 }
@@ -303,7 +303,7 @@ fn evaluate_bishops(board: &Board, color: Color) -> i16 {
     // Bishop mobility bonus
     for sq in bishops {
         let mobility = get_bishop_moves(sq, occupied).popcnt() as i16;
-        cp += 5 * mobility;
+        cp += 3 * mobility;
     }
 
     cp
@@ -320,7 +320,7 @@ fn evaluate_knights(board: &Board, color: Color) -> i16 {
     for sq in knights {
         let squares = get_knight_moves(sq);
         let mobility = (squares & !my_pieces).popcnt() as i16;
-        cp += 8 * mobility;
+        cp += 5 * mobility;
     }
 
     cp
@@ -339,7 +339,7 @@ fn evaluate_queens(board: &Board, color: Color) -> i16 {
     for sq in queens {
         let moves = get_bishop_moves(sq, occupied) | get_rook_moves(sq, occupied);
         let mobility = (moves & !my_pieces).popcnt() as i16;
-        cp += 2 * mobility;
+        cp += mobility;
     }
 
     cp
