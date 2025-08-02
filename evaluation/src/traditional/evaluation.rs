@@ -51,6 +51,9 @@ pub fn evaluate_board(
     cp += evaluate_knights(board, Color::White);
     cp -= evaluate_knights(board, Color::Black);
 
+    cp += evaluate_queens(board, Color::White);
+    cp -= evaluate_queens(board, Color::Black);
+
     cp += evaluate_king_safety(board, Color::White, phase);
     cp -= evaluate_king_safety(board, Color::Black, phase);
 
@@ -314,11 +317,29 @@ fn evaluate_knights(board: &Board, color: Color) -> i16 {
     }
 
     let mut cp = 0i16;
-
     for sq in knights {
         let squares = get_knight_moves(sq);
         let mobility = (squares & !my_pieces).popcnt() as i16;
         cp += 8 * mobility;
+    }
+
+    cp
+}
+
+fn evaluate_queens(board: &Board, color: Color) -> i16 {
+    let my_pieces = board.color_combined(color);
+    let queens = board.pieces(Piece::Queen) & my_pieces;
+    if queens == EMPTY {
+        return 0;
+    }
+
+    let occupied = *board.combined();
+
+    let mut cp = 0i16;
+    for sq in queens {
+        let moves = get_bishop_moves(sq, occupied) | get_rook_moves(sq, occupied);
+        let mobility = (moves & !my_pieces).popcnt() as i16;
+        cp += 2 * mobility;
     }
 
     cp
