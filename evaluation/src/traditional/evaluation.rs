@@ -237,7 +237,7 @@ fn evaluate_king(board: &Board, color: Color, phase: f32) -> i16 {
     cp
 }
 
-const KING_ZONE_RADIUS: i8 = 2;ma
+const KING_ZONE_RADIUS: i8 = 2;
 const KING_ZONES: [BitBoard; 64] = {
     let mut zones = [EMPTY; 64];
     let mut i = 0;
