@@ -42,20 +42,20 @@ pub fn evaluate_board(
     cp += evaluate_pawn_structure(board, Color::White);
     cp -= evaluate_pawn_structure(board, Color::Black);
 
-    cp += evaluate_rooks(board, Color::White);
-    cp -= evaluate_rooks(board, Color::Black);
+    cp += evaluate_rooks(board, Color::White, phase);
+    cp -= evaluate_rooks(board, Color::Black, phase);
 
-    cp += evaluate_bishops(board, Color::White);
-    cp -= evaluate_bishops(board, Color::Black);
+    cp += evaluate_bishops(board, Color::White, phase);
+    cp -= evaluate_bishops(board, Color::Black, phase);
 
-    cp += evaluate_knights(board, Color::White);
-    cp -= evaluate_knights(board, Color::Black);
+    cp += evaluate_knights(board, Color::White, phase);
+    cp -= evaluate_knights(board, Color::Black, phase);
 
-    cp += evaluate_queens(board, Color::White);
-    cp -= evaluate_queens(board, Color::Black);
+    cp += evaluate_queens(board, Color::White, phase);
+    cp -= evaluate_queens(board, Color::Black, phase);
 
-    cp += evaluate_king_safety(board, Color::White, phase);
-    cp -= evaluate_king_safety(board, Color::Black, phase);
+    cp += evaluate_king(board, Color::White, phase);
+    cp -= evaluate_king(board, Color::Black, phase);
 
     if white_has_castled {
         cp += 50;
@@ -195,8 +195,11 @@ const fn make_passed_pawn_mask(
 }
 
 #[inline(always)]
-fn evaluate_king_safety(board: &Board, color: Color, phase: f32) -> i16 {
+fn evaluate_king(board: &Board, color: Color, phase: f32) -> i16 {
     let king_square = board.king_square(color);
+    let mut cp = 0i16;
+
+    // King safety (opening/middlegame)
     let king_zone = KING_ZONES[king_square.to_index()];
     let enemy_color = !color;
     let enemy_pieces = board.color_combined(enemy_color);
@@ -207,17 +210,34 @@ fn evaluate_king_safety(board: &Board, color: Color, phase: f32) -> i16 {
     let knights = (enemy_pieces & board.pieces(Piece::Knight) & king_zone).popcnt() as i16;
     let pawns = (enemy_pieces & board.pieces(Piece::Pawn) & king_zone).popcnt() as i16;
 
-    let mut cp = 0i16;
-    cp -= queens * piece_value(Piece::Queen, phase);
-    cp -= rooks * piece_value(Piece::Rook, phase);
-    cp -= bishops * piece_value(Piece::Bishop, phase);
-    cp -= knights * piece_value(Piece::Knight, phase);
-    cp -= pawns * piece_value(Piece::Pawn, phase);
+    let mut safety_penalty = 0i16;
+    safety_penalty -= queens * piece_value(Piece::Queen, phase);
+    safety_penalty -= rooks * piece_value(Piece::Rook, phase);
+    safety_penalty -= bishops * piece_value(Piece::Bishop, phase);
+    safety_penalty -= knights * piece_value(Piece::Knight, phase);
+    safety_penalty -= pawns * piece_value(Piece::Pawn, phase);
 
     // Let's do 30% of the value of the pieces
-    (0.3 * (cp as f32)).round() as i16
+    cp += ((0.3 * (safety_penalty as f32)) * phase).round() as i16;
+
+    // King activity (endgame)
+    if phase < 0.4 {
+        let file = board.king_square(color).get_file() as i32;
+        let rank = board.king_square(color).get_rank() as i32;
+
+        // Manhattan distance to d4(3,3), e4(4,3), d5(3,4), e5(4,4)
+        let d = ((file - 3).abs() + (rank - 3).abs())
+            .min((file - 4).abs() + (rank - 3).abs())
+            .min((file - 3).abs() + (rank - 4).abs())
+            .min((file - 4).abs() + (rank - 4).abs()) as i16;
+
+        cp += ((14 - d) as f32 * 2.0 * (1.0 - phase)).round() as i16;
+    }
+
+    cp
 }
-const KING_ZONE_RADIUS: i8 = 2;
+
+const KING_ZONE_RADIUS: i8 = 2;ma
 const KING_ZONES: [BitBoard; 64] = {
     let mut zones = [EMPTY; 64];
     let mut i = 0;
@@ -247,7 +267,7 @@ const KING_ZONES: [BitBoard; 64] = {
 };
 
 #[inline(always)]
-fn evaluate_rooks(board: &Board, color: Color) -> i16 {
+fn evaluate_rooks(board: &Board, color: Color, phase: f32) -> i16 {
     let rooks = board.pieces(Piece::Rook) & board.color_combined(color);
     if rooks == EMPTY {
         return 0;
@@ -278,15 +298,14 @@ fn evaluate_rooks(board: &Board, color: Color) -> i16 {
             cp += ROOK_ON_SEVENTH_BONUS;
         }
 
-        // Rook mobility bonus
         let mobility = get_rook_moves(sq, occupied).popcnt() as i16;
-        cp += 3 * mobility;
+        cp += ((3 * mobility) as f32 * phase).round() as i16;
     }
     cp
 }
 
 #[inline(always)]
-fn evaluate_bishops(board: &Board, color: Color) -> i16 {
+fn evaluate_bishops(board: &Board, color: Color, phase: f32) -> i16 {
     let bishops = board.pieces(Piece::Bishop) & board.color_combined(color);
     if bishops == EMPTY {
         return 0;
@@ -300,16 +319,15 @@ fn evaluate_bishops(board: &Board, color: Color) -> i16 {
         cp += 50;
     }
 
-    // Bishop mobility bonus
     for sq in bishops {
         let mobility = get_bishop_moves(sq, occupied).popcnt() as i16;
-        cp += 3 * mobility;
+        cp += ((3 * mobility) as f32 * phase).round() as i16;
     }
 
     cp
 }
 
-fn evaluate_knights(board: &Board, color: Color) -> i16 {
+fn evaluate_knights(board: &Board, color: Color, phase: f32) -> i16 {
     let my_pieces = board.color_combined(color);
     let knights = board.pieces(Piece::Knight) & my_pieces;
     if knights == EMPTY {
@@ -320,13 +338,13 @@ fn evaluate_knights(board: &Board, color: Color) -> i16 {
     for sq in knights {
         let squares = get_knight_moves(sq);
         let mobility = (squares & !my_pieces).popcnt() as i16;
-        cp += 5 * mobility;
+        cp += ((5 * mobility) as f32 * phase).round() as i16;
     }
 
     cp
 }
 
-fn evaluate_queens(board: &Board, color: Color) -> i16 {
+fn evaluate_queens(board: &Board, color: Color, phase: f32) -> i16 {
     let my_pieces = board.color_combined(color);
     let queens = board.pieces(Piece::Queen) & my_pieces;
     if queens == EMPTY {
@@ -339,7 +357,7 @@ fn evaluate_queens(board: &Board, color: Color) -> i16 {
     for sq in queens {
         let moves = get_bishop_moves(sq, occupied) | get_rook_moves(sq, occupied);
         let mobility = (moves & !my_pieces).popcnt() as i16;
-        cp += mobility;
+        cp += ((mobility as f32) * phase).round() as i16;
     }
 
     cp
