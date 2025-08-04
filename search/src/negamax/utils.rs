@@ -46,3 +46,11 @@ pub fn can_null_move_prune(board: &Board, remaining_depth: u8, in_check: bool) -
 pub fn can_razor_prune(remaining_depth: u8, in_check: bool) -> bool {
     remaining_depth <= RAZOR_MAX_DEPTH && remaining_depth > 0 && !in_check
 }
+
+pub const FUTILITY_MAX_DEPTH: u8 = 3;
+pub const FUTILITY_MARGINS: [i16; FUTILITY_MAX_DEPTH as usize + 1] = [0, 200, 300, 500];
+
+#[inline(always)]
+pub fn can_futility_prune(remaining_depth: u8, in_check: bool) -> bool {
+    remaining_depth <= FUTILITY_MAX_DEPTH && !in_check
+}

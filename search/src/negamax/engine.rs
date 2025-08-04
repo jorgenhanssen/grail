@@ -3,7 +3,10 @@ use crate::{
         aspiration::{
             AspirationWindow, Pass, ASP_ENABLED_FROM, ASP_HALF_START, ASP_MAX_RETRIES, ASP_WIDEN,
         },
-        utils::{can_delta_prune, can_null_move_prune, can_razor_prune, RAZOR_MARGINS},
+        utils::{
+            can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
+            FUTILITY_MARGINS, RAZOR_MARGINS,
+        },
     },
     utils::{
         convert_centipawn_score, convert_mate_score, game_phase, ordered_moves, see_naive, Castle,
@@ -319,6 +322,24 @@ impl NegamaxEngine {
 
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
+        let futility_eval = if can_futility_prune(remaining_depth, in_check) {
+            let phase = game_phase(board);
+            let eval = self.evaluator.evaluate(
+                board,
+                castle.white_has_castled(),
+                castle.black_has_castled(),
+                phase,
+            );
+            let se = if board.side_to_move() == Color::White {
+                eval
+            } else {
+                -eval
+            };
+            Some(se)
+        } else {
+            None
+        };
+
         let moves = ordered_moves(
             board,
             None,
@@ -350,6 +371,10 @@ impl NegamaxEngine {
             let is_capture = board.piece_on(m.get_dest()).is_some();
             let is_promotion = m.get_promotion().is_some();
             let is_tactical = in_check || gives_check || is_capture || is_promotion;
+
+            if self.futility_prune(futility_eval, is_tactical, remaining_depth, alpha) {
+                continue;
+            }
 
             let reduction = lmr(remaining_depth, is_tactical, move_index);
             let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
@@ -757,5 +782,21 @@ impl NegamaxEngine {
         } else {
             None
         }
+    }
+
+    #[inline(always)]
+    fn futility_prune(
+        &mut self,
+        futility_eval: Option<i16>,
+        is_tactical: bool,
+        remaining_depth: u8,
+        alpha: i16,
+    ) -> bool {
+        if let Some(se) = futility_eval {
+            if !is_tactical && se + FUTILITY_MARGINS[remaining_depth as usize] <= alpha {
+                return true;
+            }
+        }
+        false
     }
 }
