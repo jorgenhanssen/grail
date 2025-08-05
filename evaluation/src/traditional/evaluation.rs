@@ -58,10 +58,10 @@ pub fn evaluate_board(
     cp -= evaluate_king(board, Color::Black, phase);
 
     if white_has_castled {
-        cp += 50;
+        cp += 66
     }
     if black_has_castled {
-        cp -= 50;
+        cp -= 66;
     }
 
     cp
