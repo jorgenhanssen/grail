@@ -25,7 +25,7 @@ pub fn ordered_moves(
     let killers = &killer_moves[depth as usize];
     let pv = pv_move.get(depth as usize).cloned();
 
-    let countermove_opt = last_move.and_then(|lm| {
+    let countermove = last_move.and_then(|lm| {
         let prev_to = lm.get_dest();
         if let Some(prev_piece) = board.piece_on(prev_to) {
             let opponent_color = !board.side_to_move();
@@ -39,12 +39,12 @@ pub fn ordered_moves(
         let mut priority = move_priority(&mov, board, history_heuristic);
 
         if Some(mov) == pv {
-            priority = priority.max(MAX_PRIORITY + 2);
+            priority = MAX_PRIORITY + 2;
         } else if Some(mov) == tt_move {
-            priority = priority.max(MAX_PRIORITY + 1);
+            priority = MAX_PRIORITY + 1;
         } else if killers.contains(&Some(mov)) {
             priority = priority.max(CAPTURE_PRIORITY - 1);
-        } else if Some(mov) == countermove_opt {
+        } else if Some(mov) == countermove {
             priority = priority.max(CAPTURE_PRIORITY - 2);
         }
 
