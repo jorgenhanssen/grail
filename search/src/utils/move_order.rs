@@ -1,7 +1,8 @@
 use chess::{BitBoard, Board, ChessMove, MoveGen, Piece};
 
-use crate::utils::HistoryHeuristic;
+use crate::utils::{CountermoveHeuristic, HistoryHeuristic};
 
+#[allow(clippy::too_many_arguments)]
 #[inline(always)]
 pub fn ordered_moves(
     board: &Board,
@@ -11,6 +12,8 @@ pub fn ordered_moves(
     tt_move: Option<ChessMove>,
     killer_moves: &[[Option<ChessMove>; 2]],
     history_heuristic: &HistoryHeuristic,
+    countermove_heuristic: &CountermoveHeuristic,
+    last_move: Option<ChessMove>,
 ) -> Vec<ChessMove> {
     let mut legal = MoveGen::new_legal(board);
     if let Some(mask) = mask {
@@ -21,6 +24,16 @@ pub fn ordered_moves(
 
     let killers = &killer_moves[depth as usize];
     let pv = pv_move.get(depth as usize).cloned();
+
+    let countermove_opt = last_move.and_then(|lm| {
+        let prev_to = lm.get_dest();
+        if let Some(prev_piece) = board.piece_on(prev_to) {
+            let opponent_color = !board.side_to_move();
+            countermove_heuristic.get(opponent_color, prev_piece, prev_to)
+        } else {
+            None
+        }
+    });
 
     for mov in legal {
         let mut priority = move_priority(&mov, board, history_heuristic);
@@ -33,6 +46,9 @@ pub fn ordered_moves(
         }
         if killers.contains(&Some(mov)) {
             priority = priority.max(CAPTURE_PRIORITY - 1);
+        }
+        if Some(mov) == countermove_opt {
+            priority = priority.max(CAPTURE_PRIORITY - 2);
         }
 
         moves_with_priority.push((mov, priority));

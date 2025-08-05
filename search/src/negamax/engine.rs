@@ -10,7 +10,7 @@ use crate::{
     },
     utils::{
         convert_centipawn_score, convert_mate_score, game_phase, ordered_moves, see_naive, Castle,
-        HistoryHeuristic,
+        CountermoveHeuristic, HistoryHeuristic,
     },
     Engine,
 };
@@ -57,6 +57,7 @@ pub struct NegamaxEngine {
     stop: Arc<AtomicBool>,
 
     history_heuristic: HistoryHeuristic,
+    countermove_heuristic: CountermoveHeuristic,
 }
 
 impl Default for NegamaxEngine {
@@ -77,6 +78,7 @@ impl Default for NegamaxEngine {
             stop: Arc::new(AtomicBool::new(false)),
 
             history_heuristic: HistoryHeuristic::new(),
+            countermove_heuristic: CountermoveHeuristic::new(),
         }
     }
 }
@@ -192,6 +194,7 @@ impl NegamaxEngine {
         self.position_stack.push(self.board.get_hash());
 
         self.history_heuristic.reset();
+        self.countermove_heuristic.reset();
     }
 
     pub fn search_root(
@@ -208,6 +211,8 @@ impl NegamaxEngine {
             None,
             &self.killer_moves,
             &self.history_heuristic,
+            &self.countermove_heuristic,
+            None,
         );
 
         if moves_with_scores.is_empty() {
@@ -225,7 +230,7 @@ impl NegamaxEngine {
 
             self.position_stack.push(new_board.get_hash());
             let (child_value, mut pv) =
-                self.search_subtree(&new_board, 1, depth, -beta, -alpha, true, castle);
+                self.search_subtree(&new_board, 1, depth, -beta, -alpha, true, castle, Some(m));
             let score = -child_value;
             self.position_stack.pop();
 
@@ -258,6 +263,7 @@ impl NegamaxEngine {
         beta: i16,
         try_null_move: bool,
         castle: Castle,
+        last_move: Option<ChessMove>,
     ) -> (i16, Vec<ChessMove>) {
         if self.stop.load(Ordering::Relaxed) {
             return (0, Vec::new());
@@ -276,7 +282,7 @@ impl NegamaxEngine {
             BoardStatus::Ongoing => {}
         }
         if depth >= max_depth {
-            return self.quiescence_search(board, alpha, beta, depth, castle);
+            return self.quiescence_search(board, alpha, beta, depth, castle, last_move);
         }
 
         // Transposition table probe
@@ -305,7 +311,7 @@ impl NegamaxEngine {
         if can_razor_prune(remaining_depth, in_check) {
             let phase = game_phase(board);
             if let Some(score) =
-                self.razor_prune(board, remaining_depth, alpha, depth, castle, phase)
+                self.razor_prune(board, remaining_depth, alpha, depth, castle, phase, last_move)
             {
                 return (score, Vec::new());
             }
@@ -314,7 +320,7 @@ impl NegamaxEngine {
         // Null-move pruning
         if try_null_move && can_null_move_prune(board, remaining_depth, in_check) {
             if let Some(score) =
-                self.null_move_prune(board, depth, max_depth, alpha, beta, hash, castle)
+                self.null_move_prune(board, depth, max_depth, alpha, beta, hash, castle, last_move)
             {
                 return (score, Vec::new());
             }
@@ -348,6 +354,8 @@ impl NegamaxEngine {
             maybe_tt_move,
             &self.killer_moves,
             &self.history_heuristic,
+            &self.countermove_heuristic,
+            last_move,
         );
 
         if moves.is_empty() {
@@ -395,13 +403,14 @@ impl NegamaxEngine {
                 -a,
                 true,
                 new_castle,
+                Some(m),
             );
             let mut value = -child_value;
             let mut line = pv_line;
 
             if reduction > 0 && value > alpha {
                 let (re_child_value, re_line) =
-                    self.search_subtree(&new_board, depth + 1, max_depth, -b, -a, true, new_castle);
+                    self.search_subtree(&new_board, depth + 1, max_depth, -b, -a, true, new_castle, Some(m));
                 value = -re_child_value;
                 line = re_line;
             }
@@ -415,6 +424,7 @@ impl NegamaxEngine {
                     -alpha,
                     true,
                     new_castle,
+                    Some(m),
                 );
                 value = -full_child_value;
                 line = full_line;
@@ -445,6 +455,14 @@ impl NegamaxEngine {
                     let bonus = self.history_heuristic.get_bonus(remaining_depth);
 
                     self.history_heuristic.update(color, source, dest, bonus);
+
+                    if let Some(prev_move) = last_move {
+                        let prev_to = prev_move.get_dest();
+                        if let Some(prev_piece) = board.piece_on(prev_to) {
+                            let opponent_color = !board.side_to_move();
+                            self.countermove_heuristic.update(opponent_color, prev_piece, prev_to, m);
+                        }
+                    }
                 }
 
                 break; // beta cut-off
@@ -478,6 +496,7 @@ impl NegamaxEngine {
         beta: i16,
         depth: u8,
         castle: Castle,
+        last_move: Option<ChessMove>,
     ) -> (i16, Vec<ChessMove>) {
         // Check if we should stop searching
         if self.stop.load(Ordering::Relaxed) {
@@ -572,6 +591,8 @@ impl NegamaxEngine {
             None,
             &self.killer_moves,
             &self.history_heuristic,
+            &self.countermove_heuristic,
+            last_move,
         );
 
         for mv in forcing_moves {
@@ -601,7 +622,7 @@ impl NegamaxEngine {
 
             self.position_stack.push(new_board.get_hash());
             let (child_score, mut child_line) =
-                self.quiescence_search(&new_board, -beta, -alpha, depth + 1, castle);
+                self.quiescence_search(&new_board, -beta, -alpha, depth + 1, castle, Some(mv));
             self.position_stack.pop();
 
             let value = -child_score;
@@ -727,6 +748,7 @@ impl NegamaxEngine {
         beta: i16,
         hash: u64,
         castle: Castle,
+        last_move: Option<ChessMove>,
     ) -> Option<i16> {
         // Null move pruning: if giving opponent a free move still can't reach beta, we can prune
 
@@ -747,6 +769,7 @@ impl NegamaxEngine {
                 -beta + 1, // null window
                 false,     // Null moves cannot be done in sequence, so disable for next move
                 castle,
+                last_move,
             );
             self.position_stack.pop();
 
@@ -769,6 +792,7 @@ impl NegamaxEngine {
         depth: u8,
         castle: Castle,
         phase: f32,
+        last_move: Option<ChessMove>,
     ) -> Option<i16> {
         let eval = self.evaluator.evaluate(
             board,
@@ -787,7 +811,7 @@ impl NegamaxEngine {
         }
 
         // Q search with null window
-        let (value, _) = self.quiescence_search(board, alpha - 1, alpha, depth, castle);
+        let (value, _) = self.quiescence_search(board, alpha - 1, alpha, depth, castle, last_move);
 
         if value < alpha && value.abs() < RAZOR_NEAR_MATE {
             // Our position is still terrible, so we can prune

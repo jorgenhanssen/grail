@@ -1,4 +1,5 @@
 mod castling;
+mod countermove_heuristic;
 mod history_heuristic;
 mod move_order;
 
@@ -7,6 +8,7 @@ use evaluation::piece_value;
 pub use move_order::ordered_moves;
 
 pub use castling::Castle;
+pub use countermove_heuristic::CountermoveHeuristic;
 pub use history_heuristic::HistoryHeuristic;
 use uci::commands::Score;
 
