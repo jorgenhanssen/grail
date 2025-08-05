@@ -377,24 +377,37 @@ impl NegamaxEngine {
             }
 
             let reduction = lmr(remaining_depth, is_tactical, move_index);
+
+            let is_pv_move = move_index == 0;
+
+            let a = alpha;
+            let b = if !is_pv_move { alpha + 1 } else { beta };
+
             let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
 
             self.position_stack.push(new_board.get_hash());
 
-            let (child_value, mut line) = self.search_subtree(
+            let (child_value, pv_line) = self.search_subtree(
                 &new_board,
                 depth + 1,
                 child_max_depth,
-                -beta,
-                -alpha,
+                -b,
+                -a,
                 true,
                 new_castle,
             );
             let mut value = -child_value;
+            let mut line = pv_line;
 
-            // Re-search at full depth if reduced search failed high
             if reduction > 0 && value > alpha {
-                let (re_child_value, re_line) = self.search_subtree(
+                let (re_child_value, re_line) =
+                    self.search_subtree(&new_board, depth + 1, max_depth, -b, -a, true, new_castle);
+                value = -re_child_value;
+                line = re_line;
+            }
+
+            if !is_pv_move && value > alpha {
+                let (full_child_value, full_line) = self.search_subtree(
                     &new_board,
                     depth + 1,
                     max_depth,
@@ -403,8 +416,8 @@ impl NegamaxEngine {
                     true,
                     new_castle,
                 );
-                value = -re_child_value;
-                line = re_line;
+                value = -full_child_value;
+                line = full_line;
             }
 
             self.position_stack.pop();
