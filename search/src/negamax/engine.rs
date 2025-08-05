@@ -380,12 +380,8 @@ impl NegamaxEngine {
 
             let is_pv_move = move_index == 0;
 
-            let mut a = alpha;
-            let mut b = beta;
-
-            if !is_pv_move {
-                b = alpha + 1;
-            }
+            let a = alpha;
+            let b = if !is_pv_move { alpha + 1 } else { beta };
 
             let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
 
