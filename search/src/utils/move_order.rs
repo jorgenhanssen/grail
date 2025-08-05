@@ -38,16 +38,13 @@ pub fn ordered_moves(
     for mov in legal {
         let mut priority = move_priority(&mov, board, history_heuristic);
 
-        if Some(mov) == tt_move {
-            priority = priority.max(MAX_PRIORITY + 1);
-        }
         if Some(mov) == pv {
             priority = priority.max(MAX_PRIORITY + 2);
-        }
-        if killers.contains(&Some(mov)) {
+        } else if Some(mov) == tt_move {
+            priority = priority.max(MAX_PRIORITY + 1);
+        } else if killers.contains(&Some(mov)) {
             priority = priority.max(CAPTURE_PRIORITY - 1);
-        }
-        if Some(mov) == countermove_opt {
+        } else if Some(mov) == countermove_opt {
             priority = priority.max(CAPTURE_PRIORITY - 2);
         }
 
