@@ -1,10 +1,15 @@
-use chess::Board;
+use chess::{Board, ChessMove};
 use evaluation::{scores::MATE_VALUE, total_material};
 
 use crate::utils::is_zugzwang;
 
 pub const RAZOR_MAX_DEPTH: u8 = 3;
 pub const RAZOR_NEAR_MATE: i16 = MATE_VALUE - 200;
+
+pub enum MatePrune {
+    Proceed { next_alpha: i16, next_beta: i16 },
+    Prune { value: i16 },
+}
 
 // Margins from Stockfish: https://www.chessprogramming.org/Razoring#Stockfish
 pub const RAZOR_MARGINS: [i16; RAZOR_MAX_DEPTH as usize + 1] = {

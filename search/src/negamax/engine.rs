@@ -4,7 +4,7 @@ use crate::{
             AspirationWindow, Pass, ASP_ENABLED_FROM, ASP_HALF_START, ASP_MAX_RETRIES, ASP_WIDEN,
         },
         utils::{
-            can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
+            can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune, MatePrune,
             FUTILITY_MARGINS, RAZOR_MARGINS,
         },
     },
@@ -255,7 +255,7 @@ impl NegamaxEngine {
         depth: u8,
         max_depth: u8,
         mut alpha: i16,
-        beta: i16,
+        mut beta: i16,
         try_null_move: bool,
         castle: Castle,
     ) -> (i16, Vec<ChessMove>) {
@@ -274,6 +274,16 @@ impl NegamaxEngine {
             BoardStatus::Checkmate => return (-MATE_VALUE + depth as i16, Vec::new()),
             BoardStatus::Stalemate => return (0, Vec::new()),
             BoardStatus::Ongoing => {}
+        }
+        match Self::mate_prune(alpha, beta, depth) {
+            MatePrune::Proceed {
+                next_alpha,
+                next_beta,
+            } => {
+                alpha = next_alpha;
+                beta = next_beta;
+            }
+            MatePrune::Prune { value } => return (value, Vec::new()),
         }
         if depth >= max_depth {
             return self.quiescence_search(board, alpha, beta, depth, castle);
@@ -475,7 +485,7 @@ impl NegamaxEngine {
         &mut self,
         board: &Board,
         mut alpha: i16,
-        beta: i16,
+        mut beta: i16,
         depth: u8,
         castle: Castle,
     ) -> (i16, Vec<ChessMove>) {
@@ -500,6 +510,16 @@ impl NegamaxEngine {
                 return (0, Vec::new());
             }
             BoardStatus::Ongoing => {}
+        }
+        match Self::mate_prune(alpha, beta, depth) {
+            MatePrune::Proceed {
+                next_alpha,
+                next_beta,
+            } => {
+                alpha = next_alpha;
+                beta = next_beta;
+            }
+            MatePrune::Prune { value } => return (value, Vec::new()),
         }
 
         // Check cache
@@ -811,5 +831,22 @@ impl NegamaxEngine {
             }
         }
         false
+    }
+
+    #[inline(always)]
+    fn mate_prune(alpha: i16, beta: i16, depth: u8) -> MatePrune {
+        let mut alpha = alpha;
+        let mut beta = beta;
+        let mated = -MATE_VALUE + depth as i16;
+        alpha = alpha.max(mated);
+        let mates = MATE_VALUE - depth as i16;
+        beta = beta.min(mates);
+        if alpha >= beta {
+            return MatePrune::Prune { value: alpha };
+        }
+        MatePrune::Proceed {
+            next_alpha: alpha,
+            next_beta: beta,
+        }
     }
 }
