@@ -837,13 +837,29 @@ impl NegamaxEngine {
     fn mate_prune(alpha: i16, beta: i16, depth: u8) -> MatePrune {
         let mut alpha = alpha;
         let mut beta = beta;
-        let mated = -MATE_VALUE + depth as i16;
-        alpha = alpha.max(mated);
-        let mates = MATE_VALUE - depth as i16;
-        beta = beta.min(mates);
-        if alpha >= beta {
-            return MatePrune::Prune { value: alpha };
+
+        // Lower Bound - losing position
+        let mating_value_alpha = -MATE_VALUE + depth as i16;
+        if mating_value_alpha > alpha {
+            alpha = mating_value_alpha;
+            if beta <= mating_value_alpha {
+                return MatePrune::Prune {
+                    value: mating_value_alpha,
+                };
+            }
         }
+
+        // Upper Bound - winning position
+        let mating_value_beta = MATE_VALUE - depth as i16;
+        if mating_value_beta < beta {
+            beta = mating_value_beta;
+            if alpha >= mating_value_beta {
+                return MatePrune::Prune {
+                    value: mating_value_beta,
+                };
+            }
+        }
+
         MatePrune::Proceed {
             next_alpha: alpha,
             next_beta: beta,
