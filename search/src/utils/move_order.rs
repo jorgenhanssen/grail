@@ -42,10 +42,10 @@ pub fn ordered_moves(
             priority = MAX_PRIORITY + 2;
         } else if Some(mov) == tt_move {
             priority = MAX_PRIORITY + 1;
-        } else if killers.contains(&Some(mov)) {
-            priority = priority.max(CAPTURE_PRIORITY - 1);
         } else if Some(mov) == countermove {
-            priority = priority.max(CAPTURE_PRIORITY - 2);
+            priority += COUNTERMOVE_BONUS;
+        } else if killers.contains(&Some(mov)) {
+            priority = priority.max(MIN_CAPTURE_PRIORITY - 1);
         }
 
         moves_with_priority.push((mov, priority));
@@ -55,6 +55,8 @@ pub fn ordered_moves(
 
     moves_with_priority.into_iter().map(|(m, _)| m).collect()
 }
+
+const COUNTERMOVE_BONUS: i32 = 20;
 
 // Piece moves get base priority (lowest)
 pub const MIN_PRIORITY: i32 = 0;
