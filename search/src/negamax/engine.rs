@@ -310,18 +310,24 @@ impl NegamaxEngine {
         // Razoring
         if can_razor_prune(remaining_depth, in_check) {
             let phase = game_phase(board);
-            if let Some(score) =
-                self.razor_prune(board, remaining_depth, alpha, depth, castle, phase, last_move)
-            {
+            if let Some(score) = self.razor_prune(
+                board,
+                remaining_depth,
+                alpha,
+                depth,
+                castle,
+                phase,
+                last_move,
+            ) {
                 return (score, Vec::new());
             }
         }
 
         // Null-move pruning
         if try_null_move && can_null_move_prune(board, remaining_depth, in_check) {
-            if let Some(score) =
-                self.null_move_prune(board, depth, max_depth, alpha, beta, hash, castle, last_move)
-            {
+            if let Some(score) = self.null_move_prune(
+                board, depth, max_depth, alpha, beta, hash, castle, last_move,
+            ) {
                 return (score, Vec::new());
             }
         }
@@ -409,8 +415,16 @@ impl NegamaxEngine {
             let mut line = pv_line;
 
             if reduction > 0 && value > alpha {
-                let (re_child_value, re_line) =
-                    self.search_subtree(&new_board, depth + 1, max_depth, -b, -a, true, new_castle, Some(m));
+                let (re_child_value, re_line) = self.search_subtree(
+                    &new_board,
+                    depth + 1,
+                    max_depth,
+                    -b,
+                    -a,
+                    true,
+                    new_castle,
+                    Some(m),
+                );
                 value = -re_child_value;
                 line = re_line;
             }
@@ -459,8 +473,13 @@ impl NegamaxEngine {
                     if let Some(prev_move) = last_move {
                         let prev_to = prev_move.get_dest();
                         if let Some(prev_piece) = board.piece_on(prev_to) {
-                            let opponent_color = !board.side_to_move();
-                            self.countermove_heuristic.update(opponent_color, prev_piece, prev_to, m);
+                            let current_color = board.side_to_move();
+                            self.countermove_heuristic.update(
+                                current_color,
+                                prev_piece,
+                                prev_to,
+                                m,
+                            );
                         }
                     }
                 }

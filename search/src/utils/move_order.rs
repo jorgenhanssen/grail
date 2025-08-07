@@ -28,8 +28,8 @@ pub fn ordered_moves(
     let countermove = last_move.and_then(|lm| {
         let prev_to = lm.get_dest();
         if let Some(prev_piece) = board.piece_on(prev_to) {
-            let opponent_color = !board.side_to_move();
-            countermove_heuristic.get(opponent_color, prev_piece, prev_to)
+            let current_color = board.side_to_move();
+            countermove_heuristic.get(current_color, prev_piece, prev_to)
         } else {
             None
         }
@@ -42,7 +42,7 @@ pub fn ordered_moves(
             priority = MAX_PRIORITY + 2;
         } else if Some(mov) == tt_move {
             priority = MAX_PRIORITY + 1;
-        } else if Some(mov) == countermove {
+        } else if Some(mov) == countermove && priority < MIN_CAPTURE_PRIORITY {
             priority += COUNTERMOVE_BONUS;
         } else if killers.contains(&Some(mov)) {
             priority = priority.max(MIN_CAPTURE_PRIORITY - 1);
@@ -56,7 +56,7 @@ pub fn ordered_moves(
     moves_with_priority.into_iter().map(|(m, _)| m).collect()
 }
 
-const COUNTERMOVE_BONUS: i32 = 20;
+const COUNTERMOVE_BONUS: i32 = 10000;
 
 // Piece moves get base priority (lowest)
 pub const MIN_PRIORITY: i32 = 0;
