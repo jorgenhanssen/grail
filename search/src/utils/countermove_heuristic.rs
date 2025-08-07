@@ -1,18 +1,4 @@
-use chess::{ChessMove, Color, Piece, Square, NUM_COLORS, NUM_SQUARES};
-
-const NUM_PIECES: usize = 6;
-
-#[inline(always)]
-fn piece_to_index(piece: Piece) -> usize {
-    match piece {
-        Piece::King => 0,
-        Piece::Queen => 1,
-        Piece::Rook => 2,
-        Piece::Bishop => 3,
-        Piece::Knight => 4,
-        Piece::Pawn => 5,
-    }
-}
+use chess::{Board, ChessMove, Color, Piece, Square, NUM_COLORS, NUM_PIECES, NUM_SQUARES};
 
 #[derive(Clone)]
 pub struct CountermoveHeuristic {
@@ -32,12 +18,43 @@ impl CountermoveHeuristic {
     }
 
     #[inline(always)]
-    pub fn get(&self, color: Color, piece: Piece, square: Square) -> Option<ChessMove> {
-        self.countermove[color.to_index()][piece_to_index(piece)][square.to_index()]
+    fn get_move(&self, color: Color, piece: Piece, square: Square) -> Option<ChessMove> {
+        self.countermove[color.to_index()][piece.to_index()][square.to_index()]
     }
 
     #[inline(always)]
-    pub fn update(&mut self, color: Color, piece: Piece, square: Square, mov: ChessMove) {
-        self.countermove[color.to_index()][piece_to_index(piece)][square.to_index()] = Some(mov);
+    fn set_move(&mut self, color: Color, piece: Piece, square: Square, mov: ChessMove) {
+        self.countermove[color.to_index()][piece.to_index()][square.to_index()] = Some(mov);
+    }
+
+    // Get the countermove for the current position based on the previous move
+    #[inline(always)]
+    pub fn get(&self, board: &Board, prev_move: Option<ChessMove>) -> Option<ChessMove> {
+        prev_move.and_then(|lm| {
+            let prev_to = lm.get_dest();
+            if let Some(prev_piece) = board.piece_on(prev_to) {
+                let current_color = board.side_to_move();
+                self.get_move(current_color, prev_piece, prev_to)
+            } else {
+                None
+            }
+        })
+    }
+
+    // Update the countermove table with a good response to the previous move
+    #[inline(always)]
+    pub fn update(
+        &mut self,
+        board: &Board,
+        prev_move: Option<ChessMove>,
+        response_move: ChessMove,
+    ) {
+        if let Some(prev_move) = prev_move {
+            let prev_to = prev_move.get_dest();
+            if let Some(prev_piece) = board.piece_on(prev_to) {
+                let current_color = board.side_to_move();
+                self.set_move(current_color, prev_piece, prev_to, response_move);
+            }
+        }
     }
 }

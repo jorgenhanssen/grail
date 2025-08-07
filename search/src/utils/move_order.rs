@@ -13,7 +13,7 @@ pub fn ordered_moves(
     killer_moves: &[[Option<ChessMove>; 2]],
     history_heuristic: &HistoryHeuristic,
     countermove_heuristic: &CountermoveHeuristic,
-    last_move: Option<ChessMove>,
+    prev_move: Option<ChessMove>,
 ) -> Vec<ChessMove> {
     let mut legal = MoveGen::new_legal(board);
     if let Some(mask) = mask {
@@ -24,16 +24,7 @@ pub fn ordered_moves(
 
     let killers = &killer_moves[depth as usize];
     let pv = pv_move.get(depth as usize).cloned();
-
-    let countermove = last_move.and_then(|lm| {
-        let prev_to = lm.get_dest();
-        if let Some(prev_piece) = board.piece_on(prev_to) {
-            let current_color = board.side_to_move();
-            countermove_heuristic.get(current_color, prev_piece, prev_to)
-        } else {
-            None
-        }
-    });
+    let countermove = countermove_heuristic.get(board, prev_move);
 
     for mov in legal {
         let mut priority = move_priority(&mov, board, history_heuristic);
