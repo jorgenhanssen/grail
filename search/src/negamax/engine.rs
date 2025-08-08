@@ -31,7 +31,9 @@ use uci::{
     UciOutput,
 };
 
-use super::utils::{lmr, RAZOR_NEAR_MATE};
+use super::utils::{
+    can_history_leaf_prune, lmr, HISTORY_LEAF_THRESHOLD, HISTORY_REDUCE_THRESHOLD, RAZOR_NEAR_MATE,
+};
 use super::{
     controller::SearchController,
     tt::{Bound, TTEntry},
@@ -376,12 +378,26 @@ impl NegamaxEngine {
                 continue;
             }
 
-            let reduction = lmr(remaining_depth, is_tactical, move_index);
+            let mut reduction = lmr(remaining_depth, is_tactical, move_index);
 
             let is_pv_move = move_index == 0;
 
             let a = alpha;
             let b = if !is_pv_move { alpha + 1 } else { beta };
+
+            // History Leaf Pruning / extra reduction on quiet late moves
+            if can_history_leaf_prune(
+                remaining_depth,
+                in_check,
+                is_tactical,
+                is_pv_move,
+                move_index,
+            ) {
+                let skip = self.history_leaf_prune(board, m, depth, max_depth, &mut reduction);
+                if skip {
+                    continue;
+                }
+            }
 
             let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
 
@@ -758,6 +774,32 @@ impl NegamaxEngine {
         }
 
         None
+    }
+
+    #[inline(always)]
+    fn history_leaf_prune(
+        &self,
+        board: &Board,
+        m: ChessMove,
+        depth: u8,
+        max_depth: u8,
+        reduction: &mut u8,
+    ) -> bool {
+        let color = board.side_to_move();
+        let source = m.get_source();
+        let dest = m.get_dest();
+        let hist_score = self.history_heuristic.get(color, source, dest);
+
+        if hist_score < HISTORY_REDUCE_THRESHOLD {
+            *reduction = reduction.saturating_add(1);
+
+            let projected_child_max = max_depth.saturating_sub(*reduction);
+            if hist_score < HISTORY_LEAF_THRESHOLD && projected_child_max <= depth + 1 {
+                return true; // prune
+            }
+        }
+
+        false
     }
 
     #[inline(always)]
