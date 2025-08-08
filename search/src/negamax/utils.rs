@@ -1,4 +1,4 @@
-use chess::{Board, ChessMove};
+use chess::Board;
 use evaluation::{scores::MATE_VALUE, total_material};
 
 use crate::utils::is_zugzwang;
