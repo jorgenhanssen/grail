@@ -17,6 +17,10 @@ define cargo-run
   RUSTFLAGS="$(RUSTFLAGS)" cargo run --release --bin $(1)
 endef
 
+run: build-grail
+	$(CARGO_ENV)
+	echo -e "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\ngo movetime 10000\nquit\n" | ./target/release/grail
+
 setup:
 	sudo apt-get update
 	sudo apt-get install -y curl build-essential
@@ -46,8 +50,3 @@ build-tournament:
 	$(call cargo-build,tournament)
 
 build-all: build-grail build-generate build-train build-tournament
-
-try: build-grail
-	$(CARGO_ENV)
-	echo -e "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\ngo movetime 10000\nquit\n" | ./target/release/grail negamax
-
