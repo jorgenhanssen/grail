@@ -1,7 +1,7 @@
 // aspiration.rs
 use evaluation::scores::{NEG_INFINITY, POS_INFINITY};
 
-pub const ASP_HALF_START: i16 = 50; // ±0.50 pawn
+pub const ASP_HALF_START: i16 = 40; // ±0.40 pawn
 pub const ASP_WIDEN: i16 = 2; // ×2 each miss
 pub const ASP_ENABLED_FROM: u8 = 4; // start at depth 4
 pub const ASP_MAX_RETRIES: u8 = 2; // bail to full window after this many retries
