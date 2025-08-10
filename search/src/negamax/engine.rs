@@ -9,7 +9,7 @@ use crate::{
         },
     },
     utils::{
-        convert_centipawn_score, convert_mate_score, game_phase, ordered_moves, see_naive, Castle,
+        convert_centipawn_score, convert_mate_score, game_phase, ordered_moves, see, Castle,
         HistoryHeuristic,
     },
     Engine,
@@ -640,7 +640,7 @@ impl NegamaxEngine {
                 }
             }
 
-            if !in_check && see_naive(board, mv, phase) < 0 {
+            if !in_check && see(board, mv, phase) < 0 {
                 continue;
             }
 
