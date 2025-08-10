@@ -17,7 +17,7 @@ pub fn see(board: &Board, mv: ChessMove, phase: f32) -> i16 {
     }
 
     // Gains list stores the captured value at each ply
-    let mut gains: Vec<i16> = Vec::with_capacity(16);
+    let mut gains: Vec<i16> = Vec::with_capacity(8);
     gains.push(initial_gain);
 
     // Simulate alternating recaptures choosing the least valuable attacker each time
@@ -33,7 +33,6 @@ pub fn see(board: &Board, mv: ChessMove, phase: f32) -> i16 {
         let mut best_recapture = None;
         let mut best_value = i16::MAX;
         for mov in recaptures {
-            // All generated moves land on target by mask
             if let Some(attacker) = current_board.piece_on(mov.get_source()) {
                 let val = piece_value(attacker, phase);
                 if val < best_value {
