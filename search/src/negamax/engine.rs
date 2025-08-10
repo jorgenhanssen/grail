@@ -227,7 +227,7 @@ impl NegamaxEngine {
 
             self.position_stack.push(new_board.get_hash());
             let (child_value, mut pv) =
-                self.search_subtree(&new_board, 1, depth, -beta, -alpha, true, castle);
+                self.search_subtree(&new_board, 1, depth, -beta, -alpha, true, true, castle);
             let score = -child_value;
             self.position_stack.pop();
 
@@ -259,6 +259,7 @@ impl NegamaxEngine {
         mut alpha: i16,
         beta: i16,
         try_null_move: bool,
+        allow_iid: bool,
         castle: Castle,
     ) -> (i16, Vec<ChessMove>) {
         if self.stop.load(Ordering::Relaxed) {
@@ -319,6 +320,26 @@ impl NegamaxEngine {
                 self.null_move_prune(board, depth, max_depth, alpha, beta, hash, castle)
             {
                 return (score, Vec::new());
+            }
+        }
+
+        // Internal Iterative Deepening (IID): if we have no TT move and are sufficiently deep,
+        // do a shallow search to obtain a good move for ordering.
+        if allow_iid && maybe_tt_move.is_none() && remaining_depth >= 4 && !in_check {
+            let iid_reduction: u8 = 2;
+            let shallow_max = max_depth.saturating_sub(iid_reduction);
+            let (.., shallow_line) = self.search_subtree(
+                board,
+                depth,
+                shallow_max,
+                alpha,
+                beta,
+                try_null_move,
+                false, // disable nested IID
+                castle,
+            );
+            if let Some(m) = shallow_line.first().copied() {
+                maybe_tt_move = Some(m);
             }
         }
 
@@ -410,14 +431,23 @@ impl NegamaxEngine {
                 -b,
                 -a,
                 true,
+                true,
                 new_castle,
             );
             let mut value = -child_value;
             let mut line = pv_line;
 
             if reduction > 0 && value > alpha {
-                let (re_child_value, re_line) =
-                    self.search_subtree(&new_board, depth + 1, max_depth, -b, -a, true, new_castle);
+                let (re_child_value, re_line) = self.search_subtree(
+                    &new_board,
+                    depth + 1,
+                    max_depth,
+                    -b,
+                    -a,
+                    true,
+                    true,
+                    new_castle,
+                );
                 value = -re_child_value;
                 line = re_line;
             }
@@ -429,6 +459,7 @@ impl NegamaxEngine {
                     max_depth,
                     -beta,
                     -alpha,
+                    true,
                     true,
                     new_castle,
                 );
@@ -762,6 +793,7 @@ impl NegamaxEngine {
                 -beta,
                 -beta + 1, // null window
                 false,     // Null moves cannot be done in sequence, so disable for next move
+                false,     // also disable IID under null move
                 castle,
             );
             self.position_stack.pop();
