@@ -25,33 +25,30 @@ pub fn see(board: &Board, mv: ChessMove, phase: f32) -> i16 {
 
     // Alternate sides capturing on target until no legal recapture exists
     loop {
-        // Find all legal recaptures to target square
-        let recaptures = chess::MoveGen::new_legal(&current_board)
-            .filter(|m| m.get_dest() == target)
-            .collect::<Vec<_>>();
+        // Generate capture moves for this square
+        let mut recaptures = chess::MoveGen::new_legal(&current_board);
+        recaptures.set_iterator_mask(chess::BitBoard::from_square(target));
 
-        if recaptures.is_empty() {
-            break;
-        }
-
-        // Choose the least valuable attacker to continue the sequence
+        // Choose the least valuable attacker among recaptures
         let mut best_recapture = None;
         let mut best_value = i16::MAX;
-        for m in recaptures {
-            if let Some(attacker) = current_board.piece_on(m.get_source()) {
+        for mov in recaptures {
+            // All generated moves land on target by mask
+            if let Some(attacker) = current_board.piece_on(mov.get_source()) {
                 let val = piece_value(attacker, phase);
                 if val < best_value {
                     best_value = val;
-                    best_recapture = Some(m);
+                    best_recapture = Some(mov);
                 }
             }
         }
 
-        if let Some(best) = best_recapture {
-            gains.push(best_value);
-            current_board = current_board.make_move_new(best);
-        } else {
-            break;
+        match best_recapture {
+            Some(best) => {
+                gains.push(best_value);
+                current_board = current_board.make_move_new(best);
+            }
+            None => break,
         }
     }
 
