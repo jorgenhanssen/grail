@@ -1,13 +1,14 @@
 mod castling;
 mod history_heuristic;
 mod move_order;
+mod see;
 
 use chess::{Board, ChessMove, Piece};
-use evaluation::piece_value;
 pub use move_order::ordered_moves;
 
 pub use castling::Castle;
 pub use history_heuristic::HistoryHeuristic;
+pub use see::see;
 use uci::commands::Score;
 
 #[inline(always)]
@@ -46,16 +47,4 @@ pub fn convert_mate_score(score: i16, pv: &[ChessMove]) -> Score {
 #[inline(always)]
 pub fn convert_centipawn_score(score: i16) -> Score {
     Score::Centipawns(score)
-}
-
-#[inline(always)]
-pub fn see_naive(board: &Board, capture_move: ChessMove, phase: f32) -> i16 {
-    if let (Some(captured_piece), Some(capturing_piece)) = (
-        board.piece_on(capture_move.get_dest()),
-        board.piece_on(capture_move.get_source()),
-    ) {
-        piece_value(captured_piece, phase) - piece_value(capturing_piece, phase)
-    } else {
-        0
-    }
 }
