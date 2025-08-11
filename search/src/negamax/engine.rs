@@ -14,7 +14,6 @@ use crate::{
     },
     Engine,
 };
-use ahash::AHashMap;
 use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank};
 use evaluation::{
     piece_value,
@@ -34,7 +33,8 @@ use uci::{
 use super::utils::{lmr, RAZOR_NEAR_MATE};
 use super::{
     controller::SearchController,
-    tt::{Bound, TranspositionTable},
+    qs_table::QSTable,
+    tt_table::{Bound, TranspositionTable},
 };
 
 const MAX_DEPTH: usize = 100;
@@ -49,7 +49,7 @@ pub struct NegamaxEngine {
 
     window: AspirationWindow,
     tt: TranspositionTable,
-    qs_tt: AHashMap<u64, i16>,
+    qs_tt: QSTable,
 
     max_depth_reached: u8,
 
@@ -68,7 +68,7 @@ impl Default for NegamaxEngine {
             nodes: 0,
             window: AspirationWindow::new(ASP_HALF_START, ASP_WIDEN, ASP_ENABLED_FROM),
             tt: TranspositionTable::with_capacity(200_000),
-            qs_tt: AHashMap::with_capacity(100_000),
+            qs_tt: QSTable::with_capacity(100_000),
             killer_moves: [[None; 2]; MAX_DEPTH],
             max_depth_reached: 1,
             current_pv: Vec::new(),
@@ -563,7 +563,7 @@ impl NegamaxEngine {
         }
 
         // Check cache
-        if let Some(&cached_score) = self.qs_tt.get(&hash) {
+        if let Some(cached_score) = self.qs_tt.probe(hash) {
             return (cached_score, Vec::new());
         }
 
@@ -586,7 +586,7 @@ impl NegamaxEngine {
         // Do a "stand-pat" evaluation if not in check
         if !in_check {
             if stand_pat >= beta {
-                self.qs_tt.insert(hash, stand_pat);
+                self.qs_tt.store(hash, stand_pat);
                 return (stand_pat, Vec::new());
             }
 
@@ -607,7 +607,7 @@ impl NegamaxEngine {
                 }
 
                 if stand_pat + big_delta < alpha {
-                    self.qs_tt.insert(hash, stand_pat);
+                    self.qs_tt.store(hash, stand_pat);
                     return (stand_pat, Vec::new());
                 }
             }
@@ -683,7 +683,7 @@ impl NegamaxEngine {
             }
         }
 
-        self.qs_tt.insert(hash, best_eval);
+        self.qs_tt.store(hash, best_eval);
         (best_eval, best_line)
     }
 
