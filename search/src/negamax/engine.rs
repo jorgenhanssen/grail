@@ -423,8 +423,9 @@ impl NegamaxEngine {
 
             let is_pv_move = move_index == 0;
 
-            let a = alpha;
-            let b = if !is_pv_move { alpha + 1 } else { beta };
+            // Child search window: null-window for non-PV moves
+            let alpha_child = alpha;
+            let beta_child = if !is_pv_move { alpha + 1 } else { beta };
 
             // History-leaf pruning / extra reduction on quiet late moves
             if self.history_heuristic.maybe_reduce_or_prune(
@@ -450,8 +451,8 @@ impl NegamaxEngine {
                 &new_board,
                 depth + 1,
                 child_max_depth,
-                -b,
-                -a,
+                -beta_child,
+                -alpha_child,
                 true,
                 true,
                 new_castle,
@@ -464,8 +465,8 @@ impl NegamaxEngine {
                     &new_board,
                     depth + 1,
                     max_depth,
-                    -b,
-                    -a,
+                    -beta_child,
+                    -alpha_child,
                     true,
                     true,
                     new_castle,
