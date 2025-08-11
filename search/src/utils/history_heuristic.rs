@@ -2,6 +2,9 @@ use chess::{Board, ChessMove, Color, Square, NUM_COLORS, NUM_SQUARES};
 
 const MAX_HISTORY: i32 = 16_384;
 const MAX_DEPTH: usize = 100;
+const HISTORY_REDUCE_THRESHOLD: i16 = 0; // reduce quiet late moves if history <= 0
+const HISTORY_LEAF_THRESHOLD: i16 = -1000; // prune quiet late moves if history very low
+const HISTORY_MOVE_GATE: i32 = 5; // only consider after some moves have been tried
 
 #[derive(Clone)]
 pub struct HistoryHeuristic {
@@ -45,6 +48,47 @@ impl HistoryHeuristic {
         let source = mv.get_source();
         let dest = mv.get_dest();
         self.update_move(color, source, dest, delta);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
+    pub fn maybe_reduce_or_prune(
+        &self,
+        board: &Board,
+        mv: ChessMove,
+        depth: u8,
+        max_depth: u8,
+        remaining_depth: u8,
+        in_check: bool,
+        is_tactical: bool,
+        is_pv_move: bool,
+        move_index: i32,
+        reduction: &mut u8,
+    ) -> bool {
+        if !(remaining_depth > 0
+            && !in_check
+            && !is_tactical
+            && !is_pv_move
+            && move_index >= HISTORY_MOVE_GATE)
+        {
+            return false;
+        }
+
+        let color = board.side_to_move();
+        let source = mv.get_source();
+        let dest = mv.get_dest();
+        let hist_score = self.get(color, source, dest);
+
+        if hist_score < HISTORY_REDUCE_THRESHOLD {
+            *reduction = reduction.saturating_add(1);
+
+            let projected_child_max = max_depth.saturating_sub(*reduction);
+            if hist_score < HISTORY_LEAF_THRESHOLD && projected_child_max <= depth + 1 {
+                return true; // prune
+            }
+        }
+
+        false
     }
 
     #[inline(always)]
