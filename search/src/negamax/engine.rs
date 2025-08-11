@@ -305,84 +305,69 @@ impl NegamaxEngine {
         let in_check = board.checkers().popcnt() > 0;
         let is_pv_node = beta > alpha + 1;
 
-        // Determine if we need a static evaluation at this node
-        let need_static_eval = can_razor_prune(remaining_depth, in_check)
-            || can_futility_prune(remaining_depth, in_check)
-            || (!is_pv_node && can_reverse_futility_prune(remaining_depth, in_check));
-        let mut static_eval: Option<i16> = None;
-        if need_static_eval {
-            let phase = game_phase(board);
-            let eval = self.evaluator.evaluate(
-                board,
-                castle.white_has_castled(),
-                castle.black_has_castled(),
-                phase,
-            );
-            static_eval = Some(if board.side_to_move() == Color::White {
-                eval
-            } else {
-                -eval
-            });
+        // Some pruning uses static eval
+        let static_eval =
+            self.static_eval_if_needed(board, castle, remaining_depth, in_check, is_pv_node);
+
+        if let Some(score) = self.try_razor_prune(
+            board,
+            remaining_depth,
+            alpha,
+            depth,
+            castle,
+            in_check,
+            static_eval,
+        ) {
+            return (score, Vec::new());
         }
 
-        // Razoring
-        if can_razor_prune(remaining_depth, in_check) {
-            if let Some(se) = static_eval {
-                if let Some(score) =
-                    self.razor_prune(board, remaining_depth, alpha, depth, castle, se)
-                {
-                    return (score, Vec::new());
-                }
-            }
+        if let Some(score) = self.try_null_move_prune(
+            board,
+            depth,
+            max_depth,
+            alpha,
+            beta,
+            hash,
+            castle,
+            remaining_depth,
+            in_check,
+            try_null_move,
+        ) {
+            return (score, Vec::new());
         }
 
-        // Null-move pruning
-        if try_null_move && can_null_move_prune(board, remaining_depth, in_check) {
-            if let Some(score) =
-                self.null_move_prune(board, depth, max_depth, alpha, beta, hash, castle)
-            {
-                return (score, Vec::new());
-            }
+        if let Some(score) = self.try_reverse_futility_prune(
+            remaining_depth,
+            in_check,
+            is_pv_node,
+            static_eval,
+            beta,
+            hash,
+            depth,
+            max_depth,
+            alpha,
+        ) {
+            return (score, Vec::new());
         }
 
-        // Reverse Futility Pruning (static beta pruning) at shallow depths on non-PV nodes
-        if !is_pv_node && can_reverse_futility_prune(remaining_depth, in_check) {
-            if let Some(se) = static_eval {
-                if se - RFP_MARGINS[remaining_depth as usize] >= beta && se.abs() < RAZOR_NEAR_MATE
-                {
-                    self.tt
-                        .store(hash, depth, max_depth, beta, alpha, beta, None);
-                    return (beta, Vec::new());
-                }
-            }
-        }
-
-        // Internal Iterative Deepening (IID): if we have no TT move and are sufficiently deep,
-        // do a shallow search to obtain a good move for ordering.
-        if allow_iid && maybe_tt_move.is_none() && remaining_depth >= 4 && !in_check {
-            let shallow_max = max_depth.saturating_sub(IID_REDUCTION);
-            let (.., shallow_line) = self.search_subtree(
-                board,
-                depth,
-                shallow_max,
-                alpha,
-                beta,
-                try_null_move,
-                false, // disable nested IID
-                castle,
-            );
-            if let Some(m) = shallow_line.first().copied() {
-                maybe_tt_move = Some(m);
-            }
+        // Internal Iterative Deepening (IID)
+        if let Some(m) = self.try_iid(
+            board,
+            depth,
+            max_depth,
+            alpha,
+            beta,
+            try_null_move,
+            castle,
+            allow_iid,
+            maybe_tt_move.is_none(),
+            remaining_depth,
+            in_check,
+        ) {
+            maybe_tt_move = Some(m);
         }
 
         self.max_depth_reached = self.max_depth_reached.max(depth);
-
-        let futility_eval = if can_futility_prune(remaining_depth, in_check) {
-            static_eval
-        } else {
-            None
-        };
 
         let moves = ordered_moves(
             board,
@@ -416,7 +401,7 @@ impl NegamaxEngine {
             let is_promotion = m.get_promotion().is_some();
             let is_tactical = in_check || gives_check || is_capture || is_promotion;
 
-            if self.futility_prune(futility_eval, is_tactical, remaining_depth, alpha) {
+            if self.try_futility_prune(remaining_depth, in_check, is_tactical, alpha, static_eval) {
                 continue;
             }
 
@@ -747,9 +732,87 @@ impl NegamaxEngine {
             .unwrap();
     }
 
+    #[inline(always)]
+    fn static_eval_if_needed(
+        &mut self,
+        board: &Board,
+        castle: Castle,
+        remaining_depth: u8,
+        in_check: bool,
+        is_pv_node: bool,
+    ) -> Option<i16> {
+        let should_static_eval = can_razor_prune(remaining_depth, in_check)
+            || can_futility_prune(remaining_depth, in_check)
+            || can_reverse_futility_prune(remaining_depth, in_check, is_pv_node);
+
+        if !should_static_eval {
+            return None;
+        }
+
+        let phase = game_phase(board);
+        let eval = self.evaluator.evaluate(
+            board,
+            castle.white_has_castled(),
+            castle.black_has_castled(),
+            phase,
+        );
+        if board.side_to_move() == Color::White {
+            Some(eval)
+        } else {
+            Some(-eval)
+        }
+    }
+
+    #[inline(always)]
+    fn try_futility_prune(
+        &self,
+        remaining_depth: u8,
+        in_check: bool,
+        is_tactical: bool,
+        alpha: i16,
+        static_eval: Option<i16>,
+    ) -> bool {
+        if !can_futility_prune(remaining_depth, in_check) {
+            return false;
+        }
+        if let Some(se) = static_eval {
+            return !is_tactical && se + FUTILITY_MARGINS[remaining_depth as usize] <= alpha;
+        }
+        false
+    }
+
     #[allow(clippy::too_many_arguments)]
     #[inline(always)]
-    fn null_move_prune(
+    fn try_razor_prune(
+        &mut self,
+        board: &Board,
+        remaining_depth: u8,
+        alpha: i16,
+        depth: u8,
+        castle: Castle,
+        in_check: bool,
+        static_eval: Option<i16>,
+    ) -> Option<i16> {
+        if !can_razor_prune(remaining_depth, in_check) {
+            return None;
+        }
+        let se = static_eval?;
+        // If static eval already near/above alpha threshold, do not razor
+        if se >= alpha - RAZOR_MARGINS[remaining_depth as usize] {
+            return None;
+        }
+        // Q search with null window
+        let (value, _) = self.quiescence_search(board, alpha - 1, alpha, depth, castle);
+        if value < alpha && value.abs() < RAZOR_NEAR_MATE {
+            Some(value)
+        } else {
+            None
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
+    fn try_null_move_prune(
         &mut self,
         board: &Board,
         depth: u8,
@@ -758,9 +821,14 @@ impl NegamaxEngine {
         beta: i16,
         hash: u64,
         castle: Castle,
+        remaining_depth: u8,
+        in_check: bool,
+        try_null_move: bool,
     ) -> Option<i16> {
+        if !(try_null_move && can_null_move_prune(board, remaining_depth, in_check)) {
+            return None;
+        }
         // Null move pruning: if giving opponent a free move still can't reach beta, we can prune
-
         // Less reduction near horizon
         let r = match max_depth - depth {
             3..7 => 2,
@@ -793,44 +861,63 @@ impl NegamaxEngine {
         None
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(always)]
-    fn razor_prune(
+    fn try_reverse_futility_prune(
         &mut self,
-        board: &Board,
         remaining_depth: u8,
-        alpha: i16,
+        in_check: bool,
+        is_pv_node: bool,
+        static_eval: Option<i16>,
+        beta: i16,
+        hash: u64,
         depth: u8,
-        castle: Castle,
-        static_eval: i16,
+        max_depth: u8,
+        alpha: i16,
     ) -> Option<i16> {
-        if static_eval >= alpha - RAZOR_MARGINS[remaining_depth as usize] {
-            return None; // Static eval too high, no point in razoring
+        if !can_reverse_futility_prune(remaining_depth, in_check, is_pv_node) {
+            return None;
         }
-
-        // Q search with null window
-        let (value, _) = self.quiescence_search(board, alpha - 1, alpha, depth, castle);
-
-        if value < alpha && value.abs() < RAZOR_NEAR_MATE {
-            // Our position is still terrible, so we can prune
-            Some(value)
-        } else {
-            None
+        let se = static_eval?;
+        if se - RFP_MARGINS[remaining_depth as usize] >= beta && se.abs() < RAZOR_NEAR_MATE {
+            self.tt
+                .store(hash, depth, max_depth, beta, alpha, beta, None);
+            return Some(beta);
         }
+        None
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(always)]
-    fn futility_prune(
+    fn try_iid(
         &mut self,
-        futility_eval: Option<i16>,
-        is_tactical: bool,
-        remaining_depth: u8,
+        board: &Board,
+        depth: u8,
+        max_depth: u8,
         alpha: i16,
-    ) -> bool {
-        if let Some(se) = futility_eval {
-            if !is_tactical && se + FUTILITY_MARGINS[remaining_depth as usize] <= alpha {
-                return true;
-            }
+        beta: i16,
+        try_null_move: bool,
+        castle: Castle,
+        allow_iid: bool,
+        need_iid: bool,
+        remaining_depth: u8,
+        in_check: bool,
+    ) -> Option<ChessMove> {
+        // Gate
+        if !(allow_iid && need_iid && remaining_depth >= 4 && !in_check) {
+            return None;
         }
-        false
+        let shallow_max = max_depth.saturating_sub(IID_REDUCTION);
+        let (.., shallow_line) = self.search_subtree(
+            board,
+            depth,
+            shallow_max,
+            alpha,
+            beta,
+            try_null_move,
+            false, // disable nested IID
+            castle,
+        );
+        shallow_line.first().copied()
     }
 }

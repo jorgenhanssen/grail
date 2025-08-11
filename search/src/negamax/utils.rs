@@ -60,6 +60,6 @@ pub const RFP_MAX_DEPTH: u8 = 3;
 pub const RFP_MARGINS: [i16; RFP_MAX_DEPTH as usize + 1] = [0, 200, 300, 500];
 
 #[inline(always)]
-pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool) -> bool {
-    remaining_depth <= RFP_MAX_DEPTH && remaining_depth > 0 && !in_check
+pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool, is_pv_node: bool) -> bool {
+    remaining_depth <= RFP_MAX_DEPTH && remaining_depth > 0 && !in_check && !is_pv_node
 }
