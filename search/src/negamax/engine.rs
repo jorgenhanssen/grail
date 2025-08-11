@@ -504,28 +504,21 @@ impl NegamaxEngine {
 
             alpha = alpha.max(best_value);
 
-            let dest = m.get_dest();
             let is_quiet = !is_capture && !is_promotion;
             if alpha >= beta {
                 if is_quiet {
                     self.add_killer_move(depth as usize, m);
 
-                    let source = m.get_source();
                     let bonus = self.history_heuristic.get_bonus(remaining_depth);
-
-                    self.history_heuristic
-                        .update(board.side_to_move(), source, dest, bonus);
+                    self.history_heuristic.update(board, m, bonus);
                 }
 
                 break; // beta cut-off
             }
 
             if value < beta && is_quiet {
-                let source = m.get_source();
                 let malus = self.history_heuristic.get_malus(remaining_depth);
-
-                self.history_heuristic
-                    .update(board.side_to_move(), source, dest, malus); // loser
+                self.history_heuristic.update(board, m, malus); // loser
             }
         }
 

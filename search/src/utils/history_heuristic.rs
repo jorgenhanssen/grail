@@ -1,4 +1,4 @@
-use chess::{Color, Square, NUM_COLORS, NUM_SQUARES};
+use chess::{Board, ChessMove, Color, Square, NUM_COLORS, NUM_SQUARES};
 
 const MAX_HISTORY: i32 = 16_384;
 const MAX_DEPTH: usize = 100;
@@ -27,7 +27,7 @@ impl HistoryHeuristic {
     }
 
     #[inline(always)]
-    pub fn update(&mut self, c: Color, source: Square, dest: Square, bonus: i32) {
+    fn update_move(&mut self, c: Color, source: Square, dest: Square, bonus: i32) {
         let entry = &mut self.history[c.to_index()][source.to_index()][dest.to_index()];
 
         let h = *entry as i32;
@@ -37,6 +37,14 @@ impl HistoryHeuristic {
         let new = h + b - ((h * b.abs()) >> 14);
 
         *entry = new.clamp(-(MAX_HISTORY), MAX_HISTORY) as i16;
+    }
+
+    #[inline(always)]
+    pub fn update(&mut self, board: &Board, mv: ChessMove, delta: i32) {
+        let color = board.side_to_move();
+        let source = mv.get_source();
+        let dest = mv.get_dest();
+        self.update_move(color, source, dest, delta);
     }
 
     #[inline(always)]
