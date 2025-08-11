@@ -305,13 +305,34 @@ impl NegamaxEngine {
         let in_check = board.checkers().popcnt() > 0;
         let is_pv_node = beta > alpha + 1;
 
+        // Determine if we need a static evaluation at this node
+        let need_static_eval = can_razor_prune(remaining_depth, in_check)
+            || can_futility_prune(remaining_depth, in_check)
+            || (!is_pv_node && can_reverse_futility_prune(remaining_depth, in_check));
+        let mut static_eval: Option<i16> = None;
+        if need_static_eval {
+            let phase = game_phase(board);
+            let eval = self.evaluator.evaluate(
+                board,
+                castle.white_has_castled(),
+                castle.black_has_castled(),
+                phase,
+            );
+            static_eval = Some(if board.side_to_move() == Color::White {
+                eval
+            } else {
+                -eval
+            });
+        }
+
         // Razoring
         if can_razor_prune(remaining_depth, in_check) {
-            let phase = game_phase(board);
-            if let Some(score) =
-                self.razor_prune(board, remaining_depth, alpha, depth, castle, phase)
-            {
-                return (score, Vec::new());
+            if let Some(se) = static_eval {
+                if let Some(score) =
+                    self.razor_prune(board, remaining_depth, alpha, depth, castle, se)
+                {
+                    return (score, Vec::new());
+                }
             }
         }
 
@@ -326,17 +347,12 @@ impl NegamaxEngine {
 
         // Reverse Futility Pruning (static beta pruning) at shallow depths on non-PV nodes
         if !is_pv_node && can_reverse_futility_prune(remaining_depth, in_check) {
-            if let Some(score) = self.reverse_futility_prune(
-                board,
-                remaining_depth,
-                alpha,
-                beta,
-                depth,
-                max_depth,
-                castle,
-                hash,
-            ) {
-                return (score, Vec::new());
+            if let Some(se) = static_eval {
+                if se - RFP_MARGINS[remaining_depth as usize] >= beta && se.abs() < RAZOR_NEAR_MATE
+                {
+                    self.store_tt(hash, depth, max_depth, beta, alpha, beta, None);
+                    return (beta, Vec::new());
+                }
             }
         }
 
@@ -363,19 +379,7 @@ impl NegamaxEngine {
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
         let futility_eval = if can_futility_prune(remaining_depth, in_check) {
-            let phase = game_phase(board);
-            let eval = self.evaluator.evaluate(
-                board,
-                castle.white_has_castled(),
-                castle.black_has_castled(),
-                phase,
-            );
-            let se = if board.side_to_move() == Color::White {
-                eval
-            } else {
-                -eval
-            };
-            Some(se)
+            static_eval
         } else {
             None
         };
@@ -500,8 +504,9 @@ impl NegamaxEngine {
             alpha = alpha.max(best_value);
 
             let dest = m.get_dest();
+            let is_quiet = !is_capture && !is_promotion;
             if alpha >= beta {
-                if board.piece_on(dest).is_none() {
+                if is_quiet {
                     self.add_killer_move(depth as usize, m);
 
                     let color = board.side_to_move();
@@ -514,7 +519,7 @@ impl NegamaxEngine {
                 break; // beta cut-off
             }
 
-            if value < beta && board.piece_on(dest).is_none() {
+            if value < beta && is_quiet {
                 let color = board.side_to_move();
                 let source = m.get_source();
                 let malus = self.history_heuristic.get_malus(remaining_depth);
@@ -825,42 +830,6 @@ impl NegamaxEngine {
         None
     }
 
-    #[allow(clippy::too_many_arguments)]
-    #[inline(always)]
-    fn reverse_futility_prune(
-        &mut self,
-        board: &Board,
-        remaining_depth: u8,
-        alpha: i16,
-        beta: i16,
-        depth: u8,
-        max_depth: u8,
-        castle: Castle,
-        hash: u64,
-    ) -> Option<i16> {
-        let phase = game_phase(board);
-        let eval = self.evaluator.evaluate(
-            board,
-            castle.white_has_castled(),
-            castle.black_has_castled(),
-            phase,
-        );
-        let static_eval = if board.side_to_move() == Color::White {
-            eval
-        } else {
-            -eval
-        };
-
-        if static_eval - RFP_MARGINS[remaining_depth as usize] >= beta
-            && static_eval.abs() < RAZOR_NEAR_MATE
-        {
-            self.store_tt(hash, depth, max_depth, beta, alpha, beta, None);
-            return Some(beta);
-        }
-
-        None
-    }
-
     #[inline(always)]
     fn history_leaf_prune(
         &self,
@@ -895,20 +864,8 @@ impl NegamaxEngine {
         alpha: i16,
         depth: u8,
         castle: Castle,
-        phase: f32,
+        static_eval: i16,
     ) -> Option<i16> {
-        let eval = self.evaluator.evaluate(
-            board,
-            castle.white_has_castled(),
-            castle.black_has_castled(),
-            phase,
-        );
-        let static_eval = if board.side_to_move() == Color::White {
-            eval
-        } else {
-            -eval
-        };
-
         if static_eval >= alpha - RAZOR_MARGINS[remaining_depth as usize] {
             return None; // Static eval too high, no point in razoring
         }
