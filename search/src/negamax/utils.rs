@@ -55,32 +55,11 @@ pub fn can_futility_prune(remaining_depth: u8, in_check: bool) -> bool {
     remaining_depth <= FUTILITY_MAX_DEPTH && !in_check
 }
 
-// History Leaf Pruning parameters
-// History scores range roughly in [-16384, 16384]
-pub const HISTORY_REDUCE_THRESHOLD: i16 = 0; // reduce quiet late moves if history <= 0
-pub const HISTORY_LEAF_THRESHOLD: i16 = -1000; // prune quiet late moves at leaf if history very low
-pub const HISTORY_MOVE_GATE: i32 = 5; // only consider after some moves have been tried
-
-#[inline(always)]
-pub fn can_history_leaf_prune(
-    remaining_depth: u8,
-    in_check: bool,
-    is_tactical: bool,
-    is_pv_move: bool,
-    move_index: i32,
-) -> bool {
-    remaining_depth > 0
-        && !in_check
-        && !is_tactical
-        && !is_pv_move
-        && move_index >= HISTORY_MOVE_GATE
-}
-
 // Reverse Futility Pruning (static beta pruning)
 pub const RFP_MAX_DEPTH: u8 = 3;
 pub const RFP_MARGINS: [i16; RFP_MAX_DEPTH as usize + 1] = [0, 200, 300, 500];
 
 #[inline(always)]
-pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool) -> bool {
-    remaining_depth <= RFP_MAX_DEPTH && remaining_depth > 0 && !in_check
+pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool, is_pv_node: bool) -> bool {
+    remaining_depth <= RFP_MAX_DEPTH && remaining_depth > 0 && !in_check && !is_pv_node
 }
