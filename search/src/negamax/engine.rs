@@ -391,116 +391,41 @@ impl NegamaxEngine {
         for m in moves {
             move_index += 1;
 
-            let new_castle = castle.update(board, m);
-
-            let new_board = board.make_move_new(m);
-            let gives_check = new_board.checkers().popcnt() > 0;
-
-            // Consider move tactical if it's check, capture, or promotion
-            let is_capture = board.piece_on(m.get_dest()).is_some();
-            let is_promotion = m.get_promotion().is_some();
-            let is_tactical = in_check || gives_check || is_capture || is_promotion;
-
-            if self.try_futility_prune(remaining_depth, in_check, is_tactical, alpha, static_eval) {
-                continue;
-            }
-
-            let mut reduction = lmr(remaining_depth, is_tactical, move_index);
-
-            let is_pv_move = move_index == 0;
-
-            // Child search window: null-window for non-PV moves
-            let alpha_child = alpha;
-            let beta_child = if !is_pv_move { alpha + 1 } else { beta };
-
-            // History-leaf pruning / extra reduction on quiet late moves
-            if self.history_heuristic.maybe_reduce_or_prune(
+            if let Some((value, mut line, is_quiet)) = self.search_move(
                 board,
-                m,
+                castle,
                 depth,
                 max_depth,
-                remaining_depth,
+                alpha,
+                beta,
                 in_check,
-                is_tactical,
-                is_pv_move,
+                remaining_depth,
+                m,
                 move_index,
-                &mut reduction,
+                static_eval,
             ) {
-                continue;
-            }
-
-            let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
-
-            self.position_stack.push(new_board.get_hash());
-
-            let (child_value, pv_line) = self.search_subtree(
-                &new_board,
-                depth + 1,
-                child_max_depth,
-                -beta_child,
-                -alpha_child,
-                true,
-                true,
-                new_castle,
-            );
-            let mut value = -child_value;
-            let mut line = pv_line;
-
-            if reduction > 0 && value > alpha {
-                let (re_child_value, re_line) = self.search_subtree(
-                    &new_board,
-                    depth + 1,
-                    max_depth,
-                    -beta_child,
-                    -alpha_child,
-                    true,
-                    true,
-                    new_castle,
-                );
-                value = -re_child_value;
-                line = re_line;
-            }
-
-            if !is_pv_move && value > alpha {
-                let (full_child_value, full_line) = self.search_subtree(
-                    &new_board,
-                    depth + 1,
-                    max_depth,
-                    -beta,
-                    -alpha,
-                    true,
-                    true,
-                    new_castle,
-                );
-                value = -full_child_value;
-                line = full_line;
-            }
-
-            self.position_stack.pop();
-
-            if self.stop.load(Ordering::Relaxed) {
-                break;
-            }
-
-            if value > best_value {
-                best_value = value;
-                best_move = Some(m);
-                line.insert(0, m);
-                best_line = line;
-            }
-
-            alpha = alpha.max(best_value);
-
-            let is_quiet = !is_capture && !is_promotion;
-            if alpha >= beta {
-                if is_quiet {
-                    self.on_quiet_fail_high(board, m, remaining_depth, depth as usize);
+                if self.stop.load(Ordering::Relaxed) {
+                    break;
                 }
-                break; // beta cutoff
-            }
 
-            if value < beta && is_quiet {
-                self.on_quiet_fail_low(board, m, remaining_depth);
+                if value > best_value {
+                    best_value = value;
+                    best_move = Some(m);
+                    line.insert(0, m);
+                    best_line = line;
+                }
+
+                alpha = alpha.max(best_value);
+                if alpha >= beta {
+                    if is_quiet {
+                        self.on_quiet_fail_high(board, m, remaining_depth, depth as usize);
+                    }
+                    break; // beta cutoff
+                }
+
+                if value < beta && is_quiet {
+                    self.on_quiet_fail_low(board, m, remaining_depth);
+                }
             }
         }
 
@@ -514,6 +439,111 @@ impl NegamaxEngine {
             best_move,
         );
         (best_value, best_line)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
+    fn search_move(
+        &mut self,
+        board: &Board,
+        castle: Castle,
+        depth: u8,
+        max_depth: u8,
+        alpha: i16,
+        beta: i16,
+        in_check: bool,
+        remaining_depth: u8,
+        m: ChessMove,
+        move_index: i32,
+        static_eval: Option<i16>,
+    ) -> Option<(i16, Vec<ChessMove>, bool)> {
+        let new_castle = castle.update(board, m);
+        let new_board = board.make_move_new(m);
+        let gives_check = new_board.checkers().popcnt() > 0;
+
+        // Consider move tactical if it's check, capture, or promotion
+        let is_capture = board.piece_on(m.get_dest()).is_some();
+        let is_promotion = m.get_promotion().is_some();
+        let is_tactical = in_check || gives_check || is_capture || is_promotion;
+
+        // Futility prune
+        if self.try_futility_prune(remaining_depth, in_check, is_tactical, alpha, static_eval) {
+            return None;
+        }
+
+        // Late-move reduction
+        let mut reduction = lmr(remaining_depth, is_tactical, move_index);
+
+        let is_pv_move = move_index == 0;
+        let alpha_child = alpha;
+        let beta_child = if !is_pv_move { alpha + 1 } else { beta };
+
+        // History-leaf pruning / extra reduction on quiet late moves
+        if self.history_heuristic.maybe_reduce_or_prune(
+            board,
+            m,
+            depth,
+            max_depth,
+            remaining_depth,
+            in_check,
+            is_tactical,
+            is_pv_move,
+            move_index,
+            &mut reduction,
+        ) {
+            return None;
+        }
+
+        let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
+
+        self.position_stack.push(new_board.get_hash());
+        let (child_value, pv_line) = self.search_subtree(
+            &new_board,
+            depth + 1,
+            child_max_depth,
+            -beta_child,
+            -alpha_child,
+            true,
+            true,
+            new_castle,
+        );
+        let mut value = -child_value;
+        let mut line = pv_line;
+
+        if reduction > 0 && value > alpha {
+            let (re_child_value, re_line) = self.search_subtree(
+                &new_board,
+                depth + 1,
+                max_depth,
+                -beta_child,
+                -alpha_child,
+                true,
+                true,
+                new_castle,
+            );
+            value = -re_child_value;
+            line = re_line;
+        }
+
+        if !is_pv_move && value > alpha {
+            let (full_child_value, full_line) = self.search_subtree(
+                &new_board,
+                depth + 1,
+                max_depth,
+                -beta,
+                -alpha,
+                true,
+                true,
+                new_castle,
+            );
+            value = -full_child_value;
+            line = full_line;
+        }
+
+        self.position_stack.pop();
+
+        let is_quiet = !is_capture && !is_promotion;
+        Some((value, line, is_quiet))
     }
 
     fn quiescence_search(
