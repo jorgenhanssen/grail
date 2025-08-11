@@ -40,6 +40,8 @@ use super::{
 };
 
 const MAX_DEPTH: usize = 100;
+const IID_REDUCTION: u8 = 2;
+const QS_DELTA_MARGIN: i16 = 200;
 
 pub struct NegamaxEngine {
     board: Board,
@@ -359,8 +361,7 @@ impl NegamaxEngine {
         // Internal Iterative Deepening (IID): if we have no TT move and are sufficiently deep,
         // do a shallow search to obtain a good move for ordering.
         if allow_iid && maybe_tt_move.is_none() && remaining_depth >= 4 && !in_check {
-            let iid_reduction: u8 = 2;
-            let shallow_max = max_depth.saturating_sub(iid_reduction);
+            let shallow_max = max_depth.saturating_sub(IID_REDUCTION);
             let (.., shallow_line) = self.search_subtree(
                 board,
                 depth,
@@ -509,22 +510,22 @@ impl NegamaxEngine {
                 if is_quiet {
                     self.add_killer_move(depth as usize, m);
 
-                    let color = board.side_to_move();
                     let source = m.get_source();
                     let bonus = self.history_heuristic.get_bonus(remaining_depth);
 
-                    self.history_heuristic.update(color, source, dest, bonus);
+                    self.history_heuristic
+                        .update(board.side_to_move(), source, dest, bonus);
                 }
 
                 break; // beta cut-off
             }
 
             if value < beta && is_quiet {
-                let color = board.side_to_move();
                 let source = m.get_source();
                 let malus = self.history_heuristic.get_malus(remaining_depth);
 
-                self.history_heuristic.update(color, source, dest, malus); // loser
+                self.history_heuristic
+                    .update(board.side_to_move(), source, dest, malus); // loser
             }
         }
 
@@ -648,7 +649,7 @@ impl NegamaxEngine {
             if can_delta_prune(board, in_check, phase) {
                 let captured = board.piece_on(mv.get_dest());
                 if let Some(piece) = captured {
-                    let mut delta = piece_value(piece, phase) + 200; // delta margin
+                    let mut delta = piece_value(piece, phase) + QS_DELTA_MARGIN;
                     if mv.get_promotion().is_some() {
                         delta += piece_value(Piece::Queen, phase) - piece_value(Piece::Pawn, phase);
                         // promotion bonus
