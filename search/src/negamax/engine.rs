@@ -508,18 +508,13 @@ impl NegamaxEngine {
             let is_quiet = !is_capture && !is_promotion;
             if alpha >= beta {
                 if is_quiet {
-                    self.add_killer_move(depth as usize, m);
-
-                    let bonus = self.history_heuristic.get_bonus(remaining_depth);
-                    self.history_heuristic.update(board, m, bonus);
+                    self.on_quiet_fail_high(board, m, remaining_depth, depth as usize);
                 }
-
-                break; // beta cut-off
+                break; // beta cutoff
             }
 
             if value < beta && is_quiet {
-                let malus = self.history_heuristic.get_malus(remaining_depth);
-                self.history_heuristic.update(board, m, malus); // loser
+                self.on_quiet_fail_low(board, m, remaining_depth);
             }
         }
 
@@ -739,18 +734,37 @@ impl NegamaxEngine {
         }
     }
 
+    // Runs when a quiet move yields a beta cutoff
     #[inline(always)]
-    fn add_killer_move(&mut self, depth: usize, m: ChessMove) {
+    fn on_quiet_fail_high(
+        &mut self,
+        board: &Board,
+        mv: ChessMove,
+        remaining_depth: u8,
+        depth: usize,
+    ) {
+        // Add killer move
         let killers = &mut self.killer_moves[depth];
-        if killers[0] != Some(m) {
+        if killers[0] != Some(mv) {
             killers[1] = killers[0];
-            killers[0] = Some(m);
+            killers[0] = Some(mv);
         }
+
+        // Update history
+        let bonus = self.history_heuristic.get_bonus(remaining_depth);
+        self.history_heuristic.update(board, mv, bonus);
+    }
+
+    // Runs when a quiet move fails low (does not improve the bound)
+    #[inline(always)]
+    fn on_quiet_fail_low(&mut self, board: &Board, mv: ChessMove, remaining_depth: u8) {
+        let malus = self.history_heuristic.get_malus(remaining_depth);
+        self.history_heuristic.update(board, mv, malus);
     }
 
     #[inline(always)]
     fn is_cycle(&self, hash: u64) -> bool {
-        self.position_stack.iter().filter(|&&h| h == hash).count() >= 2
+        self.position_stack.iter().filter(|&&h| h == hash).count() > 1
     }
 
     fn send_search_info(
