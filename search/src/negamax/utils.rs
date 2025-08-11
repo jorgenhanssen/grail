@@ -75,3 +75,12 @@ pub fn can_history_leaf_prune(
         && !is_pv_move
         && move_index >= HISTORY_MOVE_GATE
 }
+
+// Reverse Futility Pruning (static beta pruning)
+pub const RFP_MAX_DEPTH: u8 = 3;
+pub const RFP_MARGINS: [i16; RFP_MAX_DEPTH as usize + 1] = [0, 200, 300, 500];
+
+#[inline(always)]
+pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool) -> bool {
+    remaining_depth <= RFP_MAX_DEPTH && remaining_depth > 0 && !in_check
+}
