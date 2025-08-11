@@ -34,7 +34,7 @@ use uci::{
 use super::utils::{lmr, RAZOR_NEAR_MATE};
 use super::{
     controller::SearchController,
-    tt::{Bound, TTEntry},
+    tt::{Bound, TranspositionTable},
 };
 
 const MAX_DEPTH: usize = 100;
@@ -48,7 +48,7 @@ pub struct NegamaxEngine {
     current_pv: Vec<ChessMove>,
 
     window: AspirationWindow,
-    tt: AHashMap<u64, TTEntry>,
+    tt: TranspositionTable,
     qs_tt: AHashMap<u64, i16>,
 
     max_depth_reached: u8,
@@ -67,7 +67,7 @@ impl Default for NegamaxEngine {
             board: Board::default(),
             nodes: 0,
             window: AspirationWindow::new(ASP_HALF_START, ASP_WIDEN, ASP_ENABLED_FROM),
-            tt: AHashMap::with_capacity(200_000),
+            tt: TranspositionTable::with_capacity(200_000),
             qs_tt: AHashMap::with_capacity(100_000),
             killer_moves: [[None; 2]; MAX_DEPTH],
             max_depth_reached: 1,
@@ -285,7 +285,7 @@ impl NegamaxEngine {
         // Transposition table probe
         let original_alpha = alpha;
         let mut maybe_tt_move = None;
-        if let Some((tt_value, tt_bound, tt_move)) = self.probe_tt(hash, depth, max_depth) {
+        if let Some((tt_value, tt_bound, tt_move)) = self.tt.probe(hash, depth, max_depth) {
             maybe_tt_move = tt_move;
             match tt_bound {
                 Bound::Exact => return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m])),
@@ -350,7 +350,8 @@ impl NegamaxEngine {
             if let Some(se) = static_eval {
                 if se - RFP_MARGINS[remaining_depth as usize] >= beta && se.abs() < RAZOR_NEAR_MATE
                 {
-                    self.store_tt(hash, depth, max_depth, beta, alpha, beta, None);
+                    self.tt
+                        .store(hash, depth, max_depth, beta, alpha, beta, None);
                     return (beta, Vec::new());
                 }
             }
@@ -518,7 +519,7 @@ impl NegamaxEngine {
             }
         }
 
-        self.store_tt(
+        self.tt.store(
             hash,
             depth,
             max_depth,
@@ -686,54 +687,6 @@ impl NegamaxEngine {
         (best_eval, best_line)
     }
 
-    #[inline]
-    fn probe_tt(
-        &mut self,
-        hash: u64,
-        depth: u8,
-        max_depth: u8,
-    ) -> Option<(i16, Bound, Option<ChessMove>)> {
-        let plies = max_depth - depth;
-        if let Some(entry) = self.tt.get(&hash) {
-            if entry.plies >= plies {
-                return Some((entry.value, entry.bound, entry.best_move));
-            }
-        }
-        None
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn store_tt(
-        &mut self,
-        hash: u64,
-        depth: u8,
-        max_depth: u8,
-        value: i16,
-        alpha: i16,
-        beta: i16,
-        best_move: Option<ChessMove>,
-    ) {
-        let plies = max_depth - depth;
-
-        let bound = if value <= alpha {
-            Bound::Upper
-        } else if value >= beta {
-            Bound::Lower
-        } else {
-            Bound::Exact
-        };
-
-        let entry = TTEntry::new(plies, value, bound, best_move);
-
-        if let Some(old_entry) = self.tt.get(&hash) {
-            if old_entry.plies <= plies {
-                self.tt.insert(hash, entry);
-            }
-        } else {
-            self.tt.insert(hash, entry);
-        }
-    }
-
     // Runs when a quiet move yields a beta cutoff
     #[inline(always)]
     fn on_quiet_fail_high(
@@ -831,15 +784,14 @@ impl NegamaxEngine {
 
             // If opponent still can't reach beta, prune this branch
             if -score >= beta {
-                self.store_tt(hash, depth, max_depth, beta, alpha, beta, None);
+                self.tt
+                    .store(hash, depth, max_depth, beta, alpha, beta, None);
                 return Some(beta);
             }
         }
 
         None
     }
-
-    // history-leaf prune moved into HistoryHeuristic::maybe_reduce_or_prune
 
     #[inline(always)]
     fn razor_prune(
