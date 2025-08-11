@@ -5,7 +5,7 @@ use crate::{
         },
         utils::{
             can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
-            FUTILITY_MARGINS, RAZOR_MARGINS,
+            can_reverse_futility_prune, FUTILITY_MARGINS, RAZOR_MARGINS, RFP_MARGINS,
         },
     },
     utils::{
@@ -303,6 +303,7 @@ impl NegamaxEngine {
 
         let remaining_depth = max_depth - depth;
         let in_check = board.checkers().popcnt() > 0;
+        let is_pv_node = beta > alpha + 1;
 
         // Razoring
         if can_razor_prune(remaining_depth, in_check) {
@@ -319,6 +320,22 @@ impl NegamaxEngine {
             if let Some(score) =
                 self.null_move_prune(board, depth, max_depth, alpha, beta, hash, castle)
             {
+                return (score, Vec::new());
+            }
+        }
+
+        // Reverse Futility Pruning (static beta pruning) at shallow depths on non-PV nodes
+        if !is_pv_node && can_reverse_futility_prune(remaining_depth, in_check) {
+            if let Some(score) = self.reverse_futility_prune(
+                board,
+                remaining_depth,
+                alpha,
+                beta,
+                depth,
+                max_depth,
+                castle,
+                hash,
+            ) {
                 return (score, Vec::new());
             }
         }
@@ -803,6 +820,42 @@ impl NegamaxEngine {
                 self.store_tt(hash, depth, max_depth, beta, alpha, beta, None);
                 return Some(beta);
             }
+        }
+
+        None
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
+    fn reverse_futility_prune(
+        &mut self,
+        board: &Board,
+        remaining_depth: u8,
+        alpha: i16,
+        beta: i16,
+        depth: u8,
+        max_depth: u8,
+        castle: Castle,
+        hash: u64,
+    ) -> Option<i16> {
+        let phase = game_phase(board);
+        let eval = self.evaluator.evaluate(
+            board,
+            castle.white_has_castled(),
+            castle.black_has_castled(),
+            phase,
+        );
+        let static_eval = if board.side_to_move() == Color::White {
+            eval
+        } else {
+            -eval
+        };
+
+        if static_eval - RFP_MARGINS[remaining_depth as usize] >= beta
+            && static_eval.abs() < RAZOR_NEAR_MATE
+        {
+            self.store_tt(hash, depth, max_depth, beta, alpha, beta, None);
+            return Some(beta);
         }
 
         None
