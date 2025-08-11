@@ -1,5 +1,3 @@
-// For Transposition Table
-
 use ahash::AHashMap;
 use chess::ChessMove;
 

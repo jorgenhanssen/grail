@@ -19,8 +19,8 @@ use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank};
 use evaluation::{
     piece_value,
     scores::{MATE_VALUE, NEG_INFINITY},
+    Evaluator, TraditionalEvaluator,
 };
-use evaluation::{Evaluator, TraditionalEvaluator};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc::Sender,
