@@ -1,7 +1,8 @@
 mod aspiration;
 mod controller;
 mod engine;
-mod tt;
+mod qs_table;
+mod tt_table;
 mod utils;
 
 pub use engine::NegamaxEngine;
