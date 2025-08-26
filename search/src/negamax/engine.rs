@@ -194,14 +194,12 @@ impl NegamaxEngine {
         self.max_depth_reached = 1;
         self.current_pv.clear();
 
-        // Init position stack
         self.position_stack.clear();
         self.position_stack.push(self.board.get_hash());
+        self.move_stack.clear();
 
         self.history_heuristic.reset();
-        // Reset countermoves and move stack
         self.countermoves.reset();
-        self.move_stack.clear();
     }
 
     pub fn search_root(
