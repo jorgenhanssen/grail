@@ -1,4 +1,5 @@
 mod castling;
+mod countermove;
 mod history_heuristic;
 mod move_order;
 mod see;
@@ -7,6 +8,7 @@ use chess::{Board, ChessMove, Piece};
 pub use move_order::ordered_moves;
 
 pub use castling::Castle;
+pub use countermove::CountermoveTable;
 pub use history_heuristic::HistoryHeuristic;
 pub use see::see;
 use uci::commands::Score;
