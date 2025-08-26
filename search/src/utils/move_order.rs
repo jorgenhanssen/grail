@@ -34,7 +34,6 @@ pub fn ordered_moves(
             priority = priority.max(MAX_PRIORITY + 2);
         }
         if Some(mov) == countermove {
-            // Boost refutation quiets just below killers; still below captures
             priority = priority.max(CAPTURE_PRIORITY - 2);
         }
         if killers.contains(&Some(mov)) {
