@@ -47,22 +47,20 @@ pub struct NegamaxEngine {
     nodes: u32,
     killer_moves: [[Option<ChessMove>; 2]; MAX_DEPTH], // 2 per depth
     current_pv: Vec<ChessMove>,
+    max_depth_reached: u8,
+    stop: Arc<AtomicBool>,
+
+    evaluator: Box<dyn Evaluator>,
 
     window: AspirationWindow,
     tt: TranspositionTable,
     qs_tt: QSTable,
 
-    max_depth_reached: u8,
-
     position_stack: Vec<u64>,
-    evaluator: Box<dyn Evaluator>,
-
-    stop: Arc<AtomicBool>,
+    move_stack: Vec<ChessMove>,
 
     history_heuristic: HistoryHeuristic,
-    // Countermove table and stack
     countermoves: CountermoveTable,
-    move_stack: Vec<ChessMove>,
 }
 
 impl Default for NegamaxEngine {
@@ -70,21 +68,22 @@ impl Default for NegamaxEngine {
         Self {
             board: Board::default(),
             nodes: 0,
+            killer_moves: [[None; 2]; MAX_DEPTH],
+            current_pv: Vec::new(),
+            max_depth_reached: 1,
+            stop: Arc::new(AtomicBool::new(false)),
+
+            evaluator: Box::new(TraditionalEvaluator),
+
             window: AspirationWindow::new(ASP_HALF_START, ASP_WIDEN, ASP_ENABLED_FROM),
             tt: TranspositionTable::with_capacity(200_000),
             qs_tt: QSTable::with_capacity(100_000),
-            killer_moves: [[None; 2]; MAX_DEPTH],
-            max_depth_reached: 1,
-            current_pv: Vec::new(),
 
             position_stack: Vec::with_capacity(100),
-            evaluator: Box::new(TraditionalEvaluator),
-
-            stop: Arc::new(AtomicBool::new(false)),
+            move_stack: Vec::with_capacity(100),
 
             history_heuristic: HistoryHeuristic::new(),
             countermoves: CountermoveTable::new(),
-            move_stack: Vec::with_capacity(100),
         }
     }
 }
