@@ -2,6 +2,7 @@ use chess::{BitBoard, Board, ChessMove, MoveGen, Piece};
 
 use crate::utils::HistoryHeuristic;
 
+#[allow(clippy::too_many_arguments)]
 #[inline(always)]
 pub fn ordered_moves(
     board: &Board,
@@ -9,6 +10,7 @@ pub fn ordered_moves(
     depth: u8,
     pv_move: &[ChessMove],
     tt_move: Option<ChessMove>,
+    countermove: Option<ChessMove>,
     killer_moves: &[[Option<ChessMove>; 2]],
     history_heuristic: &HistoryHeuristic,
 ) -> Vec<ChessMove> {
@@ -31,6 +33,9 @@ pub fn ordered_moves(
         if Some(mov) == pv {
             priority = priority.max(MAX_PRIORITY + 2);
         }
+        if Some(mov) == countermove {
+            priority = priority.max(CAPTURE_PRIORITY - 2);
+        }
         if killers.contains(&Some(mov)) {
             priority = priority.max(CAPTURE_PRIORITY - 1);
         }
@@ -49,7 +54,7 @@ pub const MIN_PRIORITY: i32 = 0;
 // Captures get medium priority (MVV-LVA values 10-55)
 pub const MIN_CAPTURE_PRIORITY: i32 = MIN_PRIORITY + 1_000_000;
 pub const CAPTURE_PRIORITY: i32 = MIN_CAPTURE_PRIORITY;
-pub const MAX_CAPTURE_PRIORITY: i32 = MIN_CAPTURE_PRIORITY + 55;
+// pub const MAX_CAPTURE_PRIORITY: i32 = MIN_CAPTURE_PRIORITY + 55;
 
 // Promotions get highest priority
 pub const MIN_PROMOTION_PRIORITY: i32 = MIN_PRIORITY + 2_000_000;

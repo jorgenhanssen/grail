@@ -36,6 +36,7 @@ use super::{
     qs_table::QSTable,
     tt_table::{Bound, TranspositionTable},
 };
+use crate::utils::CountermoveTable;
 
 const MAX_DEPTH: usize = 100;
 const IID_REDUCTION: u8 = 2;
@@ -46,19 +47,20 @@ pub struct NegamaxEngine {
     nodes: u32,
     killer_moves: [[Option<ChessMove>; 2]; MAX_DEPTH], // 2 per depth
     current_pv: Vec<ChessMove>,
+    max_depth_reached: u8,
+    stop: Arc<AtomicBool>,
+
+    evaluator: Box<dyn Evaluator>,
 
     window: AspirationWindow,
     tt: TranspositionTable,
     qs_tt: QSTable,
 
-    max_depth_reached: u8,
-
     position_stack: Vec<u64>,
-    evaluator: Box<dyn Evaluator>,
-
-    stop: Arc<AtomicBool>,
+    move_stack: Vec<ChessMove>,
 
     history_heuristic: HistoryHeuristic,
+    countermoves: CountermoveTable,
 }
 
 impl Default for NegamaxEngine {
@@ -66,19 +68,22 @@ impl Default for NegamaxEngine {
         Self {
             board: Board::default(),
             nodes: 0,
+            killer_moves: [[None; 2]; MAX_DEPTH],
+            current_pv: Vec::new(),
+            max_depth_reached: 1,
+            stop: Arc::new(AtomicBool::new(false)),
+
+            evaluator: Box::new(TraditionalEvaluator),
+
             window: AspirationWindow::new(ASP_HALF_START, ASP_WIDEN, ASP_ENABLED_FROM),
             tt: TranspositionTable::with_capacity(200_000),
             qs_tt: QSTable::with_capacity(100_000),
-            killer_moves: [[None; 2]; MAX_DEPTH],
-            max_depth_reached: 1,
-            current_pv: Vec::new(),
 
             position_stack: Vec::with_capacity(100),
-            evaluator: Box::new(TraditionalEvaluator),
-
-            stop: Arc::new(AtomicBool::new(false)),
+            move_stack: Vec::with_capacity(100),
 
             history_heuristic: HistoryHeuristic::new(),
+            countermoves: CountermoveTable::new(),
         }
     }
 }
@@ -189,11 +194,12 @@ impl NegamaxEngine {
         self.max_depth_reached = 1;
         self.current_pv.clear();
 
-        // Init position stack
         self.position_stack.clear();
         self.position_stack.push(self.board.get_hash());
+        self.move_stack.clear();
 
         self.history_heuristic.reset();
+        self.countermoves.reset();
     }
 
     pub fn search_root(
@@ -207,6 +213,7 @@ impl NegamaxEngine {
             None,
             0,
             &self.current_pv,
+            None,
             None,
             &self.killer_moves,
             &self.history_heuristic,
@@ -226,10 +233,12 @@ impl NegamaxEngine {
             let new_board = self.board.make_move_new(m);
 
             self.position_stack.push(new_board.get_hash());
+            self.move_stack.push(m);
             let (child_value, mut pv) =
                 self.search_subtree(&new_board, 1, depth, -beta, -alpha, true, true, castle);
             let score = -child_value;
             self.position_stack.pop();
+            self.move_stack.pop();
 
             // Check if we were stopped during the subtree search
             if self.stop.load(Ordering::Relaxed) {
@@ -375,6 +384,7 @@ impl NegamaxEngine {
             depth,
             &self.current_pv,
             maybe_tt_move,
+            self.countermoves.get(board, &self.move_stack),
             &self.killer_moves,
             &self.history_heuristic,
         );
@@ -419,6 +429,7 @@ impl NegamaxEngine {
                 if alpha >= beta {
                     if is_quiet {
                         self.on_quiet_fail_high(board, m, remaining_depth, depth as usize);
+                        self.countermoves.store(board, &self.move_stack, m);
                     }
                     break; // beta cutoff
                 }
@@ -497,6 +508,7 @@ impl NegamaxEngine {
         let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
 
         self.position_stack.push(new_board.get_hash());
+        self.move_stack.push(m);
         let (child_value, pv_line) = self.search_subtree(
             &new_board,
             depth + 1,
@@ -507,10 +519,12 @@ impl NegamaxEngine {
             true,
             new_castle,
         );
+        self.move_stack.pop();
         let mut value = -child_value;
         let mut line = pv_line;
 
         if reduction > 0 && value > alpha {
+            self.move_stack.push(m);
             let (re_child_value, re_line) = self.search_subtree(
                 &new_board,
                 depth + 1,
@@ -521,11 +535,13 @@ impl NegamaxEngine {
                 true,
                 new_castle,
             );
+            self.move_stack.pop();
             value = -re_child_value;
             line = re_line;
         }
 
         if !is_pv_move && value > alpha {
+            self.move_stack.push(m);
             let (full_child_value, full_line) = self.search_subtree(
                 &new_board,
                 depth + 1,
@@ -536,6 +552,7 @@ impl NegamaxEngine {
                 true,
                 new_castle,
             );
+            self.move_stack.pop();
             value = -full_child_value;
             line = full_line;
         }
@@ -644,6 +661,7 @@ impl NegamaxEngine {
             mask,
             depth,
             &self.current_pv,
+            None,
             None,
             &self.killer_moves,
             &self.history_heuristic,
