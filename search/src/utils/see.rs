@@ -16,7 +16,7 @@ pub fn see(board: &Board, mv: ChessMove, phase: f32) -> i16 {
         initial_gain += piece_value(promo, phase) - piece_value(Piece::Pawn, phase);
     }
 
-    // Gains list stores the captured value at each ply
+    // Gains list stores the net gain after each ply using the CPW swaplist method
     let mut gains: Vec<i16> = Vec::with_capacity(8);
     gains.push(initial_gain);
 
@@ -44,21 +44,25 @@ pub fn see(board: &Board, mv: ChessMove, phase: f32) -> i16 {
 
         match best_recapture {
             Some(best) => {
-                gains.push(best_value);
+                // Forward pass: net gain at this ply is captured piece value minus previous net
+                let prev = *gains.last().unwrap();
+                let captured_piece = current_board
+                    .piece_on(target)
+                    .expect("target must be occupied before recapture");
+                let captured_value = piece_value(captured_piece, phase);
+                gains.push(captured_value - prev);
                 current_board = current_board.make_move_new(best);
             }
             None => break,
         }
     }
 
-    // Backward induction to compute optimal outcome for the initial side
-    // Standard SEE fold: gains[i-1] = max(0, gains[i-1] - gains[i])
+    // Backward induction (CPW): gains[i-1] = -max(-gains[i-1], gains[i])
     let mut i = gains.len();
     while i > 1 {
         let next = gains[i - 1];
         let prev = gains[i - 2];
-        let new_prev = prev - next;
-        gains[i - 2] = new_prev.max(0);
+        gains[i - 2] = -std::cmp::max(-prev, next);
         i -= 1;
     }
 
