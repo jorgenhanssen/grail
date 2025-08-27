@@ -20,6 +20,13 @@ candle-core = { workspace = true }
 candle-nn = { workspace = true }
 indicatif = { workspace = true }
 
+[features]
+default = []
+cuda = [
+    "candle-core/cuda",
+    "candle-nn/cuda",
+]
+
 [lib]
 name = "nnue"
 
