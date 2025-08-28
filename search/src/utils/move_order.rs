@@ -58,9 +58,7 @@ pub const CAPTURE_PRIORITY: i32 = MIN_CAPTURE_PRIORITY;
 
 // Promotions get highest priority
 pub const MIN_PROMOTION_PRIORITY: i32 = MIN_PRIORITY + 2_000_000;
-const PROMOTION_PRIORITY_KNIGHT: i32 = MIN_PROMOTION_PRIORITY + 1;
-const PROMOTION_PRIORITY_BISHOP: i32 = MIN_PROMOTION_PRIORITY + 2;
-const PROMOTION_PRIORITY_ROOK: i32 = MIN_PROMOTION_PRIORITY + 3;
+const UNDERPROMOTION_PRIORITY: i32 = MIN_PRIORITY - 3_000_000;
 const PROMOTION_PRIORITY_QUEEN: i32 = MIN_PROMOTION_PRIORITY + 4;
 pub const MAX_PROMOTION_PRIORITY: i32 = PROMOTION_PRIORITY_QUEEN;
 
@@ -96,10 +94,7 @@ fn move_priority(mov: &ChessMove, board: &Board, history_heuristic: &HistoryHeur
     if let Some(promotion) = mov.get_promotion() {
         return match promotion {
             Piece::Queen => PROMOTION_PRIORITY_QUEEN,
-            Piece::Rook => PROMOTION_PRIORITY_ROOK,
-            Piece::Bishop => PROMOTION_PRIORITY_BISHOP,
-            Piece::Knight => PROMOTION_PRIORITY_KNIGHT,
-            _ => 0,
+            _ => UNDERPROMOTION_PRIORITY,
         };
     }
 
