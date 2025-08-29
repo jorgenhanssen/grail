@@ -474,7 +474,7 @@ impl NegamaxEngine {
 
         // Consider move tactical if it's check, capture, or promotion
         let is_capture = board.piece_on(m.get_dest()).is_some();
-        let is_promotion = m.get_promotion().is_some();
+        let is_promotion = m.get_promotion() == Some(Piece::Queen);
         let is_tactical = in_check || gives_check || is_capture || is_promotion;
 
         // Futility prune
