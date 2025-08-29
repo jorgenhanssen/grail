@@ -673,8 +673,8 @@ impl NegamaxEngine {
                 let captured = board.piece_on(mv.get_dest());
                 if let Some(piece) = captured {
                     let mut delta = piece_value(piece, phase) + QS_DELTA_MARGIN;
-                    if mv.get_promotion().is_some() {
-                        delta += piece_value(Piece::Queen, phase) - piece_value(Piece::Pawn, phase);
+                    if let Some(promotion) = mv.get_promotion() {
+                        delta += piece_value(promotion, phase) - piece_value(Piece::Pawn, phase);
                         // promotion bonus
                     }
                     if stand_pat + delta < alpha {
