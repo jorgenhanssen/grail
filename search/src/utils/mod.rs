@@ -9,6 +9,7 @@ pub use move_order::ordered_moves;
 
 pub use castling::Castle;
 pub use countermove::CountermoveTable;
+use evaluation::scores::MATE_VALUE;
 pub use history_heuristic::HistoryHeuristic;
 pub use see::see;
 use uci::commands::Score;
@@ -36,9 +37,9 @@ pub fn game_phase(board: &Board) -> f32 {
 }
 
 #[inline(always)]
-pub fn convert_mate_score(score: i16, pv: &[ChessMove]) -> Score {
-    let mate_in = (pv.len() as i16 + 1) / 2;
-
+pub fn convert_mate_score(score: i16) -> Score {
+    let mate_plies = (MATE_VALUE - score.abs()).max(0);
+    let mate_in = (mate_plies + 1) / 2;
     if score > 0 {
         Score::Mate(mate_in)
     } else {
