@@ -8,8 +8,7 @@ pub fn ordered_moves(
     board: &Board,
     mask: Option<BitBoard>,
     depth: u8,
-    pv_move: &[ChessMove],
-    tt_move: Option<ChessMove>,
+    best_move: Option<ChessMove>,
     countermove: Option<ChessMove>,
     killer_moves: &[[Option<ChessMove>; 2]],
     history_heuristic: &HistoryHeuristic,
@@ -22,17 +21,20 @@ pub fn ordered_moves(
     let mut moves_with_priority: Vec<(ChessMove, i32)> = Vec::with_capacity(64); // Rough estimate; chess max ~218
 
     let killers = &killer_moves[depth as usize];
-    let pv = pv_move.get(depth as usize).cloned();
+
+    if let Some(_tt) = best_move {
+        if board.legal(_tt) {
+            moves_with_priority.push((_tt, MAX_PRIORITY + 1));
+        }
+    }
 
     for mov in legal {
+        if Some(mov) == best_move {
+            continue;
+        }
+
         let mut priority = move_priority(&mov, board, history_heuristic);
 
-        if Some(mov) == tt_move {
-            priority = priority.max(MAX_PRIORITY + 1);
-        }
-        if Some(mov) == pv {
-            priority = priority.max(MAX_PRIORITY + 2);
-        }
         if Some(mov) == countermove {
             priority = priority.max(CAPTURE_PRIORITY - 2);
         }
