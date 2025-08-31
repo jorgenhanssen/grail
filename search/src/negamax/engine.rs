@@ -10,7 +10,7 @@ use crate::{
     },
     utils::{
         convert_centipawn_score, convert_mate_score, game_phase, ordered_moves, see, Castle,
-        HistoryHeuristic,
+        HistoryHeuristic, MainMoveGenerator,
     },
     Engine,
 };
@@ -397,8 +397,14 @@ impl NegamaxEngine {
         let mut best_move = None;
         let mut best_line = Vec::new();
 
+        let mut movegen = MainMoveGenerator::new(
+            maybe_tt_move,
+            self.killer_moves[depth as usize],
+            self.countermoves.get(board, &self.move_stack),
+        );
+
         let mut move_index = -1;
-        for m in moves {
+        while let Some(m) = movegen.next(board, &self.history_heuristic) {
             move_index += 1;
 
             if let Some((value, mut line, is_quiet)) = self.search_move(
