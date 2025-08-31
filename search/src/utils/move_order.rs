@@ -1,6 +1,7 @@
 // Move ordering inspired by Black Marlin
 
 use chess::{BitBoard, Board, ChessMove, MoveGen, Piece};
+use evaluation::piece_value;
 
 use crate::utils::{game_phase, see, HistoryHeuristic};
 
@@ -91,26 +92,35 @@ impl MainMoveGenerator {
             let capture_mask = board.color_combined(!board.side_to_move());
             gen.set_iterator_mask(*capture_mask);
 
-            let phase = game_phase(board);
             for mov in gen {
                 if Some(mov) == self.best_move {
                     continue;
                 }
+
+                let victim = board.piece_on(mov.get_dest()).unwrap();
+                let attacker = board.piece_on(mov.get_source()).unwrap();
+
+                let score = MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)];
+
                 let scored_move = ScoredMove {
                     mv: mov,
-                    score: see(board, mov, phase),
+                    score: score as i16,
                 };
-                if scored_move.score > 0 {
-                    self.good_captures.push(scored_move);
-                } else {
-                    self.bad_captures.push(scored_move);
-                }
+                self.good_captures.push(scored_move);
             }
         }
 
         if self.phase == Phase::GoodCaptures {
-            if let Some(index) = select_highest(&self.good_captures) {
+            let phase = game_phase(board);
+
+            while let Some(index) = select_highest(&self.good_captures) {
                 let scored_move = self.good_captures.swap_remove(index);
+
+                if see(board, scored_move.mv, phase) < 0 {
+                    self.bad_captures.push(scored_move);
+                    continue;
+                }
+
                 return Some(scored_move.mv);
             }
             self.phase = Phase::Killers;
