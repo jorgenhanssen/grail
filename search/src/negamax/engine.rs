@@ -472,10 +472,22 @@ impl NegamaxEngine {
         let new_board = board.make_move_new(m);
         let gives_check = new_board.checkers().popcnt() > 0;
 
+        let capturee = board.piece_on(m.get_dest());
+        let piece = board.piece_on(m.get_source()).unwrap();
+
         // Consider move tactical if it's check, capture, or promotion
-        let is_capture = board.piece_on(m.get_dest()).is_some();
+        let is_capture = capturee.is_some();
         let is_promotion = m.get_promotion() == Some(Piece::Queen);
         let is_tactical = in_check || gives_check || is_capture || is_promotion;
+
+        // SEE pruning
+        if is_capture && !in_check && !is_promotion {
+            let phase = game_phase(board);
+            // Only SEE if it's a major piece, then prune if it's obviously losing
+            if piece_value(piece, phase) > 200 && see(board, m, phase) < -200 {
+                return None;
+            }
+        }
 
         // Futility prune
         if self.try_futility_prune(remaining_depth, in_check, is_tactical, alpha, static_eval) {
