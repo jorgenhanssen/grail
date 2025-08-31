@@ -208,12 +208,13 @@ impl NegamaxEngine {
         mut alpha: i16,
         beta: i16,
     ) -> (Option<ChessMove>, i16) {
+        let best_move = self.current_pv.first().cloned();
+
         let moves_with_scores = ordered_moves(
             &self.board,
             None,
             0,
-            &self.current_pv,
-            None,
+            best_move,
             None,
             &self.killer_moves,
             &self.history_heuristic,
@@ -382,7 +383,6 @@ impl NegamaxEngine {
             board,
             None,
             depth,
-            &self.current_pv,
             maybe_tt_move,
             self.countermoves.get(board, &self.move_stack),
             &self.killer_moves,
@@ -660,7 +660,6 @@ impl NegamaxEngine {
             board,
             mask,
             depth,
-            &self.current_pv,
             None,
             None,
             &self.killer_moves,
