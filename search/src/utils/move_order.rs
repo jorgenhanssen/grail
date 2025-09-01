@@ -167,7 +167,7 @@ impl MainMoveGenerator {
                         );
 
                         let counter = if self.countermove == Some(mov) {
-                            100
+                            1000
                         } else {
                             0
                         };
@@ -175,6 +175,7 @@ impl MainMoveGenerator {
                         hist + counter
                     }
                 };
+
                 self.quiets.push(ScoredMove { mv: mov, score });
             }
         }
@@ -186,6 +187,7 @@ impl MainMoveGenerator {
             }
             self.gen_phase = Phase::BadCaptures;
         }
+
         if self.gen_phase == Phase::BadCaptures {
             if let Some(index) = select_highest(&self.bad_captures) {
                 let scored_move = self.bad_captures.swap_remove(index);
