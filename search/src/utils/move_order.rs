@@ -1,9 +1,8 @@
 // Move ordering inspired by Black Marlin
 
 use chess::{BitBoard, Board, ChessMove, MoveGen, Piece};
-use evaluation::piece_value;
 
-use crate::utils::{game_phase, see, HistoryHeuristic};
+use crate::utils::{see, HistoryHeuristic};
 
 #[derive(PartialEq, Eq, Copy, Debug, Clone, PartialOrd, Ord)]
 enum Phase {
@@ -38,7 +37,8 @@ fn select_highest(array: &[ScoredMove]) -> Option<usize> {
 }
 
 pub struct MainMoveGenerator {
-    phase: Phase,
+    gen_phase: Phase,
+    game_phase: f32,
 
     best_move: Option<ChessMove>,
 
@@ -57,9 +57,11 @@ impl MainMoveGenerator {
         best_move: Option<ChessMove>,
         killer_moves: [Option<ChessMove>; 2],
         countermove: Option<ChessMove>,
+        game_phase: f32,
     ) -> Self {
         Self {
-            phase: Phase::BestMove,
+            gen_phase: Phase::BestMove,
+            game_phase,
             best_move,
 
             countermove,
@@ -78,15 +80,15 @@ impl MainMoveGenerator {
         board: &Board,
         history_heuristic: &HistoryHeuristic,
     ) -> Option<ChessMove> {
-        if self.phase == Phase::BestMove {
-            self.phase = Phase::GenCaptures;
+        if self.gen_phase == Phase::BestMove {
+            self.gen_phase = Phase::GenCaptures;
             if let Some(best_move) = self.best_move {
                 return Some(best_move);
             }
         }
 
-        if self.phase == Phase::GenCaptures {
-            self.phase = Phase::GoodCaptures;
+        if self.gen_phase == Phase::GenCaptures {
+            self.gen_phase = Phase::GoodCaptures;
 
             let mut gen = MoveGen::new_legal(board);
             let capture_mask = board.color_combined(!board.side_to_move());
@@ -102,31 +104,28 @@ impl MainMoveGenerator {
 
                 let score = MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)];
 
-                let scored_move = ScoredMove {
+                self.good_captures.push(ScoredMove {
                     mv: mov,
                     score: score as i16,
-                };
-                self.good_captures.push(scored_move);
+                });
             }
         }
 
-        if self.phase == Phase::GoodCaptures {
-            let phase = game_phase(board);
-
+        if self.gen_phase == Phase::GoodCaptures {
             while let Some(index) = select_highest(&self.good_captures) {
                 let scored_move = self.good_captures.swap_remove(index);
 
-                if see(board, scored_move.mv, phase) < 0 {
+                if see(board, scored_move.mv, self.game_phase) < 0 {
                     self.bad_captures.push(scored_move);
                     continue;
                 }
 
                 return Some(scored_move.mv);
             }
-            self.phase = Phase::Killers;
+            self.gen_phase = Phase::Killers;
         }
 
-        if self.phase == Phase::Killers {
+        if self.gen_phase == Phase::Killers {
             while self.killer_index < 2 {
                 let killer = self.killer_moves[self.killer_index];
                 self.killer_index += 1;
@@ -140,11 +139,11 @@ impl MainMoveGenerator {
                     return Some(killer);
                 }
             }
-            self.phase = Phase::GenQuiets;
+            self.gen_phase = Phase::GenQuiets;
         }
 
-        if self.phase == Phase::GenQuiets {
-            self.phase = Phase::Quiets;
+        if self.gen_phase == Phase::GenQuiets {
+            self.gen_phase = Phase::Quiets;
 
             let mut gen = MoveGen::new_legal(board);
             gen.set_iterator_mask(!board.combined());
@@ -180,14 +179,14 @@ impl MainMoveGenerator {
             }
         }
 
-        if self.phase == Phase::Quiets {
+        if self.gen_phase == Phase::Quiets {
             if let Some(index) = select_highest(&self.quiets) {
                 let scored_move = self.quiets.swap_remove(index);
                 return Some(scored_move.mv);
             }
-            self.phase = Phase::BadCaptures;
+            self.gen_phase = Phase::BadCaptures;
         }
-        if self.phase == Phase::BadCaptures {
+        if self.gen_phase == Phase::BadCaptures {
             if let Some(index) = select_highest(&self.bad_captures) {
                 let scored_move = self.bad_captures.swap_remove(index);
                 return Some(scored_move.mv);

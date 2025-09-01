@@ -311,13 +311,15 @@ impl NegamaxEngine {
             }
         }
 
+        let phase = game_phase(board);
+
         let remaining_depth = max_depth - depth;
         let in_check = board.checkers().popcnt() > 0;
         let is_pv_node = beta > alpha + 1;
 
         // Some pruning uses static eval
         let static_eval =
-            self.static_eval_if_needed(board, castle, remaining_depth, in_check, is_pv_node);
+            self.static_eval_if_needed(board, castle, remaining_depth, in_check, is_pv_node, phase);
 
         if let Some(score) = self.try_razor_prune(
             board,
@@ -401,6 +403,7 @@ impl NegamaxEngine {
             maybe_tt_move,
             self.killer_moves[depth as usize],
             self.countermoves.get(board, &self.move_stack),
+            phase,
         );
 
         let mut move_index = -1;
@@ -793,6 +796,7 @@ impl NegamaxEngine {
         remaining_depth: u8,
         in_check: bool,
         is_pv_node: bool,
+        phase: f32,
     ) -> Option<i16> {
         let should_static_eval = can_razor_prune(remaining_depth, in_check)
             || can_futility_prune(remaining_depth, in_check)
@@ -802,7 +806,6 @@ impl NegamaxEngine {
             return None;
         }
 
-        let phase = game_phase(board);
         let eval = self.evaluator.evaluate(
             board,
             castle.white_has_castled(),
