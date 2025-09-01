@@ -4,8 +4,8 @@ mod history_heuristic;
 mod move_order;
 mod see;
 
-use chess::{Board, ChessMove, Piece};
-pub use move_order::ordered_moves;
+use chess::{Board, Piece};
+pub use move_order::{MainMoveGenerator, QMoveGenerator};
 
 pub use castling::Castle;
 pub use countermove::CountermoveTable;
