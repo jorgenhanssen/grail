@@ -4,22 +4,6 @@ use chess::{BitBoard, Board, ChessMove, MoveGen, Piece};
 
 use crate::utils::{see, HistoryHeuristic};
 
-#[derive(PartialEq, Eq, Copy, Debug, Clone, PartialOrd, Ord)]
-enum Phase {
-    BestMove,
-    GenCaptures,
-    GoodCaptures,
-    GenQuiets,
-    Killers,
-    Quiets,
-    BadCaptures,
-}
-
-struct ScoredMove {
-    mv: ChessMove,
-    score: i16,
-}
-
 fn select_highest(array: &[ScoredMove]) -> Option<usize> {
     if array.is_empty() {
         return None;
@@ -34,6 +18,22 @@ fn select_highest(array: &[ScoredMove]) -> Option<usize> {
         best = Some((mv.score, index));
     }
     best.map(|(_, index)| index)
+}
+
+struct ScoredMove {
+    mv: ChessMove,
+    score: i16,
+}
+
+#[derive(PartialEq, Eq, Clone)]
+enum Phase {
+    BestMove,
+    GenCaptures,
+    GoodCaptures,
+    GenQuiets,
+    Killers,
+    Quiets,
+    BadCaptures,
 }
 
 pub struct MainMoveGenerator {
