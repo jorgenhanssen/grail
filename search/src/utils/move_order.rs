@@ -5,7 +5,7 @@ use chess::{Board, ChessMove, MoveGen, Piece};
 use crate::utils::{see, HistoryHeuristic};
 
 struct ScoredMove {
-    mv: ChessMove,
+    mov: ChessMove,
     score: i16,
 }
 
@@ -84,7 +84,7 @@ impl MainMoveGenerator {
                 }
 
                 self.good_captures.push(ScoredMove {
-                    mv: mov,
+                    mov,
                     score: capture_score(board, mov),
                 });
             }
@@ -94,12 +94,12 @@ impl MainMoveGenerator {
             while let Some(index) = select_highest(&self.good_captures) {
                 let scored_move = self.good_captures.swap_remove(index);
 
-                if see(board, scored_move.mv, self.game_phase) < 0 {
+                if see(board, scored_move.mov, self.game_phase) < 0 {
                     self.bad_captures.push(scored_move);
                     continue;
                 }
 
-                return Some(scored_move.mv);
+                return Some(scored_move.mov);
             }
             self.gen_phase = Phase::Killers;
         }
@@ -155,14 +155,14 @@ impl MainMoveGenerator {
                     }
                 };
 
-                self.quiets.push(ScoredMove { mv: mov, score });
+                self.quiets.push(ScoredMove { mov, score });
             }
         }
 
         if self.gen_phase == Phase::Quiets {
             if let Some(index) = select_highest(&self.quiets) {
                 let scored_move = self.quiets.swap_remove(index);
-                return Some(scored_move.mv);
+                return Some(scored_move.mov);
             }
             self.gen_phase = Phase::BadCaptures;
         }
@@ -170,7 +170,7 @@ impl MainMoveGenerator {
         if self.gen_phase == Phase::BadCaptures {
             if let Some(index) = select_highest(&self.bad_captures) {
                 let scored_move = self.bad_captures.swap_remove(index);
-                return Some(scored_move.mv);
+                return Some(scored_move.mov);
             }
         }
 
@@ -193,7 +193,7 @@ impl QMoveGenerator {
 
             for mov in gen {
                 forcing_moves.push(ScoredMove {
-                    mv: mov,
+                    mov,
                     score: capture_score(board, mov),
                 });
             }
@@ -201,7 +201,7 @@ impl QMoveGenerator {
             Self { forcing_moves }
         } else {
             Self {
-                forcing_moves: gen.map(|mov| ScoredMove { mv: mov, score: 0 }).collect(),
+                forcing_moves: gen.map(|mov| ScoredMove { mov, score: 0 }).collect(),
             }
         }
     }
@@ -209,7 +209,7 @@ impl QMoveGenerator {
     pub fn next(&mut self) -> Option<ChessMove> {
         if let Some(index) = select_highest(&self.forcing_moves) {
             let scored_move = self.forcing_moves.swap_remove(index);
-            return Some(scored_move.mv);
+            return Some(scored_move.mov);
         }
         None
     }
