@@ -5,7 +5,7 @@ mod move_order;
 mod see;
 
 use chess::{Board, Piece};
-pub use move_order::{ordered_moves, MainMoveGenerator};
+pub use move_order::{MainMoveGenerator, QMoveGenerator};
 
 pub use castling::Castle;
 pub use countermove::CountermoveTable;

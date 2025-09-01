@@ -9,8 +9,8 @@ use crate::{
         },
     },
     utils::{
-        convert_centipawn_score, convert_mate_score, game_phase, ordered_moves, see, Castle,
-        HistoryHeuristic, MainMoveGenerator,
+        convert_centipawn_score, convert_mate_score, game_phase, see, Castle, HistoryHeuristic,
+        MainMoveGenerator, QMoveGenerator,
     },
     Engine,
 };
@@ -210,25 +210,13 @@ impl NegamaxEngine {
     ) -> (Option<ChessMove>, i16) {
         let best_move = self.current_pv.first().cloned();
 
-        let moves_with_scores = ordered_moves(
-            &self.board,
-            None,
-            0,
-            best_move,
-            None,
-            &self.killer_moves,
-            &self.history_heuristic,
-        );
-
-        if moves_with_scores.is_empty() {
-            return (None, 0);
-        }
+        let mut moves = MainMoveGenerator::new(best_move, [None; 2], None, game_phase(&self.board));
 
         let mut best_score = NEG_INFINITY;
         let mut current_best_move = None;
 
         // Negamax at root: call search_subtree with flipped window, then negate result
-        for m in moves_with_scores {
+        while let Some(m) = moves.next(&self.board, &self.history_heuristic) {
             let castle = Castle::new().update(&self.board, m);
 
             let new_board = self.board.make_move_new(m);
@@ -645,23 +633,9 @@ impl NegamaxEngine {
         let mut best_line = Vec::new();
         let mut best_eval = if in_check { NEG_INFINITY } else { stand_pat };
 
-        let mask = if in_check {
-            None // We should check all moves
-        } else {
-            // Only captgures
-            Some(*board.color_combined(!board.side_to_move()))
-        };
-        let forcing_moves = ordered_moves(
-            board,
-            mask,
-            depth,
-            None,
-            None,
-            &self.killer_moves,
-            &self.history_heuristic,
-        );
+        let mut moves = QMoveGenerator::new(in_check, board);
 
-        for mv in forcing_moves {
+        while let Some(mv) = moves.next() {
             // Per-move delta pruning (skip if capture can't possibly improve alpha)
             if can_delta_prune(board, in_check, phase) {
                 let captured = board.piece_on(mv.get_dest());

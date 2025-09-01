@@ -1,24 +1,8 @@
 // Move ordering inspired by Black Marlin
 
-use chess::{BitBoard, Board, ChessMove, MoveGen, Piece};
+use chess::{Board, ChessMove, MoveGen, Piece};
 
 use crate::utils::{see, HistoryHeuristic};
-
-fn select_highest(array: &[ScoredMove]) -> Option<usize> {
-    if array.is_empty() {
-        return None;
-    }
-    let mut best: Option<(i16, usize)> = None;
-    for (index, mv) in array.iter().enumerate() {
-        if let Some((best_score, _)) = best {
-            if mv.score <= best_score {
-                continue;
-            }
-        }
-        best = Some((mv.score, index));
-    }
-    best.map(|(_, index)| index)
-}
 
 struct ScoredMove {
     mv: ChessMove,
@@ -99,14 +83,9 @@ impl MainMoveGenerator {
                     continue;
                 }
 
-                let victim = board.piece_on(mov.get_dest()).unwrap();
-                let attacker = board.piece_on(mov.get_source()).unwrap();
-
-                let score = MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)];
-
                 self.good_captures.push(ScoredMove {
                     mv: mov,
-                    score: score as i16,
+                    score: capture_score(board, mov),
                 });
             }
         }
@@ -199,73 +178,69 @@ impl MainMoveGenerator {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-#[inline(always)]
-pub fn ordered_moves(
-    board: &Board,
-    mask: Option<BitBoard>,
-    depth: u8,
-    best_move: Option<ChessMove>,
-    countermove: Option<ChessMove>,
-    killer_moves: &[[Option<ChessMove>; 2]],
-    history_heuristic: &HistoryHeuristic,
-) -> Vec<ChessMove> {
-    let mut legal = MoveGen::new_legal(board);
-    if let Some(mask) = mask {
-        legal.set_iterator_mask(mask);
-    }
-
-    let mut moves_with_priority: Vec<(ChessMove, i32)> = Vec::with_capacity(64); // Rough estimate; chess max ~218
-
-    let killers = &killer_moves[depth as usize];
-
-    if let Some(_tt) = best_move {
-        if board.legal(_tt) {
-            moves_with_priority.push((_tt, MAX_PRIORITY + 1));
-        }
-    }
-
-    for mov in legal {
-        if Some(mov) == best_move {
-            continue;
-        }
-
-        let mut priority = move_priority(&mov, board, history_heuristic);
-
-        if Some(mov) == countermove {
-            priority = priority.max(CAPTURE_PRIORITY - 2);
-        }
-        if killers.contains(&Some(mov)) {
-            priority = priority.max(CAPTURE_PRIORITY - 1);
-        }
-
-        moves_with_priority.push((mov, priority));
-    }
-
-    moves_with_priority.sort_unstable_by_key(|&(_, p)| -p);
-
-    moves_with_priority.into_iter().map(|(m, _)| m).collect()
+pub struct QMoveGenerator {
+    forcing_moves: Vec<ScoredMove>,
 }
 
-// Piece moves get base priority (lowest)
-pub const MIN_PRIORITY: i32 = 0;
+impl QMoveGenerator {
+    pub fn new(in_check: bool, board: &Board) -> Self {
+        let mut gen = MoveGen::new_legal(board);
 
-// Captures get medium priority (MVV-LVA values 10-55)
-pub const MIN_CAPTURE_PRIORITY: i32 = MIN_PRIORITY + 1_000_000;
-pub const CAPTURE_PRIORITY: i32 = MIN_CAPTURE_PRIORITY;
-// pub const MAX_CAPTURE_PRIORITY: i32 = MIN_CAPTURE_PRIORITY + 55;
+        if !in_check {
+            gen.set_iterator_mask(*board.color_combined(!board.side_to_move()));
 
-// Promotions get highest priority
-pub const MIN_PROMOTION_PRIORITY: i32 = MIN_PRIORITY + 2_000_000;
-const UNDERPROMOTION_PRIORITY: i32 = MIN_PRIORITY - 3_000_000;
-const PROMOTION_PRIORITY_QUEEN: i32 = MIN_PROMOTION_PRIORITY + 4;
-pub const MAX_PROMOTION_PRIORITY: i32 = PROMOTION_PRIORITY_QUEEN;
+            let mut forcing_moves = vec![];
 
-pub const MAX_PRIORITY: i32 = MAX_PROMOTION_PRIORITY;
+            for mov in gen {
+                forcing_moves.push(ScoredMove {
+                    mv: mov,
+                    score: capture_score(board, mov),
+                });
+            }
+
+            Self { forcing_moves }
+        } else {
+            Self {
+                forcing_moves: gen.map(|mov| ScoredMove { mv: mov, score: 0 }).collect(),
+            }
+        }
+    }
+
+    pub fn next(&mut self) -> Option<ChessMove> {
+        if let Some(index) = select_highest(&self.forcing_moves) {
+            let scored_move = self.forcing_moves.swap_remove(index);
+            return Some(scored_move.mv);
+        }
+        None
+    }
+}
+
+fn select_highest(array: &[ScoredMove]) -> Option<usize> {
+    if array.is_empty() {
+        return None;
+    }
+    let mut best: Option<(i16, usize)> = None;
+    for (index, mv) in array.iter().enumerate() {
+        if let Some((best_score, _)) = best {
+            if mv.score <= best_score {
+                continue;
+            }
+        }
+        best = Some((mv.score, index));
+    }
+    best.map(|(_, index)| index)
+}
+
+#[inline(always)]
+fn capture_score(board: &Board, mv: ChessMove) -> i16 {
+    let victim = board.piece_on(mv.get_dest()).unwrap();
+    let attacker = board.piece_on(mv.get_source()).unwrap();
+    MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)]
+}
 
 // MVV-LVA table
 // king, queen, rook, bishop, knight, pawn
-const MVV_LVA: [[i32; 6]; 6] = [
+const MVV_LVA: [[i16; 6]; 6] = [
     [0, 0, 0, 0, 0, 0],       // victim King
     [50, 51, 52, 53, 54, 55], // victim Queen
     [40, 41, 42, 43, 44, 45], // victim Rook
@@ -275,7 +250,7 @@ const MVV_LVA: [[i32; 6]; 6] = [
 ];
 
 // Helper function to convert Piece to array index
-#[inline]
+#[inline(always)]
 fn mvva_lva_index(piece: Piece) -> usize {
     match piece {
         Piece::King => 0,
@@ -285,27 +260,4 @@ fn mvva_lva_index(piece: Piece) -> usize {
         Piece::Knight => 4,
         Piece::Pawn => 5,
     }
-}
-
-#[inline(always)]
-fn move_priority(mov: &ChessMove, board: &Board, history_heuristic: &HistoryHeuristic) -> i32 {
-    // Check for promotions first
-    if let Some(promotion) = mov.get_promotion() {
-        return match promotion {
-            Piece::Queen => PROMOTION_PRIORITY_QUEEN,
-            _ => UNDERPROMOTION_PRIORITY,
-        };
-    }
-
-    let source = mov.get_source();
-    let dest = mov.get_dest();
-
-    let attacker = board.piece_on(source).unwrap();
-    if let Some(victim) = board.piece_on(dest) {
-        return CAPTURE_PRIORITY + MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)];
-    }
-
-    let color = board.side_to_move();
-
-    history_heuristic.get(color, source, dest) as i32
 }
