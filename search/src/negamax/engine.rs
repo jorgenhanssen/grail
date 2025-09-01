@@ -381,20 +381,6 @@ impl NegamaxEngine {
 
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
-        let moves = ordered_moves(
-            board,
-            None,
-            depth,
-            maybe_tt_move,
-            self.countermoves.get(board, &self.move_stack),
-            &self.killer_moves,
-            &self.history_heuristic,
-        );
-
-        if moves.is_empty() {
-            return (0, Vec::new());
-        }
-
         let mut best_value = NEG_INFINITY;
         let mut best_move = None;
         let mut best_line = Vec::new();
