@@ -19,24 +19,13 @@ impl Evaluator for TraditionalEvaluator {
         "Traditional".to_string()
     }
 
-    fn evaluate(
-        &mut self,
-        board: &Board,
-        white_has_castled: bool,
-        black_has_castled: bool,
-        phase: f32,
-    ) -> i16 {
-        evaluate_board(board, white_has_castled, black_has_castled, phase)
+    fn evaluate(&mut self, board: &Board, phase: f32) -> i16 {
+        evaluate_board(board, phase)
     }
 }
 
 // Return final evaluation (positive = good for White, negative = good for Black)
-pub fn evaluate_board(
-    board: &Board,
-    white_has_castled: bool,
-    black_has_castled: bool,
-    phase: f32,
-) -> i16 {
+pub fn evaluate_board(board: &Board, phase: f32) -> i16 {
     let is_white = board.side_to_move() == Color::White;
 
     match board.status() {
@@ -77,13 +66,6 @@ pub fn evaluate_board(
 
     cp += eval_king::evaluate(board, Color::White, phase);
     cp -= eval_king::evaluate(board, Color::Black, phase);
-
-    if white_has_castled {
-        cp += 66
-    }
-    if black_has_castled {
-        cp -= 66;
-    }
 
     cp
 }
