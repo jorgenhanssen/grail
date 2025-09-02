@@ -48,7 +48,7 @@ pub fn can_razor_prune(remaining_depth: u8, in_check: bool) -> bool {
 }
 
 pub const FUTILITY_MAX_DEPTH: u8 = 3;
-pub const FUTILITY_MARGINS: [i16; FUTILITY_MAX_DEPTH as usize + 1] = [0, 200, 300, 500];
+pub const FUTILITY_MARGINS: [i16; FUTILITY_MAX_DEPTH as usize + 1] = [0, 150, 250, 400];
 
 #[inline(always)]
 pub fn can_futility_prune(remaining_depth: u8, in_check: bool) -> bool {
