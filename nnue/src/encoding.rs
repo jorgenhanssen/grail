@@ -1,6 +1,7 @@
 use chess::{Board, Color, Piece, ALL_SQUARES};
 
 pub const NUM_FEATURES: usize = 773;
+pub const NUM_U64S: usize = (NUM_FEATURES + 63) / 64;
 
 const SIDE_TO_MOVE_IDX: usize = 768;
 const CASTLE_BASE_IDX: usize = 769;
@@ -76,6 +77,51 @@ pub fn encode_board(board: &Board) -> [f32; NUM_FEATURES] {
     }
 
     features
+}
+
+#[inline(always)]
+pub fn encode_board_bitset(board: &Board) -> [u64; NUM_U64S] {
+    let mut words = [0u64; NUM_U64S];
+
+    // 1) Piece placements [0..768)
+    for sq in ALL_SQUARES {
+        if let Some(piece) = board.piece_on(sq) {
+            let color = board.color_on(sq).unwrap();
+            let offset = sq.to_index() * 12 + piece_color_to_index(piece, color);
+            let word_idx = offset / 64;
+            let bit_idx = offset % 64;
+            words[word_idx] |= 1u64 << bit_idx;
+        }
+    }
+
+    // 2) Side to move [768]
+    if board.side_to_move() == Color::White {
+        let idx = SIDE_TO_MOVE_IDX;
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    // 3) Castling rights [769..772]
+    let wcr = board.castle_rights(Color::White);
+    let bcr = board.castle_rights(Color::Black);
+
+    if wcr.has_kingside() {
+        let idx = CASTLE_BASE_IDX;
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+    if wcr.has_queenside() {
+        let idx = CASTLE_BASE_IDX + 1;
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+    if bcr.has_kingside() {
+        let idx = CASTLE_BASE_IDX + 2;
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+    if bcr.has_queenside() {
+        let idx = CASTLE_BASE_IDX + 3;
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    words
 }
 
 #[inline(always)]

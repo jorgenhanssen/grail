@@ -2,15 +2,13 @@ use candle_core::{Result, Tensor};
 use candle_nn::{linear, Linear, Module, VarBuilder};
 use std::simd::prelude::SimdFloat;
 
-use crate::encoding::NUM_FEATURES;
+use crate::encoding::{NUM_FEATURES, NUM_U64S};
 
 use std::simd::f32x8;
 const SIMD_WIDTH: usize = 8;
 
 const EMBEDDING_SIZE: usize = 256;
 const HIDDEN_SIZE: usize = 32;
-
-const NUM_U64S: usize = (NUM_FEATURES + 63) / 64;
 
 pub struct Network {
     embedding: Linear,
@@ -130,7 +128,9 @@ impl NNUENetwork {
             }
         }
 
-        let embedding_buffer = [0.0; EMBEDDING_SIZE];
+        let mut embedding_buffer = [0.0; EMBEDDING_SIZE];
+        embedding_buffer.copy_from_slice(&embedding.biases);
+
         let hidden1_buffer = [0.0; HIDDEN_SIZE];
         let hidden2_buffer = [0.0; HIDDEN_SIZE];
         let output_buffer = [0.0; 1];
@@ -156,7 +156,8 @@ impl NNUENetwork {
     // Reset the NNUE state (useful when starting a new position evaluation)
     #[inline(always)]
     pub fn reset(&mut self) {
-        self.embedding_buffer.fill(0.0);
+        self.embedding_buffer
+            .copy_from_slice(&self.embedding.biases);
         self.previous_input.fill(0);
         self.current_input.fill(0);
     }
@@ -229,17 +230,59 @@ impl NNUENetwork {
         // Store current input for next time
         self.previous_input.copy_from_slice(&self.current_input);
 
-        // Create a temporary copy of embedding with biases added
-        let mut temp_embedding = [0.0; EMBEDDING_SIZE];
-        for i in 0..EMBEDDING_SIZE {
-            temp_embedding[i] = self.embedding_buffer[i] + self.embedding.biases[i];
-        }
-
-        // Continue with the rest of the network as before
-        simd_relu(&mut temp_embedding);
+        // Create an activated view of the embedding (ReLU), leaving the
+        // pre-activation buffer intact for incremental updates.
+        let mut activated_embedding = [0.0; EMBEDDING_SIZE];
+        activated_embedding.copy_from_slice(&self.embedding_buffer);
+        simd_relu(&mut activated_embedding);
 
         self.hidden1
-            .forward(&temp_embedding, &mut self.hidden1_buffer);
+            .forward(&activated_embedding, &mut self.hidden1_buffer);
+        simd_relu(&mut self.hidden1_buffer);
+
+        self.hidden2
+            .forward(&self.hidden1_buffer, &mut self.hidden2_buffer);
+        simd_relu(&mut self.hidden2_buffer);
+
+        self.output
+            .forward(&self.hidden2_buffer, &mut self.output_buffer);
+
+        self.output_buffer[0]
+    }
+
+    // Forward pass with a pre-encoded bitset input. Skips float-to-bit conversion.
+    #[inline(always)]
+    pub fn forward_bitset(&mut self, bitset: &[u64; NUM_U64S]) -> f32 {
+        // Copy bitset into current_input buffer
+        self.current_input.copy_from_slice(bitset);
+
+        // Apply incremental updates by comparing with previous_input
+        for word_idx in 0..NUM_U64S {
+            let mut changes = self.previous_input[word_idx] ^ self.current_input[word_idx];
+            while changes != 0 {
+                let bit_idx = changes.trailing_zeros() as usize;
+                changes &= changes - 1;
+
+                let feature_idx = word_idx * 64 + bit_idx;
+                if feature_idx >= NUM_FEATURES {
+                    continue;
+                }
+                let mask = 1u64 << bit_idx;
+                let is_active = (self.current_input[word_idx] & mask) != 0;
+                self.update_embedding_for_feature(feature_idx, is_active);
+            }
+        }
+
+        // Store current input for next time
+        self.previous_input.copy_from_slice(&self.current_input);
+
+        // Activate embedding (ReLU) from pre-activation buffer
+        let mut activated_embedding = [0.0; EMBEDDING_SIZE];
+        activated_embedding.copy_from_slice(&self.embedding_buffer);
+        simd_relu(&mut activated_embedding);
+
+        self.hidden1
+            .forward(&activated_embedding, &mut self.hidden1_buffer);
         simd_relu(&mut self.hidden1_buffer);
 
         self.hidden2

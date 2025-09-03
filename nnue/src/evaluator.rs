@@ -3,7 +3,7 @@ use chess::Board;
 use evaluation::Evaluator;
 
 use crate::{
-    encoding::encode_board,
+    encoding::encode_board_bitset,
     network::{NNUENetwork, Network},
 };
 use candle_core::{DType, Device};
@@ -39,9 +39,9 @@ impl Evaluator for NNUE {
 
     #[inline(always)]
     fn evaluate(&mut self, board: &Board, _: f32) -> i16 {
-        let encoded_board = encode_board(board);
+        let bitset = encode_board_bitset(board);
         self.nnue_network
-            .forward(&encoded_board)
+            .forward_bitset(&bitset)
             .clamp(i16::MIN as f32, i16::MAX as f32) as i16
     }
 }
