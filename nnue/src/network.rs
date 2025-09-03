@@ -215,6 +215,7 @@ impl NNUENetwork {
                 changes &= changes - 1;
 
                 let feature_idx = word_idx * 64 + bit_idx;
+                // Guard against stray bits beyond NUM_FEATURES (last partial u64).
                 if feature_idx >= NUM_FEATURES {
                     continue;
                 }
