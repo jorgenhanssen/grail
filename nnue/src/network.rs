@@ -97,6 +97,9 @@ pub struct NNUENetwork {
     hidden2: LinearLayer,
     output: LinearLayer,
 
+    // [feature_idx][embedding_idx]
+    embedding_weights_by_feature: Box<[f32]>,
+
     // Accumulated state
     embedding_buffer: [f32; EMBEDDING_SIZE],
     hidden1_buffer: [f32; HIDDEN_SIZE],
@@ -115,6 +118,18 @@ impl NNUENetwork {
         let hidden2 = LinearLayer::from_candle_linear(&network.hidden2)?;
         let output = LinearLayer::from_candle_linear(&network.output)?;
 
+        // Transposed embedding weights for cache-friendly updates.
+        // [in=NUM_FEATURES][out=EMBEDDING_SIZE].
+        let mut embedding_weights_by_feature =
+            vec![0.0f32; NUM_FEATURES * EMBEDDING_SIZE].into_boxed_slice();
+        for out_idx in 0..EMBEDDING_SIZE {
+            let src_row_offset = out_idx * NUM_FEATURES;
+            for feature_idx in 0..NUM_FEATURES {
+                let src = embedding.weights[src_row_offset + feature_idx];
+                embedding_weights_by_feature[feature_idx * EMBEDDING_SIZE + out_idx] = src;
+            }
+        }
+
         let embedding_buffer = [0.0; EMBEDDING_SIZE];
         let hidden1_buffer = [0.0; HIDDEN_SIZE];
         let hidden2_buffer = [0.0; HIDDEN_SIZE];
@@ -128,6 +143,7 @@ impl NNUENetwork {
             hidden1,
             hidden2,
             output,
+            embedding_weights_by_feature,
             embedding_buffer,
             hidden1_buffer,
             hidden2_buffer,
@@ -152,16 +168,14 @@ impl NNUENetwork {
         let sign_vec = f32x8::splat(sign);
 
         let mut i = 0;
+        let weights_row = &self.embedding_weights_by_feature
+            [feature_idx * EMBEDDING_SIZE..feature_idx * EMBEDDING_SIZE + EMBEDDING_SIZE];
+
         while i + SIMD_WIDTH <= EMBEDDING_SIZE {
             // Load current embedding values
             let mut embedding_chunk = f32x8::from_slice(&self.embedding_buffer[i..i + SIMD_WIDTH]);
 
-            // Load corresponding weights
-            let mut weights = [0.0f32; SIMD_WIDTH];
-            for j in 0..SIMD_WIDTH {
-                weights[j] = self.embedding.weights[(i + j) * NUM_FEATURES + feature_idx];
-            }
-            let weights_chunk = f32x8::from_slice(&weights);
+            let weights_chunk = f32x8::from_slice(&weights_row[i..i + SIMD_WIDTH]);
 
             // Multiply weights by sign and add to embedding
             embedding_chunk += sign_vec * weights_chunk;
@@ -173,8 +187,7 @@ impl NNUENetwork {
 
         // Handle remaining elements
         while i < EMBEDDING_SIZE {
-            self.embedding_buffer[i] +=
-                sign * self.embedding.weights[i * NUM_FEATURES + feature_idx];
+            self.embedding_buffer[i] += sign * weights_row[i];
             i += 1;
         }
     }
@@ -202,6 +215,9 @@ impl NNUENetwork {
                 changes &= changes - 1;
 
                 let feature_idx = word_idx * 64 + bit_idx;
+                if feature_idx >= NUM_FEATURES {
+                    continue;
+                }
                 // Check if it's now active or inactive
                 let mask = 1u64 << bit_idx;
                 let is_active = (self.current_input[word_idx] & mask) != 0;
