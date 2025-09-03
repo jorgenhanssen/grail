@@ -50,8 +50,8 @@ fn print_label_distribution(samples: &Samples) {
 
     let mut bins = vec![0; NUM_BINS];
 
-    for (_, score) in &samples.samples {
-        let bin_idx = ((((*score as f32).clamp(CP_MIN as f32, CP_MAX as f32) - CP_MIN as f32)
+    for &score in &samples.scores {
+        let bin_idx = ((((score as f32).clamp(CP_MIN as f32, CP_MAX as f32) - CP_MIN as f32)
             / BIN_SIZE) as usize)
             .min(NUM_BINS - 1);
         bins[bin_idx] += 1;

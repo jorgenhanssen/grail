@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 use std::str::FromStr;
 
@@ -14,36 +13,41 @@ pub const CP_MIN: i16 = -5000;
 
 #[derive(Clone, Debug)]
 pub struct Samples {
-    pub samples: HashMap<String, i16>,
+    pub fens: Vec<Box<str>>,
+    pub scores: Vec<i16>,
 }
 
 impl Samples {
     pub fn new() -> Self {
         Self {
-            samples: HashMap::new(),
+            fens: Vec::new(),
+            scores: Vec::new(),
         }
     }
 
     pub fn from_evaluations(evals: &[(String, i16)]) -> Self {
-        let samples = evals
-            .iter()
-            .map(|(fen, score)| (fen.clone(), (*score).clamp(CP_MIN, CP_MAX)))
-            .collect();
-        Self { samples }
+        let mut fens = Vec::with_capacity(evals.len());
+        let mut scores = Vec::with_capacity(evals.len());
+        for (fen, score) in evals.iter() {
+            fens.push(fen.clone().into_boxed_str());
+            scores.push((*score).clamp(CP_MIN, CP_MAX));
+        }
+        Self { fens, scores }
     }
 
     pub fn write<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         writeln!(writer, "fen,score")?; // Header
 
-        for (fen, score) in &self.samples {
-            writeln!(writer, "{},{}", fen, score)?;
+        for i in 0..self.fens.len() {
+            writeln!(writer, "{},{}", self.fens[i], self.scores[i])?;
         }
 
         Ok(())
     }
 
     pub fn read<R: BufRead>(mut reader: R) -> io::Result<Self> {
-        let mut samples = HashMap::new();
+        let mut fens = Vec::new();
+        let mut scores = Vec::new();
 
         // Skip header line
         let mut header_line = String::new();
@@ -66,19 +70,20 @@ impl Samples {
                 io::Error::new(io::ErrorKind::InvalidData, "Score is not a valid integer")
             })?;
 
-            samples.insert(fen_str.trim().to_string(), score.clamp(CP_MIN, CP_MAX));
+            fens.push(fen_str.trim().to_string().into_boxed_str());
+            scores.push(score.clamp(CP_MIN, CP_MAX));
         }
 
-        Ok(Self { samples })
+        Ok(Self { fens, scores })
     }
 
     pub fn to_xy(self, device: &Device) -> Result<(Tensor, Tensor)> {
-        let num_samples = self.samples.len();
+        let num_samples = self.fens.len();
 
         let mut feature_data = Vec::with_capacity(num_samples * NUM_FEATURES);
         let mut score_data: Vec<f32> = Vec::with_capacity(num_samples);
 
-        for (fen, score) in self.samples {
+        for (fen, score) in self.fens.into_iter().zip(self.scores.into_iter()) {
             let board =
                 Board::from_str(&fen).unwrap_or_else(|_| panic!("Invalid FEN in sample: {}", fen));
             let features = encode_board(&board);
@@ -93,125 +98,108 @@ impl Samples {
         Ok((x, y))
     }
 
-    pub fn to_xy_batched<'a>(
+    pub fn to_xy_batched_indices<'a>(
         &'a self,
+        indices: &'a [usize],
         batch_size: usize,
         device: &'a Device,
-    ) -> BatchedSamples<'a> {
-        BatchedSamples {
-            samples: &self.samples,
+    ) -> BatchedSamplesIdx<'a> {
+        BatchedSamplesIdx {
+            fens: &self.fens,
+            scores: &self.scores,
             device,
             batch_size,
             idx: 0,
-            keys: self.samples.keys().collect(),
+            indices,
         }
     }
 
-    pub fn train_test_split(
+    pub fn train_test_indices(
         &self,
         test_ratio: f64,
         random_seed: Option<u64>,
-    ) -> (Samples, Samples) {
-        let total_len = self.samples.len();
+    ) -> (Vec<usize>, Vec<usize>) {
+        let total_len = self.fens.len();
         let test_len = (total_len as f64 * test_ratio) as usize;
         let train_len = total_len - test_len;
-
-        // Get all keys
-        let mut keys: Vec<_> = self.samples.keys().collect();
-
-        // Shuffle the keys
+        let mut idx: Vec<usize> = (0..total_len).collect();
         if let Some(seed) = random_seed {
             let mut rng = StdRng::seed_from_u64(seed);
-            keys.shuffle(&mut rng);
+            idx.shuffle(&mut rng);
         }
-
-        // Split keys
-        let (train_keys, test_keys) = keys.split_at(train_len);
-
-        // Create new HashMaps
-        let train_samples = train_keys
-            .iter()
-            .map(|k| ((*k).clone(), *self.samples.get(*k).unwrap()))
-            .collect();
-        let test_samples = test_keys
-            .iter()
-            .map(|k| ((*k).clone(), *self.samples.get(*k).unwrap()))
-            .collect();
-
-        (
-            Samples {
-                samples: train_samples,
-            },
-            Samples {
-                samples: test_samples,
-            },
-        )
+        let (train_idx, test_idx) = idx.split_at(train_len);
+        (train_idx.to_vec(), test_idx.to_vec())
     }
 
     pub fn len(&self) -> usize {
-        self.samples.len()
+        self.fens.len()
     }
 
     pub fn shuffle(&mut self, rng: &mut ThreadRng) {
-        let mut keys: Vec<_> = self.samples.keys().collect();
-        keys.shuffle(rng);
-        self.samples = keys
-            .iter()
-            .map(|k| ((*k).clone(), *self.samples.get(*k).unwrap()))
-            .collect();
+        let mut idx: Vec<usize> = (0..self.fens.len()).collect();
+        idx.shuffle(rng);
+
+        let mut new_fens = Vec::with_capacity(self.fens.len());
+        let mut new_scores = Vec::with_capacity(self.scores.len());
+        for i in idx {
+            new_fens.push(self.fens[i].clone());
+            new_scores.push(self.scores[i]);
+        }
+
+        self.fens = new_fens;
+        self.scores = new_scores;
     }
 
     pub fn extend(&mut self, other: Samples) {
-        for (key, value) in other.samples {
-            if !self.samples.contains_key(&key) {
-                self.samples.insert(key, value);
-            }
-        }
+        self.fens.extend(other.fens);
+        self.scores.extend(other.scores);
     }
 }
 
-pub struct BatchedSamples<'a> {
-    samples: &'a HashMap<String, i16>,
+pub struct BatchedSamplesIdx<'a> {
+    fens: &'a [Box<str>],
+    scores: &'a [i16],
     device: &'a Device,
     batch_size: usize,
     idx: usize,
-    keys: Vec<&'a String>,
+    indices: &'a [usize],
 }
 
-impl<'a> Iterator for BatchedSamples<'a> {
+impl<'a> Iterator for BatchedSamplesIdx<'a> {
     type Item = Result<(Tensor, Tensor)>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.idx >= self.keys.len() {
+        if self.idx >= self.indices.len() {
             return None;
         }
-        let end = (self.idx + self.batch_size).min(self.keys.len());
-        let batch_keys = &self.keys[self.idx..end];
+        let end = (self.idx + self.batch_size).min(self.indices.len());
+        let batch_idx = &self.indices[self.idx..end];
         self.idx = end;
 
-        let mut feature_data = Vec::with_capacity(batch_keys.len() * NUM_FEATURES);
-        let mut score_data: Vec<f32> = Vec::with_capacity(batch_keys.len());
+        let mut feature_data = Vec::with_capacity(batch_idx.len() * NUM_FEATURES);
+        let mut score_data: Vec<f32> = Vec::with_capacity(batch_idx.len());
 
-        for key in batch_keys {
-            let score = self.samples.get(*key).unwrap();
+        for &i in batch_idx {
+            let score = self.scores[i];
+            let fen = &self.fens[i];
             let board =
-                Board::from_str(key).unwrap_or_else(|_| panic!("Invalid FEN in sample: {}", key));
+                Board::from_str(fen).unwrap_or_else(|_| panic!("Invalid FEN in sample: {}", fen));
             let features = encode_board(&board);
             feature_data.extend_from_slice(&features);
-            score_data.push(*score as f32);
+            score_data.push(score as f32);
         }
 
-        let x = match Tensor::from_iter(feature_data.into_iter(), self.device) {
+        let x = match Tensor::from_iter(feature_data, self.device) {
             Ok(t) => t,
             Err(e) => return Some(Err(e)),
         }
-        .reshape((batch_keys.len(), NUM_FEATURES));
+        .reshape((batch_idx.len(), NUM_FEATURES));
 
-        let y = match Tensor::from_iter(score_data.into_iter(), self.device) {
+        let y = match Tensor::from_iter(score_data, self.device) {
             Ok(t) => t,
             Err(e) => return Some(Err(e)),
         }
-        .reshape((batch_keys.len(), 1));
+        .reshape((batch_idx.len(), 1));
 
         Some(x.and_then(|xv| y.map(|yv| (xv, yv))))
     }

@@ -7,6 +7,7 @@ use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::LevelFilter;
 use nnue::{network::Network, samples::Samples, version::VersionManager};
+use rand::seq::SliceRandom;
 use rand::thread_rng;
 use simplelog::{Config, SimpleLogger};
 use std::{error::Error, fs::File, io::BufReader};
@@ -16,10 +17,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let manager = VersionManager::new()?;
     let version = manager.get_latest_version()?.expect("No version found");
 
-    let (train_samples, test_samples) = {
-        let samples = load_samples(&manager)?;
+    let (samples, train_idx, test_idx) = {
+        let (samples, train_idx, test_idx) = load_samples(&manager)?;
         log::info!("Splitting samples into train and test");
-        samples.train_test_split(0.01, Some(42))
+        (samples, train_idx, test_idx)
     };
 
     log::info!("Creating network");
@@ -43,9 +44,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     log::info!("Training network");
     let trainer = Trainer::new(args.batch_size, args.epochs);
-    trainer.fit(&net, &train_samples, &mut opt, &device, 0.1, 2)?;
+    trainer.fit(&net, &samples, &train_idx, &mut opt, &device, 0.1, 2)?;
 
-    evaluate(&net, &test_samples, &device, &manager)?;
+    evaluate(&net, &samples, &test_idx, &device, &manager)?;
 
     log::info!("Saving model");
     let path = manager.file_path(version, "model.safetensors");
@@ -65,19 +66,23 @@ impl Trainer {
         Self { batch_size, epochs }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn fit(
         &self,
         net: &Network,
-        train_samples: &Samples,
+        samples: &Samples,
+        train_idx: &[usize],
         opt: &mut AdamW,
         device: &Device,
         validation_split: f32,
         early_stop_patience: u64,
     ) -> CandleResult<()> {
-        let (mut train_only, val_only) =
-            train_samples.train_test_split(validation_split as f64, Some(42));
+        let split = (validation_split as f64).clamp(0.0, 0.9);
+        let val_len = (train_idx.len() as f64 * split) as usize;
+        let (val_idx, train_idx_vec) = train_idx.split_at(val_len);
+        let mut train_idx_vec = train_idx_vec.to_vec();
 
-        let num_samples = train_only.len();
+        let num_samples = train_idx_vec.len();
         let mut best_val_loss = f32::MAX;
         let mut epochs_no_improve = 0;
 
@@ -92,11 +97,12 @@ impl Trainer {
                 .unwrap(),
         );
 
-            train_only.shuffle(&mut thread_rng());
+            train_idx_vec.shuffle(&mut thread_rng());
 
-            let train_loss = self.train_epoch(net, opt, &train_only, device, &progress_bar)?;
-            let val_loss = if val_only.len() > 0 {
-                self.validate(net, &val_only, device)?
+            let train_loss =
+                self.train_epoch(net, opt, samples, &train_idx_vec, device, &progress_bar)?;
+            let val_loss = if !val_idx.is_empty() {
+                self.validate(net, samples, val_idx, device)?
             } else {
                 0.0
             };
@@ -123,16 +129,17 @@ impl Trainer {
         &self,
         net: &Network,
         opt: &mut AdamW,
-        train_samples: &Samples,
+        samples: &Samples,
+        train_idx: &[usize],
         device: &Device,
         progress_bar: &ProgressBar,
     ) -> CandleResult<f32> {
         let mut epoch_loss_sum = 0f32;
         let mut batch_count = 0usize;
 
-        let mut batched_iter = train_samples.to_xy_batched(self.batch_size, device);
+        let batched_iter = samples.to_xy_batched_indices(train_idx, self.batch_size, device);
 
-        while let Some(batch_res) = batched_iter.next() {
+        for batch_res in batched_iter {
             let (x_batch, y_batch) = batch_res?;
             let loss = self.train_step(net, opt, &x_batch, &y_batch)?;
             epoch_loss_sum += loss;
@@ -157,15 +164,21 @@ impl Trainer {
         let preds = net.forward(x_batch)?;
         let loss = mse(&preds, y_batch)?;
         opt.backward_step(&loss)?;
-        Ok(f32::try_from(loss)?)
+        f32::try_from(loss)
     }
 
-    fn validate(&self, net: &Network, val_samples: &Samples, device: &Device) -> CandleResult<f32> {
+    fn validate(
+        &self,
+        net: &Network,
+        samples: &Samples,
+        val_idx: &[usize],
+        device: &Device,
+    ) -> CandleResult<f32> {
         let mut total_loss = 0f32;
         let mut batch_count = 0usize;
 
-        let mut batched_iter = val_samples.to_xy_batched(self.batch_size, device);
-        while let Some(batch_res) = batched_iter.next() {
+        let batched_iter = samples.to_xy_batched_indices(val_idx, self.batch_size, device);
+        for batch_res in batched_iter {
             let (x_val, y_val) = batch_res?;
             let preds = net.forward(&x_val)?;
             let loss = candle_nn::loss::mse(&preds, &y_val)?;
@@ -184,7 +197,9 @@ fn init() -> Result<Args, Box<dyn Error>> {
     Ok(args)
 }
 
-fn load_samples(manager: &VersionManager) -> Result<Samples, Box<dyn Error>> {
+fn load_samples(
+    manager: &VersionManager,
+) -> Result<(Samples, Vec<usize>, Vec<usize>), Box<dyn Error>> {
     let mut samples = Samples::new();
 
     let versions = manager.get_all_versions().expect("No versions found");
@@ -198,25 +213,27 @@ fn load_samples(manager: &VersionManager) -> Result<Samples, Box<dyn Error>> {
     }
 
     log::info!("Loaded {} total samples", samples.len());
-    Ok(samples)
+    let (train_idx, test_idx) = samples.train_test_indices(0.01, Some(42));
+    Ok((samples, train_idx, test_idx))
 }
 
 fn evaluate(
     net: &Network,
     samples: &Samples,
+    test_idx: &[usize],
     device: &Device,
     manager: &VersionManager,
 ) -> Result<(), Box<dyn Error>> {
     log::info!("Evaluating model (batched).");
 
-    let mut batched_iter = samples.to_xy_batched(64 /* or whatever */, device);
+    let batched_iter = samples.to_xy_batched_indices(test_idx, 64, device);
     let mut total_loss = 0f32;
     let mut total_count = 0usize;
 
     let mut all_labels = Vec::new();
     let mut all_preds = Vec::new();
 
-    while let Some(batch_res) = batched_iter.next() {
+    for batch_res in batched_iter {
         let (x_batch, y_batch) = batch_res?;
         let preds = net.forward(&x_batch)?;
         let batch_loss = candle_nn::loss::mse(&preds, &y_batch)?;
