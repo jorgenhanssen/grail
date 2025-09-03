@@ -11,6 +11,6 @@ pub struct Args {
     #[arg(long, default_value_t = 512)]
     pub batch_size: usize,
 
-    #[arg(long, default_value_t = 0.005)]
+    #[arg(long, default_value_t = 0.004)]
     pub learning_rate: f64,
 }
