@@ -77,6 +77,28 @@ impl GameRunner {
             };
             let elapsed = start_time.elapsed().as_millis() as u64;
 
+            // If using a time control, declare a loss on time before applying the move
+            if matches!(args.time_control, TimeControlType::TimeControl { .. }) {
+                let mover = board.side_to_move();
+                let available_time = match mover {
+                    chess::Color::White => white_time,
+                    chess::Color::Black => black_time,
+                };
+
+                if elapsed > available_time {
+                    // Encode flagfall as a resignation for correct PGN result
+                    match mover {
+                        chess::Color::White => {
+                            let _ = game.resign(chess::Color::White);
+                        }
+                        chess::Color::Black => {
+                            let _ = game.resign(chess::Color::Black);
+                        }
+                    }
+                    break;
+                }
+            }
+
             // Update time for the player who just moved (subtract time used, add increment)
             if matches!(args.time_control, TimeControlType::TimeControl { .. }) {
                 match board.side_to_move() {
