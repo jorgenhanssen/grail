@@ -1,3 +1,5 @@
+use super::time_budget::TimeBudget;
+use chess::Board;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -5,17 +7,17 @@ use uci::commands::GoParams;
 
 pub struct SearchController {
     start_time: std::time::Instant,
-    allocated_time: Option<u64>,
+    time_budget: Option<TimeBudget>,
     max_depth: Option<u8>,
     _timer_handle: Option<thread::JoinHandle<()>>,
     on_stop_callback: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 impl SearchController {
-    pub fn new(params: &GoParams) -> Self {
+    pub fn new(params: &GoParams, board: Board) -> Self {
         Self {
             start_time: std::time::Instant::now(),
-            allocated_time: params.move_time,
+            time_budget: TimeBudget::new(params, board.side_to_move()),
             max_depth: params.depth,
             _timer_handle: None,
             on_stop_callback: None,
@@ -30,14 +32,14 @@ impl SearchController {
     }
 
     pub fn start_timer(&mut self) {
-        let Some(allocated_time) = self.allocated_time else {
+        let Some(budget) = self.time_budget else {
             return;
         };
         let Some(callback) = &self.on_stop_callback else {
             return;
         };
 
-        let duration = Duration::from_millis(allocated_time);
+        let duration = Duration::from_millis(budget.hard);
         let callback = Arc::clone(callback);
 
         let handle = thread::spawn(move || {
@@ -48,18 +50,21 @@ impl SearchController {
         self._timer_handle = Some(handle);
     }
 
-    pub fn check_depth(&self, current_depth: u8) {
-        let Some(max_depth) = self.max_depth else {
-            return;
-        };
-        if current_depth <= max_depth {
-            return;
+    pub fn should_start_iteration(&self, next_depth: u8) -> bool {
+        // Enforce depth limit
+        if let Some(max_depth) = self.max_depth {
+            if next_depth > max_depth {
+                return false;
+            }
         }
-        let Some(ref callback) = self.on_stop_callback else {
-            return;
-        };
 
-        callback();
+        if let Some(budget) = self.time_budget {
+            if self.elapsed().as_millis() as u64 >= budget.target {
+                return false;
+            }
+        }
+
+        true
     }
 
     pub fn elapsed(&self) -> std::time::Duration {
