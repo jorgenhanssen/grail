@@ -128,7 +128,7 @@ impl Engine for NegamaxEngine {
 
         self.init_search();
 
-        let mut controller = SearchController::new(params);
+        let mut controller = SearchController::new(params, self.board);
         let stop = Arc::clone(&self.stop);
         controller.on_stop(move || stop.store(true, Ordering::Relaxed));
         controller.start_timer();
@@ -138,8 +138,7 @@ impl Engine for NegamaxEngine {
         let mut best_score = 0;
 
         while !self.stop.load(Ordering::Relaxed) && depth <= MAX_DEPTH as u8 {
-            controller.check_depth(depth);
-            if self.stop.load(Ordering::Relaxed) {
+            if !controller.should_start_iteration(depth) {
                 break;
             }
 
