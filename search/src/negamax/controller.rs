@@ -5,12 +5,18 @@ use std::thread;
 use std::time::Duration;
 use uci::commands::GoParams;
 
+// To predict the duration of the next iteration based on the previous one.
+// Assumes next iteration takes 3x ish longer than the previous.
+const NEXT_ITERATION_DURATION_FACTOR: f64 = 3.0;
+
 pub struct SearchController {
     start_time: std::time::Instant,
     time_budget: Option<TimeBudget>,
     max_depth: Option<u8>,
-    _timer_handle: Option<thread::JoinHandle<()>>,
+    timer_handle: Option<thread::JoinHandle<()>>,
     on_stop_callback: Option<Arc<dyn Fn() + Send + Sync>>,
+    last_iteration_duration_ms: Option<u64>,
+    current_iteration_start_ms: Option<u64>,
 }
 
 impl SearchController {
@@ -19,8 +25,10 @@ impl SearchController {
             start_time: std::time::Instant::now(),
             time_budget: TimeBudget::new(params, board),
             max_depth: params.depth,
-            _timer_handle: None,
+            timer_handle: None,
             on_stop_callback: None,
+            last_iteration_duration_ms: None,
+            current_iteration_start_ms: None,
         }
     }
 
@@ -47,27 +55,71 @@ impl SearchController {
             callback();
         });
 
-        self._timer_handle = Some(handle);
+        self.timer_handle = Some(handle);
     }
 
-    pub fn should_start_iteration(&self, next_depth: u8) -> bool {
-        // Enforce depth limit
+    pub fn should_continue_to_next_depth(&self, next_depth: u8) -> bool {
+        // Depth check (if specified)
         if let Some(max_depth) = self.max_depth {
             if next_depth > max_depth {
                 return false;
             }
         }
 
+        // Time check (if specified)
         if let Some(budget) = self.time_budget {
-            if self.elapsed().as_millis() as u64 >= budget.target {
+            let elapsed = self.elapsed().as_millis() as u64;
+
+            if elapsed >= budget.target {
                 return false;
+            }
+
+            if let Some(estimate) = self.estimate_next_iteration_duration() {
+                if elapsed.saturating_add(estimate) > budget.hard {
+                    return false;
+                }
             }
         }
 
         true
     }
 
+    fn estimate_next_iteration_duration(&self) -> Option<u64> {
+        let last_duration = self.last_iteration_duration_ms?;
+
+        if last_duration > 0 {
+            return Some(((last_duration as f64) * NEXT_ITERATION_DURATION_FACTOR) as u64);
+        }
+
+        None
+    }
+
+    /// Returns the total elapsed time since search started.
     pub fn elapsed(&self) -> std::time::Duration {
         self.start_time.elapsed()
+    }
+
+    pub fn on_iteration_start(&mut self) {
+        let now_ms = self.elapsed().as_millis() as u64;
+
+        // Calculate duration of the previous iteration
+        if let Some(start_ms) = self.current_iteration_start_ms {
+            let duration = now_ms.saturating_sub(start_ms);
+            self.last_iteration_duration_ms = Some(duration);
+        }
+
+        self.current_iteration_start_ms = Some(now_ms);
+    }
+
+    pub fn stop_timer(&mut self) {
+        if let Some(handle) = self.timer_handle.take() {
+            std::mem::drop(handle);
+        }
+    }
+}
+
+impl Drop for SearchController {
+    fn drop(&mut self) {
+        self.stop_timer();
     }
 }

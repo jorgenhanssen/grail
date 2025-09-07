@@ -138,7 +138,9 @@ impl Engine for NegamaxEngine {
         let mut best_score = 0;
 
         while !self.stop.load(Ordering::Relaxed) && depth <= MAX_DEPTH as u8 {
-            if !controller.should_start_iteration(depth) {
+            controller.on_iteration_start();
+
+            if !controller.should_continue_to_next_depth(depth) {
                 break;
             }
 
