@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::{
+    args::TimeControlType,
     game::{GameArgs, GameRunner},
     openings::Opening,
     outcome::GameOutcome,
@@ -14,7 +15,7 @@ pub struct Pairing {
     openings: Vec<Opening>,
     engine_a: PathBuf,
     engine_b: PathBuf,
-    move_time: u64,
+    time_control: TimeControlType,
 }
 
 impl Pairing {
@@ -22,13 +23,13 @@ impl Pairing {
         openings: Vec<Opening>,
         engine_a: PathBuf,
         engine_b: PathBuf,
-        move_time: u64,
+        time_control: TimeControlType,
     ) -> Self {
         Self {
             openings,
             engine_a,
             engine_b,
-            move_time,
+            time_control,
         }
     }
 
@@ -57,7 +58,7 @@ impl Pairing {
             .filter_map(|(white, black, opening)| {
                 let game_runner = GameRunner::new(white.clone(), black.clone());
                 let game_args = GameArgs {
-                    move_time: self.move_time,
+                    time_control: self.time_control.clone(),
                     opening: opening.clone(),
                 };
 
