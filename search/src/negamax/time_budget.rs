@@ -2,7 +2,7 @@ use chess::Color;
 use uci::commands::GoParams;
 
 // Time management constants
-const DEFAULT_MOVES_LEFT: u64 = 20;
+const DEFAULT_MOVES_LEFT: u64 = 25;
 const INCREMENT_USAGE: f64 = 0.8;
 const RESERVE_FRACTION: f64 = 0.08;
 const MIN_RESERVE_MS: u64 = 300;
