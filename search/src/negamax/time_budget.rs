@@ -1,4 +1,4 @@
-use chess::Color;
+use chess::{Board, Color, MoveGen};
 use uci::commands::GoParams;
 
 // Time management constants
@@ -17,7 +17,7 @@ pub struct TimeBudget {
 }
 
 impl TimeBudget {
-    pub fn new(params: &GoParams, side_to_move: Color) -> Option<Self> {
+    pub fn new(params: &GoParams, board: &Board) -> Option<Self> {
         // Time is provided, so let's use that as a hard limit
         if let Some(move_time) = params.move_time {
             return Some(Self {
@@ -26,7 +26,16 @@ impl TimeBudget {
             });
         }
 
-        let (time_left, increment) = Self::extract_time_params(params, side_to_move)?;
+        // If there is only one legal move, set the target time to 100ms
+        let mut gen = MoveGen::new_legal(board);
+        if gen.next().is_none() || gen.next().is_none() {
+            return Some(Self {
+                target: 100,
+                hard: 100,
+            });
+        }
+
+        let (time_left, increment) = Self::extract_time_params(params, board)?;
         let moves_left = params.moves_to_go.unwrap_or(DEFAULT_MOVES_LEFT).max(1);
 
         let reserve = ((time_left as f64) * RESERVE_FRACTION) as u64;
@@ -46,7 +55,8 @@ impl TimeBudget {
     }
 
     #[inline]
-    fn extract_time_params(params: &GoParams, side_to_move: Color) -> Option<(u64, u64)> {
+    fn extract_time_params(params: &GoParams, board: &Board) -> Option<(u64, u64)> {
+        let side_to_move = board.side_to_move();
         let (time_left, increment) = match side_to_move {
             Color::White => (params.wtime?, params.winc.unwrap_or(0)),
             Color::Black => (params.btime?, params.binc.unwrap_or(0)),
