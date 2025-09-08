@@ -5,6 +5,7 @@ use uci::{commands::GoParams, UciOutput};
 
 pub trait Engine {
     fn new(evaluator: Box<dyn Evaluator>) -> Self;
+    fn new_game(&mut self);
     fn set_position(&mut self, board: Board);
     fn search(
         &mut self,

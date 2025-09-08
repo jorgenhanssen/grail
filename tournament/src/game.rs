@@ -57,6 +57,9 @@ impl GameRunner {
         positions.push(initial_board);
         *position_counts.entry(initial_board).or_insert(0) += 1;
 
+        white_engine.new_game().unwrap();
+        black_engine.new_game().unwrap();
+
         let mut move_count = 0;
         while game.result().is_none() {
             let board = game.current_position();
