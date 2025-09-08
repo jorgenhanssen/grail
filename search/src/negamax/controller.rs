@@ -1,4 +1,4 @@
-use super::time_budget::TimeBudget;
+use super::time_budget::{SearchHistory, TimeBudget};
 use chess::Board;
 use std::sync::Arc;
 use std::thread;
@@ -17,6 +17,7 @@ pub struct SearchController {
     on_stop_callback: Option<Arc<dyn Fn() + Send + Sync>>,
     last_iteration_duration_ms: Option<u64>,
     current_iteration_start_ms: Option<u64>,
+    search_history: SearchHistory,
 }
 
 impl SearchController {
@@ -29,6 +30,7 @@ impl SearchController {
             on_stop_callback: None,
             last_iteration_duration_ms: None,
             current_iteration_start_ms: None,
+            search_history: SearchHistory::new(),
         }
     }
 
@@ -109,6 +111,23 @@ impl SearchController {
         }
 
         self.current_iteration_start_ms = Some(now_ms);
+    }
+
+    pub fn on_iteration_complete(
+        &mut self,
+        depth: u8,
+        score: i16,
+        best_move: Option<chess::ChessMove>,
+    ) {
+        self.search_history.add_iteration(depth, score, best_move);
+
+        if let Some(ref mut budget) = self.time_budget {
+            budget.adjust_for_search_behavior(&self.search_history);
+        }
+    }
+
+    pub fn on_aspiration_failure(&mut self) {
+        self.search_history.add_aspiration_failure();
     }
 
     pub fn stop_timer(&mut self) {

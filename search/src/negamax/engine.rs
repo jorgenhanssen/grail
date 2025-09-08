@@ -163,12 +163,17 @@ impl Engine for NegamaxEngine {
                     Pass::Hit(s) => {
                         best_move = mv;
                         best_score = s;
+
+                        controller.on_iteration_complete(depth, s, mv);
+
                         if let Some(out) = output {
                             self.send_search_info(out, depth, s, controller.elapsed());
                         }
                         break;
                     }
                     _ => {
+                        controller.on_aspiration_failure();
+
                         retries += 1;
 
                         if retries >= ASP_MAX_RETRIES {
