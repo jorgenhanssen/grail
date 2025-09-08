@@ -19,7 +19,6 @@ impl EngineProcess {
     pub fn new(path: impl AsRef<Path>) -> io::Result<Self> {
         let path = path.as_ref();
         let mut child = Command::new(path)
-            .arg("negamax")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()?;
@@ -77,6 +76,11 @@ impl EngineProcess {
         ))?;
 
         self.wait_for_bestmove()
+    }
+
+    pub fn new_game(&mut self) -> io::Result<()> {
+        self.send_command("ucinewgame\n")?;
+        Ok(())
     }
 
     fn wait_for_bestmove(&mut self) -> Result<ChessMove, Box<dyn Error>> {
