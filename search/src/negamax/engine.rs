@@ -101,6 +101,10 @@ impl Engine for NegamaxEngine {
         format!("Negamax ({})", self.evaluator.name())
     }
 
+    fn new_game(&mut self) {
+        self.init_game();
+    }
+
     fn set_position(&mut self, board: Board) {
         self.board = board;
     }
@@ -181,6 +185,12 @@ impl Engine for NegamaxEngine {
 }
 
 impl NegamaxEngine {
+    #[inline(always)]
+    pub fn init_game(&mut self) {
+        self.tt.clear();
+        self.qs_tt.clear();
+    }
+
     #[inline(always)]
     pub fn init_search(&mut self) {
         self.stop.store(false, Ordering::Relaxed);
@@ -551,9 +561,18 @@ impl NegamaxEngine {
             BoardStatus::Ongoing => {}
         }
 
-        // Check cache
-        if let Some(cached_score) = self.qs_tt.probe(hash) {
-            return (cached_score, Vec::new());
+        let in_check = board.checkers().popcnt() > 0;
+
+        let original_alpha = alpha;
+        let original_beta = beta;
+
+        if let Some((cached_value, cached_bound)) = self.qs_tt.probe(hash, in_check) {
+            match cached_bound {
+                Bound::Exact => return (cached_value, Vec::new()),
+                Bound::Lower if cached_value >= beta => return (cached_value, Vec::new()),
+                Bound::Upper if cached_value <= alpha => return (cached_value, Vec::new()),
+                _ => {}
+            }
         }
 
         let phase = game_phase(board);
@@ -565,12 +584,11 @@ impl NegamaxEngine {
             -eval
         };
 
-        let in_check = board.checkers().popcnt() > 0;
-
         // Do a "stand-pat" evaluation if not in check
         if !in_check {
             if stand_pat >= beta {
-                self.qs_tt.store(hash, stand_pat);
+                self.qs_tt
+                    .store(hash, stand_pat, original_alpha, original_beta, in_check);
                 return (stand_pat, Vec::new());
             }
 
@@ -591,7 +609,8 @@ impl NegamaxEngine {
                 }
 
                 if stand_pat + big_delta < alpha {
-                    self.qs_tt.store(hash, stand_pat);
+                    self.qs_tt
+                        .store(hash, stand_pat, original_alpha, original_beta, in_check);
                     return (stand_pat, Vec::new());
                 }
             }
@@ -653,7 +672,8 @@ impl NegamaxEngine {
             }
         }
 
-        self.qs_tt.store(hash, best_eval);
+        self.qs_tt
+            .store(hash, best_eval, original_alpha, original_beta, in_check);
         (best_eval, best_line)
     }
 
