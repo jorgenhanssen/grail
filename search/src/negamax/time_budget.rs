@@ -1,18 +1,18 @@
-use crate::utils::game_phase;
-use chess::{Board, Color, MoveGen};
+use chess::{Board, Color};
 use uci::commands::GoParams;
 
+use crate::negamax::utils::only_move;
+
 // Time management constants
+const DEFAULT_MOVES_LEFT: u64 = 25;
 const INCREMENT_USAGE: f64 = 0.8;
 const RESERVE_FRACTION: f64 = 0.08;
-const MIN_RESERVE_MS: u64 = 1000;
+const MIN_RESERVE_MS: u64 = 300;
 const OVERHEAD_MS: u64 = 20;
 const HARD_MULTIPLIER: f64 = 2.5;
 const MIN_TIME_PER_MOVE: u64 = 25;
 
-// Soft linear scaling for estimated moves left: opening -> 60, endgame -> 10
-const EST_MOVES_OPENING: f64 = 60.0;
-const EST_MOVES_ENDGAME: f64 = 1.0;
+const ONLY_MOVE_TIME_MS: u64 = 100;
 
 #[derive(Debug, Clone, Copy)]
 pub struct TimeBudget {
@@ -30,20 +30,16 @@ impl TimeBudget {
             });
         }
 
-        // If there is only one legal move, set the target time to 100ms
-        let mut gen = MoveGen::new_legal(board);
-        if gen.next().is_none() || gen.next().is_none() {
+        // No need spending much time searching if there is only one legal move, but a little bit for score.
+        if only_move(board) {
             return Some(Self {
-                target: 100,
-                hard: 100,
+                target: ONLY_MOVE_TIME_MS,
+                hard: ONLY_MOVE_TIME_MS,
             });
         }
 
         let (time_left, increment) = Self::extract_time_params(params, board)?;
-        let moves_left = params
-            .moves_to_go
-            .unwrap_or_else(|| Self::estimated_moves_left(board))
-            .max(1);
+        let moves_left = params.moves_to_go.unwrap_or(DEFAULT_MOVES_LEFT);
 
         let reserve = ((time_left as f64) * RESERVE_FRACTION) as u64;
         let reserve = reserve.max(MIN_RESERVE_MS);
@@ -69,14 +65,5 @@ impl TimeBudget {
             Color::Black => (params.btime?, params.binc.unwrap_or(0)),
         };
         Some((time_left, increment))
-    }
-
-    #[inline]
-    fn estimated_moves_left(board: &Board) -> u64 {
-        // Linear blend between opening and endgame estimate
-        // phase in [0,1]: 1.0->opening, 0.0->endgame
-        let p = game_phase(board) as f64;
-        let est = EST_MOVES_ENDGAME + p * (EST_MOVES_OPENING - EST_MOVES_ENDGAME);
-        est.round() as u64
     }
 }

@@ -6,8 +6,8 @@ use std::time::Duration;
 use uci::commands::GoParams;
 
 // To predict the duration of the next iteration based on the previous one.
-// Assumes next iteration takes 5x ish longer than the previous.
-const NEXT_ITERATION_DURATION_FACTOR: f64 = 3.0;
+// Assumes next iteration takes ~2x longer than the previous.
+const NEXT_ITERATION_DURATION_FACTOR: f64 = 2.0;
 
 pub struct SearchController {
     start_time: std::time::Instant,
