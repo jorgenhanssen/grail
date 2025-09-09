@@ -1,4 +1,4 @@
-use chess::Board;
+use chess::{Board, MoveGen};
 use evaluation::{scores::MATE_VALUE, total_material};
 
 use crate::utils::is_zugzwang;
@@ -62,4 +62,10 @@ pub const RFP_MARGINS: [i16; RFP_MAX_DEPTH as usize + 1] = [0, 150, 250, 400];
 #[inline(always)]
 pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool, is_pv_node: bool) -> bool {
     remaining_depth <= RFP_MAX_DEPTH && remaining_depth > 0 && !in_check && !is_pv_node
+}
+
+#[inline(always)]
+pub fn only_move(board: &Board) -> bool {
+    let mut g = MoveGen::new_legal(board);
+    matches!((g.next(), g.next()), (Some(_), None))
 }

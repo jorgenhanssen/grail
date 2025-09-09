@@ -29,9 +29,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             UciInput::IsReady => {
                 output.send(UciOutput::ReadyOk)?;
             }
-            UciInput::UciNewGame => {}
+            UciInput::UciNewGame => {
+                engine.new_game();
+            }
             UciInput::Position(board) => {
-                engine.set_position(board.clone());
+                engine.set_position(*board);
             }
             UciInput::Go(params) => {
                 let result = engine.search(params, Some(&output));

@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let openings = get_all_openings();
 
-    let pairing = Pairing::new(openings, args.engine_a, args.engine_b, args.move_time);
+    let pairing = Pairing::new(openings, args.engine_a, args.engine_b, args.time_control);
 
     let outcomes = pairing.run();
     let summary = Summary::new(&outcomes);
