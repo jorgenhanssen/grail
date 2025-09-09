@@ -110,9 +110,14 @@ impl SearchHistory {
 
 impl TimeBudget {
     pub fn new(params: &GoParams, board: &Board) -> Option<Self> {
-        // UCI movetime: spend approximately this exact amount
+        // UCI movetime: spend exactly this exact amount
         if let Some(move_time) = params.move_time {
             return Some(Self::Exact { millis: move_time });
+        }
+
+        // If a depth is set then we do not want this to be timed.
+        if params.depth.is_some() {
+            return None;
         }
 
         // No need spending much time searching if there is only one legal move, but a little bit for score.
