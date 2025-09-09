@@ -4,8 +4,8 @@ use uci::commands::GoParams;
 use crate::negamax::utils::only_move;
 
 // Time management constants
-const EST_MOVES_START: u64 = 20;
-const EST_MOVES_END: u64 = 5;
+const MOVE_MARGIN_START: u64 = 20;
+const MOVE_MARGIN_END: u64 = 10;
 const INCREMENT_USAGE: f64 = 0.8;
 const RESERVE_FRACTION: f64 = 0.08;
 const MIN_RESERVE_MS: u64 = 300;
@@ -118,7 +118,7 @@ impl TimeBudget {
         }
 
         let (time_left, increment) = extract_time_params(params, board)?;
-        let moves_left = params.moves_to_go.unwrap_or(estimate_moves_left(board));
+        let moves_left = params.moves_to_go.unwrap_or(move_margin(board));
 
         let reserve = ((time_left as f64) * RESERVE_FRACTION) as u64;
         let reserve = reserve.max(MIN_RESERVE_MS);
@@ -177,12 +177,11 @@ fn extract_time_params(params: &GoParams, board: &Board) -> Option<(u64, u64)> {
     Some((time_left, increment))
 }
 
-fn estimate_moves_left(board: &Board) -> u64 {
+fn move_margin(board: &Board) -> u64 {
     const TOTAL_PIECES: f32 = 32.0;
 
     let num_pieces = board.combined().popcnt() as f32;
     let phase = num_pieces / TOTAL_PIECES;
 
-    let moves_left = (phase * EST_MOVES_START as f32 + (1.0 - phase) * EST_MOVES_END as f32) as u64;
-    moves_left
+    (phase * MOVE_MARGIN_START as f32 + (1.0 - phase) * MOVE_MARGIN_END as f32) as u64
 }
