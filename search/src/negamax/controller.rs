@@ -68,6 +68,12 @@ impl SearchController {
             }
         }
 
+        // Always allow the first iteration regardless of time gates.
+        // Ensures we can produce at least one best move under extreme low time.
+        if next_depth == 1 {
+            return true;
+        }
+
         // Time check (if specified)
         if let Some(budget) = self.time_budget {
             let elapsed = self.elapsed().as_millis() as u64;
