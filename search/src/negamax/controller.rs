@@ -63,14 +63,12 @@ impl SearchController {
     pub fn should_continue_to_next_depth(&self, next_depth: u8) -> bool {
         // Depth check (if specified)
         if let Some(max_depth) = self.max_depth {
-            if next_depth > max_depth {
-                return false;
-            }
+            return next_depth <= max_depth;
         }
 
-        // Always allow the first iteration regardless of time gates.
+        // Always allow the first iterations regardless of time gates.
         // Ensures we can produce at least one best move under extreme low time.
-        if next_depth == 1 {
+        if next_depth <= 2 {
             return true;
         }
 
