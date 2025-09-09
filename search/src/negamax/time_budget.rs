@@ -4,7 +4,8 @@ use uci::commands::GoParams;
 use crate::negamax::utils::only_move;
 
 // Time management constants
-const DEFAULT_MOVES_LEFT: u64 = 20;
+const EST_MOVES_START: u64 = 20;
+const EST_MOVES_END: u64 = 5;
 const INCREMENT_USAGE: f64 = 0.8;
 const RESERVE_FRACTION: f64 = 0.08;
 const MIN_RESERVE_MS: u64 = 300;
@@ -116,8 +117,8 @@ impl TimeBudget {
             });
         }
 
-        let (time_left, increment) = Self::extract_time_params(params, board)?;
-        let moves_left = params.moves_to_go.unwrap_or(DEFAULT_MOVES_LEFT);
+        let (time_left, increment) = extract_time_params(params, board)?;
+        let moves_left = params.moves_to_go.unwrap_or(estimate_moves_left(board));
 
         let reserve = ((time_left as f64) * RESERVE_FRACTION) as u64;
         let reserve = reserve.max(MIN_RESERVE_MS);
@@ -164,14 +165,24 @@ impl TimeBudget {
         let new_target = ((self.hard as f64) * target_factor) as u64;
         self.target = new_target.max(MIN_TIME_PER_MOVE);
     }
+}
 
-    #[inline]
-    fn extract_time_params(params: &GoParams, board: &Board) -> Option<(u64, u64)> {
-        let side_to_move = board.side_to_move();
-        let (time_left, increment) = match side_to_move {
-            Color::White => (params.wtime?, params.winc.unwrap_or(0)),
-            Color::Black => (params.btime?, params.binc.unwrap_or(0)),
-        };
-        Some((time_left, increment))
-    }
+#[inline]
+fn extract_time_params(params: &GoParams, board: &Board) -> Option<(u64, u64)> {
+    let side_to_move = board.side_to_move();
+    let (time_left, increment) = match side_to_move {
+        Color::White => (params.wtime?, params.winc.unwrap_or(0)),
+        Color::Black => (params.btime?, params.binc.unwrap_or(0)),
+    };
+    Some((time_left, increment))
+}
+
+fn estimate_moves_left(board: &Board) -> u64 {
+    const TOTAL_PIECES: f32 = 32.0;
+
+    let num_pieces = board.combined().popcnt() as f32;
+    let phase = num_pieces / TOTAL_PIECES;
+
+    let moves_left = (phase * EST_MOVES_START as f32 + (1.0 - phase) * EST_MOVES_END as f32) as u64;
+    moves_left
 }
