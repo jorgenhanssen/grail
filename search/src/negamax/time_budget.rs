@@ -26,9 +26,11 @@ const MIN_DEPTH_FOR_ADJUSTMENTS: u8 = 6; // Don't adjust before this depth
 const EASY_MOVE_THRESHOLD: f64 = 0.6; // If same best move for 60% of iterations = easy
 
 #[derive(Debug, Clone, Copy)]
-pub struct TimeBudget {
-    pub target: u64,
-    pub hard: u64,
+pub enum TimeBudget {
+    // Spend approximately this exact amount (e.g., UCI movetime, only move)
+    Exact { millis: u64 },
+    // Managed time where target may be adjusted during search, capped by hard
+    Managed { target: u64, hard: u64 },
 }
 
 #[derive(Debug, Clone)]
@@ -40,6 +42,7 @@ pub struct SearchHistory {
 }
 
 impl SearchHistory {
+    #[inline(always)]
     pub fn new() -> Self {
         Self {
             scores: Vec::new(),
@@ -49,20 +52,24 @@ impl SearchHistory {
         }
     }
 
+    #[inline(always)]
     pub fn add_iteration(&mut self, depth: u8, score: i16, best_move: Option<chess::ChessMove>) {
         self.depths.push(depth);
         self.scores.push(score);
         self.best_moves.push(best_move);
     }
 
+    #[inline(always)]
     pub fn add_aspiration_failure(&mut self) {
         self.aspiration_failures += 1;
     }
 
+    #[inline(always)]
     fn current_depth(&self) -> u8 {
         self.depths.last().copied().unwrap_or(0)
     }
 
+    #[inline(always)]
     fn best_move_is_stable(&self) -> bool {
         if self.best_moves.len() < 4 {
             return false;
@@ -80,6 +87,7 @@ impl SearchHistory {
         (same_move_count as f64) / (recent_moves.len() as f64) >= EASY_MOVE_THRESHOLD
     }
 
+    #[inline(always)]
     fn best_move_changed_recently(&self) -> bool {
         if self.best_moves.len() < 2 {
             return false;
@@ -89,6 +97,7 @@ impl SearchHistory {
         last_two[0] != last_two[1] && last_two[0].is_some() && last_two[1].is_some()
     }
 
+    #[inline(always)]
     fn has_score_drop(&self) -> bool {
         if self.scores.len() < 2 {
             return false;
@@ -101,19 +110,15 @@ impl SearchHistory {
 
 impl TimeBudget {
     pub fn new(params: &GoParams, board: &Board) -> Option<Self> {
-        // Time is provided, so let's use that as a hard limit
+        // UCI movetime: spend approximately this exact amount
         if let Some(move_time) = params.move_time {
-            return Some(Self {
-                target: move_time,
-                hard: move_time,
-            });
+            return Some(Self::Exact { millis: move_time });
         }
 
         // No need spending much time searching if there is only one legal move, but a little bit for score.
         if only_move(board) {
-            return Some(Self {
-                target: ONLY_MOVE_TIME_MS,
-                hard: ONLY_MOVE_TIME_MS,
+            return Some(Self::Exact {
+                millis: ONLY_MOVE_TIME_MS,
             });
         }
 
@@ -133,37 +138,60 @@ impl TimeBudget {
 
         let target = ((hard as f64) * INITIAL_TARGET_FACTOR) as u64;
 
-        Some(Self { target, hard })
+        Some(Self::Managed { target, hard })
     }
 
-    // Stockfish-style time adjustment based on search behavior
+    #[inline(always)]
+    pub fn hard_limit(&self) -> u64 {
+        match *self {
+            TimeBudget::Exact { millis } => millis,
+            TimeBudget::Managed { hard, .. } => hard,
+        }
+    }
+
+    #[inline(always)]
+    pub fn target_limit(&self) -> u64 {
+        match *self {
+            TimeBudget::Exact { millis } => millis,
+            TimeBudget::Managed { target, .. } => target,
+        }
+    }
+
+    // Stockfish-style time adjustment based on search behavior (Managed only)
     pub fn adjust_for_search_behavior(&mut self, search_history: &SearchHistory) {
-        if search_history.current_depth() < MIN_DEPTH_FOR_ADJUSTMENTS {
-            return;
+        match self {
+            TimeBudget::Exact { .. } => {
+                // Do not adjust in exact mode
+            }
+            TimeBudget::Managed { target, hard } => {
+                if search_history.current_depth() < MIN_DEPTH_FOR_ADJUSTMENTS {
+                    return;
+                }
+
+                let mut target_factor = INITIAL_TARGET_FACTOR;
+
+                if search_history.best_move_is_stable() {
+                    target_factor *= BEST_MOVE_STABILITY_BONUS; // -20% time
+                } else if search_history.best_move_changed_recently() {
+                    target_factor *= BEST_MOVE_INSTABILITY_PENALTY; // +40% time
+                }
+
+                if search_history.has_score_drop() {
+                    // Score has dropped, so verify
+                    target_factor *= SCORE_DROP_PENALTY; // +30% time
+                }
+
+                if search_history.aspiration_failures > 2 {
+                    // Position is complex, so verify
+                    target_factor *= 1.2; // +20% time
+                }
+
+                target_factor = target_factor.clamp(MIN_TARGET_FACTOR, MAX_TARGET_FACTOR);
+
+                let new_target = ((*hard as f64) * target_factor) as u64;
+                *target = new_target.max(MIN_TIME_PER_MOVE);
+            }
         }
-
-        let mut target_factor = INITIAL_TARGET_FACTOR;
-
-        if search_history.best_move_is_stable() {
-            target_factor *= BEST_MOVE_STABILITY_BONUS; // -20% time
-        } else if search_history.best_move_changed_recently() {
-            target_factor *= BEST_MOVE_INSTABILITY_PENALTY; // +40% time
-        }
-
-        if search_history.has_score_drop() {
-            // Score has dropped, so verify
-            target_factor *= SCORE_DROP_PENALTY; // +30% time
-        }
-
-        if search_history.aspiration_failures > 2 {
-            // Position is complex, so verify
-            target_factor *= 1.2; // +20% time
-        }
-
-        target_factor = target_factor.clamp(MIN_TARGET_FACTOR, MAX_TARGET_FACTOR);
-
-        let new_target = ((self.hard as f64) * target_factor) as u64;
-        self.target = new_target.max(MIN_TIME_PER_MOVE);
     }
 }
 
@@ -177,6 +205,7 @@ fn extract_time_params(params: &GoParams, board: &Board) -> Option<(u64, u64)> {
     Some((time_left, increment))
 }
 
+#[inline(always)]
 fn move_margin(board: &Board) -> u64 {
     const TOTAL_PIECES: f32 = 32.0;
 

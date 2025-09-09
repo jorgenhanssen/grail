@@ -49,7 +49,7 @@ impl SearchController {
             return;
         };
 
-        let duration = Duration::from_millis(budget.hard);
+        let duration = Duration::from_millis(budget.hard_limit());
         let callback = Arc::clone(callback);
 
         let handle = thread::spawn(move || {
@@ -72,13 +72,25 @@ impl SearchController {
         if let Some(budget) = self.time_budget {
             let elapsed = self.elapsed().as_millis() as u64;
 
-            if elapsed >= budget.target {
-                return false;
-            }
-
-            if let Some(estimate) = self.estimate_next_iteration_duration() {
-                if elapsed.saturating_add(estimate) > budget.hard {
-                    return false;
+            match budget {
+                // Exact (movetime): stop exactly at hard limit.
+                TimeBudget::Exact { .. } => {
+                    if elapsed >= budget.hard_limit() {
+                        return false;
+                    }
+                }
+                // Managed: stop at target and avoid starting an iteration that would exceed hard
+                TimeBudget::Managed { .. } => {
+                    // Stop at target
+                    if elapsed >= budget.target_limit() {
+                        return false;
+                    }
+                    // If still under target but estimate that the next iteration would exceed hard, stop early to save time.
+                    if let Some(estimate) = self.estimate_next_iteration_duration() {
+                        if elapsed.saturating_add(estimate) > budget.hard_limit() {
+                            return false;
+                        }
+                    }
                 }
             }
         }
