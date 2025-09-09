@@ -107,6 +107,7 @@ impl Engine for NegamaxEngine {
 
     fn set_position(&mut self, board: Board) {
         self.board = board;
+        self.countermoves.on_new_position();
     }
 
     fn stop(&mut self) {
@@ -196,6 +197,8 @@ impl NegamaxEngine {
     pub fn init_game(&mut self) {
         self.tt.clear();
         self.qs_tt.clear();
+        self.history_heuristic.reset();
+        self.countermoves.reset();
     }
 
     #[inline(always)]
@@ -213,9 +216,6 @@ impl NegamaxEngine {
         self.position_stack.clear();
         self.position_stack.push(self.board.get_hash());
         self.move_stack.clear();
-
-        self.history_heuristic.reset();
-        self.countermoves.reset();
     }
 
     pub fn search_root(
