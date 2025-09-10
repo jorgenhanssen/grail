@@ -466,10 +466,11 @@ impl NegamaxEngine {
         let is_tactical = in_check || gives_check || is_capture || is_promotion;
 
         // SEE pruning
-        if is_capture && !in_check && !is_promotion {
+        if is_capture && !in_check && !is_promotion && remaining_depth > 3 {
             let phase = game_phase(board);
+
             // Only SEE if it's a major piece, then prune if it's obviously losing
-            if piece_value(piece, phase) > 200 && see(board, m, phase) < -200 {
+            if piece_value(piece, phase) > 200 && see(board, m, phase) < -400 {
                 return None;
             }
         }
