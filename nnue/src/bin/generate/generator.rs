@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::time::Instant;
 use std::{path::PathBuf, sync::Arc};
@@ -10,10 +11,27 @@ use evaluation::{Evaluator, TraditionalEvaluator};
 use indicatif::{ProgressBar, ProgressStyle};
 use nnue::version::VersionManager;
 use nnue::NNUE;
+use rand::distributions::WeightedIndex;
+use rand::prelude::Distribution;
 use rand::Rng;
 use search::{Engine, NegamaxEngine};
 use std::sync::Mutex;
 use uci::commands::GoParams;
+
+#[derive(Clone)]
+pub struct MoveDistribution {
+    pub moves: Vec<ChessMove>,
+    pub evaluations: Vec<i16>,
+}
+
+impl MoveDistribution {
+    pub fn new(moves: Vec<ChessMove>, evaluations: Vec<i16>) -> Self {
+        Self { moves, evaluations }
+    }
+}
+
+/// Global storage for move evaluation distributions, keyed by position hash
+type MoveDistributions = Arc<Mutex<HashMap<u64, MoveDistribution>>>;
 
 pub struct Generator {
     threads: usize,
@@ -62,13 +80,13 @@ impl Generator {
         );
         let pb = Arc::new(pb);
 
-        let global_evaluated = Arc::new(Mutex::new(AHashSet::new()));
+        let global_distributions: MoveDistributions = Arc::new(Mutex::new(HashMap::new()));
 
         let handles: Vec<_> = (0..self.threads)
             .map(|tid| {
                 let nnue_path = self.nnue_path.clone();
                 let version = self.version;
-                let global_evaluated = Arc::clone(&global_evaluated);
+                let global_distributions = Arc::clone(&global_distributions);
                 let pb = Arc::clone(&pb);
 
                 std::thread::spawn(move || {
@@ -83,7 +101,8 @@ impl Generator {
                         None => Box::new(TraditionalEvaluator),
                     };
 
-                    let mut worker = SelfPlayWorker::new(tid, global_evaluated, depth, evaluator);
+                    let mut worker =
+                        SelfPlayWorker::new(tid, global_distributions, depth, evaluator);
                     worker.play_games(duration, &pb)
                 })
             })
@@ -102,7 +121,7 @@ impl Generator {
 
 struct SelfPlayWorker {
     tid: usize,
-    global_evaluated: Arc<Mutex<AHashSet<u64>>>,
+    global_distributions: MoveDistributions,
     engine: NegamaxEngine,
     depth: u8,
 
@@ -114,13 +133,13 @@ struct SelfPlayWorker {
 impl SelfPlayWorker {
     pub fn new(
         tid: usize,
-        global_evaluated: Arc<Mutex<AHashSet<u64>>>,
+        global_distributions: MoveDistributions,
         depth: u8,
         evaluator: Box<dyn Evaluator>,
     ) -> Self {
         Self {
             tid,
-            global_evaluated,
+            global_distributions,
             game: Game::new(),
             depth,
 
@@ -142,7 +161,7 @@ impl SelfPlayWorker {
             }
 
             if self.tid == 0 {
-                let global_count = self.global_evaluated.lock().unwrap().len();
+                let global_count = self.global_distributions.lock().unwrap().len();
                 pb.set_message(format!("{} positions", global_count));
                 pb.set_position(current_elapsed);
             }
@@ -189,40 +208,45 @@ impl SelfPlayWorker {
         board: chess::Board,
         evaluations: &mut Vec<(String, i16)>,
     ) -> (ChessMove, i16) {
-        let moves: Vec<ChessMove> = MoveGen::new_legal(&board).collect();
+        let board_hash = board.get_hash();
 
-        if self.position_has_been_evaluated(&board) {
-            return (random_move(&moves), 0);
-        }
-
-        let (engine_move, engine_score) = self.get_engine_move(&board);
-
-        // Convert to white's perspective and tanh to force mate scores to be in [-1, 1]
-        let white_score = if board.side_to_move() == chess::Color::White {
-            engine_score
-        } else {
-            -engine_score
+        // Check if we have a distribution for this position
+        let distribution = {
+            let distributions = self.global_distributions.lock().unwrap();
+            distributions.get(&board_hash).cloned()
         };
-        evaluations.push((board.to_string(), white_score));
 
-        if should_use_engine_move() {
-            (engine_move, engine_score)
-        } else {
-            (random_move(&moves), engine_score)
-        }
-    }
+        match distribution {
+            Some(dist) => {
+                // Distribution exists - skip full evaluation, use weighted random
+                let chosen_move = weighted_random_move(&dist);
+                (chosen_move, 0) // Return 0 as score since we're not doing full eval
+            }
+            None => {
+                // No distribution exists - create one, do full eval, then use weighted random
 
-    #[inline]
-    fn position_has_been_evaluated(&mut self, board: &Board) -> bool {
-        let hash = board.get_hash();
+                // Create and store the distribution
+                let new_distribution = create_move_distribution(&mut self.engine, &board);
+                {
+                    let mut distributions = self.global_distributions.lock().unwrap();
+                    distributions.insert(board_hash, new_distribution.clone());
+                }
 
-        let mut evaluated_positions = self.global_evaluated.lock().unwrap();
-        if evaluated_positions.contains(&hash) {
-            true
-        } else {
-            // Mark it seen from now on
-            evaluated_positions.insert(hash);
-            false
+                // Do full evaluation for training sample
+                let (_, engine_score) = self.get_engine_move(&board);
+
+                // Convert to white's perspective
+                let white_score = if board.side_to_move() == chess::Color::White {
+                    engine_score
+                } else {
+                    -engine_score
+                };
+                evaluations.push((board.to_string(), white_score));
+
+                // Select move using weighted random
+                let chosen_move = weighted_random_move(&new_distribution);
+                (chosen_move, engine_score)
+            }
         }
     }
 
@@ -262,13 +286,69 @@ impl SelfPlayWorker {
     }
 }
 
+// Perform shallow search for all legal moves to create evaluation distribution
 #[inline]
-fn should_use_engine_move() -> bool {
-    rand::thread_rng().gen::<f32>() < 0.3
+fn create_move_distribution(engine: &mut NegamaxEngine, board: &Board) -> MoveDistribution {
+    let moves: Vec<ChessMove> = MoveGen::new_legal(board).collect();
+    let mut evaluations = Vec::with_capacity(moves.len());
+
+    // Perform shallow search for each move
+    const SHALLOW_DEPTH: u8 = 2;
+    for &chess_move in &moves {
+        let mut board_copy = *board;
+        board_copy = board_copy.make_move_new(chess_move);
+
+        engine.set_position(board_copy);
+        let params = GoParams {
+            depth: Some(SHALLOW_DEPTH),
+            ..Default::default()
+        };
+
+        match engine.search(&params, None) {
+            Some((_, eval)) => {
+                evaluations.push(-eval);
+            }
+            None => {
+                let eval = match board_copy.status() {
+                    chess::BoardStatus::Checkmate => -29_000,
+                    chess::BoardStatus::Stalemate => 0,
+                    _ => 0,
+                };
+                evaluations.push(eval);
+            }
+        }
+    }
+
+    MoveDistribution::new(moves, evaluations)
 }
 
+// Select a move using weighted random based on evaluations
 #[inline]
-fn random_move(moves: &[ChessMove]) -> ChessMove {
-    let idx = rand::thread_rng().gen_range(0..moves.len());
-    moves[idx]
+fn weighted_random_move(distribution: &MoveDistribution) -> ChessMove {
+    if distribution.moves.is_empty() {
+        panic!("No legal moves available");
+    }
+
+    let min_eval = *distribution.evaluations.iter().min().unwrap();
+    let shift = if min_eval < 0 { -min_eval + 100 } else { 100 };
+
+    let weights: Vec<u32> = distribution
+        .evaluations
+        .iter()
+        .map(|&eval| (eval + shift).max(1) as u32) // Ensure positive weights
+        .collect();
+
+    match WeightedIndex::new(&weights) {
+        Ok(dist) => {
+            let mut rng = rand::thread_rng();
+            let index = dist.sample(&mut rng);
+            distribution.moves[index]
+        }
+        Err(_) => {
+            // Fallback to random selection if weighted selection fails
+            let mut rng = rand::thread_rng();
+            let index = rng.gen_range(0..distribution.moves.len());
+            distribution.moves[index]
+        }
+    }
 }
