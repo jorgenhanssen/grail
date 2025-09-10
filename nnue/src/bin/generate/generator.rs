@@ -258,6 +258,7 @@ impl SelfPlayWorker {
     fn reset_game(&mut self) {
         self.game = Game::new();
         self.positions_in_current_game.clear();
+        self.engine.new_game();
     }
 }
 
