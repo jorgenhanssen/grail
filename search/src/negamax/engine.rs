@@ -9,7 +9,7 @@ use crate::{
         },
     },
     utils::{
-        convert_centipawn_score, convert_mate_score, game_phase, see, Castle, HistoryHeuristic,
+        convert_centipawn_score, convert_mate_score, game_phase, see, HistoryHeuristic,
         MainMoveGenerator, QMoveGenerator,
     },
     Engine,
@@ -101,8 +101,13 @@ impl Engine for NegamaxEngine {
         format!("Negamax ({})", self.evaluator.name())
     }
 
+    fn new_game(&mut self) {
+        self.init_game();
+    }
+
     fn set_position(&mut self, board: Board) {
         self.board = board;
+        self.countermoves.on_new_position();
     }
 
     fn stop(&mut self) {
@@ -128,7 +133,7 @@ impl Engine for NegamaxEngine {
 
         self.init_search();
 
-        let mut controller = SearchController::new(params);
+        let mut controller = SearchController::new(params, &self.board);
         let stop = Arc::clone(&self.stop);
         controller.on_stop(move || stop.store(true, Ordering::Relaxed));
         controller.start_timer();
@@ -138,8 +143,9 @@ impl Engine for NegamaxEngine {
         let mut best_score = 0;
 
         while !self.stop.load(Ordering::Relaxed) && depth <= MAX_DEPTH as u8 {
-            controller.check_depth(depth);
-            if self.stop.load(Ordering::Relaxed) {
+            controller.on_iteration_start();
+
+            if !controller.should_continue_to_next_depth(depth) {
                 break;
             }
 
@@ -158,12 +164,17 @@ impl Engine for NegamaxEngine {
                     Pass::Hit(s) => {
                         best_move = mv;
                         best_score = s;
+
+                        controller.on_iteration_complete(depth, s, mv);
+
                         if let Some(out) = output {
                             self.send_search_info(out, depth, s, controller.elapsed());
                         }
                         break;
                     }
                     _ => {
+                        controller.on_aspiration_failure();
+
                         retries += 1;
 
                         if retries >= ASP_MAX_RETRIES {
@@ -183,6 +194,14 @@ impl Engine for NegamaxEngine {
 
 impl NegamaxEngine {
     #[inline(always)]
+    pub fn init_game(&mut self) {
+        self.tt.clear();
+        self.qs_tt.clear();
+        self.history_heuristic.reset();
+        self.countermoves.reset();
+    }
+
+    #[inline(always)]
     pub fn init_search(&mut self) {
         self.stop.store(false, Ordering::Relaxed);
 
@@ -197,9 +216,6 @@ impl NegamaxEngine {
         self.position_stack.clear();
         self.position_stack.push(self.board.get_hash());
         self.move_stack.clear();
-
-        self.history_heuristic.reset();
-        self.countermoves.reset();
     }
 
     pub fn search_root(
@@ -217,14 +233,12 @@ impl NegamaxEngine {
 
         // Negamax at root: call search_subtree with flipped window, then negate result
         while let Some(m) = moves.next(&self.board, &self.history_heuristic) {
-            let castle = Castle::new().update(&self.board, m);
-
             let new_board = self.board.make_move_new(m);
 
             self.position_stack.push(new_board.get_hash());
             self.move_stack.push(m);
             let (child_value, mut pv) =
-                self.search_subtree(&new_board, 1, depth, -beta, -alpha, true, true, castle);
+                self.search_subtree(&new_board, 1, depth, -beta, -alpha, true, true);
             let score = -child_value;
             self.position_stack.pop();
             self.move_stack.pop();
@@ -258,7 +272,6 @@ impl NegamaxEngine {
         beta: i16,
         try_null_move: bool,
         allow_iid: bool,
-        castle: Castle,
     ) -> (i16, Vec<ChessMove>) {
         if self.stop.load(Ordering::Relaxed) {
             return (0, Vec::new());
@@ -277,7 +290,7 @@ impl NegamaxEngine {
             BoardStatus::Ongoing => {}
         }
         if depth >= max_depth {
-            return self.quiescence_search(board, alpha, beta, depth, castle);
+            return self.quiescence_search(board, alpha, beta, depth);
         }
 
         // Transposition table probe
@@ -307,17 +320,11 @@ impl NegamaxEngine {
 
         // Some pruning uses static eval
         let static_eval =
-            self.static_eval_if_needed(board, castle, remaining_depth, in_check, is_pv_node, phase);
+            self.static_eval_if_needed(board, remaining_depth, in_check, is_pv_node, phase);
 
-        if let Some(score) = self.try_razor_prune(
-            board,
-            remaining_depth,
-            alpha,
-            depth,
-            castle,
-            in_check,
-            static_eval,
-        ) {
+        if let Some(score) =
+            self.try_razor_prune(board, remaining_depth, alpha, depth, in_check, static_eval)
+        {
             return (score, Vec::new());
         }
 
@@ -328,7 +335,6 @@ impl NegamaxEngine {
             alpha,
             beta,
             hash,
-            castle,
             remaining_depth,
             in_check,
             try_null_move,
@@ -358,7 +364,6 @@ impl NegamaxEngine {
             alpha,
             beta,
             try_null_move,
-            castle,
             allow_iid,
             maybe_tt_move.is_none(),
             remaining_depth,
@@ -386,7 +391,6 @@ impl NegamaxEngine {
 
             if let Some((value, mut line, is_quiet)) = self.search_move(
                 board,
-                castle,
                 depth,
                 max_depth,
                 alpha,
@@ -440,7 +444,6 @@ impl NegamaxEngine {
     fn search_move(
         &mut self,
         board: &Board,
-        castle: Castle,
         depth: u8,
         max_depth: u8,
         alpha: i16,
@@ -451,7 +454,6 @@ impl NegamaxEngine {
         move_index: i32,
         static_eval: Option<i16>,
     ) -> Option<(i16, Vec<ChessMove>, bool)> {
-        let new_castle = castle.update(board, m);
         let new_board = board.make_move_new(m);
         let gives_check = new_board.checkers().popcnt() > 0;
 
@@ -512,7 +514,6 @@ impl NegamaxEngine {
             -alpha_child,
             true,
             true,
-            new_castle,
         );
         self.move_stack.pop();
         let mut value = -child_value;
@@ -528,7 +529,6 @@ impl NegamaxEngine {
                 -alpha_child,
                 true,
                 true,
-                new_castle,
             );
             self.move_stack.pop();
             value = -re_child_value;
@@ -537,16 +537,8 @@ impl NegamaxEngine {
 
         if !is_pv_move && value > alpha {
             self.move_stack.push(m);
-            let (full_child_value, full_line) = self.search_subtree(
-                &new_board,
-                depth + 1,
-                max_depth,
-                -beta,
-                -alpha,
-                true,
-                true,
-                new_castle,
-            );
+            let (full_child_value, full_line) =
+                self.search_subtree(&new_board, depth + 1, max_depth, -beta, -alpha, true, true);
             self.move_stack.pop();
             value = -full_child_value;
             line = full_line;
@@ -564,7 +556,6 @@ impl NegamaxEngine {
         mut alpha: i16,
         beta: i16,
         depth: u8,
-        castle: Castle,
     ) -> (i16, Vec<ChessMove>) {
         // Check if we should stop searching
         if self.stop.load(Ordering::Relaxed) {
@@ -589,31 +580,34 @@ impl NegamaxEngine {
             BoardStatus::Ongoing => {}
         }
 
-        // Check cache
-        if let Some(cached_score) = self.qs_tt.probe(hash) {
-            return (cached_score, Vec::new());
+        let in_check = board.checkers().popcnt() > 0;
+
+        let original_alpha = alpha;
+        let original_beta = beta;
+
+        if let Some((cached_value, cached_bound)) = self.qs_tt.probe(hash, in_check) {
+            match cached_bound {
+                Bound::Exact => return (cached_value, Vec::new()),
+                Bound::Lower if cached_value >= beta => return (cached_value, Vec::new()),
+                Bound::Upper if cached_value <= alpha => return (cached_value, Vec::new()),
+                _ => {}
+            }
         }
 
         let phase = game_phase(board);
 
-        let eval = self.evaluator.evaluate(
-            board,
-            castle.white_has_castled(),
-            castle.black_has_castled(),
-            phase,
-        );
+        let eval = self.evaluator.evaluate(board, phase);
         let stand_pat = if board.side_to_move() == Color::White {
             eval
         } else {
             -eval
         };
 
-        let in_check = board.checkers().popcnt() > 0;
-
         // Do a "stand-pat" evaluation if not in check
         if !in_check {
             if stand_pat >= beta {
-                self.qs_tt.store(hash, stand_pat);
+                self.qs_tt
+                    .store(hash, stand_pat, original_alpha, original_beta, in_check);
                 return (stand_pat, Vec::new());
             }
 
@@ -634,7 +628,8 @@ impl NegamaxEngine {
                 }
 
                 if stand_pat + big_delta < alpha {
-                    self.qs_tt.store(hash, stand_pat);
+                    self.qs_tt
+                        .store(hash, stand_pat, original_alpha, original_beta, in_check);
                     return (stand_pat, Vec::new());
                 }
             }
@@ -674,7 +669,7 @@ impl NegamaxEngine {
 
             self.position_stack.push(new_board.get_hash());
             let (child_score, mut child_line) =
-                self.quiescence_search(&new_board, -beta, -alpha, depth + 1, castle);
+                self.quiescence_search(&new_board, -beta, -alpha, depth + 1);
             self.position_stack.pop();
 
             let value = -child_score;
@@ -696,7 +691,8 @@ impl NegamaxEngine {
             }
         }
 
-        self.qs_tt.store(hash, best_eval);
+        self.qs_tt
+            .store(hash, best_eval, original_alpha, original_beta, in_check);
         (best_eval, best_line)
     }
 
@@ -764,7 +760,6 @@ impl NegamaxEngine {
     fn static_eval_if_needed(
         &mut self,
         board: &Board,
-        castle: Castle,
         remaining_depth: u8,
         in_check: bool,
         is_pv_node: bool,
@@ -778,12 +773,7 @@ impl NegamaxEngine {
             return None;
         }
 
-        let eval = self.evaluator.evaluate(
-            board,
-            castle.white_has_castled(),
-            castle.black_has_castled(),
-            phase,
-        );
+        let eval = self.evaluator.evaluate(board, phase);
         if board.side_to_move() == Color::White {
             Some(eval)
         } else {
@@ -817,7 +807,6 @@ impl NegamaxEngine {
         remaining_depth: u8,
         alpha: i16,
         depth: u8,
-        castle: Castle,
         in_check: bool,
         static_eval: Option<i16>,
     ) -> Option<i16> {
@@ -830,7 +819,7 @@ impl NegamaxEngine {
             return None;
         }
         // Q search with null window
-        let (value, _) = self.quiescence_search(board, alpha - 1, alpha, depth, castle);
+        let (value, _) = self.quiescence_search(board, alpha - 1, alpha, depth);
         if value < alpha && value.abs() < RAZOR_NEAR_MATE {
             Some(value)
         } else {
@@ -848,7 +837,6 @@ impl NegamaxEngine {
         alpha: i16,
         beta: i16,
         hash: u64,
-        castle: Castle,
         remaining_depth: u8,
         in_check: bool,
         try_null_move: bool,
@@ -874,7 +862,6 @@ impl NegamaxEngine {
                 -beta + 1, // null window
                 false,     // Null moves cannot be done in sequence, so disable for next move
                 false,     // also disable IID under null move
-                castle,
             );
             self.position_stack.pop();
 
@@ -925,7 +912,6 @@ impl NegamaxEngine {
         alpha: i16,
         beta: i16,
         try_null_move: bool,
-        castle: Castle,
         allow_iid: bool,
         need_iid: bool,
         remaining_depth: u8,
@@ -944,7 +930,6 @@ impl NegamaxEngine {
             beta,
             try_null_move,
             false, // disable nested IID
-            castle,
         );
         shallow_line.first().copied()
     }

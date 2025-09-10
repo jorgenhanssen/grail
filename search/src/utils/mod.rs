@@ -1,4 +1,3 @@
-mod castling;
 mod countermove;
 mod history_heuristic;
 mod move_order;
@@ -7,7 +6,6 @@ mod see;
 use chess::{Board, Piece};
 pub use move_order::{MainMoveGenerator, QMoveGenerator};
 
-pub use castling::Castle;
 pub use countermove::CountermoveTable;
 use evaluation::scores::MATE_VALUE;
 pub use history_heuristic::HistoryHeuristic;
@@ -20,8 +18,23 @@ pub fn is_zugzwang(board: &Board) -> bool {
     let pawn_bits = *board.pieces(Piece::Pawn) & side_bits;
     let king_bits = *board.pieces(Piece::King) & side_bits;
 
-    // King + pawn endgame is typical zugzwang
-    (side_bits ^ pawn_bits ^ king_bits).popcnt() == 0
+    // Only king and pawns (common zugzwang scenario)
+    if side_bits == (pawn_bits | king_bits) {
+        return true;
+    }
+
+    // Positions with no pawns and no major pieces and at most
+    // one minor piece are also prone to null-move failures.
+    let knight_bits = *board.pieces(Piece::Knight) & side_bits;
+    let bishop_bits = *board.pieces(Piece::Bishop) & side_bits;
+    let rook_bits = *board.pieces(Piece::Rook) & side_bits;
+    let queen_bits = *board.pieces(Piece::Queen) & side_bits;
+
+    let has_pawns = pawn_bits.popcnt() > 0;
+    let has_major = (rook_bits | queen_bits).popcnt() > 0;
+    let minor_count = (knight_bits | bishop_bits).popcnt();
+
+    !has_pawns && !has_major && minor_count <= 1
 }
 
 #[inline(always)]

@@ -16,7 +16,7 @@ pub struct NNUE {
 
 impl NNUE {
     pub fn new(varmap: &VarMap, device: &Device, version: u32) -> Self {
-        let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
+        let vs = VarBuilder::from_varmap(varmap, DType::F32, device);
         let network = Network::new(&vs).unwrap();
         let nnue_network = NNUENetwork::from_network(&network).unwrap();
 
@@ -38,7 +38,7 @@ impl Evaluator for NNUE {
     }
 
     #[inline(always)]
-    fn evaluate(&mut self, board: &Board, _: bool, _: bool, _: f32) -> i16 {
+    fn evaluate(&mut self, board: &Board, _: f32) -> i16 {
         let encoded_board = encode_board(board);
         self.nnue_network
             .forward(&encoded_board)

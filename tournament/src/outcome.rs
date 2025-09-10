@@ -93,11 +93,12 @@ impl fmt::Display for GameOutcome {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{} vs {}: {} ({} moves)",
+            "{} vs {}: {} ({} moves) - {:?}",
             trim_engine_name(&self.white_name),
             trim_engine_name(&self.black_name),
             game_result_to_pgn(self.result),
             self.moves.len(),
+            self.result,
         )
     }
 }
