@@ -466,15 +466,7 @@ impl NegamaxEngine {
         let is_tactical = in_check || gives_check || is_capture || is_promotion;
 
         // SEE pruning
-        if self.try_see_prune(
-            board,
-            m,
-            piece,
-            capturee,
-            in_check,
-            is_promotion,
-            remaining_depth,
-        ) {
+        if self.try_see_prune(board, m, piece, capturee, in_check, is_promotion) {
             return None;
         }
 
@@ -916,9 +908,8 @@ impl NegamaxEngine {
         capturee: Option<Piece>,
         in_check: bool,
         is_promotion: bool,
-        remaining_depth: u8,
     ) -> bool {
-        if capturee.is_none() || in_check || is_promotion || remaining_depth <= 3 {
+        if capturee.is_none() || in_check || is_promotion {
             return false;
         }
 
