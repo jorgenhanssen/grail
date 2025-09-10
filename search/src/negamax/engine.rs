@@ -466,13 +466,16 @@ impl NegamaxEngine {
         let is_tactical = in_check || gives_check || is_capture || is_promotion;
 
         // SEE pruning
-        if is_capture && !in_check && !is_promotion && remaining_depth > 3 {
-            let phase = game_phase(board);
-
-            // Only SEE if it's a major piece, then prune if it's obviously losing
-            if piece_value(piece, phase) > 200 && see(board, m, phase) < -400 {
-                return None;
-            }
+        if self.try_see_prune(
+            board,
+            m,
+            piece,
+            capturee,
+            in_check,
+            is_promotion,
+            remaining_depth,
+        ) {
+            return None;
         }
 
         // Futility prune
@@ -901,6 +904,28 @@ impl NegamaxEngine {
             return Some(beta);
         }
         None
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
+    fn try_see_prune(
+        &self,
+        board: &Board,
+        m: ChessMove,
+        piece: Piece,
+        capturee: Option<Piece>,
+        in_check: bool,
+        is_promotion: bool,
+        remaining_depth: u8,
+    ) -> bool {
+        if capturee.is_none() || in_check || is_promotion || remaining_depth <= 3 {
+            return false;
+        }
+
+        let phase = game_phase(board);
+
+        // Only SEE if it's a major piece, then prune if it's obviously losing
+        piece_value(piece, phase) > 200 && see(board, m, phase) < -400
     }
 
     #[allow(clippy::too_many_arguments)]
