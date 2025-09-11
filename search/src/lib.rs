@@ -1,3 +1,5 @@
+#![feature(portable_simd)]
+
 mod def;
 mod negamax;
 mod utils;
