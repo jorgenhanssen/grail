@@ -63,6 +63,7 @@ impl HistoryHeuristic {
         is_tactical: bool,
         is_pv_move: bool,
         move_index: i32,
+        is_improving: bool,
         reduction: &mut u8,
     ) -> bool {
         if !(remaining_depth > 0
@@ -80,10 +81,16 @@ impl HistoryHeuristic {
         let hist_score = self.get(color, source, dest);
 
         if hist_score < HISTORY_REDUCE_THRESHOLD {
-            *reduction = reduction.saturating_add(1);
+            // Only apply additional reductions/pruning when position isn't improving
+            if !is_improving {
+                *reduction = reduction.saturating_add(1);
+            }
 
             let projected_child_max = max_depth.saturating_sub(*reduction);
-            if hist_score < HISTORY_LEAF_THRESHOLD && projected_child_max <= depth + 1 {
+            if !is_improving
+                && hist_score < HISTORY_LEAF_THRESHOLD
+                && projected_child_max <= depth + 1
+            {
                 return true; // prune
             }
         }

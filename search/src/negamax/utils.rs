@@ -18,7 +18,13 @@ pub const RAZOR_MARGINS: [i16; RAZOR_MAX_DEPTH as usize + 1] = {
 };
 
 #[inline(always)]
-pub fn lmr(remaining_depth: u8, tactical: bool, move_index: i32) -> u8 {
+pub fn lmr(
+    remaining_depth: u8,
+    tactical: bool,
+    move_index: i32,
+    is_pv_move: bool,
+    is_improving: bool,
+) -> u8 {
     if tactical || remaining_depth < 3 || move_index < 3 {
         return 0;
     }
@@ -26,7 +32,12 @@ pub fn lmr(remaining_depth: u8, tactical: bool, move_index: i32) -> u8 {
     let depth_factor = (remaining_depth as f32).ln();
     let move_factor = (move_index as f32).ln();
 
-    let reduction = (depth_factor * move_factor / 2.5).round() as u8;
+    let mut reduction = (depth_factor * move_factor / 2.5).round() as u8;
+
+    // Additional reduction for non-improving positions on quiet late non-PV moves
+    if !tactical && move_index >= 3 && !is_pv_move && !is_improving {
+        reduction = reduction.saturating_add(1);
+    }
 
     // Clamp between 0 and half the remaining depth
     let half_depth = (remaining_depth / 2).max(1);
@@ -58,10 +69,21 @@ pub fn can_futility_prune(remaining_depth: u8, in_check: bool) -> bool {
 // Reverse Futility Pruning (static beta pruning)
 pub const RFP_MAX_DEPTH: u8 = 3;
 pub const RFP_MARGINS: [i16; RFP_MAX_DEPTH as usize + 1] = [0, 150, 250, 400];
+const IMPROVING_RFP_DELTA: i16 = 50; // Add or subtract based on improving signal
 
 #[inline(always)]
 pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool, is_pv_node: bool) -> bool {
     remaining_depth <= RFP_MAX_DEPTH && remaining_depth > 0 && !in_check && !is_pv_node
+}
+
+#[inline(always)]
+pub fn rfp_margin(remaining_depth: u8, is_improving: bool) -> i16 {
+    let margin = RFP_MARGINS[remaining_depth as usize];
+    if is_improving {
+        margin.saturating_sub(IMPROVING_RFP_DELTA)
+    } else {
+        margin.saturating_add(IMPROVING_RFP_DELTA)
+    }
 }
 
 #[inline(always)]
