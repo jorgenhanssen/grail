@@ -1,5 +1,7 @@
 use super::tt_table::Bound;
 use std::mem::size_of;
+use std::simd::prelude::SimdPartialEq;
+use std::simd::u64x4;
 
 const CLUSTER_SIZE: usize = 4;
 const MIN_BUCKETS: usize = 1024;
@@ -8,10 +10,9 @@ const MIN_BUCKETS: usize = 1024;
 #[repr(C)]
 struct QSEntry {
     // 0 denotes empty
-    key: u64,
+    key: u64, // lower 63 bits: hash, bit 63: in_check flag
     value: i16,
     bound: Bound,
-    in_check: bool,
 }
 
 pub struct QSTable {
@@ -40,22 +41,39 @@ impl QSTable {
 
     #[inline(always)]
     pub fn clear(&mut self) {
-        self.entries.fill(QSEntry::default());
+        unsafe {
+            let ptr = self.entries.as_mut_ptr() as *mut u8;
+            let size = self.entries.len() * size_of::<QSEntry>();
+            std::ptr::write_bytes(ptr, 0, size);
+        }
     }
 
     #[inline(always)]
-    fn cluster_start(&self, hash: u64) -> usize {
-        let idx = (hash as usize) & self.mask;
+    fn cluster_start(&self, mixed_key: u64) -> usize {
+        let idx = (mixed_key as usize) & self.mask;
         idx * CLUSTER_SIZE
     }
 
     #[inline(always)]
     pub fn probe(&self, hash: u64, in_check: bool) -> Option<(i16, Bound)> {
-        let start = self.cluster_start(hash);
+        let mixed = mix_key(hash, in_check);
+        let start = self.cluster_start(mixed);
         let end = start + CLUSTER_SIZE;
         let cluster = &self.entries[start..end];
-        for e in cluster {
-            if e.key == hash && e.in_check == in_check {
+
+        // SIMD compare 4 keys at once
+        let keys = u64x4::from_array([
+            cluster[0].key,
+            cluster[1].key,
+            cluster[2].key,
+            cluster[3].key,
+        ]);
+        let target = u64x4::splat(mixed);
+        let mask = keys.simd_eq(target);
+
+        for i in 0..4 {
+            if mask.test(i) {
+                let e = &cluster[i];
                 return Some((e.value, e.bound));
             }
         }
@@ -72,13 +90,14 @@ impl QSTable {
             Bound::Exact
         };
 
-        let start = self.cluster_start(hash);
+        let mixed = mix_key(hash, in_check);
+        let start = self.cluster_start(mixed);
         let end = start + CLUSTER_SIZE;
         let cluster = &mut self.entries[start..end];
 
         // Exact hit
         for e in cluster.iter_mut() {
-            if e.key == hash && e.in_check == in_check {
+            if e.key == mixed {
                 e.value = value;
                 e.bound = bound;
                 return;
@@ -88,18 +107,35 @@ impl QSTable {
         // Empty slot
         for e in cluster.iter_mut() {
             if e.key == 0 {
-                e.key = hash;
+                e.key = mixed;
                 e.value = value;
                 e.bound = bound;
-                e.in_check = in_check;
                 return;
             }
         }
 
-        // Replace arbitrary victim (round-robin: slot 0)
-        cluster[0].key = hash;
-        cluster[0].value = value;
-        cluster[0].bound = bound;
-        cluster[0].in_check = in_check;
+        // Prefer replacing a non-Exact bound; otherwise slot 0
+        if let Some((idx, _)) = cluster
+            .iter()
+            .enumerate()
+            .find(|(_, e)| e.bound != Bound::Exact)
+        {
+            cluster[idx].key = mixed;
+            cluster[idx].value = value;
+            cluster[idx].bound = bound;
+        } else {
+            cluster[0].key = mixed;
+            cluster[0].value = value;
+            cluster[0].bound = bound;
+        }
+    }
+}
+
+#[inline(always)]
+fn mix_key(hash: u64, in_check: bool) -> u64 {
+    if in_check {
+        hash ^ 0x1
+    } else {
+        hash
     }
 }
