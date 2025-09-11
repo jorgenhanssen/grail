@@ -68,7 +68,7 @@ impl SearchController {
 
         // Always allow the first iterations regardless of time gates.
         // Ensures we can produce at least one best move under extreme low time.
-        if next_depth <= 3 {
+        if next_depth <= 2 {
             return true;
         }
 

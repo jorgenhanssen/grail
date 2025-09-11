@@ -466,7 +466,15 @@ impl NegamaxEngine {
         let is_tactical = in_check || gives_check || is_capture || is_promotion;
 
         // SEE pruning
-        if self.try_see_prune(board, m, piece, capturee, in_check, is_promotion) {
+        if self.try_see_prune(
+            board,
+            m,
+            piece,
+            capturee,
+            in_check,
+            is_promotion,
+            remaining_depth,
+        ) {
             return None;
         }
 
@@ -904,10 +912,11 @@ impl NegamaxEngine {
         &self,
         board: &Board,
         m: ChessMove,
-        piece: Piece,
+        capturer: Piece,
         capturee: Option<Piece>,
         in_check: bool,
         is_promotion: bool,
+        remaining_depth: u8,
     ) -> bool {
         if capturee.is_none() || in_check || is_promotion {
             return false;
@@ -915,8 +924,18 @@ impl NegamaxEngine {
 
         let phase = game_phase(board);
 
-        // Only SEE if it's a major piece, then prune if it's obviously losing
-        piece_value(piece, phase) > 200 && see(board, m, phase) < -400
+        // Run SEE only if the capturer is worth more than a pawn to avoid
+        // overhead on trivial exchanges
+        if piece_value(capturer, phase) <= 200 {
+            return false;
+        }
+
+        // Prune clearly losing captures using a depth‑scaled margin.
+        // Larger margins early in the tree (more aggressive), smaller near the
+        // horizon (more conservative), preserving tactical sacrifices while
+        // cutting obviously bad trades.
+        let margin: i16 = (100 * remaining_depth as i16).clamp(200, 800);
+        see(board, m, phase) < -margin
     }
 
     #[allow(clippy::too_many_arguments)]
