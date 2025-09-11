@@ -457,26 +457,10 @@ impl NegamaxEngine {
         let new_board = board.make_move_new(m);
         let gives_check = new_board.checkers().popcnt() > 0;
 
-        let capturee = board.piece_on(m.get_dest());
-        let piece = board.piece_on(m.get_source()).unwrap();
-
         // Consider move tactical if it's check, capture, or promotion
-        let is_capture = capturee.is_some();
+        let is_capture = board.piece_on(m.get_dest()).is_some();
         let is_promotion = m.get_promotion() == Some(Piece::Queen);
         let is_tactical = in_check || gives_check || is_capture || is_promotion;
-
-        // SEE pruning
-        if self.try_see_prune(
-            board,
-            m,
-            piece,
-            capturee,
-            in_check,
-            is_promotion,
-            remaining_depth,
-        ) {
-            return None;
-        }
 
         // Futility prune
         if self.try_futility_prune(remaining_depth, in_check, is_tactical, alpha, static_eval) {
@@ -904,38 +888,6 @@ impl NegamaxEngine {
             return Some(beta);
         }
         None
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    #[inline(always)]
-    fn try_see_prune(
-        &self,
-        board: &Board,
-        m: ChessMove,
-        capturer: Piece,
-        capturee: Option<Piece>,
-        in_check: bool,
-        is_promotion: bool,
-        remaining_depth: u8,
-    ) -> bool {
-        if capturee.is_none() || in_check || is_promotion {
-            return false;
-        }
-
-        let phase = game_phase(board);
-
-        // Run SEE only if the capturer is worth more than a pawn to avoid
-        // overhead on trivial exchanges
-        if piece_value(capturer, phase) <= 200 {
-            return false;
-        }
-
-        // Prune clearly losing captures using a depth‑scaled margin.
-        // Larger margins early in the tree (more aggressive), smaller near the
-        // horizon (more conservative), preserving tactical sacrifices while
-        // cutting obviously bad trades.
-        let margin: i16 = (100 * remaining_depth as i16).clamp(200, 800);
-        see(board, m, phase) < -margin
     }
 
     #[allow(clippy::too_many_arguments)]
