@@ -76,8 +76,8 @@ impl Default for NegamaxEngine {
             evaluator: Box::new(TraditionalEvaluator),
 
             window: AspirationWindow::new(ASP_HALF_START, ASP_WIDEN, ASP_ENABLED_FROM),
-            tt: TranspositionTable::new(64),
-            qs_tt: QSTable::new(16),
+            tt: TranspositionTable::new(32),
+            qs_tt: QSTable::new(8),
 
             position_stack: Vec::with_capacity(100),
             move_stack: Vec::with_capacity(100),
@@ -296,8 +296,10 @@ impl NegamaxEngine {
         // Transposition table probe
         let original_alpha = alpha;
         let mut maybe_tt_move = None;
-        if let Some((tt_value, tt_bound, tt_move)) = self.tt.probe(hash, depth, max_depth) {
+        let mut tt_static_eval = None;
+        if let Some((tt_value, tt_bound, tt_move, tt_se)) = self.tt.probe(hash, depth, max_depth) {
             maybe_tt_move = tt_move;
+            tt_static_eval = Some(tt_se);
             match tt_bound {
                 Bound::Exact => return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m])),
                 Bound::Lower => alpha = alpha.max(tt_value),
@@ -318,14 +320,32 @@ impl NegamaxEngine {
         let in_check = board.checkers().popcnt() > 0;
         let is_pv_node = beta > alpha + 1;
 
-        // Some pruning uses static eval
-        let static_eval =
-            self.static_eval_if_needed(board, remaining_depth, in_check, is_pv_node, phase);
+        // Use TT static eval if available, otherwise calculate if needed
+        // When we have TT static eval, we can be more aggressive with pruning
+        let static_eval = if let Some(tt_se) = tt_static_eval {
+            Some(tt_se)
+        } else {
+            self.static_eval_if_needed(board, remaining_depth, in_check, is_pv_node, phase)
+        };
 
         if let Some(score) =
             self.try_razor_prune(board, remaining_depth, alpha, depth, in_check, static_eval)
         {
             return (score, Vec::new());
+        }
+
+        // Additional TT-based pruning when we have static eval from TT
+        if let Some(se) = tt_static_eval {
+            if let Some(score) = self.try_tt_static_eval_prune(
+                remaining_depth,
+                in_check,
+                is_pv_node,
+                se,
+                alpha,
+                beta,
+            ) {
+                return (score, Vec::new());
+            }
         }
 
         if let Some(score) = self.try_null_move_prune(
@@ -427,11 +447,13 @@ impl NegamaxEngine {
             }
         }
 
+        let static_eval_value = static_eval.unwrap_or(0);
         self.tt.store(
             hash,
             depth,
             max_depth,
             best_value,
+            static_eval_value,
             original_alpha,
             beta,
             best_move,
@@ -815,6 +837,36 @@ impl NegamaxEngine {
         }
     }
 
+    #[inline(always)]
+    fn try_tt_static_eval_prune(
+        &self,
+        remaining_depth: u8,
+        in_check: bool,
+        is_pv_node: bool,
+        tt_static_eval: i16,
+        alpha: i16,
+        beta: i16,
+    ) -> Option<i16> {
+        // Don't prune in check, in PV nodes, or at high depths
+        if in_check || is_pv_node || remaining_depth > 3 {
+            return None;
+        }
+
+        // Conservative TT-based reverse futility pruning
+        // If TT static eval is way above beta, likely we'll get a beta cutoff
+        if remaining_depth <= 2 && tt_static_eval >= beta + 150 {
+            return Some(beta);
+        }
+
+        // Conservative TT-based futility pruning
+        // If TT static eval is way below alpha, unlikely to raise alpha
+        if remaining_depth <= 2 && tt_static_eval <= alpha - 200 {
+            return Some(alpha);
+        }
+
+        None
+    }
+
     #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     fn try_null_move_prune(
@@ -856,7 +908,7 @@ impl NegamaxEngine {
             // If opponent still can't reach beta, prune this branch
             if -score >= beta {
                 self.tt
-                    .store(hash, depth, max_depth, beta, alpha, beta, None);
+                    .store(hash, depth, max_depth, beta, 0, alpha, beta, None);
                 return Some(beta);
             }
         }
@@ -884,7 +936,7 @@ impl NegamaxEngine {
         let se = static_eval?;
         if se - RFP_MARGINS[remaining_depth as usize] >= beta && se.abs() < RAZOR_NEAR_MATE {
             self.tt
-                .store(hash, depth, max_depth, beta, alpha, beta, None);
+                .store(hash, depth, max_depth, beta, se, alpha, beta, None);
             return Some(beta);
         }
         None
