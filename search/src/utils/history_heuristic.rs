@@ -3,7 +3,7 @@ use chess::{Board, ChessMove, Color, Square, NUM_COLORS, NUM_SQUARES};
 const MAX_HISTORY: i32 = 16_384;
 const MAX_DEPTH: usize = 100;
 const HISTORY_REDUCE_THRESHOLD: i16 = 0; // reduce quiet late moves if history <= 0
-const HISTORY_LEAF_THRESHOLD: i16 = -1000; // prune quiet late moves if history very low
+const HISTORY_LEAF_THRESHOLD: i16 = -1200; // slightly stricter to avoid over-pruning
 const HISTORY_MOVE_GATE: i32 = 5; // only consider after some moves have been tried
 
 #[derive(Clone)]

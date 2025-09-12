@@ -69,7 +69,7 @@ pub fn can_futility_prune(remaining_depth: u8, in_check: bool) -> bool {
 // Reverse Futility Pruning (static beta pruning)
 pub const RFP_MAX_DEPTH: u8 = 3;
 pub const RFP_MARGINS: [i16; RFP_MAX_DEPTH as usize + 1] = [0, 150, 250, 400];
-const IMPROVING_RFP_DELTA: i16 = 50; // Add or subtract based on improving signal
+const IMPROVING_RFP_DELTA: i16 = 25; // Add or subtract based on improving signal
 
 #[inline(always)]
 pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool, is_pv_node: bool) -> bool {

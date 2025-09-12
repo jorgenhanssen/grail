@@ -346,20 +346,6 @@ impl NegamaxEngine {
             return (score, Vec::new());
         }
 
-        // Additional TT-based pruning when we have static eval from TT
-        if let Some(se) = tt_static_eval {
-            if let Some(score) = self.try_tt_static_eval_prune(
-                remaining_depth,
-                in_check,
-                is_pv_node,
-                se,
-                alpha,
-                beta,
-            ) {
-                return (score, Vec::new());
-            }
-        }
-
         if let Some(score) = self.try_null_move_prune(
             board,
             depth,
@@ -767,7 +753,7 @@ impl NegamaxEngine {
     }
 
     /// Determines if the current position is improving compared to two plies ago.
-    /// Only considers positions that are deep enough and not in check.
+    /// Only considers positions that are deep enough, not in check, and not near mate.
     #[inline(always)]
     fn is_position_improving(
         &self,
@@ -775,10 +761,15 @@ impl NegamaxEngine {
         in_check: bool,
         remaining_depth: u8,
     ) -> bool {
-        !in_check
-            && remaining_depth >= 3
-            && self.eval_stack.len() >= 2
-            && current_eval > self.eval_stack[self.eval_stack.len() - 2]
+        if in_check || remaining_depth < 3 || self.eval_stack.len() < 2 {
+            return false;
+        }
+        const IMPROVEMENT_EVAL_DELTA: i16 = 30; // ignore small eval noise
+        let prev_eval = self.eval_stack[self.eval_stack.len() - 2];
+        if current_eval.abs() >= RAZOR_NEAR_MATE || prev_eval.abs() >= RAZOR_NEAR_MATE {
+            return false;
+        }
+        current_eval >= prev_eval + IMPROVEMENT_EVAL_DELTA
     }
 
     fn send_search_info(
@@ -848,36 +839,6 @@ impl NegamaxEngine {
         } else {
             None
         }
-    }
-
-    #[inline(always)]
-    fn try_tt_static_eval_prune(
-        &self,
-        remaining_depth: u8,
-        in_check: bool,
-        is_pv_node: bool,
-        tt_static_eval: i16,
-        alpha: i16,
-        beta: i16,
-    ) -> Option<i16> {
-        // Don't prune in check, in PV nodes, or at high depths
-        if in_check || is_pv_node || remaining_depth > 3 {
-            return None;
-        }
-
-        // Conservative TT-based reverse futility pruning
-        // If TT static eval is way above beta, likely we'll get a beta cutoff
-        if remaining_depth <= 2 && tt_static_eval >= beta + 150 {
-            return Some(beta);
-        }
-
-        // Conservative TT-based futility pruning
-        // If TT static eval is way below alpha, unlikely to raise alpha
-        if remaining_depth <= 2 && tt_static_eval <= alpha - 200 {
-            return Some(alpha);
-        }
-
-        None
     }
 
     #[allow(clippy::too_many_arguments)]
