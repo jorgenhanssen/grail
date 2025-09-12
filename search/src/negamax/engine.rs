@@ -205,7 +205,6 @@ impl NegamaxEngine {
     pub fn init_search(&mut self) {
         self.stop.store(false, Ordering::Relaxed);
 
-        self.tt.clear();
         self.qs_tt.clear();
 
         self.killer_moves = [[None; 2]; MAX_DEPTH]; // 2 killer moves per depth
@@ -285,7 +284,7 @@ impl NegamaxEngine {
 
         // Terminal checks
         match board.status() {
-            BoardStatus::Checkmate => return (-MATE_VALUE + depth as i16, Vec::new()),
+            BoardStatus::Checkmate => return (-(MATE_VALUE - depth as i16), Vec::new()),
             BoardStatus::Stalemate => return (0, Vec::new()),
             BoardStatus::Ongoing => {}
         }
@@ -297,28 +296,36 @@ impl NegamaxEngine {
         let original_alpha = alpha;
         let mut maybe_tt_move = None;
         let mut tt_static_eval = None;
+
+        let is_pv_node = beta > alpha + 1;
+
         if let Some((tt_value, tt_bound, tt_move, tt_se)) = self.tt.probe(hash, depth, max_depth) {
             maybe_tt_move = tt_move;
-            tt_static_eval = Some(tt_se);
+            tt_static_eval = tt_se;
             match tt_bound {
                 Bound::Exact => return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m])),
-                Bound::Lower => alpha = alpha.max(tt_value),
+                Bound::Lower => {
+                    alpha = alpha.max(tt_value);
+                    if alpha >= beta {
+                        return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m]));
+                    }
+                }
                 Bound::Upper => {
                     if tt_value <= alpha {
                         return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m]));
                     }
                 }
             }
-            if alpha >= beta {
-                return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m]));
-            }
+        } else if let Some((tt_move, tt_se)) = self.tt.probe_hint(hash) {
+            // Use shallow entry as hint for move ordering and static eval caching
+            maybe_tt_move = tt_move;
+            tt_static_eval = tt_se;
         }
 
         let phase = game_phase(board);
 
         let remaining_depth = max_depth - depth;
         let in_check = board.checkers().popcnt() > 0;
-        let is_pv_node = beta > alpha + 1;
 
         // Use TT static eval if available, otherwise calculate if needed
         // When we have TT static eval, we can be more aggressive with pruning
@@ -384,6 +391,8 @@ impl NegamaxEngine {
         let mut best_move = None;
         let mut best_line = Vec::new();
 
+        let mut best_move_depth = depth;
+
         let mut movegen = MainMoveGenerator::new(
             maybe_tt_move,
             self.killer_moves[depth as usize],
@@ -395,7 +404,7 @@ impl NegamaxEngine {
         while let Some(m) = movegen.next(board, &self.history_heuristic) {
             move_index += 1;
 
-            if let Some((value, mut line, is_quiet)) = self.search_move(
+            if let Some((value, mut line, is_quiet, child_depth)) = self.search_move(
                 board,
                 depth,
                 max_depth,
@@ -416,6 +425,7 @@ impl NegamaxEngine {
                     best_move = Some(m);
                     line.insert(0, m);
                     best_line = line;
+                    best_move_depth = child_depth;
                 }
 
                 alpha = alpha.max(best_value);
@@ -433,13 +443,13 @@ impl NegamaxEngine {
             }
         }
 
-        let static_eval_value = static_eval.unwrap_or(0);
+        // Store TT entry with the depth actually searched for the best move
         self.tt.store(
             hash,
             depth,
-            max_depth,
+            best_move_depth,
             best_value,
-            static_eval_value,
+            static_eval,
             original_alpha,
             beta,
             best_move,
@@ -461,7 +471,7 @@ impl NegamaxEngine {
         m: ChessMove,
         move_index: i32,
         static_eval: Option<i16>,
-    ) -> Option<(i16, Vec<ChessMove>, bool)> {
+    ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
         let new_board = board.make_move_new(m);
         let gives_check = new_board.checkers().popcnt() > 0;
 
@@ -499,6 +509,7 @@ impl NegamaxEngine {
         }
 
         let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
+        let mut actual_depth = child_max_depth;
 
         self.position_stack.push(new_board.get_hash());
         self.move_stack.push(m);
@@ -529,6 +540,7 @@ impl NegamaxEngine {
             self.move_stack.pop();
             value = -re_child_value;
             line = re_line;
+            actual_depth = max_depth;
         }
 
         if !is_pv_move && value > alpha {
@@ -538,12 +550,13 @@ impl NegamaxEngine {
             self.move_stack.pop();
             value = -full_child_value;
             line = full_line;
+            actual_depth = max_depth;
         }
 
         self.position_stack.pop();
 
         let is_quiet = !is_capture && !is_promotion;
-        Some((value, line, is_quiet))
+        Some((value, line, is_quiet, actual_depth))
     }
 
     fn quiescence_search(
@@ -568,7 +581,7 @@ impl NegamaxEngine {
 
         match board.status() {
             BoardStatus::Checkmate => {
-                return (-MATE_VALUE + depth as i16, Vec::new());
+                return (-(MATE_VALUE - depth as i16), Vec::new());
             }
             BoardStatus::Stalemate => {
                 return (0, Vec::new());
@@ -863,8 +876,9 @@ impl NegamaxEngine {
 
             // If opponent still can't reach beta, prune this branch
             if -score >= beta {
+                let null_move_depth = max_depth - r;
                 self.tt
-                    .store(hash, depth, max_depth, beta, 0, alpha, beta, None);
+                    .store(hash, depth, null_move_depth, beta, None, alpha, beta, None);
                 return Some(beta);
             }
         }
@@ -883,7 +897,7 @@ impl NegamaxEngine {
         beta: i16,
         hash: u64,
         depth: u8,
-        max_depth: u8,
+        _max_depth: u8,
         alpha: i16,
     ) -> Option<i16> {
         if !can_reverse_futility_prune(remaining_depth, in_check, is_pv_node) {
@@ -891,8 +905,9 @@ impl NegamaxEngine {
         }
         let se = static_eval?;
         if se - RFP_MARGINS[remaining_depth as usize] >= beta && se.abs() < RAZOR_NEAR_MATE {
+            let rfp_depth = depth;
             self.tt
-                .store(hash, depth, max_depth, beta, se, alpha, beta, None);
+                .store(hash, depth, rfp_depth, beta, Some(se), alpha, beta, None);
             return Some(beta);
         }
         None

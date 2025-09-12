@@ -1,3 +1,4 @@
+use crate::negamax::utils::MATE_SCORE_BOUND;
 use chess::{ChessMove, Piece, Square};
 use std::mem::size_of;
 use std::simd::prelude::SimdPartialEq;
@@ -18,10 +19,11 @@ pub struct TTEntry {
     pub key: u64,
     // Pack best move into 16 bits so a cluster of 4 entries fits one 64B cache line
     pub value: i16,
-    pub static_eval: i16, // Static evaluation (for pruning when depth insufficient)
-    // Remaining plies searched from this position (depth quality)
-    pub plies: u8,
-    pub bound: Bound,
+    pub static_eval: i16, // i16::MIN denotes "unknown"
+    // Depth searched from this node (in plies)
+    pub depth: u8,
+    // flags: lower 2 bits = bound (0 Exact,1 Lower,2 Upper)
+    pub flags: u8,
     pub best_move_packed: u16,
 }
 
@@ -30,17 +32,17 @@ impl TTEntry {
     pub fn set(
         &mut self,
         key: u64,
-        plies: u8,
+        depth: u8,
         value: i16,
         static_eval: i16,
-        bound: Bound,
+        flags: u8,
         best_move_packed: u16,
     ) {
         self.key = key;
-        self.plies = plies;
+        self.depth = depth;
         self.value = value;
         self.static_eval = static_eval;
-        self.bound = bound;
+        self.flags = flags;
         self.best_move_packed = best_move_packed;
     }
 }
@@ -88,8 +90,8 @@ impl TranspositionTable {
         hash: u64,
         depth: u8,
         max_depth: u8,
-    ) -> Option<(i16, Bound, Option<ChessMove>, i16)> {
-        let plies_needed = max_depth - depth;
+    ) -> Option<(i16, Bound, Option<ChessMove>, Option<i16>)> {
+        let needed_depth = max_depth - depth;
         let idx = (hash as usize) & self.mask;
         let base = idx * CLUSTER_SIZE;
 
@@ -106,14 +108,60 @@ impl TranspositionTable {
 
         // Check each match with depth requirement (most likely first)
         for (i, entry) in cluster.iter().enumerate() {
-            if key_matches.test(i) && entry.plies >= plies_needed {
+            if key_matches.test(i) && entry.depth >= needed_depth {
+                let val = from_tt_value(entry.value, depth);
+                let se_opt = if entry.static_eval == i16::MIN {
+                    None
+                } else {
+                    Some(entry.static_eval)
+                };
                 return Some((
-                    entry.value,
-                    entry.bound,
+                    val,
+                    extract_bound(entry.flags),
                     unpack_move(entry.best_move_packed),
-                    entry.static_eval,
+                    se_opt,
                 ));
             }
+        }
+        None
+    }
+
+    #[inline(always)]
+    pub fn probe_hint(&self, hash: u64) -> Option<(Option<ChessMove>, Option<i16>)> {
+        let idx = (hash as usize) & self.mask;
+        let base = idx * CLUSTER_SIZE;
+
+        let cluster = &self.entries[base..base + 4];
+        let keys = u64x4::from_array([
+            cluster[0].key,
+            cluster[1].key,
+            cluster[2].key,
+            cluster[3].key,
+        ]);
+        let target_keys = u64x4::splat(hash);
+        let key_matches = keys.simd_eq(target_keys);
+
+        // Prefer deepest entry as hint
+        let mut best: Option<(usize, u8)> = None;
+        for (i, entry) in cluster.iter().enumerate() {
+            if key_matches.test(i) {
+                if let Some((_, d)) = best {
+                    if entry.depth > d {
+                        best = Some((i, entry.depth));
+                    }
+                } else {
+                    best = Some((i, entry.depth));
+                }
+            }
+        }
+        if let Some((i, _)) = best {
+            let entry = &cluster[i];
+            let se = if entry.static_eval == i16::MIN {
+                None
+            } else {
+                Some(entry.static_eval)
+            };
+            return Some((unpack_move(entry.best_move_packed), se));
         }
         None
     }
@@ -126,12 +174,12 @@ impl TranspositionTable {
         depth: u8,
         max_depth: u8,
         value: i16,
-        static_eval: i16,
+        static_eval: Option<i16>,
         alpha: i16,
         beta: i16,
         best_move: Option<ChessMove>,
     ) {
-        let plies = max_depth - depth;
+        let stored_depth = max_depth - depth;
         let best_move_packed = pack_move(best_move);
 
         let bound = if value <= alpha {
@@ -141,6 +189,10 @@ impl TranspositionTable {
         } else {
             Bound::Exact
         };
+        let flags = pack_flags(bound);
+
+        let stored_value = to_tt_value(value, depth);
+        let stored_se = static_eval.unwrap_or(i16::MIN);
 
         let idx = (hash as usize) & self.mask;
         let base = idx * CLUSTER_SIZE;
@@ -151,8 +203,15 @@ impl TranspositionTable {
         // 1) Exact key hit: update if new info is at least as deep
         for e in cluster.iter_mut() {
             if e.key == hash {
-                if plies >= e.plies {
-                    e.set(hash, plies, value, static_eval, bound, best_move_packed);
+                if stored_depth >= e.depth {
+                    e.set(
+                        hash,
+                        stored_depth,
+                        stored_value,
+                        stored_se,
+                        flags,
+                        best_move_packed,
+                    );
                 }
                 return;
             }
@@ -161,23 +220,37 @@ impl TranspositionTable {
         // 2) Empty slot
         for e in cluster.iter_mut() {
             if e.key == 0 {
-                e.set(hash, plies, value, static_eval, bound, best_move_packed);
+                e.set(
+                    hash,
+                    stored_depth,
+                    stored_value,
+                    stored_se,
+                    flags,
+                    best_move_packed,
+                );
                 return;
             }
         }
 
         // 3) Simple depth-preferential replacement (proven strategy)
         let mut victim_idx = 0;
-        let mut min_depth = cluster[0].plies;
+        let mut min_depth = cluster[0].depth;
 
         for (i, entry) in cluster.iter().enumerate().skip(1) {
-            if entry.plies < min_depth {
-                min_depth = entry.plies;
+            if entry.depth < min_depth {
+                min_depth = entry.depth;
                 victim_idx = i;
             }
         }
 
-        cluster[victim_idx].set(hash, plies, value, static_eval, bound, best_move_packed);
+        cluster[victim_idx].set(
+            hash,
+            stored_depth,
+            stored_value,
+            stored_se,
+            flags,
+            best_move_packed,
+        );
     }
 }
 
@@ -218,4 +291,51 @@ fn unpack_move(code: u16) -> Option<ChessMove> {
         _ => None,
     };
     Some(ChessMove::new(from, to, promo))
+}
+
+#[inline(always)]
+fn pack_flags(bound: Bound) -> u8 {
+    let b = match bound {
+        Bound::Exact => 0u8,
+        Bound::Lower => 1u8,
+        Bound::Upper => 2u8,
+    } & 0x03;
+    b
+}
+
+#[inline(always)]
+fn extract_bound(flags: u8) -> Bound {
+    match flags & 0x03 {
+        0 => Bound::Exact,
+        1 => Bound::Lower,
+        _ => Bound::Upper,
+    }
+}
+
+#[inline(always)]
+fn to_tt_value(value: i16, ply_from_root: u8) -> i16 {
+    let ply = ply_from_root as i16;
+    if value >= MATE_SCORE_BOUND {
+        // Winning mate: add current ply to make distance from root absolute
+        value + ply
+    } else if value <= -MATE_SCORE_BOUND {
+        // Losing mate: subtract current ply to make distance from root absolute
+        value - ply
+    } else {
+        value
+    }
+}
+
+#[inline(always)]
+fn from_tt_value(stored: i16, ply_from_root: u8) -> i16 {
+    let ply = ply_from_root as i16;
+    if stored >= MATE_SCORE_BOUND {
+        // Winning mate: subtract current ply to get distance from current position
+        stored - ply
+    } else if stored <= -MATE_SCORE_BOUND {
+        // Losing mate: add current ply to get distance from current position
+        stored + ply
+    } else {
+        stored
+    }
 }
