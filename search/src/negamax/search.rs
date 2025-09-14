@@ -348,6 +348,7 @@ impl NegamaxEngine {
             remaining_depth,
             in_check,
             try_null_move,
+            static_eval,
         ) {
             return (score, Vec::new());
         }
@@ -846,38 +847,71 @@ impl NegamaxEngine {
         remaining_depth: u8,
         in_check: bool,
         try_null_move: bool,
+        static_eval: Option<i16>,
     ) -> Option<i16> {
+        // Null move pruning: if giving the opponent a free move still doesn't let
+        // them reach beta, the position is strong enough to prune
         if !(try_null_move && can_null_move_prune(board, remaining_depth, in_check)) {
             return None;
         }
-        // Null move pruning: if giving opponent a free move still can't reach beta, we can prune
-        // Less reduction near horizon
-        let r = match max_depth - depth {
-            3..7 => 2,
-            _ => 3,
-        };
 
-        if let Some(nm_board) = board.null_move() {
-            // Give opponent extra move and search with reduced depth
-            self.position_stack.push(nm_board.get_hash());
-            let (score, _) = self.search_subtree(
-                &nm_board,
-                depth + 1,
-                max_depth - r,
-                -beta,
-                -beta + 1, // null window
-                false,     // Null moves cannot be done in sequence, so disable for next move
-                false,     // also disable IID under null move
-            );
-            self.position_stack.pop();
+        let nm_board = board.null_move()?;
+        let base_remaining = max_depth - depth;
 
-            // If opponent still can't reach beta, prune this branch
-            if -score >= beta {
-                let null_move_depth = max_depth - r;
-                self.tt
-                    .store(hash, depth, null_move_depth, beta, None, alpha, beta, None);
-                return Some(beta);
+        // Calculate reduction based on remaining depth and static eval:
+        // deeper positions get more reduction, strong positions get extra reduction
+        let mut r: u8 = 2 + (base_remaining / 3);
+        if let Some(se) = static_eval {
+            if se >= beta + 200 {
+                r = r.saturating_add(1);
+            } else if se <= beta - 200 {
+                r = r.saturating_sub(1).max(2);
             }
+        }
+        if r >= base_remaining {
+            r = base_remaining.saturating_sub(1).max(2);
+        }
+
+        // Do a reduced depth null search to check if our position is still good enough
+        self.position_stack.push(nm_board.get_hash());
+        let (score, _) = self.search_subtree(
+            &nm_board,
+            depth + 1,
+            max_depth - r,
+            -beta,
+            -beta + 1,
+            false,
+            false,
+        );
+        self.position_stack.pop();
+
+        // The opponent still can't reach beta,
+        // so the position is strong enough to prune
+        if -score >= beta {
+            // However, in Zugzwang positions, passing is better than any legal move
+            // so we need to verify that the position is still good enough
+            if base_remaining <= 6 {
+                self.position_stack.push(nm_board.get_hash());
+                let verify_depth = max_depth - r.saturating_sub(1);
+                let (v_score, _) = self.search_subtree(
+                    &nm_board,
+                    depth + 1,
+                    verify_depth,
+                    -beta,
+                    -beta + 1,
+                    false,
+                    false,
+                );
+                self.position_stack.pop();
+                if -v_score < beta {
+                    return None; // fail verification; do not prune
+                }
+            }
+
+            let null_move_depth = max_depth - r;
+            self.tt
+                .store(hash, depth, null_move_depth, beta, None, alpha, beta, None);
+            return Some(beta);
         }
 
         None
