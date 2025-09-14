@@ -1,5 +1,6 @@
 use crate::negamax::utils::MATE_SCORE_BOUND;
 use chess::{ChessMove, Piece, Square};
+use evaluation::scores::MATE_VALUE;
 use std::mem::size_of;
 use std::simd::prelude::SimdPartialEq;
 use std::simd::u64x4;
@@ -17,13 +18,10 @@ pub enum Bound {
 pub struct TTEntry {
     // 0 = empty slot
     pub key: u64,
-    // Pack best move into 16 bits so a cluster of 4 entries fits one 64B cache line
     pub value: i16,
     pub static_eval: i16, // i16::MIN denotes "unknown"
-    // Depth searched from this node (in plies)
     pub depth: u8,
-    // flags: lower 2 bits = bound (0 Exact,1 Lower,2 Upper)
-    pub flags: u8,
+    pub bound: Bound,
     pub best_move_packed: u16,
 }
 
@@ -35,14 +33,14 @@ impl TTEntry {
         depth: u8,
         value: i16,
         static_eval: i16,
-        flags: u8,
+        bound: Bound,
         best_move_packed: u16,
     ) {
         self.key = key;
         self.depth = depth;
         self.value = value;
         self.static_eval = static_eval;
-        self.flags = flags;
+        self.bound = bound;
         self.best_move_packed = best_move_packed;
     }
 }
@@ -109,7 +107,11 @@ impl TranspositionTable {
         // Check each match with depth requirement (most likely first)
         for (i, entry) in cluster.iter().enumerate() {
             if key_matches.test(i) && entry.depth >= needed_depth {
-                let val = from_tt_value(entry.value, depth);
+                let val = if entry.value.abs() >= MATE_SCORE_BOUND {
+                    from_tt_value(entry.value, depth)
+                } else {
+                    entry.value
+                };
                 let se_opt = if entry.static_eval == i16::MIN {
                     None
                 } else {
@@ -117,7 +119,7 @@ impl TranspositionTable {
                 };
                 return Some((
                     val,
-                    extract_bound(entry.flags),
+                    entry.bound,
                     unpack_move(entry.best_move_packed),
                     se_opt,
                 ));
@@ -189,9 +191,12 @@ impl TranspositionTable {
         } else {
             Bound::Exact
         };
-        let flags = pack_flags(bound);
 
-        let stored_value = to_tt_value(value, depth);
+        let stored_value = if value.abs() >= MATE_SCORE_BOUND {
+            to_tt_value(value, depth)
+        } else {
+            value
+        };
         let stored_se = static_eval.unwrap_or(i16::MIN);
 
         let idx = (hash as usize) & self.mask;
@@ -209,7 +214,7 @@ impl TranspositionTable {
                         stored_depth,
                         stored_value,
                         stored_se,
-                        flags,
+                        bound,
                         best_move_packed,
                     );
                 }
@@ -225,7 +230,7 @@ impl TranspositionTable {
                     stored_depth,
                     stored_value,
                     stored_se,
-                    flags,
+                    bound,
                     best_move_packed,
                 );
                 return;
@@ -248,7 +253,7 @@ impl TranspositionTable {
             stored_depth,
             stored_value,
             stored_se,
-            flags,
+            bound,
             best_move_packed,
         );
     }
@@ -294,48 +299,24 @@ fn unpack_move(code: u16) -> Option<ChessMove> {
 }
 
 #[inline(always)]
-fn pack_flags(bound: Bound) -> u8 {
-    let b = match bound {
-        Bound::Exact => 0u8,
-        Bound::Lower => 1u8,
-        Bound::Upper => 2u8,
-    } & 0x03;
-    b
-}
-
-#[inline(always)]
-fn extract_bound(flags: u8) -> Bound {
-    match flags & 0x03 {
-        0 => Bound::Exact,
-        1 => Bound::Lower,
-        _ => Bound::Upper,
-    }
-}
-
-#[inline(always)]
-fn to_tt_value(value: i16, ply_from_root: u8) -> i16 {
-    let ply = ply_from_root as i16;
-    if value >= MATE_SCORE_BOUND {
-        // Winning mate: add current ply to make distance from root absolute
-        value + ply
-    } else if value <= -MATE_SCORE_BOUND {
-        // Losing mate: subtract current ply to make distance from root absolute
-        value - ply
+fn to_tt_value(value: i16, _ply_from_root: u8) -> i16 {
+    if value > 0 {
+        // Winning mate: store distance from this position (positive)
+        MATE_VALUE - value
     } else {
-        value
+        // Losing mate: store distance from this position (negative)
+        -(MATE_VALUE + value)
     }
 }
 
 #[inline(always)]
 fn from_tt_value(stored: i16, ply_from_root: u8) -> i16 {
     let ply = ply_from_root as i16;
-    if stored >= MATE_SCORE_BOUND {
-        // Winning mate: subtract current ply to get distance from current position
-        stored - ply
-    } else if stored <= -MATE_SCORE_BOUND {
-        // Losing mate: add current ply to get distance from current position
-        stored + ply
+    if stored > 0 {
+        // Positive = winning mate distance from this position
+        MATE_VALUE - (stored + ply)
     } else {
-        stored
+        // Negative = losing mate distance from this position
+        -(MATE_VALUE - (-stored + ply))
     }
 }
