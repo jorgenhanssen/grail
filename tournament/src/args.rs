@@ -26,10 +26,10 @@ pub enum TimeControlType {
 
     #[command(name = "tc")]
     TimeControl {
-        #[arg(long, short = 'i')]
+        #[arg(long)]
         inc: u64,
 
-        #[arg(long, short = 'd')]
-        duration: u64,
+        #[arg(long)]
+        time: u64,
     },
 }
