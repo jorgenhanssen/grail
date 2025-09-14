@@ -10,7 +10,7 @@ const MIN_BUCKETS: usize = 1024;
 #[repr(C)]
 struct QSEntry {
     // 0 denotes empty
-    key: u64, // lower 63 bits: hash, bit 63: in_check flag
+    key: u64, // position hash with bit 0 toggled when in_check
     value: i16,
     bound: Bound,
 }
@@ -71,9 +71,8 @@ impl QSTable {
         let target = u64x4::splat(mixed);
         let mask = keys.simd_eq(target);
 
-        for i in 0..4 {
+        for (i, e) in cluster.iter().enumerate() {
             if mask.test(i) {
-                let e = &cluster[i];
                 return Some((e.value, e.bound));
             }
         }

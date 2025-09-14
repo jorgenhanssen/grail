@@ -77,7 +77,7 @@ impl Default for NegamaxEngine {
 
             window: AspirationWindow::new(ASP_HALF_START, ASP_WIDEN, ASP_ENABLED_FROM),
             tt: TranspositionTable::new(256),
-            qs_tt: QSTable::new(64),
+            qs_tt: QSTable::new(128),
 
             position_stack: Vec::with_capacity(100),
             move_stack: Vec::with_capacity(100),
@@ -205,9 +205,6 @@ impl NegamaxEngine {
     pub fn init_search(&mut self) {
         self.stop.store(false, Ordering::Relaxed);
 
-        self.qs_tt.clear();
-
-        self.killer_moves = [[None; 2]; MAX_DEPTH]; // 2 killer moves per depth
         self.nodes = 0;
         self.max_depth_reached = 1;
         self.current_pv.clear();
