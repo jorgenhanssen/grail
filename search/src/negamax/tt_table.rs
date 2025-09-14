@@ -1,6 +1,5 @@
 use crate::negamax::utils::MATE_SCORE_BOUND;
 use chess::{ChessMove, Piece, Square};
-use evaluation::scores::MATE_VALUE;
 use std::mem::size_of;
 use std::simd::prelude::SimdPartialEq;
 use std::simd::u64x4;
@@ -107,11 +106,7 @@ impl TranspositionTable {
         // Check each match with depth requirement (most likely first)
         for (i, entry) in cluster.iter().enumerate() {
             if key_matches.test(i) && entry.depth >= needed_depth {
-                let val = if entry.value.abs() >= MATE_SCORE_BOUND {
-                    from_tt_value(entry.value, depth)
-                } else {
-                    entry.value
-                };
+                let val = entry.value;
                 let se_opt = if entry.static_eval == i16::MIN {
                     None
                 } else {
@@ -192,11 +187,11 @@ impl TranspositionTable {
             Bound::Exact
         };
 
-        let stored_value = if value.abs() >= MATE_SCORE_BOUND {
-            to_tt_value(value, depth)
-        } else {
-            value
-        };
+        if value.abs() >= MATE_SCORE_BOUND {
+            return;
+        }
+
+        let stored_value = value;
         let stored_se = static_eval.unwrap_or(i16::MIN);
 
         let idx = (hash as usize) & self.mask;
@@ -296,27 +291,4 @@ fn unpack_move(code: u16) -> Option<ChessMove> {
         _ => None,
     };
     Some(ChessMove::new(from, to, promo))
-}
-
-#[inline(always)]
-fn to_tt_value(value: i16, _ply_from_root: u8) -> i16 {
-    if value > 0 {
-        // Winning mate: store distance from this position (positive)
-        MATE_VALUE - value
-    } else {
-        // Losing mate: store distance from this position (negative)
-        -(MATE_VALUE + value)
-    }
-}
-
-#[inline(always)]
-fn from_tt_value(stored: i16, ply_from_root: u8) -> i16 {
-    let ply = ply_from_root as i16;
-    if stored > 0 {
-        // Positive = winning mate distance from this position
-        MATE_VALUE - (stored + ply)
-    } else {
-        // Negative = losing mate distance from this position
-        -(MATE_VALUE - (-stored + ply))
-    }
 }
