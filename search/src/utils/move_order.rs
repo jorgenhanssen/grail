@@ -67,7 +67,9 @@ impl MainMoveGenerator {
         if self.gen_phase == Phase::BestMove {
             self.gen_phase = Phase::GenCaptures;
             if let Some(best_move) = self.best_move {
-                return Some(best_move);
+                if board.legal(best_move) {
+                    return Some(best_move);
+                }
             }
         }
 

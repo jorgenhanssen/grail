@@ -76,8 +76,8 @@ impl Default for NegamaxEngine {
             evaluator: Box::new(TraditionalEvaluator),
 
             window: AspirationWindow::new(ASP_HALF_START, ASP_WIDEN, ASP_ENABLED_FROM),
-            tt: TranspositionTable::with_capacity(200_000),
-            qs_tt: QSTable::with_capacity(100_000),
+            tt: TranspositionTable::new(256),
+            qs_tt: QSTable::new(128),
 
             position_stack: Vec::with_capacity(100),
             move_stack: Vec::with_capacity(100),
@@ -205,10 +205,6 @@ impl NegamaxEngine {
     pub fn init_search(&mut self) {
         self.stop.store(false, Ordering::Relaxed);
 
-        self.tt.clear();
-        self.qs_tt.clear();
-
-        self.killer_moves = [[None; 2]; MAX_DEPTH]; // 2 killer moves per depth
         self.nodes = 0;
         self.max_depth_reached = 1;
         self.current_pv.clear();
@@ -285,7 +281,7 @@ impl NegamaxEngine {
 
         // Terminal checks
         match board.status() {
-            BoardStatus::Checkmate => return (-MATE_VALUE + depth as i16, Vec::new()),
+            BoardStatus::Checkmate => return (-(MATE_VALUE - depth as i16), Vec::new()),
             BoardStatus::Stalemate => return (0, Vec::new()),
             BoardStatus::Ongoing => {}
         }
@@ -296,31 +292,45 @@ impl NegamaxEngine {
         // Transposition table probe
         let original_alpha = alpha;
         let mut maybe_tt_move = None;
-        if let Some((tt_value, tt_bound, tt_move)) = self.tt.probe(hash, depth, max_depth) {
+        let mut tt_static_eval = None;
+
+        let is_pv_node = beta > alpha + 1;
+
+        if let Some((tt_value, tt_bound, tt_move, tt_se)) = self.tt.probe(hash, depth, max_depth) {
             maybe_tt_move = tt_move;
+            tt_static_eval = tt_se;
             match tt_bound {
                 Bound::Exact => return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m])),
-                Bound::Lower => alpha = alpha.max(tt_value),
+                Bound::Lower => {
+                    alpha = alpha.max(tt_value);
+                    if alpha >= beta {
+                        return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m]));
+                    }
+                }
                 Bound::Upper => {
                     if tt_value <= alpha {
                         return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m]));
                     }
                 }
             }
-            if alpha >= beta {
-                return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m]));
-            }
+        } else if let Some((tt_move, tt_se)) = self.tt.probe_hint(hash) {
+            // Use shallow entry as hint for move ordering and static eval caching
+            maybe_tt_move = tt_move;
+            tt_static_eval = tt_se;
         }
 
         let phase = game_phase(board);
 
         let remaining_depth = max_depth - depth;
         let in_check = board.checkers().popcnt() > 0;
-        let is_pv_node = beta > alpha + 1;
 
-        // Some pruning uses static eval
-        let static_eval =
-            self.static_eval_if_needed(board, remaining_depth, in_check, is_pv_node, phase);
+        // Use TT static eval if available, otherwise calculate if needed
+        // When we have TT static eval, we can be more aggressive with pruning
+        let static_eval = if let Some(tt_se) = tt_static_eval {
+            Some(tt_se)
+        } else {
+            self.static_eval_if_needed(board, remaining_depth, in_check, is_pv_node, phase)
+        };
 
         if let Some(score) =
             self.try_razor_prune(board, remaining_depth, alpha, depth, in_check, static_eval)
@@ -338,6 +348,7 @@ impl NegamaxEngine {
             remaining_depth,
             in_check,
             try_null_move,
+            static_eval,
         ) {
             return (score, Vec::new());
         }
@@ -378,6 +389,8 @@ impl NegamaxEngine {
         let mut best_move = None;
         let mut best_line = Vec::new();
 
+        let mut best_move_depth = depth;
+
         let mut movegen = MainMoveGenerator::new(
             maybe_tt_move,
             self.killer_moves[depth as usize],
@@ -389,7 +402,7 @@ impl NegamaxEngine {
         while let Some(m) = movegen.next(board, &self.history_heuristic) {
             move_index += 1;
 
-            if let Some((value, mut line, is_quiet)) = self.search_move(
+            if let Some((value, mut line, is_quiet, child_depth)) = self.search_move(
                 board,
                 depth,
                 max_depth,
@@ -410,6 +423,7 @@ impl NegamaxEngine {
                     best_move = Some(m);
                     line.insert(0, m);
                     best_line = line;
+                    best_move_depth = child_depth;
                 }
 
                 alpha = alpha.max(best_value);
@@ -427,11 +441,13 @@ impl NegamaxEngine {
             }
         }
 
+        // Store TT entry with the depth actually searched for the best move
         self.tt.store(
             hash,
             depth,
-            max_depth,
+            best_move_depth,
             best_value,
+            static_eval,
             original_alpha,
             beta,
             best_move,
@@ -453,30 +469,14 @@ impl NegamaxEngine {
         m: ChessMove,
         move_index: i32,
         static_eval: Option<i16>,
-    ) -> Option<(i16, Vec<ChessMove>, bool)> {
+    ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
         let new_board = board.make_move_new(m);
         let gives_check = new_board.checkers().popcnt() > 0;
 
-        let capturee = board.piece_on(m.get_dest());
-        let piece = board.piece_on(m.get_source()).unwrap();
-
         // Consider move tactical if it's check, capture, or promotion
-        let is_capture = capturee.is_some();
+        let is_capture = board.piece_on(m.get_dest()).is_some();
         let is_promotion = m.get_promotion() == Some(Piece::Queen);
         let is_tactical = in_check || gives_check || is_capture || is_promotion;
-
-        // SEE pruning
-        if self.try_see_prune(
-            board,
-            m,
-            piece,
-            capturee,
-            in_check,
-            is_promotion,
-            remaining_depth,
-        ) {
-            return None;
-        }
 
         // Futility prune
         if self.try_futility_prune(remaining_depth, in_check, is_tactical, alpha, static_eval) {
@@ -507,6 +507,7 @@ impl NegamaxEngine {
         }
 
         let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
+        let mut actual_depth = child_max_depth;
 
         self.position_stack.push(new_board.get_hash());
         self.move_stack.push(m);
@@ -537,6 +538,7 @@ impl NegamaxEngine {
             self.move_stack.pop();
             value = -re_child_value;
             line = re_line;
+            actual_depth = max_depth;
         }
 
         if !is_pv_move && value > alpha {
@@ -546,12 +548,13 @@ impl NegamaxEngine {
             self.move_stack.pop();
             value = -full_child_value;
             line = full_line;
+            actual_depth = max_depth;
         }
 
         self.position_stack.pop();
 
         let is_quiet = !is_capture && !is_promotion;
-        Some((value, line, is_quiet))
+        Some((value, line, is_quiet, actual_depth))
     }
 
     fn quiescence_search(
@@ -576,7 +579,7 @@ impl NegamaxEngine {
 
         match board.status() {
             BoardStatus::Checkmate => {
-                return (-MATE_VALUE + depth as i16, Vec::new());
+                return (-(MATE_VALUE - depth as i16), Vec::new());
             }
             BoardStatus::Stalemate => {
                 return (0, Vec::new());
@@ -844,37 +847,71 @@ impl NegamaxEngine {
         remaining_depth: u8,
         in_check: bool,
         try_null_move: bool,
+        static_eval: Option<i16>,
     ) -> Option<i16> {
+        // Null move pruning: if giving the opponent a free move still doesn't let
+        // them reach beta, the position is strong enough to prune
         if !(try_null_move && can_null_move_prune(board, remaining_depth, in_check)) {
             return None;
         }
-        // Null move pruning: if giving opponent a free move still can't reach beta, we can prune
-        // Less reduction near horizon
-        let r = match max_depth - depth {
-            3..7 => 2,
-            _ => 3,
-        };
 
-        if let Some(nm_board) = board.null_move() {
-            // Give opponent extra move and search with reduced depth
-            self.position_stack.push(nm_board.get_hash());
-            let (score, _) = self.search_subtree(
-                &nm_board,
-                depth + 1,
-                max_depth - r,
-                -beta,
-                -beta + 1, // null window
-                false,     // Null moves cannot be done in sequence, so disable for next move
-                false,     // also disable IID under null move
-            );
-            self.position_stack.pop();
+        let nm_board = board.null_move()?;
+        let base_remaining = max_depth - depth;
 
-            // If opponent still can't reach beta, prune this branch
-            if -score >= beta {
-                self.tt
-                    .store(hash, depth, max_depth, beta, alpha, beta, None);
-                return Some(beta);
+        // Calculate reduction based on remaining depth and static eval:
+        // deeper positions get more reduction, strong positions get extra reduction
+        let mut r: u8 = 2 + (base_remaining / 3);
+        if let Some(se) = static_eval {
+            if se >= beta + 200 {
+                r = r.saturating_add(1);
+            } else if se <= beta - 200 {
+                r = r.saturating_sub(1).max(2);
             }
+        }
+        if r >= base_remaining {
+            r = base_remaining.saturating_sub(1).max(2);
+        }
+
+        // Do a reduced depth null search to check if our position is still good enough
+        self.position_stack.push(nm_board.get_hash());
+        let (score, _) = self.search_subtree(
+            &nm_board,
+            depth + 1,
+            max_depth - r,
+            -beta,
+            -beta + 1,
+            false,
+            false,
+        );
+        self.position_stack.pop();
+
+        // The opponent still can't reach beta,
+        // so the position is strong enough to prune
+        if -score >= beta {
+            // However, in Zugzwang positions, passing is better than any legal move
+            // so we need to verify that the position is still good enough
+            if base_remaining <= 6 {
+                self.position_stack.push(nm_board.get_hash());
+                let verify_depth = max_depth - r.saturating_sub(1);
+                let (v_score, _) = self.search_subtree(
+                    &nm_board,
+                    depth + 1,
+                    verify_depth,
+                    -beta,
+                    -beta + 1,
+                    false,
+                    false,
+                );
+                self.position_stack.pop();
+                if -v_score < beta {
+                    return None; // fail verification; do not prune
+                }
+            }
+
+            let null_move_depth = max_depth - r;
+            self.tt
+                .store(hash, depth, null_move_depth, beta, None, alpha, beta, None);
+            return Some(beta);
         }
 
         None
@@ -891,7 +928,7 @@ impl NegamaxEngine {
         beta: i16,
         hash: u64,
         depth: u8,
-        max_depth: u8,
+        _max_depth: u8,
         alpha: i16,
     ) -> Option<i16> {
         if !can_reverse_futility_prune(remaining_depth, in_check, is_pv_node) {
@@ -899,33 +936,12 @@ impl NegamaxEngine {
         }
         let se = static_eval?;
         if se - RFP_MARGINS[remaining_depth as usize] >= beta && se.abs() < RAZOR_NEAR_MATE {
+            let rfp_depth = depth;
             self.tt
-                .store(hash, depth, max_depth, beta, alpha, beta, None);
+                .store(hash, depth, rfp_depth, beta, Some(se), alpha, beta, None);
             return Some(beta);
         }
         None
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    #[inline(always)]
-    fn try_see_prune(
-        &self,
-        board: &Board,
-        m: ChessMove,
-        piece: Piece,
-        capturee: Option<Piece>,
-        in_check: bool,
-        is_promotion: bool,
-        remaining_depth: u8,
-    ) -> bool {
-        if capturee.is_none() || in_check || is_promotion || remaining_depth <= 3 {
-            return false;
-        }
-
-        let phase = game_phase(board);
-
-        // Only SEE if it's a major piece, then prune if it's obviously losing
-        piece_value(piece, phase) > 200 && see(board, m, phase) < -400
     }
 
     #[allow(clippy::too_many_arguments)]

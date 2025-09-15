@@ -45,7 +45,7 @@ impl GameRunner {
 
         // Initialize time controls
         let (mut white_time, mut black_time, increment) = match &args.time_control {
-            TimeControlType::TimeControl { inc, duration } => (*duration, *duration, *inc),
+            TimeControlType::TimeControl { inc, time } => (*time, *time, *inc),
             TimeControlType::Infinite { .. } => (0, 0, 0), // Not used for infinite time
         };
 
