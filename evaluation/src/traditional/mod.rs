@@ -67,5 +67,12 @@ pub fn evaluate_board(board: &Board, phase: f32) -> i16 {
     cp += eval_king::evaluate(board, Color::White, phase);
     cp -= eval_king::evaluate(board, Color::Black, phase);
 
+    // Tempo bonus
+    if board.side_to_move() == Color::White {
+        cp += 10;
+    } else {
+        cp -= 10;
+    }
+
     cp
 }
