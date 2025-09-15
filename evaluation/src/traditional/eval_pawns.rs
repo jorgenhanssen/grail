@@ -20,17 +20,17 @@ pub(super) fn evaluate(board: &Board, color: Color) -> i16 {
             continue;
         }
 
-        score -= match cnt {
-            1 => {
-                if (my_pawns & get_adjacent_files(file_idx)).popcnt() == 0 {
-                    40 // Isolated
-                } else {
-                    0
-                }
-            }
-            2 => 30, // Doubled
-            _ => 60, // Tripled+
+        // Penalty for doubled / tripled pawns
+        match cnt {
+            1 => score -= 0,  // Good case: no penalty
+            2 => score -= 30, // Bad case: doubled
+            _ => score -= 60, // Bad case: > tripled
         };
+
+        // Isolated penalty
+        if (my_pawns & get_adjacent_files(file_idx)).popcnt() == 0 {
+            score -= 40;
+        }
     }
 
     // passed-pawn bonus
