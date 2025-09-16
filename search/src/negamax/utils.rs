@@ -43,13 +43,13 @@ pub fn lmr(
             reduction = reduction.saturating_add(s);
         }
         Trend::Improving(s) => {
-            let benefit = match s {
+            let strength = match s {
                 1 => 1, // Small improvement: search deeper
                 2 => 2, // Moderate improvement: search much deeper
                 3 => 1, // Large improvement: search deeper
                 _ => 0, // Crushing: spend time searching elsewhere
             };
-            reduction = reduction.saturating_sub(benefit);
+            reduction = reduction.saturating_sub(strength);
         }
         Trend::Neutral => {}
     }
