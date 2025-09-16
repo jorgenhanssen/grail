@@ -1,6 +1,7 @@
 use chess::{Board, MoveGen};
 use evaluation::{scores::MATE_VALUE, total_material};
 
+use super::trend::Trend;
 use crate::utils::is_zugzwang;
 
 pub const RAZOR_MAX_DEPTH: u8 = 3;
@@ -26,9 +27,9 @@ pub fn lmr(
     tactical: bool,
     move_index: i32,
     is_pv_move: bool,
-    is_improving: bool,
+    trend: Trend,
 ) -> u8 {
-    if tactical || remaining_depth < 3 || move_index < 3 {
+    if tactical || remaining_depth < 3 || move_index < 3 || is_pv_move {
         return 0;
     }
 
@@ -37,9 +38,14 @@ pub fn lmr(
 
     let mut reduction = (depth_factor * move_factor / 2.5).round() as u8;
 
-    // Additional reduction for non-improving positions on quiet late non-PV moves
-    if !tactical && move_index >= 3 && !is_pv_move && !is_improving {
-        reduction = reduction.saturating_add(1);
+    match trend {
+        Trend::Worsening(s) => {
+            reduction = reduction.saturating_add(s);
+        }
+        Trend::Improving(s) => {
+            reduction = reduction.saturating_sub(s);
+        }
+        Trend::Neutral => {}
     }
 
     // Clamp between 0 and half the remaining depth
@@ -80,12 +86,18 @@ pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool, is_pv_nod
 }
 
 #[inline(always)]
-pub fn rfp_margin(remaining_depth: u8, is_improving: bool) -> i16 {
+pub fn rfp_margin(remaining_depth: u8, trend: Trend) -> i16 {
     let margin = RFP_MARGINS[remaining_depth as usize];
-    if is_improving {
-        margin.saturating_sub(IMPROVING_RFP_DELTA)
-    } else {
-        margin.saturating_add(IMPROVING_RFP_DELTA)
+    match trend {
+        Trend::Improving(s) => {
+            let delta = IMPROVING_RFP_DELTA * s as i16;
+            margin.saturating_sub(delta)
+        }
+        Trend::Worsening(s) => {
+            let delta = IMPROVING_RFP_DELTA * s as i16;
+            margin.saturating_add(delta)
+        }
+        Trend::Neutral => margin,
     }
 }
 
