@@ -343,8 +343,7 @@ impl NegamaxEngine {
             }
         };
 
-        let trend =
-            Trend::from_eval_stack(&self.eval_stack, static_eval, in_check, remaining_depth);
+        let trend = Trend::new(static_eval, &self.eval_stack, in_check, remaining_depth);
 
         if let Some(score) =
             self.try_razor_prune(board, remaining_depth, alpha, depth, in_check, static_eval)

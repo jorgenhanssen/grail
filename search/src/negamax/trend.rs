@@ -1,7 +1,6 @@
-use super::utils::RAZOR_NEAR_MATE;
-
-const TREND_DELTA: i16 = 120;
-const TREND_LOOKBACK: usize = 4;
+const TREND_DELTA: i16 = 100;
+const TREND_LOOKBACK: usize = 2;
+const TREND_MAX_STRENGTH: i16 = 4;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Trend {
@@ -12,31 +11,30 @@ pub enum Trend {
 
 impl Trend {
     #[inline(always)]
-    pub fn from_eval_stack(
-        eval_stack: &[i16],
-        current_eval: i16,
-        in_check: bool,
-        remaining_depth: u8,
-    ) -> Self {
+    pub fn new(eval: i16, eval_stack: &[i16], in_check: bool, remaining_depth: u8) -> Self {
         if in_check || remaining_depth < 3 || eval_stack.len() < TREND_LOOKBACK {
             return Trend::Neutral;
         }
 
-        let prev2 = eval_stack[eval_stack.len() - TREND_LOOKBACK];
-        if current_eval.abs() >= RAZOR_NEAR_MATE || prev2.abs() >= RAZOR_NEAR_MATE {
+        // Find delta between current eval and eval x moves before
+        let delta = eval - eval_stack[eval_stack.len() - TREND_LOOKBACK];
+        let abs_delta = delta.abs();
+
+        if abs_delta < TREND_DELTA {
             return Trend::Neutral;
         }
 
-        let delta = current_eval - prev2;
-
-        if delta >= TREND_DELTA {
-            let s = delta / TREND_DELTA;
-            Trend::Improving(s as u8)
-        } else if delta <= -TREND_DELTA {
-            let s = delta / TREND_DELTA;
-            Trend::Worsening(s as u8)
+        // Faster than strength.min(TREND_MAX_STRENGTH)
+        let strength = if abs_delta >= TREND_MAX_STRENGTH * TREND_DELTA {
+            TREND_MAX_STRENGTH as u8
         } else {
-            Trend::Neutral
+            (abs_delta / TREND_DELTA) as u8
+        };
+
+        if delta > 0 {
+            Trend::Improving(strength)
+        } else {
+            Trend::Worsening(strength)
         }
     }
 }
