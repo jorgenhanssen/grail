@@ -1,8 +1,8 @@
 use chess::{get_file, get_rook_moves, Board, Color, Piece, Rank, EMPTY};
 
-use crate::traditional::bonus::{
-    ROOK_ON_SEVENTH_BONUS, ROOK_OPEN_FILE_BONUS, ROOK_SEMI_OPEN_FILE_BONUS,
-};
+const ROOK_OPEN_FILE_BONUS: i16 = 15;
+const ROOK_SEMI_OPEN_FILE_BONUS: i16 = 10;
+const ROOK_ON_SEVENTH_BONUS: i16 = 20;
 
 #[inline(always)]
 pub(super) fn evaluate(board: &Board, color: Color, phase: f32) -> i16 {

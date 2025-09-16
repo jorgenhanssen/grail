@@ -1,7 +1,5 @@
 use chess::{get_adjacent_files, get_file, BitBoard, Board, Color, Piece, ALL_FILES, EMPTY};
 
-use crate::traditional::bonus::PASSED_PAWN_BONUS;
-
 #[inline(always)]
 pub(super) fn evaluate(board: &Board, color: Color) -> i16 {
     let my_pawns = board.pieces(Piece::Pawn) & board.color_combined(color);
@@ -20,17 +18,17 @@ pub(super) fn evaluate(board: &Board, color: Color) -> i16 {
             continue;
         }
 
-        score -= match cnt {
-            1 => {
-                if (my_pawns & get_adjacent_files(file_idx)).popcnt() == 0 {
-                    40 // Isolated
-                } else {
-                    0
-                }
-            }
-            2 => 30, // Doubled
-            _ => 60, // Tripled+
+        // Penalty for doubled / tripled pawns
+        match cnt {
+            1 => score -= 0,  // Good case: no penalty
+            2 => score -= 30, // Bad case: doubled
+            _ => score -= 60, // Bad case: > tripled
         };
+
+        // Isolated penalty
+        if (my_pawns & get_adjacent_files(file_idx)).popcnt() == 0 {
+            score -= 40;
+        }
     }
 
     // passed-pawn bonus
@@ -49,6 +47,8 @@ pub(super) fn evaluate(board: &Board, color: Color) -> i16 {
 
     score
 }
+
+const PASSED_PAWN_BONUS: [i16; 8] = [0, 10, 20, 30, 50, 80, 120, 0];
 
 /// Pre-computed passed-pawn masks: [color][square].
 pub const PASSED_PAWN_MASKS: [[BitBoard; 64]; 2] = {

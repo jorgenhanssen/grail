@@ -6,6 +6,9 @@ use crate::utils::is_zugzwang;
 pub const RAZOR_MAX_DEPTH: u8 = 3;
 pub const RAZOR_NEAR_MATE: i16 = MATE_VALUE - 200;
 
+// Scores above this threshold are considered mate scores requiring ply normalization
+pub const MATE_SCORE_BOUND: i16 = MATE_VALUE - 1000;
+
 // Margins from Stockfish: https://www.chessprogramming.org/Razoring#Stockfish
 pub const RAZOR_MARGINS: [i16; RAZOR_MAX_DEPTH as usize + 1] = {
     let mut margins = [0i16; RAZOR_MAX_DEPTH as usize + 1];
