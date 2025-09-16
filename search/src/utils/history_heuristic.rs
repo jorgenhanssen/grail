@@ -3,7 +3,7 @@ use chess::{Board, ChessMove, Color, Square, NUM_COLORS, NUM_SQUARES};
 const MAX_HISTORY: i32 = 16_384;
 const MAX_DEPTH: usize = 100;
 const HISTORY_REDUCE_THRESHOLD: i16 = 0; // reduce quiet late moves if history <= 0
-const HISTORY_LEAF_THRESHOLD: i16 = -1000; // prune quiet late moves if history very low
+const HISTORY_LEAF_THRESHOLD: i16 = -1200; // slightly stricter to avoid over-pruning
 const HISTORY_MOVE_GATE: i32 = 5; // only consider after some moves have been tried
 
 #[derive(Clone)]
@@ -63,6 +63,7 @@ impl HistoryHeuristic {
         is_tactical: bool,
         is_pv_move: bool,
         move_index: i32,
+        is_improving: bool,
         reduction: &mut u8,
     ) -> bool {
         if !(remaining_depth > 0
@@ -80,10 +81,16 @@ impl HistoryHeuristic {
         let hist_score = self.get(color, source, dest);
 
         if hist_score < HISTORY_REDUCE_THRESHOLD {
-            *reduction = reduction.saturating_add(1);
+            // Only apply additional reductions/pruning when position isn't improving
+            if !is_improving {
+                *reduction = reduction.saturating_add(1);
+            }
 
             let projected_child_max = max_depth.saturating_sub(*reduction);
-            if hist_score < HISTORY_LEAF_THRESHOLD && projected_child_max <= depth + 1 {
+            if !is_improving
+                && hist_score < HISTORY_LEAF_THRESHOLD
+                && projected_child_max <= depth + 1
+            {
                 return true; // prune
             }
         }

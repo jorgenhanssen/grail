@@ -1,6 +1,7 @@
 use chess::{Board, MoveGen};
 use evaluation::{scores::MATE_VALUE, total_material};
 
+use super::trend::Trend;
 use crate::utils::is_zugzwang;
 
 pub const RAZOR_MAX_DEPTH: u8 = 3;
@@ -21,15 +22,37 @@ pub const RAZOR_MARGINS: [i16; RAZOR_MAX_DEPTH as usize + 1] = {
 };
 
 #[inline(always)]
-pub fn lmr(remaining_depth: u8, tactical: bool, move_index: i32) -> u8 {
-    if tactical || remaining_depth < 3 || move_index < 3 {
+pub fn lmr(
+    remaining_depth: u8,
+    tactical: bool,
+    move_index: i32,
+    is_pv_move: bool,
+    trend: Trend,
+) -> u8 {
+    if tactical || remaining_depth < 3 || move_index < 3 || is_pv_move {
         return 0;
     }
 
     let depth_factor = (remaining_depth as f32).ln();
     let move_factor = (move_index as f32).ln();
 
-    let reduction = (depth_factor * move_factor / 2.5).round() as u8;
+    let mut reduction = (depth_factor * move_factor / 2.5).round() as u8;
+
+    match trend {
+        Trend::Worsening(s) => {
+            reduction = reduction.saturating_add(s);
+        }
+        Trend::Improving(s) => {
+            let strength = match s {
+                1 => 1, // Small improvement: search deeper
+                2 => 2, // Moderate improvement: search much deeper
+                3 => 1, // Large improvement: search deeper
+                _ => 0, // Crushing: spend time searching elsewhere
+            };
+            reduction = reduction.saturating_sub(strength);
+        }
+        Trend::Neutral => {}
+    }
 
     // Clamp between 0 and half the remaining depth
     let half_depth = (remaining_depth / 2).max(1);
@@ -61,10 +84,27 @@ pub fn can_futility_prune(remaining_depth: u8, in_check: bool) -> bool {
 // Reverse Futility Pruning (static beta pruning)
 pub const RFP_MAX_DEPTH: u8 = 3;
 pub const RFP_MARGINS: [i16; RFP_MAX_DEPTH as usize + 1] = [0, 150, 250, 400];
+const IMPROVING_RFP_DELTA: i16 = 25; // Add or subtract based on improving signal
 
 #[inline(always)]
 pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool, is_pv_node: bool) -> bool {
     remaining_depth <= RFP_MAX_DEPTH && remaining_depth > 0 && !in_check && !is_pv_node
+}
+
+#[inline(always)]
+pub fn rfp_margin(remaining_depth: u8, trend: Trend) -> i16 {
+    let margin = RFP_MARGINS[remaining_depth as usize];
+    match trend {
+        Trend::Improving(s) => {
+            let delta = IMPROVING_RFP_DELTA * s as i16;
+            margin.saturating_sub(delta)
+        }
+        Trend::Worsening(s) => {
+            let delta = IMPROVING_RFP_DELTA * s as i16;
+            margin.saturating_add(delta)
+        }
+        Trend::Neutral => margin,
+    }
 }
 
 #[inline(always)]
