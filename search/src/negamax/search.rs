@@ -62,7 +62,7 @@ pub struct NegamaxEngine {
 
     history_heuristic: HistoryHeuristic,
     countermoves: CountermoveTable,
-    eval_stack: Vec<i16>, // Tracks position evaluations for improvement detection
+    eval_stack: Vec<i16>,
 }
 
 impl Default for NegamaxEngine {
@@ -81,12 +81,12 @@ impl Default for NegamaxEngine {
             tt: TranspositionTable::new(256),
             qs_tt: QSTable::new(128),
 
-            position_stack: Vec::with_capacity(100),
-            move_stack: Vec::with_capacity(100),
+            position_stack: Vec::with_capacity(MAX_DEPTH),
+            move_stack: Vec::with_capacity(MAX_DEPTH),
 
             history_heuristic: HistoryHeuristic::new(),
             countermoves: CountermoveTable::new(),
-            eval_stack: Vec::with_capacity(100),
+            eval_stack: Vec::with_capacity(MAX_DEPTH),
         }
     }
 }
