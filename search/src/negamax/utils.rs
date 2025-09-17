@@ -28,22 +28,20 @@ pub fn lmr(
     is_pv_move: bool,
     is_improving: bool,
 ) -> u8 {
-    if tactical || remaining_depth < 3 || move_index < 3 || is_pv_move {
+    if tactical || remaining_depth < 3 || is_pv_move {
         return 0;
     }
 
     let depth_factor = (remaining_depth as f32).ln();
     let move_factor = (move_index as f32).ln();
 
-    let mut reduction = (depth_factor * move_factor).round() as u8;
+    let mut reduction = ((depth_factor * move_factor) / 5.0).round() as u8;
 
     if !is_improving {
         reduction = reduction.saturating_add(1);
     }
 
-    // Clamp between 0 and half the remaining depth
-    let half_depth = (remaining_depth / 2).max(1);
-    reduction.min(half_depth)
+    reduction.min(remaining_depth / 2)
 }
 
 pub fn can_delta_prune(board: &Board, in_check: bool, phase: f32) -> bool {
