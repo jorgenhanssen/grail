@@ -1,7 +1,6 @@
 use chess::{Board, MoveGen};
 use evaluation::{scores::MATE_VALUE, total_material};
 
-use super::trend::Trend;
 use crate::utils::is_zugzwang;
 
 pub const RAZOR_MAX_DEPTH: u8 = 3;
@@ -27,7 +26,7 @@ pub fn lmr(
     tactical: bool,
     move_index: i32,
     is_pv_move: bool,
-    trend: Trend,
+    is_improving: bool,
 ) -> u8 {
     if tactical || remaining_depth < 3 || move_index < 3 || is_pv_move {
         return 0;
@@ -36,22 +35,10 @@ pub fn lmr(
     let depth_factor = (remaining_depth as f32).ln();
     let move_factor = (move_index as f32).ln();
 
-    let mut reduction = (depth_factor * move_factor / 2.5).round() as u8;
+    let mut reduction = (depth_factor * move_factor).round() as u8;
 
-    match trend {
-        Trend::Worsening(s) => {
-            reduction = reduction.saturating_add(s);
-        }
-        Trend::Improving(s) => {
-            let strength = match s {
-                1 => 1, // Small improvement: search deeper
-                2 => 2, // Moderate improvement: search much deeper
-                3 => 1, // Large improvement: search deeper
-                _ => 0, // Crushing: spend time searching elsewhere
-            };
-            reduction = reduction.saturating_sub(strength);
-        }
-        Trend::Neutral => {}
+    if !is_improving {
+        reduction = reduction.saturating_add(1);
     }
 
     // Clamp between 0 and half the remaining depth
@@ -81,10 +68,8 @@ pub fn can_futility_prune(remaining_depth: u8, in_check: bool) -> bool {
     remaining_depth <= FUTILITY_MAX_DEPTH && !in_check
 }
 
-// Reverse Futility Pruning (static beta pruning)
-pub const RFP_MAX_DEPTH: u8 = 3;
-pub const RFP_MARGINS: [i16; RFP_MAX_DEPTH as usize + 1] = [0, 150, 250, 400];
-const IMPROVING_RFP_DELTA: i16 = 25; // Add or subtract based on improving signal
+// Reverse Futility Pruning (static beta pruning) - Black Marlin approach
+pub const RFP_MAX_DEPTH: u8 = 8;
 
 #[inline(always)]
 pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool, is_pv_node: bool) -> bool {
@@ -92,18 +77,12 @@ pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool, is_pv_nod
 }
 
 #[inline(always)]
-pub fn rfp_margin(remaining_depth: u8, trend: Trend) -> i16 {
-    let margin = RFP_MARGINS[remaining_depth as usize];
-    match trend {
-        Trend::Improving(s) => {
-            let delta = IMPROVING_RFP_DELTA * s as i16;
-            margin.saturating_sub(delta)
-        }
-        Trend::Worsening(s) => {
-            let delta = IMPROVING_RFP_DELTA * s as i16;
-            margin.saturating_add(delta)
-        }
-        Trend::Neutral => margin,
+pub fn rfp_margin(remaining_depth: u8, is_improving: bool) -> i16 {
+    let base_margin = remaining_depth as i16 * 70;
+    if is_improving {
+        base_margin - 60 // Smaller margin for improving positions
+    } else {
+        base_margin // No adjustment for non-improving (just base margin)
     }
 }
 
@@ -111,4 +90,15 @@ pub fn rfp_margin(remaining_depth: u8, trend: Trend) -> i16 {
 pub fn only_move(board: &Board) -> bool {
     let mut g = MoveGen::new_legal(board);
     matches!((g.next(), g.next()), (Some(_), None))
+}
+
+#[inline(always)]
+pub fn improving(eval: i16, eval_stack: &[i16]) -> bool {
+    // Pure eval comparison: current eval vs eval from 2 plies back
+    if eval_stack.len() < 2 {
+        return false;
+    }
+
+    let prev_move_eval = eval_stack[eval_stack.len() - 2];
+    eval > prev_move_eval
 }

@@ -30,8 +30,7 @@ use uci::{
     UciOutput,
 };
 
-use super::trend::Trend;
-use super::utils::{lmr, RAZOR_NEAR_MATE};
+use super::utils::{improving, lmr, RAZOR_NEAR_MATE};
 use super::{
     controller::SearchController,
     qs_table::QSTable,
@@ -343,7 +342,7 @@ impl NegamaxEngine {
             }
         };
 
-        let trend = Trend::new(static_eval, &self.eval_stack, in_check, remaining_depth);
+        let is_improving = !in_check && improving(static_eval, &self.eval_stack);
 
         if let Some(score) =
             self.try_razor_prune(board, remaining_depth, alpha, depth, in_check, static_eval)
@@ -376,7 +375,7 @@ impl NegamaxEngine {
             depth,
             max_depth,
             alpha,
-            trend,
+            is_improving,
         ) {
             return (score, Vec::new());
         }
@@ -428,7 +427,7 @@ impl NegamaxEngine {
                 remaining_depth,
                 m,
                 move_index,
-                trend,
+                is_improving,
                 static_eval,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
@@ -487,7 +486,7 @@ impl NegamaxEngine {
         remaining_depth: u8,
         m: ChessMove,
         move_index: i32,
-        trend: Trend,
+        is_improving: bool,
         static_eval: i16,
     ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
         let new_board = board.make_move_new(m);
@@ -507,7 +506,13 @@ impl NegamaxEngine {
         // get additional reduction on quiet late moves, as they're less likely to
         // contain the critical continuation.
         let is_pv_move = move_index == 0;
-        let mut reduction = lmr(remaining_depth, is_tactical, move_index, is_pv_move, trend);
+        let mut reduction = lmr(
+            remaining_depth,
+            is_tactical,
+            move_index,
+            is_pv_move,
+            is_improving,
+        );
         let alpha_child = alpha;
         let beta_child = if !is_pv_move { alpha + 1 } else { beta };
 
@@ -522,7 +527,7 @@ impl NegamaxEngine {
             is_tactical,
             is_pv_move,
             move_index,
-            matches!(trend, Trend::Improving(_)),
+            is_improving,
             &mut reduction,
         ) {
             return None;
@@ -922,12 +927,12 @@ impl NegamaxEngine {
         depth: u8,
         _max_depth: u8,
         alpha: i16,
-        trend: Trend,
+        is_improving: bool,
     ) -> Option<i16> {
         if !can_reverse_futility_prune(remaining_depth, in_check, is_pv_node) {
             return None;
         }
-        let margin = rfp_margin(remaining_depth, trend);
+        let margin = rfp_margin(remaining_depth, is_improving);
         if static_eval - margin >= beta && static_eval.abs() < RAZOR_NEAR_MATE {
             let rfp_depth = depth;
             self.tt.store(
