@@ -30,7 +30,7 @@ use uci::{
     UciOutput,
 };
 
-use super::utils::{lmr, RAZOR_NEAR_MATE};
+use super::utils::{lmr, should_lmp_prune, RAZOR_NEAR_MATE};
 use super::{
     controller::SearchController,
     qs_table::QSTable,
@@ -401,6 +401,11 @@ impl NegamaxEngine {
         let mut move_index = -1;
         while let Some(m) = movegen.next(board, &self.history_heuristic) {
             move_index += 1;
+
+            // Late Move Pruning (LMP)
+            if should_lmp_prune(board, m, in_check, is_pv_node, remaining_depth, move_index) {
+                continue;
+            }
 
             if let Some((value, mut line, is_quiet, child_depth)) = self.search_move(
                 board,
