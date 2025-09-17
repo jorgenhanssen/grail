@@ -4,6 +4,8 @@ use chess::{Board, ChessMove, MoveGen, Piece};
 
 use crate::utils::{see, HistoryHeuristic};
 
+const COUNTERMOVE_BONUS: i16 = 64;
+
 struct ScoredMove {
     mov: ChessMove,
     score: i16,
@@ -148,7 +150,7 @@ impl MainMoveGenerator {
                         );
 
                         let counter = if self.countermove == Some(mov) {
-                            1000
+                            COUNTERMOVE_BONUS
                         } else {
                             0
                         };
