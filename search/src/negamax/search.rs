@@ -398,6 +398,9 @@ impl NegamaxEngine {
             phase,
         );
 
+        // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff
+        let mut quiets_searched: Vec<ChessMove> = Vec::new();
+
         let mut move_index = -1;
         while let Some(m) = movegen.next(board, &self.history_heuristic) {
             move_index += 1;
@@ -434,14 +437,22 @@ impl NegamaxEngine {
                 alpha = alpha.max(best_value);
                 if alpha >= beta {
                     if is_quiet {
-                        self.on_quiet_fail_high(board, m, remaining_depth, depth as usize);
+                        self.on_quiet_fail_high(
+                            board,
+                            m,
+                            remaining_depth,
+                            depth as usize,
+                            &quiets_searched,
+                        );
                         self.countermoves.store(board, &self.move_stack, m);
                     }
                     break; // beta cutoff
                 }
 
-                if value < beta && is_quiet {
-                    self.on_quiet_fail_low(board, m, remaining_depth);
+                if is_quiet {
+                    // If we have a quiet move later that causes a cutoff, then this
+                    // move should have been sorted after, so let's punish it!
+                    quiets_searched.push(m);
                 }
             }
         }
@@ -716,6 +727,7 @@ impl NegamaxEngine {
         mv: ChessMove,
         remaining_depth: u8,
         depth: usize,
+        quiets_searched: &[ChessMove],
     ) {
         // Add killer move
         let killers = &mut self.killer_moves[depth];
@@ -724,16 +736,15 @@ impl NegamaxEngine {
             killers[0] = Some(mv);
         }
 
-        // Update history
+        // Apply malus to all previously searched quiet moves that did not cause a cutoff
+        let malus = self.history_heuristic.get_malus(remaining_depth);
+        for &q in quiets_searched {
+            self.history_heuristic.update(board, q, malus);
+        }
+
+        // Conversely, boost the move that caused the cutoff
         let bonus = self.history_heuristic.get_bonus(remaining_depth);
         self.history_heuristic.update(board, mv, bonus);
-    }
-
-    // Runs when a quiet move fails low (does not improve the bound)
-    #[inline(always)]
-    fn on_quiet_fail_low(&mut self, board: &Board, mv: ChessMove, remaining_depth: u8) {
-        let malus = self.history_heuristic.get_malus(remaining_depth);
-        self.history_heuristic.update(board, mv, malus);
     }
 
     #[inline(always)]
