@@ -91,8 +91,9 @@ pub fn can_futility_prune(remaining_depth: u8, in_check: bool) -> bool {
     remaining_depth <= FUTILITY_MAX_DEPTH && !in_check
 }
 
-// Reverse Futility Pruning (static beta pruning) - Black Marlin approach
-pub const RFP_MAX_DEPTH: u8 = 8;
+// Reverse Futility Pruning (static beta pruning)
+pub const RFP_MAX_DEPTH: u8 = 3;
+pub const RFP_MARGINS: [i16; RFP_MAX_DEPTH as usize + 1] = [0, 150, 250, 400];
 
 #[inline(always)]
 pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool, is_pv_node: bool) -> bool {
@@ -100,20 +101,13 @@ pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool, is_pv_nod
 }
 
 #[inline(always)]
-pub fn rfp_margin(remaining_depth: u8, is_improving: bool) -> i16 {
-    let base_margin = remaining_depth as i16 * 70;
-    if is_improving {
-        base_margin - 60 // Smaller margin for improving positions
-    } else {
-        base_margin // No adjustment for non-improving (just base margin)
-    }
-}
-
-#[inline(always)]
 pub fn only_move(board: &Board) -> bool {
     let mut g = MoveGen::new_legal(board);
     matches!((g.next(), g.next()), (Some(_), None))
 }
+
+// improving by at least x CPs
+const IMPROVING_MARGIN: i16 = 20;
 
 #[inline(always)]
 pub fn improving(eval: i16, eval_stack: &[i16]) -> bool {
@@ -123,5 +117,5 @@ pub fn improving(eval: i16, eval_stack: &[i16]) -> bool {
     }
 
     let prev_move_eval = eval_stack[eval_stack.len() - 2];
-    eval > prev_move_eval
+    eval + IMPROVING_MARGIN > prev_move_eval
 }

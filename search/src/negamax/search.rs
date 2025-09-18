@@ -5,7 +5,7 @@ use crate::{
         },
         utils::{
             can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
-            can_reverse_futility_prune, rfp_margin, FUTILITY_MARGINS, RAZOR_MARGINS,
+            can_reverse_futility_prune, FUTILITY_MARGINS, RAZOR_MARGINS, RFP_MARGINS,
         },
     },
     utils::{
@@ -331,13 +331,9 @@ impl NegamaxEngine {
         let remaining_depth = max_depth - depth;
         let in_check = board.checkers().popcnt() > 0;
 
-        // Use TT static eval if available, otherwise calculate as fallback
-        // Position improvement detection and pruning both use the same static evaluation
         let static_eval = if let Some(tt_se) = tt_static_eval {
-            // We have cached static eval from TT - use it directly
-            tt_se
+            tt_se // Cached in TT
         } else {
-            // Fallback: calculate static evaluation for this position
             let eval = self.evaluator.evaluate(board, phase);
             if board.side_to_move() == Color::White {
                 eval
@@ -379,7 +375,6 @@ impl NegamaxEngine {
             depth,
             max_depth,
             alpha,
-            is_improving,
         ) {
             return (score, Vec::new());
         }
@@ -526,9 +521,7 @@ impl NegamaxEngine {
             return None;
         }
 
-        // Late-move reduction with position improvement bias: Non-improving positions
-        // get additional reduction on quiet late moves, as they're less likely to
-        // contain the critical continuation.
+        // Late move reduction
         let is_pv_move = move_index == 0;
         let mut reduction = lmr(
             remaining_depth,
@@ -971,12 +964,11 @@ impl NegamaxEngine {
         depth: u8,
         _max_depth: u8,
         alpha: i16,
-        is_improving: bool,
     ) -> Option<i16> {
         if !can_reverse_futility_prune(remaining_depth, in_check, is_pv_node) {
             return None;
         }
-        let margin = rfp_margin(remaining_depth, is_improving);
+        let margin = RFP_MARGINS[remaining_depth as usize];
         if static_eval - margin >= beta && static_eval.abs() < RAZOR_NEAR_MATE {
             let rfp_depth = depth;
             self.tt.store(
