@@ -5,7 +5,7 @@ use crate::{
         },
         utils::{
             can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
-            can_reverse_futility_prune, FUTILITY_MARGINS, RAZOR_MARGINS, RFP_MARGINS,
+            can_reverse_futility_prune, rfp_margin, FUTILITY_MARGINS, RAZOR_MARGINS,
         },
     },
     utils::{
@@ -30,7 +30,7 @@ use uci::{
     UciOutput,
 };
 
-use super::utils::{lmr, should_lmp_prune, RAZOR_NEAR_MATE};
+use super::utils::{improving, lmr, should_lmp_prune, RAZOR_NEAR_MATE};
 use super::{
     controller::SearchController,
     qs_table::QSTable,
@@ -62,6 +62,7 @@ pub struct NegamaxEngine {
     history_heuristic: HistoryHeuristic,
     capture_history: CaptureHistory,
     countermoves: CountermoveTable,
+    eval_stack: Vec<i16>,
 }
 
 impl Default for NegamaxEngine {
@@ -80,12 +81,13 @@ impl Default for NegamaxEngine {
             tt: TranspositionTable::new(256),
             qs_tt: QSTable::new(128),
 
-            position_stack: Vec::with_capacity(100),
-            move_stack: Vec::with_capacity(100),
+            position_stack: Vec::with_capacity(MAX_DEPTH),
+            move_stack: Vec::with_capacity(MAX_DEPTH),
 
             history_heuristic: HistoryHeuristic::new(),
             capture_history: CaptureHistory::new(),
             countermoves: CountermoveTable::new(),
+            eval_stack: Vec::with_capacity(MAX_DEPTH),
         }
     }
 }
@@ -202,6 +204,7 @@ impl NegamaxEngine {
         self.history_heuristic.reset();
         self.capture_history.reset();
         self.countermoves.reset();
+        self.eval_stack.clear();
     }
 
     #[inline(always)]
@@ -215,6 +218,7 @@ impl NegamaxEngine {
         self.position_stack.clear();
         self.position_stack.push(self.board.get_hash());
         self.move_stack.clear();
+        self.eval_stack.clear();
     }
 
     pub fn search_root(
@@ -324,16 +328,18 @@ impl NegamaxEngine {
         }
 
         let phase = game_phase(board);
-
         let remaining_depth = max_depth - depth;
         let in_check = board.checkers().popcnt() > 0;
 
-        // Use TT static eval if available, otherwise calculate if needed
-        // When we have TT static eval, we can be more aggressive with pruning
         let static_eval = if let Some(tt_se) = tt_static_eval {
-            Some(tt_se)
+            tt_se // Cached in TT
         } else {
-            self.static_eval_if_needed(board, remaining_depth, in_check, is_pv_node, phase)
+            let eval = self.evaluator.evaluate(board, phase);
+            if board.side_to_move() == Color::White {
+                eval
+            } else {
+                -eval
+            }
         };
 
         if let Some(score) =
@@ -352,21 +358,7 @@ impl NegamaxEngine {
             remaining_depth,
             in_check,
             try_null_move,
-            static_eval,
-        ) {
-            return (score, Vec::new());
-        }
-
-        if let Some(score) = self.try_reverse_futility_prune(
-            remaining_depth,
-            in_check,
-            is_pv_node,
-            static_eval,
-            beta,
-            hash,
-            depth,
-            max_depth,
-            alpha,
+            Some(static_eval),
         ) {
             return (score, Vec::new());
         }
@@ -385,6 +377,24 @@ impl NegamaxEngine {
             in_check,
         ) {
             maybe_tt_move = Some(m);
+        }
+
+        self.eval_stack.push(static_eval);
+        let is_improving = !in_check && improving(static_eval, &self.eval_stack);
+
+        if let Some(score) = self.try_reverse_futility_prune(
+            remaining_depth,
+            in_check,
+            is_pv_node,
+            static_eval,
+            beta,
+            hash,
+            depth,
+            max_depth,
+            alpha,
+            is_improving,
+        ) {
+            return (score, Vec::new());
         }
 
         self.max_depth_reached = self.max_depth_reached.max(depth);
@@ -411,7 +421,15 @@ impl NegamaxEngine {
             move_index += 1;
 
             // Late Move Pruning (LMP)
-            if should_lmp_prune(board, m, in_check, is_pv_node, remaining_depth, move_index) {
+            if should_lmp_prune(
+                board,
+                m,
+                in_check,
+                is_pv_node,
+                remaining_depth,
+                move_index,
+                is_improving,
+            ) {
                 continue;
             }
 
@@ -425,6 +443,7 @@ impl NegamaxEngine {
                 remaining_depth,
                 m,
                 move_index,
+                is_improving,
                 static_eval,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
@@ -465,13 +484,15 @@ impl NegamaxEngine {
             }
         }
 
+        self.eval_stack.pop();
+
         // Store TT entry with the depth actually searched for the best move
         self.tt.store(
             hash,
             depth,
             best_move_depth,
             best_value,
-            static_eval,
+            Some(static_eval),
             original_alpha,
             beta,
             best_move,
@@ -492,7 +513,8 @@ impl NegamaxEngine {
         remaining_depth: u8,
         m: ChessMove,
         move_index: i32,
-        static_eval: Option<i16>,
+        is_improving: bool,
+        static_eval: i16,
     ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
         let new_board = board.make_move_new(m);
         let gives_check = new_board.checkers().popcnt() > 0;
@@ -507,10 +529,15 @@ impl NegamaxEngine {
             return None;
         }
 
-        // Late-move reduction
-        let mut reduction = lmr(remaining_depth, is_tactical, move_index);
-
+        // Late move reduction
         let is_pv_move = move_index == 0;
+        let mut reduction = lmr(
+            remaining_depth,
+            is_tactical,
+            move_index,
+            is_pv_move,
+            is_improving,
+        );
         let alpha_child = alpha;
         let beta_child = if !is_pv_move { alpha + 1 } else { beta };
 
@@ -525,6 +552,7 @@ impl NegamaxEngine {
             is_tactical,
             is_pv_move,
             move_index,
+            is_improving,
             &mut reduction,
         ) {
             return None;
@@ -808,46 +836,18 @@ impl NegamaxEngine {
     }
 
     #[inline(always)]
-    fn static_eval_if_needed(
-        &mut self,
-        board: &Board,
-        remaining_depth: u8,
-        in_check: bool,
-        is_pv_node: bool,
-        phase: f32,
-    ) -> Option<i16> {
-        let should_static_eval = can_razor_prune(remaining_depth, in_check)
-            || can_futility_prune(remaining_depth, in_check)
-            || can_reverse_futility_prune(remaining_depth, in_check, is_pv_node);
-
-        if !should_static_eval {
-            return None;
-        }
-
-        let eval = self.evaluator.evaluate(board, phase);
-        if board.side_to_move() == Color::White {
-            Some(eval)
-        } else {
-            Some(-eval)
-        }
-    }
-
-    #[inline(always)]
     fn try_futility_prune(
         &self,
         remaining_depth: u8,
         in_check: bool,
         is_tactical: bool,
         alpha: i16,
-        static_eval: Option<i16>,
+        static_eval: i16,
     ) -> bool {
         if !can_futility_prune(remaining_depth, in_check) {
             return false;
         }
-        if let Some(se) = static_eval {
-            return !is_tactical && se + FUTILITY_MARGINS[remaining_depth as usize] <= alpha;
-        }
-        false
+        !is_tactical && static_eval + FUTILITY_MARGINS[remaining_depth as usize] <= alpha
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -859,14 +859,13 @@ impl NegamaxEngine {
         alpha: i16,
         depth: u8,
         in_check: bool,
-        static_eval: Option<i16>,
+        static_eval: i16,
     ) -> Option<i16> {
         if !can_razor_prune(remaining_depth, in_check) {
             return None;
         }
-        let se = static_eval?;
         // If static eval already near/above alpha threshold, do not razor
-        if se >= alpha - RAZOR_MARGINS[remaining_depth as usize] {
+        if static_eval >= alpha - RAZOR_MARGINS[remaining_depth as usize] {
             return None;
         }
         // Q search with null window
@@ -898,7 +897,6 @@ impl NegamaxEngine {
         if !(try_null_move && can_null_move_prune(board, remaining_depth, in_check)) {
             return None;
         }
-
         let nm_board = board.null_move()?;
         let base_remaining = max_depth - depth;
 
@@ -968,21 +966,30 @@ impl NegamaxEngine {
         remaining_depth: u8,
         in_check: bool,
         is_pv_node: bool,
-        static_eval: Option<i16>,
+        static_eval: i16,
         beta: i16,
         hash: u64,
         depth: u8,
         _max_depth: u8,
         alpha: i16,
+        is_improving: bool,
     ) -> Option<i16> {
         if !can_reverse_futility_prune(remaining_depth, in_check, is_pv_node) {
             return None;
         }
-        let se = static_eval?;
-        if se - RFP_MARGINS[remaining_depth as usize] >= beta && se.abs() < RAZOR_NEAR_MATE {
+        let margin = rfp_margin(remaining_depth, is_improving);
+        if static_eval - margin >= beta && static_eval.abs() < RAZOR_NEAR_MATE {
             let rfp_depth = depth;
-            self.tt
-                .store(hash, depth, rfp_depth, beta, Some(se), alpha, beta, None);
+            self.tt.store(
+                hash,
+                depth,
+                rfp_depth,
+                beta,
+                Some(static_eval),
+                alpha,
+                beta,
+                None,
+            );
             return Some(beta);
         }
         None
