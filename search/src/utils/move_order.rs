@@ -1,8 +1,9 @@
 // Move ordering inspired by Black Marlin
 
 use chess::{Board, ChessMove, MoveGen, Piece};
+use evaluation::piece_value;
 
-use crate::utils::{see, HistoryHeuristic};
+use crate::utils::{see, CaptureHistory, HistoryHeuristic};
 
 const COUNTERMOVE_BONUS: i16 = 64;
 
@@ -65,6 +66,7 @@ impl MainMoveGenerator {
         &mut self,
         board: &Board,
         history_heuristic: &HistoryHeuristic,
+        capture_history: &CaptureHistory,
     ) -> Option<ChessMove> {
         if self.gen_phase == Phase::BestMove {
             self.gen_phase = Phase::GenCaptures;
@@ -89,7 +91,7 @@ impl MainMoveGenerator {
 
                 self.good_captures.push(ScoredMove {
                     mov,
-                    score: capture_score(board, mov),
+                    score: capture_score(board, mov, capture_history, self.game_phase),
                 });
             }
         }
@@ -98,7 +100,7 @@ impl MainMoveGenerator {
             while let Some(index) = select_highest(&self.good_captures) {
                 let scored_move = self.good_captures.swap_remove(index);
 
-                if see(board, scored_move.mov, self.game_phase) < 0 {
+                if scored_move.score < 0 || see(board, scored_move.mov, self.game_phase) < 0 {
                     self.bad_captures.push(scored_move);
                     continue;
                 }
@@ -187,7 +189,12 @@ pub struct QMoveGenerator {
 }
 
 impl QMoveGenerator {
-    pub fn new(in_check: bool, board: &Board) -> Self {
+    pub fn new(
+        in_check: bool,
+        board: &Board,
+        capture_history: &CaptureHistory,
+        phase: f32,
+    ) -> Self {
         let mut gen = MoveGen::new_legal(board);
 
         if !in_check {
@@ -198,7 +205,7 @@ impl QMoveGenerator {
             for mov in gen {
                 forcing_moves.push(ScoredMove {
                     mov,
-                    score: capture_score(board, mov),
+                    score: capture_score(board, mov, capture_history, phase),
                 });
             }
 
@@ -235,33 +242,17 @@ fn select_highest(array: &[ScoredMove]) -> Option<usize> {
     best.map(|(_, index)| index)
 }
 
+// Replacement scoring for captures using Capture History.
 #[inline(always)]
-fn capture_score(board: &Board, mv: ChessMove) -> i16 {
+fn capture_score(
+    board: &Board,
+    mv: ChessMove,
+    capture_history: &CaptureHistory,
+    phase: f32,
+) -> i16 {
     let victim = board.piece_on(mv.get_dest()).unwrap();
     let attacker = board.piece_on(mv.get_source()).unwrap();
-    MVV_LVA[mvva_lva_index(victim)][mvva_lva_index(attacker)]
-}
+    let hist = capture_history.get(attacker, mv.get_dest(), victim);
 
-// MVV-LVA table
-// king, queen, rook, bishop, knight, pawn
-const MVV_LVA: [[i16; 6]; 6] = [
-    [0, 0, 0, 0, 0, 0],       // victim King
-    [50, 51, 52, 53, 54, 55], // victim Queen
-    [40, 41, 42, 43, 44, 45], // victim Rook
-    [30, 31, 32, 33, 34, 35], // victim Bishop
-    [20, 21, 22, 23, 24, 25], // victim Knight
-    [10, 11, 12, 13, 14, 15], // victim Pawn
-];
-
-// Helper function to convert Piece to array index
-#[inline(always)]
-fn mvva_lva_index(piece: Piece) -> usize {
-    match piece {
-        Piece::King => 0,
-        Piece::Queen => 1,
-        Piece::Rook => 2,
-        Piece::Bishop => 3,
-        Piece::Knight => 4,
-        Piece::Pawn => 5,
-    }
+    piece_value(victim, phase) + hist
 }
