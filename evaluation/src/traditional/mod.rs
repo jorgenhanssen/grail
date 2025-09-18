@@ -1,4 +1,3 @@
-pub mod bonus;
 mod eval_bishops;
 mod eval_king;
 mod eval_knights;
