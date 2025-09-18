@@ -34,6 +34,7 @@ pub fn should_lmp_prune(
     is_pv_node: bool,
     remaining_depth: u8,
     move_index: i32,
+    is_improving: bool,
 ) -> bool {
     let is_capture = board.piece_on(mv.get_dest()).is_some();
     let is_promotion = mv.get_promotion() == Some(Piece::Queen);
@@ -42,7 +43,15 @@ pub fn should_lmp_prune(
         return false;
     }
 
-    move_index > LMP_LIMITS[remaining_depth as usize]
+    let mut limit = LMP_LIMITS[remaining_depth as usize];
+
+    // Be more aggressive (prune earlier) when position isn't improving
+    // Use conservative 15% reduction to avoid being too aggressive
+    if !is_improving {
+        limit = (limit * 85) / 100;
+    }
+
+    move_index > limit
 }
 
 #[inline(always)]
@@ -101,21 +110,31 @@ pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool, is_pv_nod
 }
 
 #[inline(always)]
+pub fn rfp_margin(remaining_depth: u8, is_improving: bool) -> i16 {
+    let base_margin = RFP_MARGINS[remaining_depth as usize];
+    if is_improving {
+        base_margin - 50 // Smaller margin for improving positions (more conservative than original -60)
+    } else {
+        base_margin
+    }
+}
+
+#[inline(always)]
 pub fn only_move(board: &Board) -> bool {
     let mut g = MoveGen::new_legal(board);
     matches!((g.next(), g.next()), (Some(_), None))
 }
 
-// improving by at least x CPs
+// Small margin to avoid evaluation noise affecting position improvement detection
 const IMPROVING_MARGIN: i16 = 20;
 
 #[inline(always)]
 pub fn improving(eval: i16, eval_stack: &[i16]) -> bool {
-    // Pure eval comparison: current eval vs eval from 2 plies back
+    // Eval comparison with small margin to filter noise: current eval vs eval from 2 plies back
     if eval_stack.len() < 2 {
         return false;
     }
 
     let prev_move_eval = eval_stack[eval_stack.len() - 2];
-    eval + IMPROVING_MARGIN > prev_move_eval
+    eval > prev_move_eval - IMPROVING_MARGIN
 }

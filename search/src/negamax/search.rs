@@ -5,7 +5,7 @@ use crate::{
         },
         utils::{
             can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
-            can_reverse_futility_prune, FUTILITY_MARGINS, RAZOR_MARGINS, RFP_MARGINS,
+            can_reverse_futility_prune, rfp_margin, FUTILITY_MARGINS, RAZOR_MARGINS,
         },
     },
     utils::{
@@ -342,8 +342,6 @@ impl NegamaxEngine {
             }
         };
 
-        let is_improving = !in_check && improving(static_eval, &self.eval_stack);
-
         if let Some(score) =
             self.try_razor_prune(board, remaining_depth, alpha, depth, in_check, static_eval)
         {
@@ -365,20 +363,6 @@ impl NegamaxEngine {
             return (score, Vec::new());
         }
 
-        if let Some(score) = self.try_reverse_futility_prune(
-            remaining_depth,
-            in_check,
-            is_pv_node,
-            static_eval,
-            beta,
-            hash,
-            depth,
-            max_depth,
-            alpha,
-        ) {
-            return (score, Vec::new());
-        }
-
         // Internal Iterative Deepening (IID)
         if let Some(m) = self.try_iid(
             board,
@@ -396,6 +380,22 @@ impl NegamaxEngine {
         }
 
         self.eval_stack.push(static_eval);
+        let is_improving = !in_check && improving(static_eval, &self.eval_stack);
+
+        if let Some(score) = self.try_reverse_futility_prune(
+            remaining_depth,
+            in_check,
+            is_pv_node,
+            static_eval,
+            beta,
+            hash,
+            depth,
+            max_depth,
+            alpha,
+            is_improving,
+        ) {
+            return (score, Vec::new());
+        }
 
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
@@ -421,7 +421,15 @@ impl NegamaxEngine {
             move_index += 1;
 
             // Late Move Pruning (LMP)
-            if should_lmp_prune(board, m, in_check, is_pv_node, remaining_depth, move_index) {
+            if should_lmp_prune(
+                board,
+                m,
+                in_check,
+                is_pv_node,
+                remaining_depth,
+                move_index,
+                is_improving,
+            ) {
                 continue;
             }
 
@@ -964,11 +972,12 @@ impl NegamaxEngine {
         depth: u8,
         _max_depth: u8,
         alpha: i16,
+        is_improving: bool,
     ) -> Option<i16> {
         if !can_reverse_futility_prune(remaining_depth, in_check, is_pv_node) {
             return None;
         }
-        let margin = RFP_MARGINS[remaining_depth as usize];
+        let margin = rfp_margin(remaining_depth, is_improving);
         if static_eval - margin >= beta && static_eval.abs() < RAZOR_NEAR_MATE {
             let rfp_depth = depth;
             self.tt.store(
