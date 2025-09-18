@@ -35,7 +35,7 @@ pub fn lmr(
     let depth_factor = (remaining_depth as f32).ln();
     let move_factor = (move_index as f32).ln();
 
-    let mut reduction = ((depth_factor * move_factor) / 5.0).round() as u8;
+    let mut reduction = (depth_factor * move_factor / 2.3).round() as u8;
 
     if !is_improving {
         reduction = reduction.saturating_add(1);

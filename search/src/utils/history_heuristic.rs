@@ -1,9 +1,9 @@
 use chess::{Board, ChessMove, Color, Square, NUM_COLORS, NUM_SQUARES};
 
-const MAX_HISTORY: i32 = 16_384;
+const MAX_HISTORY: i32 = 512;
 const MAX_DEPTH: usize = 100;
-const HISTORY_REDUCE_THRESHOLD: i16 = 0; // reduce quiet late moves if history <= 0
-const HISTORY_LEAF_THRESHOLD: i16 = -1200; // slightly stricter to avoid over-pruning
+const HISTORY_REDUCE_THRESHOLD: i16 = -8; // reduce quiet late moves if history <= -8
+const HISTORY_LEAF_THRESHOLD: i16 = -64; // prune quiet late moves if history very low
 const HISTORY_MOVE_GATE: i32 = 5; // only consider after some moves have been tried
 
 #[derive(Clone)]
@@ -36,8 +36,8 @@ impl HistoryHeuristic {
         let h = *entry as i32;
         let b = bonus.clamp(-(MAX_HISTORY), MAX_HISTORY);
 
-        // Optimized Stockfish formula: h += bonus - (h * |bonus|) / 2¹⁴
-        let new = h + b - ((h * b.abs()) >> 14);
+        // History gravity formula
+        let new = h + b - ((h * b.abs()) / MAX_HISTORY);
 
         *entry = new.clamp(-(MAX_HISTORY), MAX_HISTORY) as i16;
     }
@@ -114,7 +114,7 @@ const BONUS: [i32; MAX_DEPTH + 1] = {
     let mut i = 0;
     while i <= MAX_DEPTH {
         let depth = i as i32;
-        table[i] = 32 * depth * depth + 16 * depth;
+        table[i] = 13 * depth;
         i += 1;
     }
     table
@@ -124,7 +124,7 @@ const MALUS: [i32; MAX_DEPTH + 1] = {
     let mut i = 0;
     while i <= MAX_DEPTH {
         let depth = i as i32;
-        table[i] = -(12 * depth * depth + 6 * depth);
+        table[i] = -(10 * depth);
         i += 1;
     }
     table

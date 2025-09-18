@@ -1,3 +1,4 @@
+mod capture_history;
 mod countermove;
 mod history_heuristic;
 mod move_order;
@@ -6,6 +7,7 @@ mod see;
 use chess::{Board, Piece};
 pub use move_order::{MainMoveGenerator, QMoveGenerator};
 
+pub use capture_history::CaptureHistory;
 pub use countermove::CountermoveTable;
 use evaluation::scores::MATE_VALUE;
 pub use history_heuristic::HistoryHeuristic;

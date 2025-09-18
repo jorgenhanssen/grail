@@ -9,8 +9,8 @@ use crate::{
         },
     },
     utils::{
-        convert_centipawn_score, convert_mate_score, game_phase, see, HistoryHeuristic,
-        MainMoveGenerator, QMoveGenerator,
+        convert_centipawn_score, convert_mate_score, game_phase, see, CaptureHistory,
+        HistoryHeuristic, MainMoveGenerator, QMoveGenerator,
     },
     Engine,
 };
@@ -60,6 +60,7 @@ pub struct NegamaxEngine {
     move_stack: Vec<ChessMove>,
 
     history_heuristic: HistoryHeuristic,
+    capture_history: CaptureHistory,
     countermoves: CountermoveTable,
     eval_stack: Vec<i16>,
 }
@@ -84,6 +85,7 @@ impl Default for NegamaxEngine {
             move_stack: Vec::with_capacity(MAX_DEPTH),
 
             history_heuristic: HistoryHeuristic::new(),
+            capture_history: CaptureHistory::new(),
             countermoves: CountermoveTable::new(),
             eval_stack: Vec::with_capacity(MAX_DEPTH),
         }
@@ -200,6 +202,7 @@ impl NegamaxEngine {
         self.tt.clear();
         self.qs_tt.clear();
         self.history_heuristic.reset();
+        self.capture_history.reset();
         self.countermoves.reset();
         self.eval_stack.clear();
     }
@@ -232,7 +235,8 @@ impl NegamaxEngine {
         let mut current_best_move = None;
 
         // Negamax at root: call search_subtree with flipped window, then negate result
-        while let Some(m) = moves.next(&self.board, &self.history_heuristic) {
+        while let Some(m) = moves.next(&self.board, &self.history_heuristic, &self.capture_history)
+        {
             let new_board = self.board.make_move_new(m);
 
             self.position_stack.push(new_board.get_hash());
@@ -413,8 +417,12 @@ impl NegamaxEngine {
             phase,
         );
 
+        // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff
+        let mut quiets_searched: Vec<ChessMove> = Vec::with_capacity(8);
+        let mut captures_searched: Vec<ChessMove> = Vec::with_capacity(8);
+
         let mut move_index = -1;
-        while let Some(m) = movegen.next(board, &self.history_heuristic) {
+        while let Some(m) = movegen.next(board, &self.history_heuristic, &self.capture_history) {
             move_index += 1;
 
             if let Some((value, mut line, is_quiet, child_depth)) = self.search_move(
@@ -444,15 +452,26 @@ impl NegamaxEngine {
 
                 alpha = alpha.max(best_value);
                 if alpha >= beta {
-                    if is_quiet {
-                        self.on_quiet_fail_high(board, m, remaining_depth, depth as usize);
-                        self.countermoves.store(board, &self.move_stack, m);
-                    }
+                    self.on_fail_high(
+                        board,
+                        m,
+                        remaining_depth,
+                        depth as usize,
+                        is_quiet,
+                        &quiets_searched,
+                        &captures_searched,
+                    );
+
                     break; // beta cutoff
                 }
 
-                if value < beta && is_quiet {
-                    self.on_quiet_fail_low(board, m, remaining_depth);
+                if is_quiet {
+                    // If we have a quiet move later that causes a cutoff, then this
+                    // move should have been sorted after, so let's punish it!
+                    quiets_searched.push(m);
+                } else {
+                    // Similarly track captures that didn't cause cutoff
+                    captures_searched.push(m);
                 }
             }
         }
@@ -674,7 +693,7 @@ impl NegamaxEngine {
         let mut best_line = Vec::new();
         let mut best_eval = if in_check { NEG_INFINITY } else { stand_pat };
 
-        let mut moves = QMoveGenerator::new(in_check, board);
+        let mut moves = QMoveGenerator::new(in_check, board, &self.capture_history, phase);
 
         while let Some(mv) = moves.next() {
             // Per-move delta pruning (skip if capture can't possibly improve alpha)
@@ -730,32 +749,52 @@ impl NegamaxEngine {
         (best_eval, best_line)
     }
 
-    // Runs when a quiet move yields a beta cutoff
+    #[allow(clippy::too_many_arguments)]
     #[inline(always)]
-    fn on_quiet_fail_high(
+    fn on_fail_high(
         &mut self,
         board: &Board,
         mv: ChessMove,
         remaining_depth: u8,
         depth: usize,
+        is_quiet: bool,
+        quiets_searched: &[ChessMove],
+        captures_searched: &[ChessMove],
     ) {
-        // Add killer move
-        let killers = &mut self.killer_moves[depth];
-        if killers[0] != Some(mv) {
-            killers[1] = killers[0];
-            killers[0] = Some(mv);
+        if is_quiet {
+            // Add killer move for quiet moves
+            let killers = &mut self.killer_moves[depth];
+            if killers[0] != Some(mv) {
+                killers[1] = killers[0];
+                killers[0] = Some(mv);
+            }
+
+            self.countermoves.store(board, &self.move_stack, mv);
+
+            // Boost the quiet move that caused the cutoff
+            let bonus = self.history_heuristic.get_bonus(remaining_depth);
+            self.history_heuristic.update(board, mv, bonus);
+        } else {
+            // Boost the capture that caused the cutoff
+            let bonus = self.capture_history.get_bonus(remaining_depth);
+            self.capture_history.update_capture(board, mv, bonus);
         }
 
-        // Update history
-        let bonus = self.history_heuristic.get_bonus(remaining_depth);
-        self.history_heuristic.update(board, mv, bonus);
-    }
+        if !quiets_searched.is_empty() {
+            // Apply malus to all previously searched quiet moves
+            let quiet_malus = self.history_heuristic.get_malus(remaining_depth);
+            for &q in quiets_searched {
+                self.history_heuristic.update(board, q, quiet_malus);
+            }
+        }
 
-    // Runs when a quiet move fails low (does not improve the bound)
-    #[inline(always)]
-    fn on_quiet_fail_low(&mut self, board: &Board, mv: ChessMove, remaining_depth: u8) {
-        let malus = self.history_heuristic.get_malus(remaining_depth);
-        self.history_heuristic.update(board, mv, malus);
+        if !captures_searched.is_empty() {
+            // Apply malus to all previously searched captures
+            let capture_malus = self.capture_history.get_malus(remaining_depth);
+            for &c in captures_searched {
+                self.capture_history.update_capture(board, c, capture_malus);
+            }
+        }
     }
 
     #[inline(always)]
