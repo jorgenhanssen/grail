@@ -399,7 +399,7 @@ impl NegamaxEngine {
         );
 
         // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff
-        let mut quiets_searched: Vec<ChessMove> = Vec::new();
+        let mut quiets_searched: Vec<ChessMove> = Vec::with_capacity(8);
 
         let mut move_index = -1;
         while let Some(m) = movegen.next(board, &self.history_heuristic) {
