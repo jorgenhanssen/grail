@@ -1,11 +1,9 @@
 // Move ordering inspired by Black Marlin
 
-use chess::{Board, ChessMove, MoveGen, Piece};
+use chess::{Board, ChessMove, MoveGen, Piece, Square};
 use evaluation::piece_value;
 
-use crate::utils::{see, CaptureHistory, HistoryHeuristic};
-
-const COUNTERMOVE_BONUS: i16 = 64;
+use crate::utils::{see, CaptureHistory, ContinuationHistory, HistoryHeuristic, MAX_CONT_PLIES};
 
 struct ScoredMove {
     mov: ChessMove,
@@ -29,7 +27,8 @@ pub struct MainMoveGenerator {
 
     best_move: Option<ChessMove>,
 
-    countermove: Option<ChessMove>,
+    // Continuation history context
+    prev_to: [Option<Square>; MAX_CONT_PLIES],
 
     killer_moves: [Option<ChessMove>; 2],
     killer_index: usize,
@@ -43,7 +42,7 @@ impl MainMoveGenerator {
     pub fn new(
         best_move: Option<ChessMove>,
         killer_moves: [Option<ChessMove>; 2],
-        countermove: Option<ChessMove>,
+        prev_to: [Option<Square>; 2], // [1-ply, 2-ply]
         game_phase: f32,
     ) -> Self {
         Self {
@@ -51,7 +50,12 @@ impl MainMoveGenerator {
             game_phase,
             best_move,
 
-            countermove,
+            prev_to: {
+                let mut arr = [None; MAX_CONT_PLIES];
+                arr[0] = prev_to[0];
+                arr[1] = prev_to[1];
+                arr
+            },
 
             killer_moves,
             killer_index: 0,
@@ -67,6 +71,7 @@ impl MainMoveGenerator {
         board: &Board,
         history_heuristic: &HistoryHeuristic,
         capture_history: &CaptureHistory,
+        continuation_history: &ContinuationHistory,
     ) -> Option<ChessMove> {
         if self.gen_phase == Phase::BestMove {
             self.gen_phase = Phase::GenCaptures;
@@ -151,13 +156,14 @@ impl MainMoveGenerator {
                             mov.get_dest(),
                         );
 
-                        let counter = if self.countermove == Some(mov) {
-                            COUNTERMOVE_BONUS
-                        } else {
-                            0
-                        };
+                        let cont = continuation_history.get(
+                            board.side_to_move(),
+                            &self.prev_to,
+                            mov.get_source(),
+                            mov.get_dest(),
+                        );
 
-                        hist + counter
+                        hist + cont
                     }
                 };
 

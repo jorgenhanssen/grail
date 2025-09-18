@@ -10,11 +10,11 @@ use crate::{
     },
     utils::{
         convert_centipawn_score, convert_mate_score, game_phase, see, CaptureHistory,
-        HistoryHeuristic, MainMoveGenerator, QMoveGenerator,
+        ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator, MAX_CONT_PLIES,
     },
     Engine,
 };
-use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank};
+use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank, Square};
 use evaluation::{
     piece_value,
     scores::{MATE_VALUE, NEG_INFINITY},
@@ -36,7 +36,6 @@ use super::{
     qs_table::QSTable,
     tt_table::{Bound, TranspositionTable},
 };
-use crate::utils::CountermoveTable;
 
 const MAX_DEPTH: usize = 100;
 const IID_REDUCTION: u8 = 2;
@@ -61,7 +60,8 @@ pub struct NegamaxEngine {
 
     history_heuristic: HistoryHeuristic,
     capture_history: CaptureHistory,
-    countermoves: CountermoveTable,
+    continuation_history: Box<ContinuationHistory>,
+
     eval_stack: Vec<i16>,
 }
 
@@ -86,7 +86,7 @@ impl Default for NegamaxEngine {
 
             history_heuristic: HistoryHeuristic::new(),
             capture_history: CaptureHistory::new(),
-            countermoves: CountermoveTable::new(),
+            continuation_history: Box::new(ContinuationHistory::new()),
             eval_stack: Vec::with_capacity(MAX_DEPTH),
         }
     }
@@ -111,7 +111,6 @@ impl Engine for NegamaxEngine {
 
     fn set_position(&mut self, board: Board) {
         self.board = board;
-        self.countermoves.on_new_position();
     }
 
     fn stop(&mut self) {
@@ -198,12 +197,23 @@ impl Engine for NegamaxEngine {
 
 impl NegamaxEngine {
     #[inline(always)]
+    fn prev_to_squares(&self) -> [Option<Square>; MAX_CONT_PLIES] {
+        let len = self.move_stack.len();
+        let mut arr = [None; MAX_CONT_PLIES];
+        for (i, slot) in arr.iter_mut().enumerate() {
+            if i < len {
+                *slot = Some(self.move_stack[len - 1 - i].get_dest());
+            }
+        }
+        arr
+    }
+    #[inline(always)]
     pub fn init_game(&mut self) {
         self.tt.clear();
         self.qs_tt.clear();
         self.history_heuristic.reset();
         self.capture_history.reset();
-        self.countermoves.reset();
+        self.continuation_history.reset();
         self.eval_stack.clear();
     }
 
@@ -229,14 +239,24 @@ impl NegamaxEngine {
     ) -> (Option<ChessMove>, i16) {
         let best_move = self.current_pv.first().cloned();
 
-        let mut moves = MainMoveGenerator::new(best_move, [None; 2], None, game_phase(&self.board));
+        let prev_to = self.prev_to_squares();
+        let mut moves = MainMoveGenerator::new(
+            best_move,
+            [None; 2],
+            [prev_to[0], prev_to[1]],
+            game_phase(&self.board),
+        );
 
         let mut best_score = NEG_INFINITY;
         let mut current_best_move = None;
 
         // Negamax at root: call search_subtree with flipped window, then negate result
-        while let Some(m) = moves.next(&self.board, &self.history_heuristic, &self.capture_history)
-        {
+        while let Some(m) = moves.next(
+            &self.board,
+            &self.history_heuristic,
+            &self.capture_history,
+            &self.continuation_history,
+        ) {
             let new_board = self.board.make_move_new(m);
 
             self.position_stack.push(new_board.get_hash());
@@ -405,10 +425,11 @@ impl NegamaxEngine {
 
         let mut best_move_depth = depth;
 
+        let prev_to = self.prev_to_squares();
         let mut movegen = MainMoveGenerator::new(
             maybe_tt_move,
             self.killer_moves[depth as usize],
-            self.countermoves.get(board, &self.move_stack),
+            [prev_to[0], prev_to[1]],
             phase,
         );
 
@@ -417,7 +438,12 @@ impl NegamaxEngine {
         let mut captures_searched: Vec<ChessMove> = Vec::with_capacity(8);
 
         let mut move_index = -1;
-        while let Some(m) = movegen.next(board, &self.history_heuristic, &self.capture_history) {
+        while let Some(m) = movegen.next(
+            board,
+            &self.history_heuristic,
+            &self.capture_history,
+            &self.continuation_history,
+        ) {
             move_index += 1;
 
             // Late Move Pruning (LMP)
@@ -767,6 +793,7 @@ impl NegamaxEngine {
         quiets_searched: &[ChessMove],
         captures_searched: &[ChessMove],
     ) {
+        let prev_to = self.prev_to_squares();
         if is_quiet {
             // Add killer move for quiet moves
             let killers = &mut self.killer_moves[depth];
@@ -775,11 +802,14 @@ impl NegamaxEngine {
                 killers[0] = Some(mv);
             }
 
-            self.countermoves.store(board, &self.move_stack, mv);
-
             // Boost the quiet move that caused the cutoff
             let bonus = self.history_heuristic.get_bonus(remaining_depth);
             self.history_heuristic.update(board, mv, bonus);
+
+            // Continuation history bonus for quiet cutoff move
+            let cont_bonus = self.continuation_history.get_bonus(remaining_depth);
+            self.continuation_history
+                .update_quiet_all(board, &prev_to, mv, cont_bonus);
         } else {
             // Boost the capture that caused the cutoff
             let bonus = self.capture_history.get_bonus(remaining_depth);
@@ -791,6 +821,13 @@ impl NegamaxEngine {
             let quiet_malus = self.history_heuristic.get_malus(remaining_depth);
             for &q in quiets_searched {
                 self.history_heuristic.update(board, q, quiet_malus);
+            }
+
+            // Continuation history malus for previously searched quiets
+            let cont_malus = self.continuation_history.get_malus(remaining_depth);
+            for &q in quiets_searched {
+                self.continuation_history
+                    .update_quiet_all(board, &prev_to, q, cont_malus);
             }
         }
 
