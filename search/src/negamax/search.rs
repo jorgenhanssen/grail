@@ -78,8 +78,8 @@ impl Default for NegamaxEngine {
             evaluator: Box::new(TraditionalEvaluator),
 
             window: AspirationWindow::new(ASP_HALF_START, ASP_WIDEN, ASP_ENABLED_FROM),
-            tt: TranspositionTable::new(256),
-            qs_tt: QSTable::new(128),
+            tt: TranspositionTable::new(320),
+            qs_tt: QSTable::new(144),
 
             position_stack: Vec::with_capacity(MAX_DEPTH),
             move_stack: Vec::with_capacity(MAX_DEPTH),
