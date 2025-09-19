@@ -52,8 +52,8 @@ impl MainMoveGenerator {
 
             prev_to: {
                 let mut arr = [None; MAX_CONT_PLIES];
-                arr[0] = prev_to[0];
-                arr[1] = prev_to[1];
+                let len = prev_to.len().min(MAX_CONT_PLIES);
+                arr[..len].copy_from_slice(&prev_to[..len]);
                 arr
             },
 
