@@ -5,30 +5,32 @@ const MAX_DEPTH: usize = 100;
 
 #[derive(Clone)]
 pub struct CaptureHistory {
-    // table[moved_piece][dest_square][captured_piece]
-    table: [[[i16; NUM_PIECES]; NUM_SQUARES]; NUM_PIECES],
+    // Flattened: [moved_piece][dest_square][captured_piece]
+    table: Vec<i16>,
 }
 
 impl CaptureHistory {
     pub fn new() -> Self {
+        const TABLE_SIZE: usize = NUM_PIECES * NUM_SQUARES * NUM_PIECES;
         Self {
-            table: [[[0; NUM_PIECES]; NUM_SQUARES]; NUM_PIECES],
+            table: vec![0; TABLE_SIZE],
         }
     }
 
     #[inline(always)]
     pub fn reset(&mut self) {
-        self.table = [[[0; NUM_PIECES]; NUM_SQUARES]; NUM_PIECES];
+        self.table.fill(0);
     }
 
     #[inline(always)]
     pub fn get(&self, moved: Piece, dest: Square, captured: Piece) -> i16 {
-        self.table[piece_index(moved)][dest.to_index()][piece_index(captured)]
+        self.table[Self::index(moved, dest, captured)]
     }
 
     #[inline(always)]
     pub fn update(&mut self, moved: Piece, dest: Square, captured: Piece, delta: i32) {
-        let entry = &mut self.table[piece_index(moved)][dest.to_index()][piece_index(captured)];
+        let idx = Self::index(moved, dest, captured);
+        let entry = &mut self.table[idx];
 
         let h = *entry as i32;
         let b = delta.clamp(-MAX_HISTORY, MAX_HISTORY);
@@ -51,6 +53,18 @@ impl CaptureHistory {
             None => return, // not a capture, ignore
         };
         self.update(moved, dest, captured, delta);
+    }
+
+    #[inline(always)]
+    fn index(moved: Piece, dest: Square, captured: Piece) -> usize {
+        let moved_idx = piece_index(moved);
+        let dest_idx = dest.to_index();
+        let captured_idx = piece_index(captured);
+
+        let moved_stride = NUM_SQUARES * NUM_PIECES;
+        let dest_stride = NUM_PIECES;
+
+        moved_idx * moved_stride + dest_idx * dest_stride + captured_idx
     }
 
     #[inline(always)]
