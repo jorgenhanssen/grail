@@ -6,22 +6,21 @@ pub const MAX_CONT_PLIES: usize = 4;
 
 #[derive(Clone)]
 pub struct ContinuationHistory {
-    // [ply][color][prev_to][curr_from][curr_to]
-    continuations: [[[[[i16; NUM_SQUARES]; NUM_SQUARES]; NUM_SQUARES]; NUM_COLORS]; MAX_CONT_PLIES],
+    // Flattened: [ply][color][prev_to][curr_from][curr_to]
+    continuations: Vec<i16>,
 }
 
 impl ContinuationHistory {
     pub fn new() -> Self {
+        const SIZE: usize = MAX_CONT_PLIES * NUM_COLORS * NUM_SQUARES * NUM_SQUARES * NUM_SQUARES;
         Self {
-            continuations: [[[[[0; NUM_SQUARES]; NUM_SQUARES]; NUM_SQUARES]; NUM_COLORS];
-                MAX_CONT_PLIES],
+            continuations: vec![0; SIZE],
         }
     }
 
     #[inline(always)]
     pub fn reset(&mut self) {
-        self.continuations =
-            [[[[[0; NUM_SQUARES]; NUM_SQUARES]; NUM_SQUARES]; NUM_COLORS]; MAX_CONT_PLIES];
+        self.continuations.fill(0);
     }
 
     #[inline(always)]
@@ -37,8 +36,7 @@ impl ContinuationHistory {
             return 0;
         }
         if let Some(p_to) = prev_to {
-            self.continuations[ply][color.to_index()][p_to.to_index()][src.to_index()]
-                [dst.to_index()]
+            self.continuations[Self::index(ply, color, p_to, src, dst)]
         } else {
             0
         }
@@ -53,8 +51,8 @@ impl ContinuationHistory {
         dst: Square,
     ) -> i16 {
         let mut score = 0;
-        for ply in 0..MAX_CONT_PLIES {
-            score += self.get_ply(ply, color, prev_to[ply], src, dst);
+        for (ply, p_to) in prev_to.iter().enumerate() {
+            score += self.get_ply(ply, color, *p_to, src, dst);
         }
         score
     }
@@ -86,10 +84,10 @@ impl ContinuationHistory {
         dst: Square,
         delta: i32,
     ) {
-        for ply in 0..MAX_CONT_PLIES {
-            if let Some(p_to) = prev_to[ply] {
-                let entry = &mut self.continuations[ply][color.to_index()][p_to.to_index()]
-                    [src.to_index()][dst.to_index()];
+        for (ply, p_to_opt) in prev_to.iter().enumerate() {
+            if let Some(p_to) = *p_to_opt {
+                let idx = Self::index(ply, color, p_to, src, dst);
+                let entry = &mut self.continuations[idx];
                 Self::update_entry(entry, delta);
             }
         }
@@ -105,6 +103,28 @@ impl ContinuationHistory {
     ) {
         let color = board.side_to_move();
         self.update_continuations(color, prev_to, mv.get_source(), mv.get_dest(), delta);
+    }
+}
+
+impl ContinuationHistory {
+    #[inline(always)]
+    fn index(ply: usize, color: Color, prev_to: Square, src: Square, dst: Square) -> usize {
+        let ply_idx = ply;
+        let color_idx = color.to_index();
+        let prev_to_idx = prev_to.to_index();
+        let src_idx = src.to_index();
+        let dst_idx = dst.to_index();
+
+        let ply_stride = NUM_COLORS * NUM_SQUARES * NUM_SQUARES * NUM_SQUARES;
+        let color_stride = NUM_SQUARES * NUM_SQUARES * NUM_SQUARES;
+        let prev_to_stride = NUM_SQUARES * NUM_SQUARES;
+        let src_stride = NUM_SQUARES;
+
+        ply_idx * ply_stride
+            + color_idx * color_stride
+            + prev_to_idx * prev_to_stride
+            + src_idx * src_stride
+            + dst_idx
     }
 }
 
