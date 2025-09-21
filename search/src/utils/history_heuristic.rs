@@ -8,30 +8,32 @@ const HISTORY_MOVE_GATE: i32 = 5; // only consider after some moves have been tr
 
 #[derive(Clone)]
 pub struct HistoryHeuristic {
-    // history[color][from][to]
-    history: [[[i16; NUM_SQUARES]; NUM_SQUARES]; NUM_COLORS],
+    // Flattened: [color][from][to]
+    history: Vec<i16>,
 }
 
 impl HistoryHeuristic {
     pub fn new() -> Self {
+        const HISTORY_SIZE: usize = NUM_COLORS * NUM_SQUARES * NUM_SQUARES;
         Self {
-            history: [[[0; NUM_SQUARES]; NUM_SQUARES]; NUM_COLORS],
+            history: vec![0; HISTORY_SIZE],
         }
     }
 
     #[inline(always)]
     pub fn reset(&mut self) {
-        self.history = [[[0; NUM_SQUARES]; NUM_SQUARES]; NUM_COLORS];
+        self.history.fill(0);
     }
 
     #[inline(always)]
     pub fn get(&self, color: Color, source: Square, dest: Square) -> i16 {
-        self.history[color.to_index()][source.to_index()][dest.to_index()]
+        self.history[Self::index(color, source, dest)]
     }
 
     #[inline(always)]
     fn update_move(&mut self, c: Color, source: Square, dest: Square, bonus: i32) {
-        let entry = &mut self.history[c.to_index()][source.to_index()][dest.to_index()];
+        let idx = Self::index(c, source, dest);
+        let entry = &mut self.history[idx];
 
         let h = *entry as i32;
         let b = bonus.clamp(-(MAX_HISTORY), MAX_HISTORY);
@@ -50,6 +52,18 @@ impl HistoryHeuristic {
         self.update_move(color, source, dest, delta);
     }
 
+    #[inline(always)]
+    fn index(color: Color, source: Square, dest: Square) -> usize {
+        let color_idx = color.to_index();
+        let source_idx = source.to_index();
+        let dest_idx = dest.to_index();
+
+        let color_stride = NUM_SQUARES * NUM_SQUARES;
+        let source_stride = NUM_SQUARES;
+
+        color_idx * color_stride + source_idx * source_stride + dest_idx
+    }
+
     #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     pub fn maybe_reduce_or_prune(
@@ -63,6 +77,7 @@ impl HistoryHeuristic {
         is_tactical: bool,
         is_pv_move: bool,
         move_index: i32,
+        is_improving: bool,
         reduction: &mut u8,
     ) -> bool {
         if !(remaining_depth > 0
@@ -80,10 +95,16 @@ impl HistoryHeuristic {
         let hist_score = self.get(color, source, dest);
 
         if hist_score < HISTORY_REDUCE_THRESHOLD {
-            *reduction = reduction.saturating_add(1);
+            // Only apply additional reductions/pruning when position isn't improving
+            if !is_improving {
+                *reduction = reduction.saturating_add(1);
+            }
 
             let projected_child_max = max_depth.saturating_sub(*reduction);
-            if hist_score < HISTORY_LEAF_THRESHOLD && projected_child_max <= depth + 1 {
+            if !is_improving
+                && hist_score < HISTORY_LEAF_THRESHOLD
+                && projected_child_max <= depth + 1
+            {
                 return true; // prune
             }
         }
