@@ -3,6 +3,9 @@ name = "search"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+tuning = []
+
 [dependencies]
 evaluation = { path = "../evaluation" }
 uci = { path = "../uci" }

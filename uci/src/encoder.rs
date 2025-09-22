@@ -39,6 +39,7 @@ impl Encoder {
                         .join(" ")
                 )
             }
+            UciOutput::Option(option_str) => option_str.clone(),
         };
 
         output

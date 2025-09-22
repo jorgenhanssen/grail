@@ -3,6 +3,10 @@ name = "grail"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = []
+tuning = ["uci/tuning", "search/tuning"]
+
 [profile.release]
 lto = "fat"
 opt-level = 3

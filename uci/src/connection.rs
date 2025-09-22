@@ -37,7 +37,7 @@ impl UciConnection {
             let in_line = in_line.trim();
             log::debug!("Input: {:?}", in_line);
 
-            let input = decoder.decode(&in_line);
+            let input = decoder.decode(in_line);
 
             // Handle potential errors from callback
             if let Err(e) = callback(&input, self.output_tx.clone()) {

@@ -5,6 +5,7 @@ use args::Args;
 use clap::Parser;
 use engine::Engine;
 use log::{debug, LevelFilter};
+use search::EngineConfig;
 use simplelog::{Config, WriteLogger};
 use std::error::Error;
 use std::fs::File;
@@ -17,17 +18,32 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = init()?;
 
     let mut uci = UciConnection::new();
-    let mut engine = engine::create(&args);
+
+    let mut config = EngineConfig::default();
+    let mut engine = engine::create(&args, &config);
 
     uci.listen(|input, output| {
         match input {
             UciInput::Uci => {
                 output.send(UciOutput::IdName(ENGINE_NAME.to_string()))?;
                 output.send(UciOutput::IdAuthor(ENGINE_AUTHOR.to_string()))?;
+
+                // TODO: consider a more consistent way to do this (output.send)
+                config.to_uci(&output)?;
+
                 output.send(UciOutput::UciOk)?;
             }
             UciInput::IsReady => {
                 output.send(UciOutput::ReadyOk)?;
+            }
+            UciInput::SetOption { name, value } => {
+                if let Err(e) = config.update_from_uci(name, value) {
+                    debug!("Option setting failed: {}", e);
+                } else {
+                    debug!("Set option '{}' to '{}'", name, value);
+
+                    engine.configure(&config, false);
+                }
             }
             UciInput::UciNewGame => {
                 engine.new_game();

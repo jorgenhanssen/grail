@@ -1,3 +1,4 @@
+use crate::EngineConfig;
 use crate::{
     negamax::{
         aspiration::{
@@ -50,6 +51,7 @@ pub struct NegamaxEngine {
     stop: Arc<AtomicBool>,
 
     evaluator: Box<dyn Evaluator>,
+    config: EngineConfig,
 
     window: AspirationWindow,
     tt: TranspositionTable,
@@ -76,10 +78,11 @@ impl Default for NegamaxEngine {
             stop: Arc::new(AtomicBool::new(false)),
 
             evaluator: Box::new(TraditionalEvaluator),
+            config: EngineConfig::default(),
 
             window: AspirationWindow::new(ASP_HALF_START, ASP_WIDEN, ASP_ENABLED_FROM),
-            tt: TranspositionTable::new(256),
-            qs_tt: QSTable::new(128),
+            tt: TranspositionTable::new(1),
+            qs_tt: QSTable::new(1),
 
             position_stack: Vec::with_capacity(MAX_DEPTH),
             move_stack: Vec::with_capacity(MAX_DEPTH),
@@ -93,11 +96,24 @@ impl Default for NegamaxEngine {
 }
 
 impl Engine for NegamaxEngine {
-    fn new(evaluator: Box<dyn Evaluator>) -> Self {
-        Self {
+    fn new(evaluator: Box<dyn Evaluator>, config: &EngineConfig) -> Self {
+        let mut instance = Self {
             evaluator,
-            stop: Arc::new(AtomicBool::new(false)),
+            config: config.clone(),
             ..Default::default()
+        };
+
+        instance.configure(config, true);
+
+        instance
+    }
+
+    fn configure(&mut self, config: &EngineConfig, init: bool) {
+        let old_config = self.config.clone();
+        self.config = config.clone();
+
+        if init || old_config.hash_size.value != config.hash_size.value {
+            self.configure_transposition_tables();
         }
     }
 
@@ -1062,5 +1078,16 @@ impl NegamaxEngine {
             false, // disable nested IID
         );
         shallow_line.first().copied()
+    }
+}
+
+impl NegamaxEngine {
+    fn configure_transposition_tables(&mut self) {
+        let total_size_mb = self.config.hash_size.value;
+        let qs_size_mb = total_size_mb / 3;
+        let main_size_mb = total_size_mb - qs_size_mb;
+
+        self.tt = TranspositionTable::new(main_size_mb as usize);
+        self.qs_tt = QSTable::new(qs_size_mb as usize);
     }
 }

@@ -5,6 +5,7 @@ use candle_core::Result;
 use evaluation::TraditionalEvaluator;
 use nnue::NNUE;
 pub use search::Engine;
+use search::EngineConfig;
 pub use search::NegamaxEngine;
 
 use candle_nn::VarMap;
@@ -23,7 +24,7 @@ fn load_varmap_from_bytes(varmap: &mut VarMap, data: &[u8]) -> Result<()> {
     Ok(())
 }
 
-pub fn create(args: &Args) -> impl Engine {
+pub fn create(args: &Args, config: &EngineConfig) -> impl Engine {
     match args.engines.as_ref().unwrap_or(&Engines::Negamax {}) {
         Engines::Negamax {} => {
             // let mut varmap = VarMap::new();
@@ -33,7 +34,7 @@ pub fn create(args: &Args) -> impl Engine {
 
             // nnue.enable_nnue();
 
-            NegamaxEngine::new(Box::new(TraditionalEvaluator))
+            NegamaxEngine::new(Box::new(TraditionalEvaluator), config)
         }
     }
 }

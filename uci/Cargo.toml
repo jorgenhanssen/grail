@@ -3,6 +3,9 @@ name = "uci"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+tuning = []
+
 [dependencies]
 chess = { workspace = true }
 log = { workspace = true }

@@ -11,7 +11,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use nnue::version::VersionManager;
 use nnue::NNUE;
 use rand::Rng;
-use search::{Engine, NegamaxEngine};
+use search::{Engine, EngineConfig, NegamaxEngine};
 use std::sync::Mutex;
 use uci::commands::GoParams;
 
@@ -118,13 +118,15 @@ impl SelfPlayWorker {
         depth: u8,
         evaluator: Box<dyn Evaluator>,
     ) -> Self {
+        let config = EngineConfig::default();
+
         Self {
             tid,
             global_evaluated,
             game: Game::new(),
             depth,
 
-            engine: NegamaxEngine::new(evaluator),
+            engine: NegamaxEngine::new(evaluator, &config),
             positions_in_current_game: AHashSet::new(),
         }
     }
