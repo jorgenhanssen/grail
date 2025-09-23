@@ -14,8 +14,9 @@ use crate::{
     Engine,
 };
 use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank};
+use evaluation::PieceValues;
 use evaluation::{
-    hce, piece_value,
+    hce,
     scores::{MATE_VALUE, NEG_INFINITY},
     HCE, NNUE,
 };
@@ -40,6 +41,7 @@ const MAX_DEPTH: usize = 100;
 
 pub struct NegamaxEngine {
     config: EngineConfig,
+    piece_values: PieceValues,
 
     hce: Box<dyn HCE>,
     nnue: Option<Box<dyn NNUE>>,
@@ -68,8 +70,9 @@ impl Default for NegamaxEngine {
     fn default() -> Self {
         Self {
             config: EngineConfig::default(),
+            piece_values: PieceValues::default(),
 
-            hce: Box::new(hce::Evaluator),
+            hce: Box::new(hce::Evaluator::default()),
             nnue: None,
 
             board: Board::default(),
@@ -110,12 +113,15 @@ impl Engine for NegamaxEngine {
     }
 
     fn configure(&mut self, config: &EngineConfig, init: bool) {
-        let old_config = self.config.clone();
         self.config = config.clone();
 
-        if init || old_config.hash_size.value != config.hash_size.value {
-            self.configure_transposition_tables();
-        }
+        // Update the HCE
+        // TODO: Find a better way to do this
+        self.piece_values = config.get_piece_values();
+        self.hce = Box::new(hce::Evaluator::new(self.piece_values));
+
+        // Always clear (can be stale by hce changes etc)
+        self.configure_transposition_tables();
 
         if init || !self.history_heuristic.matches_config(config) {
             self.history_heuristic.configure(config);
@@ -279,8 +285,13 @@ impl NegamaxEngine {
         let prev_to = self
             .continuation_history
             .get_prev_to_squares(&self.move_stack);
-        let mut moves =
-            MainMoveGenerator::new(best_move, [None; 2], &prev_to, game_phase(&self.board));
+        let mut moves = MainMoveGenerator::new(
+            best_move,
+            [None; 2],
+            &prev_to,
+            game_phase(&self.board),
+            self.config.get_piece_values(),
+        );
 
         let mut best_score = NEG_INFINITY;
         let mut current_best_move = None;
@@ -468,6 +479,7 @@ impl NegamaxEngine {
             self.killer_moves[depth as usize],
             &prev_to,
             phase,
+            self.config.get_piece_values(),
         );
 
         // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff
@@ -740,14 +752,15 @@ impl NegamaxEngine {
                 return (stand_pat, Vec::new());
             }
 
+            let total_material = self.piece_values.total_material(board, phase);
+
             // Node-level delta pruning (big delta)
             if can_delta_prune(
-                board,
                 in_check,
-                phase,
                 self.config.qs_delta_material_threshold.value,
+                total_material,
             ) {
-                let mut big_delta = piece_value(Piece::Queen, phase);
+                let mut big_delta = self.piece_values.get(Piece::Queen, phase);
                 let promotion_rank = if board.side_to_move() == Color::White {
                     Rank::Seventh
                 } else {
@@ -758,7 +771,8 @@ impl NegamaxEngine {
                 let promoting_pawns = pawns & rank_mask;
 
                 if promoting_pawns != chess::EMPTY {
-                    big_delta += piece_value(Piece::Queen, phase) - piece_value(Piece::Pawn, phase);
+                    big_delta += self.piece_values.get(Piece::Queen, phase)
+                        - self.piece_values.get(Piece::Pawn, phase);
                 }
 
                 if stand_pat + big_delta < alpha {
@@ -774,21 +788,28 @@ impl NegamaxEngine {
         let mut best_line = Vec::new();
         let mut best_eval = if in_check { NEG_INFINITY } else { stand_pat };
 
-        let mut moves = QMoveGenerator::new(in_check, board, &self.capture_history, phase);
+        let mut moves = QMoveGenerator::new(
+            in_check,
+            board,
+            &self.capture_history,
+            phase,
+            self.piece_values,
+        );
 
         while let Some(mv) = moves.next() {
             // Per-move delta pruning (skip if capture can't possibly improve alpha)
             if can_delta_prune(
-                board,
                 in_check,
-                phase,
                 self.config.qs_delta_material_threshold.value,
+                self.piece_values.total_material(board, phase),
             ) {
                 let captured = board.piece_on(mv.get_dest());
                 if let Some(piece) = captured {
-                    let mut delta = piece_value(piece, phase) + self.config.qs_delta_margin.value;
+                    let mut delta =
+                        self.piece_values.get(piece, phase) + self.config.qs_delta_margin.value;
                     if let Some(promotion) = mv.get_promotion() {
-                        delta += piece_value(promotion, phase) - piece_value(Piece::Pawn, phase);
+                        delta += self.piece_values.get(promotion, phase)
+                            - self.piece_values.get(Piece::Pawn, phase);
                         // promotion bonus
                     }
                     if stand_pat + delta < alpha {
@@ -800,7 +821,7 @@ impl NegamaxEngine {
                 }
             }
 
-            if !in_check && see(board, mv, phase) < 0 {
+            if !in_check && see(board, mv, phase, &self.piece_values) < 0 {
                 continue;
             }
 

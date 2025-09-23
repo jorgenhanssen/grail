@@ -119,6 +119,7 @@ impl SelfPlayWorker {
         nnue: Option<Box<dyn NNUE>>,
     ) -> Self {
         let config = EngineConfig::default();
+        let hce = Box::new(hce::Evaluator::new(config.get_piece_values()));
 
         Self {
             tid,
@@ -126,7 +127,7 @@ impl SelfPlayWorker {
             game: Game::new(),
             depth,
 
-            engine: NegamaxEngine::new(&config, Box::new(hce::Evaluator), nnue),
+            engine: NegamaxEngine::new(&config, hce, nnue),
             positions_in_current_game: AHashSet::new(),
         }
     }

@@ -1,5 +1,5 @@
 use chess::{Board, ChessMove, MoveGen, Piece};
-use evaluation::{scores::MATE_VALUE, total_material};
+use evaluation::scores::MATE_VALUE;
 
 use crate::utils::is_zugzwang;
 
@@ -88,8 +88,8 @@ pub fn lmr(
     reduction.min(max_reduction)
 }
 
-pub fn can_delta_prune(board: &Board, in_check: bool, phase: f32, material_threshold: i16) -> bool {
-    !in_check && total_material(board, phase) >= material_threshold
+pub fn can_delta_prune(in_check: bool, material_threshold: i16, total_material: i16) -> bool {
+    !in_check && total_material >= material_threshold
 }
 
 #[inline(always)]

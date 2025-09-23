@@ -8,10 +8,20 @@ mod eval_rooks;
 mod pst;
 
 use crate::def::HCE;
+use crate::piece_values::PieceValues;
 use crate::scores::MATE_VALUE;
 use chess::{Board, BoardStatus, Color};
 
-pub struct Evaluator;
+#[derive(Default)]
+pub struct Evaluator {
+    piece_values: PieceValues,
+}
+
+impl Evaluator {
+    pub fn new(piece_values: PieceValues) -> Self {
+        Self { piece_values }
+    }
+}
 
 impl HCE for Evaluator {
     fn name(&self) -> String {
@@ -39,8 +49,8 @@ impl HCE for Evaluator {
 
         let mut cp: i16 = 0;
 
-        cp += eval_material::evaluate(board, Color::White, white_mask, phase);
-        cp -= eval_material::evaluate(board, Color::Black, black_mask, phase);
+        cp += eval_material::evaluate(board, Color::White, white_mask, phase, &self.piece_values);
+        cp -= eval_material::evaluate(board, Color::Black, black_mask, phase, &self.piece_values);
 
         cp += eval_pawns::evaluate(board, Color::White);
         cp -= eval_pawns::evaluate(board, Color::Black);
