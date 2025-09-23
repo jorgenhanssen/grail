@@ -1,9 +1,7 @@
 use crate::EngineConfig;
 use crate::{
     negamax::{
-        aspiration::{
-            AspirationWindow, Pass, ASP_ENABLED_FROM, ASP_HALF_START, ASP_MAX_RETRIES, ASP_WIDEN,
-        },
+        aspiration::{AspirationWindow, Pass},
         utils::{
             can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
             can_reverse_futility_prune, rfp_margin, FUTILITY_MARGINS, RAZOR_MARGINS,
@@ -55,7 +53,6 @@ pub struct NegamaxEngine {
     max_depth_reached: u8,
     stop: Arc<AtomicBool>,
 
-    window: AspirationWindow,
     tt: TranspositionTable,
     qs_tt: QSTable,
 
@@ -84,7 +81,6 @@ impl Default for NegamaxEngine {
             max_depth_reached: 1,
             stop: Arc::new(AtomicBool::new(false)),
 
-            window: AspirationWindow::new(ASP_HALF_START, ASP_WIDEN, ASP_ENABLED_FROM),
             tt: TranspositionTable::new(1),
             qs_tt: QSTable::new(1),
 
@@ -163,6 +159,12 @@ impl Engine for NegamaxEngine {
 
         self.init_search();
 
+        let mut window = AspirationWindow::new(
+            self.config.aspiration_window_size.value,
+            self.config.aspiration_window_widen.value,
+            self.config.aspiration_window_depth.value,
+        );
+
         let mut controller = SearchController::new(params, &self.board);
         let stop = Arc::clone(&self.stop);
         controller.on_stop(move || stop.store(true, Ordering::Relaxed));
@@ -179,18 +181,18 @@ impl Engine for NegamaxEngine {
                 break;
             }
 
-            self.window.begin_depth(depth, best_score);
+            window.begin_depth(depth, best_score);
             let mut retries = 0;
 
             loop {
-                let (alpha, beta) = self.window.bounds();
+                let (alpha, beta) = window.bounds();
                 let (mv, score) = self.search_root(depth, alpha, beta);
 
                 if mv.is_none() {
                     break;
                 }
 
-                match self.window.analyse_pass(score) {
+                match window.analyse_pass(score) {
                     Pass::Hit(s) => {
                         best_move = mv;
                         best_score = s;
@@ -207,8 +209,8 @@ impl Engine for NegamaxEngine {
 
                         retries += 1;
 
-                        if retries >= ASP_MAX_RETRIES {
-                            self.window.fully_extend();
+                        if retries >= self.config.aspiration_window_retries.value {
+                            window.fully_extend();
                             retries = 0;
                         }
                     }

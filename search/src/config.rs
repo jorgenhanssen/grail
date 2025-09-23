@@ -51,6 +51,12 @@ define_config!(
     // Standard UCI parameters
     (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 1024 }, 384, true),
 
+    // Tuning parameters
+    (aspiration_window_size: i16, "Aspiration Window Size", UciOptionType::Spin { min: 10, max: 100 }, 40, cfg!(feature = "tuning")),
+    (aspiration_window_widen: i16, "Aspiration Window Widening", UciOptionType::Spin { min: 1, max: 5 }, 2, cfg!(feature = "tuning")),
+    (aspiration_window_depth: u8, "Aspiration Window Depth", UciOptionType::Spin { min: 1, max: 10 }, 4, cfg!(feature = "tuning")),
+    (aspiration_window_retries: i16, "Aspiration Window Retries", UciOptionType::Spin { min: 1, max: 5 }, 2, cfg!(feature = "tuning")),
+
     // TODO: Add other parameters
 
     // (threads: i32, "Threads", UciOptionType::Spin { min: 1, max: 192 }, 1, true),
