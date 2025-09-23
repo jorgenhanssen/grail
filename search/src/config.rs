@@ -115,26 +115,6 @@ define_config!(
 
     // Internal Iterative Deepening - Search with reduced depth when no TT move
     (iid_reduction: u8, "IID Reduction", UciOptionType::Spin { min: 1, max: 4 }, 2, cfg!(feature = "tuning")), // Depth reduction for IID search
-
-    // TODO: Add other parameters
-
-    // (threads: i32, "Threads", UciOptionType::Spin { min: 1, max: 192 }, 1, true),
-    // (ponder: bool, "Ponder", UciOptionType::Check, false, true),
-
-    // // Search parameters - only tunable with feature flag
-    // (aspiration_window: i32, "Aspiration Window", UciOptionType::Spin { min: 10, max: 200 }, 50, cfg!(feature = "tuning")),
-    // (null_move_reduction: i32, "Null Move Reduction", UciOptionType::Spin { min: 1, max: 6 }, 3, cfg!(feature = "tuning")),
-    // (late_move_pruning: i32, "Late Move Pruning", UciOptionType::Spin { min: 50, max: 1000 }, 300, cfg!(feature = "tuning")),
-    // (futility_pruning: i32, "Futility Pruning", UciOptionType::Spin { min: 50, max: 500 }, 200, cfg!(feature = "tuning")),
-
-    // // Evaluation parameters - only tunable with feature flag
-    // (piece_square_bonus: i32, "Piece Square Bonus", UciOptionType::Spin { min: 0, max: 300 }, 100, cfg!(feature = "tuning")),
-    // (mobility_bonus: i32, "Mobility Bonus", UciOptionType::Spin { min: 0, max: 200 }, 50, cfg!(feature = "tuning")),
-    // (king_safety: i32, "King Safety", UciOptionType::Spin { min: 0, max: 200 }, 75, cfg!(feature = "tuning")),
-    // (king_mg_weight: i32, "King MG Weight", UciOptionType::Spin { min: 0, max: 100 }, 50, cfg!(feature = "tuning")),
-
-    // // Debug parameters
-    // (debug_search: bool, "Debug Search", UciOptionType::Check, false, true),
 );
 
 #[derive(Debug, Clone)]
