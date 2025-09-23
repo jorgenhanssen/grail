@@ -4,7 +4,7 @@ use crate::{
         aspiration::{AspirationWindow, Pass},
         utils::{
             can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
-            can_reverse_futility_prune, rfp_margin, FUTILITY_MARGINS, RAZOR_MARGINS,
+            can_reverse_futility_prune, futility_margin, rfp_margin, RAZOR_MARGINS,
         },
     },
     utils::{
@@ -929,10 +929,19 @@ impl NegamaxEngine {
         alpha: i16,
         static_eval: i16,
     ) -> bool {
-        if !can_futility_prune(remaining_depth, in_check) {
+        if !can_futility_prune(
+            remaining_depth,
+            in_check,
+            self.config.futility_max_depth.value,
+        ) {
             return false;
         }
-        !is_tactical && static_eval + FUTILITY_MARGINS[remaining_depth as usize] <= alpha
+        let margin = futility_margin(
+            remaining_depth,
+            self.config.futility_base_margin.value,
+            self.config.futility_depth_multiplier.value,
+        );
+        !is_tactical && static_eval + margin <= alpha
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1062,10 +1071,21 @@ impl NegamaxEngine {
         alpha: i16,
         is_improving: bool,
     ) -> Option<i16> {
-        if !can_reverse_futility_prune(remaining_depth, in_check, is_pv_node) {
+        if !can_reverse_futility_prune(
+            remaining_depth,
+            in_check,
+            is_pv_node,
+            self.config.rfp_max_depth.value,
+        ) {
             return None;
         }
-        let margin = rfp_margin(remaining_depth, is_improving);
+        let margin = rfp_margin(
+            remaining_depth,
+            self.config.rfp_base_margin.value,
+            self.config.rfp_depth_multiplier.value,
+            is_improving,
+            self.config.rfp_improving_bonus.value,
+        );
         if static_eval - margin >= beta && static_eval.abs() < RAZOR_NEAR_MATE {
             let rfp_depth = depth;
             self.tt.store(

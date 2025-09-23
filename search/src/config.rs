@@ -93,6 +93,17 @@ define_config!(
     (lmp_depth_multiplier: i32, "LMP Depth Multiplier", UciOptionType::Spin { min: 1, max: 6 }, 2, cfg!(feature = "tuning")), // Depth scaling factor for triangular formula
     (lmp_improving_reduction: i32, "LMP Improving Reduction", UciOptionType::Spin { min: 70, max: 95 }, 85, cfg!(feature = "tuning")), // Limit percentage when not improving
 
+    // Futility Pruning - Prune moves that can't improve alpha
+    (futility_max_depth: u8, "Futility Max Depth", UciOptionType::Spin { min: 1, max: 6 }, 3, cfg!(feature = "tuning")), // Maximum depth to apply futility pruning
+    (futility_base_margin: i16, "Futility Base Margin", UciOptionType::Spin { min: 50, max: 300 }, 150, cfg!(feature = "tuning")), // Base margin at depth 1
+    (futility_depth_multiplier: i16, "Futility Depth Multiplier", UciOptionType::Spin { min: 50, max: 200 }, 100, cfg!(feature = "tuning")), // Additional margin per depth
+
+    // Reverse Futility Pruning - Prune positions that are too good (static beta cutoff)
+    (rfp_max_depth: u8, "RFP Max Depth", UciOptionType::Spin { min: 1, max: 6 }, 3, cfg!(feature = "tuning")), // Maximum depth to apply RFP
+    (rfp_base_margin: i16, "RFP Base Margin", UciOptionType::Spin { min: 50, max: 300 }, 150, cfg!(feature = "tuning")), // Base margin at depth 1
+    (rfp_depth_multiplier: i16, "RFP Depth Multiplier", UciOptionType::Spin { min: 50, max: 200 }, 100, cfg!(feature = "tuning")), // Additional margin per depth
+    (rfp_improving_bonus: i16, "RFP Improving Bonus", UciOptionType::Spin { min: 20, max: 100 }, 50, cfg!(feature = "tuning")), // Margin reduction for improving positions
+
     // TODO: Add other parameters
 
     // (threads: i32, "Threads", UciOptionType::Spin { min: 1, max: 192 }, 1, true),

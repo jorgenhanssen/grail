@@ -140,31 +140,51 @@ pub fn can_razor_prune(remaining_depth: u8, in_check: bool) -> bool {
     remaining_depth <= RAZOR_MAX_DEPTH && remaining_depth > 0 && !in_check
 }
 
-pub const FUTILITY_MAX_DEPTH: u8 = 3;
-pub const FUTILITY_MARGINS: [i16; FUTILITY_MAX_DEPTH as usize + 1] = [0, 150, 250, 400];
+#[inline(always)]
+pub fn futility_margin(depth: u8, base_margin: i16, depth_multiplier: i16) -> i16 {
+    if depth == 0 {
+        0
+    } else {
+        base_margin + (depth as i16 - 1) * depth_multiplier
+    }
+}
 
 #[inline(always)]
-pub fn can_futility_prune(remaining_depth: u8, in_check: bool) -> bool {
-    remaining_depth <= FUTILITY_MAX_DEPTH && !in_check
+pub fn can_futility_prune(remaining_depth: u8, in_check: bool, max_depth: u8) -> bool {
+    remaining_depth <= max_depth && !in_check
 }
 
 // Reverse Futility Pruning (static beta pruning)
-pub const RFP_MAX_DEPTH: u8 = 3;
-pub const RFP_MARGINS: [i16; RFP_MAX_DEPTH as usize + 1] = [0, 150, 250, 400];
 
 #[inline(always)]
-pub fn can_reverse_futility_prune(remaining_depth: u8, in_check: bool, is_pv_node: bool) -> bool {
-    remaining_depth <= RFP_MAX_DEPTH && remaining_depth > 0 && !in_check && !is_pv_node
+pub fn rfp_margin(
+    depth: u8,
+    base_margin: i16,
+    depth_multiplier: i16,
+    is_improving: bool,
+    improving_bonus: i16,
+) -> i16 {
+    let margin = if depth == 0 {
+        0
+    } else {
+        base_margin + (depth as i16 - 1) * depth_multiplier
+    };
+
+    if is_improving {
+        margin - improving_bonus
+    } else {
+        margin
+    }
 }
 
 #[inline(always)]
-pub fn rfp_margin(remaining_depth: u8, is_improving: bool) -> i16 {
-    let base_margin = RFP_MARGINS[remaining_depth as usize];
-    if is_improving {
-        base_margin - 50 // Smaller margin for improving positions (more conservative than original -60)
-    } else {
-        base_margin
-    }
+pub fn can_reverse_futility_prune(
+    remaining_depth: u8,
+    in_check: bool,
+    is_pv_node: bool,
+    max_depth: u8,
+) -> bool {
+    remaining_depth <= max_depth && remaining_depth > 0 && !in_check && !is_pv_node
 }
 
 #[inline(always)]
