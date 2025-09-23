@@ -494,6 +494,10 @@ impl NegamaxEngine {
                 remaining_depth,
                 move_index,
                 is_improving,
+                self.config.lmp_max_depth.value,
+                self.config.lmp_base_moves.value,
+                self.config.lmp_depth_multiplier.value,
+                self.config.lmp_improving_reduction.value,
             ) {
                 continue;
             }

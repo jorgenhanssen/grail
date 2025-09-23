@@ -87,6 +87,12 @@ define_config!(
     (nmp_depth_divisor: u8, "NMP Depth Divisor", UciOptionType::Spin { min: 2, max: 6 }, 3, cfg!(feature = "tuning")), // Divide depth by this for extra reduction
     (nmp_eval_margin: i16, "NMP Eval Margin", UciOptionType::Spin { min: 50, max: 500 }, 200, cfg!(feature = "tuning")), // Eval margin for reduction adjustment
 
+    // Late Move Pruning - Prune quiet moves after a limit based on depth
+    (lmp_max_depth: u8, "LMP Max Depth", UciOptionType::Spin { min: 4, max: 12 }, 8, cfg!(feature = "tuning")), // Maximum depth to apply LMP
+    (lmp_base_moves: i32, "LMP Base Moves", UciOptionType::Spin { min: 1, max: 6 }, 2, cfg!(feature = "tuning")), // Base move limit for formula
+    (lmp_depth_multiplier: i32, "LMP Depth Multiplier", UciOptionType::Spin { min: 1, max: 6 }, 2, cfg!(feature = "tuning")), // Depth scaling factor for triangular formula
+    (lmp_improving_reduction: i32, "LMP Improving Reduction", UciOptionType::Spin { min: 70, max: 95 }, 85, cfg!(feature = "tuning")), // Limit percentage when not improving
+
     // TODO: Add other parameters
 
     // (threads: i32, "Threads", UciOptionType::Spin { min: 1, max: 192 }, 1, true),
