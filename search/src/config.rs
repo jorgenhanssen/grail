@@ -61,8 +61,12 @@ define_config!(
     (history_reduction_threshold: i16, "History Reduction Threshold", UciOptionType::Spin { min: -200, max: 200 }, -8, cfg!(feature = "tuning")),
     (history_prune_threshold: i16, "History Prune Threshold", UciOptionType::Spin { min: -200, max: 0 }, -64, cfg!(feature = "tuning")),
     (history_min_move_index: i32, "History Min Move Index", UciOptionType::Spin { min: 1, max: 10 }, 5, cfg!(feature = "tuning")),
-    (history_bonus_multiplier: i32, "History Bonus Multiplier", UciOptionType::Spin { min: 0, max: 50 }, 13, cfg!(feature = "tuning")),
-    (history_malus_multiplier: i32, "History Malus Multiplier", UciOptionType::Spin { min: 0, max: 50 }, 2, cfg!(feature = "tuning")),
+    (history_bonus_multiplier: i32, "History Bonus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 13, cfg!(feature = "tuning")),
+    (history_malus_multiplier: i32, "History Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 2, cfg!(feature = "tuning")),
+
+    (capture_history_max_value: i32, "Capture History Max Value", UciOptionType::Spin { min: 128, max: 1024 }, 512, cfg!(feature = "tuning")),
+    (capture_history_bonus_multiplier: i32, "Capture History Bonus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
+    (capture_history_malus_multiplier: i32, "Capture History Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 2, cfg!(feature = "tuning")),
 
     // TODO: Add other parameters
 

@@ -88,7 +88,7 @@ impl Default for NegamaxEngine {
             move_stack: Vec::with_capacity(MAX_DEPTH),
 
             history_heuristic: HistoryHeuristic::new(1, 1, 1, 1, 1, 1),
-            capture_history: CaptureHistory::new(),
+            capture_history: CaptureHistory::new(1, 1, 1),
             continuation_history: Box::new(ContinuationHistory::new()),
             eval_stack: Vec::with_capacity(MAX_DEPTH),
         }
@@ -121,6 +121,10 @@ impl Engine for NegamaxEngine {
 
         if init || !self.history_heuristic.matches_config(config) {
             self.history_heuristic.configure(config);
+        }
+
+        if init || !self.capture_history.matches_config(config) {
+            self.capture_history.configure(config);
         }
     }
 
