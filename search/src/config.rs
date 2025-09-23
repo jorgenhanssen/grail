@@ -104,6 +104,11 @@ define_config!(
     (rfp_depth_multiplier: i16, "RFP Depth Multiplier", UciOptionType::Spin { min: 50, max: 200 }, 100, cfg!(feature = "tuning")), // Additional margin per depth
     (rfp_improving_bonus: i16, "RFP Improving Bonus", UciOptionType::Spin { min: 20, max: 100 }, 50, cfg!(feature = "tuning")), // Margin reduction for improving positions
 
+    // Razor Pruning - Reduce to quiescence search when position looks unpromising
+    (razor_max_depth: u8, "Razor Max Depth", UciOptionType::Spin { min: 1, max: 6 }, 3, cfg!(feature = "tuning")), // Maximum depth to apply razor pruning
+    (razor_base_margin: i16, "Razor Base Margin", UciOptionType::Spin { min: 200, max: 800 }, 512, cfg!(feature = "tuning")), // Base margin for razor formula
+    (razor_depth_coefficient: i16, "Razor Depth Coefficient", UciOptionType::Spin { min: 100, max: 500 }, 293, cfg!(feature = "tuning")), // Coefficient for depth² scaling
+
     // TODO: Add other parameters
 
     // (threads: i32, "Threads", UciOptionType::Spin { min: 1, max: 192 }, 1, true),

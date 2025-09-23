@@ -3,22 +3,19 @@ use evaluation::{scores::MATE_VALUE, total_material};
 
 use crate::utils::is_zugzwang;
 
-pub const RAZOR_MAX_DEPTH: u8 = 3;
 pub const RAZOR_NEAR_MATE: i16 = MATE_VALUE - 200;
 
 // Scores above this threshold are considered mate scores requiring ply normalization
 pub const MATE_SCORE_BOUND: i16 = MATE_VALUE - 1000;
 
-// Margins from Stockfish: https://www.chessprogramming.org/Razoring#Stockfish
-pub const RAZOR_MARGINS: [i16; RAZOR_MAX_DEPTH as usize + 1] = {
-    let mut margins = [0i16; RAZOR_MAX_DEPTH as usize + 1];
-    let mut depth = 1;
-    while depth <= RAZOR_MAX_DEPTH as i16 {
-        margins[depth as usize] = 512 + 293 * (depth * depth);
-        depth += 1;
+#[inline(always)]
+pub fn razor_margin(depth: u8, base_margin: i16, depth_coefficient: i16) -> i16 {
+    if depth == 0 {
+        0
+    } else {
+        base_margin + depth_coefficient * (depth as i16 * depth as i16)
     }
-    margins
-};
+}
 
 // Late Move Pruning (LMP)
 // Conservative triangular limits per remaining depth for how many quiet moves
@@ -136,8 +133,8 @@ pub fn null_move_reduction(
 }
 
 #[inline(always)]
-pub fn can_razor_prune(remaining_depth: u8, in_check: bool) -> bool {
-    remaining_depth <= RAZOR_MAX_DEPTH && remaining_depth > 0 && !in_check
+pub fn can_razor_prune(remaining_depth: u8, in_check: bool, max_depth: u8) -> bool {
+    remaining_depth <= max_depth && remaining_depth > 0 && !in_check
 }
 
 #[inline(always)]

@@ -4,7 +4,7 @@ use crate::{
         aspiration::{AspirationWindow, Pass},
         utils::{
             can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
-            can_reverse_futility_prune, futility_margin, rfp_margin, RAZOR_MARGINS,
+            can_reverse_futility_prune, futility_margin, razor_margin, rfp_margin,
         },
     },
     utils::{
@@ -955,11 +955,16 @@ impl NegamaxEngine {
         in_check: bool,
         static_eval: i16,
     ) -> Option<i16> {
-        if !can_razor_prune(remaining_depth, in_check) {
+        if !can_razor_prune(remaining_depth, in_check, self.config.razor_max_depth.value) {
             return None;
         }
         // If static eval already near/above alpha threshold, do not razor
-        if static_eval >= alpha - RAZOR_MARGINS[remaining_depth as usize] {
+        let margin = razor_margin(
+            remaining_depth,
+            self.config.razor_base_margin.value,
+            self.config.razor_depth_coefficient.value,
+        );
+        if static_eval >= alpha - margin {
             return None;
         }
         // Q search with null window
