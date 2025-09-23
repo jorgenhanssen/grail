@@ -1,5 +1,6 @@
 mod args;
 mod engine;
+mod nnue;
 
 use args::Args;
 use clap::Parser;
