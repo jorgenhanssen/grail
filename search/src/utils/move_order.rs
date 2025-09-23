@@ -200,7 +200,6 @@ impl MainMoveGenerator {
 
 pub struct QMoveGenerator {
     forcing_moves: Vec<ScoredMove>,
-    piece_values: PieceValues,
 }
 
 impl QMoveGenerator {
@@ -225,14 +224,10 @@ impl QMoveGenerator {
                 });
             }
 
-            Self {
-                forcing_moves,
-                piece_values,
-            }
+            Self { forcing_moves }
         } else {
             Self {
                 forcing_moves: gen.map(|mov| ScoredMove { mov, score: 0 }).collect(),
-                piece_values,
             }
         }
     }

@@ -119,7 +119,10 @@ impl SelfPlayWorker {
         nnue: Option<Box<dyn NNUE>>,
     ) -> Self {
         let config = EngineConfig::default();
-        let hce = Box::new(hce::Evaluator::new(config.get_piece_values()));
+        let hce = Box::new(hce::Evaluator::with_config(
+            config.get_piece_values(),
+            config.get_hce_config(),
+        ));
 
         Self {
             tid,

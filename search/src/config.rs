@@ -1,4 +1,4 @@
-use evaluation::PieceValues;
+use evaluation::{hce::HCEConfig, PieceValues};
 use std::str::FromStr;
 use uci::{UciOption, UciOptionType, UciOutput};
 
@@ -119,7 +119,7 @@ define_config!(
     (iid_reduction: u8, "IID Reduction", UciOptionType::Spin { min: 1, max: 4 }, 2, cfg!(feature = "tuning")), // Depth reduction for IID search
 
 
-    // HCE
+    // HCE Piece Values
     (hce_pawn_value_mg: f32, "HCE Pawn Value MG", UciOptionType::Spin { min: 50, max: 150 }, 98.0, cfg!(feature = "tuning")),
     (hce_pawn_value_eg: f32, "HCE Pawn Value EG", UciOptionType::Spin { min: 50, max: 150 }, 113.0, cfg!(feature = "tuning")),
     (hce_knight_value_mg: f32, "HCE Knight Value MG", UciOptionType::Spin { min: 250, max: 400 }, 325.0, cfg!(feature = "tuning")),
@@ -130,6 +130,48 @@ define_config!(
     (hce_rook_value_eg: f32, "HCE Rook Value EG", UciOptionType::Spin { min: 450, max: 650 }, 560.0, cfg!(feature = "tuning")),
     (hce_queen_value_mg: f32, "HCE Queen Value MG", UciOptionType::Spin { min: 800, max: 1200 }, 975.0, cfg!(feature = "tuning")),
     (hce_queen_value_eg: f32, "HCE Queen Value EG", UciOptionType::Spin { min: 800, max: 1300 }, 1020.0, cfg!(feature = "tuning")),
+
+    // HCE Evaluation Parameters
+    (hce_tempo_bonus: i16, "HCE Tempo Bonus", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
+
+    // Pawn structure
+    (hce_doubled_pawn_penalty: i16, "HCE Doubled Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 30, cfg!(feature = "tuning")),
+    (hce_tripled_pawn_penalty: i16, "HCE Tripled Pawn Penalty", UciOptionType::Spin { min: 0, max: 150 }, 60, cfg!(feature = "tuning")),
+    (hce_isolated_pawn_penalty: i16, "HCE Isolated Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 40, cfg!(feature = "tuning")),
+    (hce_passed_pawn_linear: i16, "HCE Passed Pawn Linear", UciOptionType::Spin { min: 0, max: 20 }, 6, cfg!(feature = "tuning")),
+    (hce_passed_pawn_quadratic: i16, "HCE Passed Pawn Quadratic", UciOptionType::Spin { min: 0, max: 10 }, 2, cfg!(feature = "tuning")),
+
+    // Piece bonuses
+    (hce_bishop_pair_bonus: i16, "HCE Bishop Pair Bonus", UciOptionType::Spin { min: 0, max: 150 }, 50, cfg!(feature = "tuning")),
+    (hce_rook_open_file_bonus: i16, "HCE Rook Open File Bonus", UciOptionType::Spin { min: 0, max: 50 }, 15, cfg!(feature = "tuning")),
+    (hce_rook_semi_open_file_bonus: i16, "HCE Rook Semi-Open File Bonus", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
+    (hce_rook_seventh_rank_bonus: i16, "HCE Rook Seventh Rank Bonus", UciOptionType::Spin { min: 0, max: 50 }, 20, cfg!(feature = "tuning")),
+
+    // Mobility multipliers
+    (hce_knight_mobility_multiplier: i16, "HCE Knight Mobility Multiplier", UciOptionType::Spin { min: 1, max: 10 }, 5, cfg!(feature = "tuning")),
+    (hce_bishop_mobility_multiplier: i16, "HCE Bishop Mobility Multiplier", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")),
+    (hce_rook_mobility_multiplier: i16, "HCE Rook Mobility Multiplier", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")),
+    (hce_queen_mobility_multiplier: i16, "HCE Queen Mobility Multiplier", UciOptionType::Spin { min: 1, max: 5 }, 1, cfg!(feature = "tuning")),
+
+    // King safety - Pawn shield
+    (hce_king_shield_r1_bonus: i16, "HCE King Shield R1 Bonus", UciOptionType::Spin { min: 0, max: 30 }, 12, cfg!(feature = "tuning")),
+    (hce_king_shield_r2_bonus: i16, "HCE King Shield R2 Bonus", UciOptionType::Spin { min: 0, max: 20 }, 6, cfg!(feature = "tuning")),
+
+    // King safety - File penalties
+    (hce_king_open_file_penalty: i16, "HCE King Open File Penalty", UciOptionType::Spin { min: 0, max: 50 }, 24, cfg!(feature = "tuning")),
+    (hce_king_semi_open_file_penalty: i16, "HCE King Semi Open File Penalty", UciOptionType::Spin { min: 0, max: 30 }, 12, cfg!(feature = "tuning")),
+    (hce_king_thin_cover_penalty: i16, "HCE King Thin Cover Penalty", UciOptionType::Spin { min: 0, max: 20 }, 6, cfg!(feature = "tuning")),
+
+    // King safety - Attack pressure
+    (hce_king_pressure_knight: i16, "HCE King Pressure Knight", UciOptionType::Spin { min: 0, max: 30 }, 12, cfg!(feature = "tuning")),
+    (hce_king_pressure_bishop: i16, "HCE King Pressure Bishop", UciOptionType::Spin { min: 0, max: 30 }, 14, cfg!(feature = "tuning")),
+    (hce_king_pressure_rook: i16, "HCE King Pressure Rook", UciOptionType::Spin { min: 0, max: 40 }, 18, cfg!(feature = "tuning")),
+    (hce_king_pressure_queen: i16, "HCE King Pressure Queen", UciOptionType::Spin { min: 0, max: 50 }, 22, cfg!(feature = "tuning")),
+    (hce_king_pressure_pawn: i16, "HCE King Pressure Pawn", UciOptionType::Spin { min: 0, max: 20 }, 8, cfg!(feature = "tuning")),
+
+    // King safety - Positional
+    (hce_king_central_penalty: i16, "HCE King Central Penalty", UciOptionType::Spin { min: 0, max: 50 }, 20, cfg!(feature = "tuning")),
+    (hce_king_activity_bonus: i16, "HCE King Activity Bonus", UciOptionType::Spin { min: 0, max: 30 }, 14, cfg!(feature = "tuning")),
 
 );
 
@@ -146,6 +188,45 @@ impl EngineConfig {
             rook_value_eg: self.hce_rook_value_eg.value,
             queen_value_mg: self.hce_queen_value_mg.value,
             queen_value_eg: self.hce_queen_value_eg.value,
+        }
+    }
+
+    pub fn get_hce_config(&self) -> HCEConfig {
+        HCEConfig {
+            tempo_bonus: self.hce_tempo_bonus.value,
+
+            // Pawn structure
+            doubled_pawn_penalty: self.hce_doubled_pawn_penalty.value,
+            tripled_pawn_penalty: self.hce_tripled_pawn_penalty.value,
+            isolated_pawn_penalty: self.hce_isolated_pawn_penalty.value,
+            passed_pawn_linear: self.hce_passed_pawn_linear.value,
+            passed_pawn_quadratic: self.hce_passed_pawn_quadratic.value,
+
+            // Piece bonuses
+            bishop_pair_bonus: self.hce_bishop_pair_bonus.value,
+            rook_open_file_bonus: self.hce_rook_open_file_bonus.value,
+            rook_semi_open_file_bonus: self.hce_rook_semi_open_file_bonus.value,
+            rook_seventh_rank_bonus: self.hce_rook_seventh_rank_bonus.value,
+
+            // Mobility multipliers
+            knight_mobility_multiplier: self.hce_knight_mobility_multiplier.value,
+            bishop_mobility_multiplier: self.hce_bishop_mobility_multiplier.value,
+            rook_mobility_multiplier: self.hce_rook_mobility_multiplier.value,
+            queen_mobility_multiplier: self.hce_queen_mobility_multiplier.value,
+
+            // King safety
+            king_shield_r1_bonus: self.hce_king_shield_r1_bonus.value,
+            king_shield_r2_bonus: self.hce_king_shield_r2_bonus.value,
+            king_open_file_penalty: self.hce_king_open_file_penalty.value,
+            king_semi_open_file_penalty: self.hce_king_semi_open_file_penalty.value,
+            king_thin_cover_penalty: self.hce_king_thin_cover_penalty.value,
+            king_pressure_knight: self.hce_king_pressure_knight.value,
+            king_pressure_bishop: self.hce_king_pressure_bishop.value,
+            king_pressure_rook: self.hce_king_pressure_rook.value,
+            king_pressure_queen: self.hce_king_pressure_queen.value,
+            king_pressure_pawn: self.hce_king_pressure_pawn.value,
+            king_central_penalty: self.hce_king_central_penalty.value,
+            king_activity_bonus: self.hce_king_activity_bonus.value,
         }
     }
 }

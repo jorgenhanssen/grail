@@ -1,11 +1,8 @@
+use super::HCEConfig;
 use chess::{get_file, get_rook_moves, Board, Color, Piece, Rank, EMPTY};
 
-const ROOK_OPEN_FILE_BONUS: i16 = 15;
-const ROOK_SEMI_OPEN_FILE_BONUS: i16 = 10;
-const ROOK_ON_SEVENTH_BONUS: i16 = 20;
-
 #[inline(always)]
-pub(super) fn evaluate(board: &Board, color: Color, phase: f32) -> i16 {
+pub(super) fn evaluate(board: &Board, color: Color, phase: f32, config: &HCEConfig) -> i16 {
     let rooks = board.pieces(Piece::Rook) & board.color_combined(color);
     if rooks == EMPTY {
         return 0;
@@ -23,8 +20,8 @@ pub(super) fn evaluate(board: &Board, color: Color, phase: f32) -> i16 {
         let their_file_pawns = (their_pawns & file_mask).popcnt();
 
         cp += match (our_file_pawns == 0, their_file_pawns == 0) {
-            (true, true) => ROOK_OPEN_FILE_BONUS,
-            (true, false) => ROOK_SEMI_OPEN_FILE_BONUS,
+            (true, true) => config.rook_open_file_bonus,
+            (true, false) => config.rook_semi_open_file_bonus,
             _ => 0,
         };
 
@@ -33,11 +30,11 @@ pub(super) fn evaluate(board: &Board, color: Color, phase: f32) -> i16 {
         if (color == Color::White && rank == Rank::Seventh)
             || (color == Color::Black && rank == Rank::Second)
         {
-            cp += ROOK_ON_SEVENTH_BONUS;
+            cp += config.rook_seventh_rank_bonus;
         }
 
         let mobility = get_rook_moves(sq, occupied).popcnt() as i16;
-        cp += ((3 * mobility) as f32 * phase).round() as i16;
+        cp += ((config.rook_mobility_multiplier * mobility) as f32 * phase).round() as i16;
     }
     cp
 }

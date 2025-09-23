@@ -1,7 +1,8 @@
+use super::HCEConfig;
 use chess::{get_adjacent_files, get_file, BitBoard, Board, Color, Piece, ALL_FILES, EMPTY};
 
 #[inline(always)]
-pub(super) fn evaluate(board: &Board, color: Color) -> i16 {
+pub(super) fn evaluate(board: &Board, color: Color, config: &HCEConfig) -> i16 {
     let my_pawns = board.pieces(Piece::Pawn) & board.color_combined(color);
     if my_pawns == EMPTY {
         return 0;
@@ -20,14 +21,14 @@ pub(super) fn evaluate(board: &Board, color: Color) -> i16 {
 
         // Penalty for doubled / tripled pawns
         match cnt {
-            1 => score -= 0,  // Good case: no penalty
-            2 => score -= 30, // Bad case: doubled
-            _ => score -= 60, // Bad case: > tripled
+            1 => score -= 0,                           // Good case: no penalty
+            2 => score -= config.doubled_pawn_penalty, // Bad case: doubled
+            _ => score -= config.tripled_pawn_penalty, // Bad case: > tripled
         };
 
         // Isolated penalty
         if (my_pawns & get_adjacent_files(file_idx)).popcnt() == 0 {
-            score -= 40;
+            score -= config.isolated_pawn_penalty;
         }
     }
 
@@ -35,20 +36,25 @@ pub(super) fn evaluate(board: &Board, color: Color) -> i16 {
     for sq in my_pawns {
         let blockers = PASSED_PAWN_MASKS[color as usize][sq.to_index()];
         if (enemy_pawns & blockers).popcnt() == 0 {
-            // convert to white’s perspective: rank 0..7
+            // convert to white's perspective: rank 0..7
             let rank_from_white = if color == Color::White {
-                sq.get_rank() as usize
+                sq.get_rank() as i16
             } else {
-                7 - sq.get_rank() as usize
+                7 - sq.get_rank() as i16
             };
-            score += PASSED_PAWN_BONUS[rank_from_white];
+            // Formula: bonus = linear * (rank-1) + quadratic * (rank-1)^2
+            let effective_rank = rank_from_white - 1; // 0-6 range
+            if effective_rank > 0 {
+                // Skip rank 0 (no bonus)
+                let bonus = config.passed_pawn_linear * effective_rank
+                    + config.passed_pawn_quadratic * effective_rank * effective_rank;
+                score += bonus;
+            }
         }
     }
 
     score
 }
-
-const PASSED_PAWN_BONUS: [i16; 8] = [0, 10, 20, 30, 50, 80, 120, 0];
 
 /// Pre-computed passed-pawn masks: [color][square].
 pub const PASSED_PAWN_MASKS: [[BitBoard; 64]; 2] = {

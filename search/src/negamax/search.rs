@@ -118,7 +118,10 @@ impl Engine for NegamaxEngine {
         // Update the HCE
         // TODO: Find a better way to do this
         self.piece_values = config.get_piece_values();
-        self.hce = Box::new(hce::Evaluator::new(self.piece_values));
+        self.hce = Box::new(hce::Evaluator::with_config(
+            self.piece_values,
+            config.get_hce_config(),
+        ));
 
         // Always clear (can be stale by hce changes etc)
         self.configure_transposition_tables();
