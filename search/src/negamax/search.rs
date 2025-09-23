@@ -113,6 +113,7 @@ impl Engine for NegamaxEngine {
     }
 
     fn configure(&mut self, config: &EngineConfig, init: bool) {
+        let old_config = self.config.clone();
         self.config = config.clone();
 
         // Update the HCE
@@ -123,8 +124,9 @@ impl Engine for NegamaxEngine {
             config.get_hce_config(),
         ));
 
-        // Always clear (can be stale by hce changes etc)
-        self.configure_transposition_tables();
+        if init || old_config.hash_size.value != config.hash_size.value {
+            self.configure_transposition_tables();
+        }
 
         if init || !self.history_heuristic.matches_config(config) {
             self.history_heuristic.configure(config);
