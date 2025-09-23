@@ -9,11 +9,11 @@ use crate::{
     },
     utils::{
         convert_centipawn_score, convert_mate_score, game_phase, see, CaptureHistory,
-        ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator, MAX_CONT_PLIES,
+        ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator,
     },
     Engine,
 };
-use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank, Square};
+use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank};
 use evaluation::{
     hce, piece_value,
     scores::{MATE_VALUE, NEG_INFINITY},
@@ -89,7 +89,7 @@ impl Default for NegamaxEngine {
 
             history_heuristic: HistoryHeuristic::new(1, 1, 1, 1, 1, 1),
             capture_history: CaptureHistory::new(1, 1, 1),
-            continuation_history: Box::new(ContinuationHistory::new()),
+            continuation_history: Box::new(ContinuationHistory::new(1, 1, 1, 1)),
             eval_stack: Vec::with_capacity(MAX_DEPTH),
         }
     }
@@ -125,6 +125,10 @@ impl Engine for NegamaxEngine {
 
         if init || !self.capture_history.matches_config(config) {
             self.capture_history.configure(config);
+        }
+
+        if init || !self.continuation_history.matches_config(config) {
+            self.continuation_history.configure(config);
         }
     }
 
@@ -243,17 +247,6 @@ impl NegamaxEngine {
     }
 
     #[inline(always)]
-    fn prev_to_squares(&self) -> [Option<Square>; MAX_CONT_PLIES] {
-        let len = self.move_stack.len();
-        let mut arr = [None; MAX_CONT_PLIES];
-        for (i, slot) in arr.iter_mut().enumerate() {
-            if i < len {
-                *slot = Some(self.move_stack[len - 1 - i].get_dest());
-            }
-        }
-        arr
-    }
-    #[inline(always)]
     pub fn init_game(&mut self) {
         self.tt.clear();
         self.qs_tt.clear();
@@ -285,13 +278,11 @@ impl NegamaxEngine {
     ) -> (Option<ChessMove>, i16) {
         let best_move = self.current_pv.first().cloned();
 
-        let prev_to = self.prev_to_squares();
-        let mut moves = MainMoveGenerator::new(
-            best_move,
-            [None; 2],
-            [prev_to[0], prev_to[1]],
-            game_phase(&self.board),
-        );
+        let prev_to = self
+            .continuation_history
+            .get_prev_to_squares(&self.move_stack);
+        let mut moves =
+            MainMoveGenerator::new(best_move, [None; 2], &prev_to, game_phase(&self.board));
 
         let mut best_score = NEG_INFINITY;
         let mut current_best_move = None;
@@ -471,11 +462,13 @@ impl NegamaxEngine {
 
         let mut best_move_depth = depth;
 
-        let prev_to = self.prev_to_squares();
+        let prev_to = self
+            .continuation_history
+            .get_prev_to_squares(&self.move_stack);
         let mut movegen = MainMoveGenerator::new(
             maybe_tt_move,
             self.killer_moves[depth as usize],
-            [prev_to[0], prev_to[1]],
+            &prev_to,
             phase,
         );
 
@@ -839,7 +832,9 @@ impl NegamaxEngine {
         quiets_searched: &[ChessMove],
         captures_searched: &[ChessMove],
     ) {
-        let prev_to = self.prev_to_squares();
+        let prev_to = self
+            .continuation_history
+            .get_prev_to_squares(&self.move_stack);
         if is_quiet {
             // Add killer move for quiet moves
             let killers = &mut self.killer_moves[depth];

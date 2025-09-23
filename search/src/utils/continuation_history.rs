@@ -1,26 +1,57 @@
 use chess::{Board, ChessMove, Color, Square, NUM_COLORS, NUM_SQUARES};
 
-const MAX_HISTORY: i32 = 512;
+use crate::EngineConfig;
+
 const MAX_DEPTH: usize = 100;
-pub const MAX_CONT_PLIES: usize = 4;
 
 #[derive(Clone)]
 pub struct ContinuationHistory {
     // Flattened: [ply][color][prev_to][curr_from][curr_to]
     continuations: Vec<i16>,
+
+    max_moves: usize,
+    max_history: i32,
+    bonus_multiplier: i32,
+    malus_multiplier: i32,
 }
 
 impl ContinuationHistory {
-    pub fn new() -> Self {
-        const SIZE: usize = MAX_CONT_PLIES * NUM_COLORS * NUM_SQUARES * NUM_SQUARES * NUM_SQUARES;
+    pub fn new(
+        max_moves: usize,
+        max_history: i32,
+        bonus_multiplier: i32,
+        malus_multiplier: i32,
+    ) -> Self {
+        let size = max_moves * NUM_COLORS * NUM_SQUARES * NUM_SQUARES * NUM_SQUARES;
         Self {
-            continuations: vec![0; SIZE],
+            continuations: vec![0; size],
+            max_moves,
+            max_history,
+            bonus_multiplier,
+            malus_multiplier,
         }
+    }
+
+    pub fn configure(&mut self, config: &EngineConfig) {
+        self.max_moves = config.continuation_max_moves.value;
+        self.max_history = config.continuation_max_value.value;
+        self.bonus_multiplier = config.continuation_bonus_multiplier.value;
+        self.malus_multiplier = config.continuation_malus_multiplier.value;
+
+        self.reset();
+    }
+
+    pub fn matches_config(&self, config: &EngineConfig) -> bool {
+        self.max_moves == config.continuation_max_moves.value
+            && self.max_history == config.continuation_max_value.value
+            && self.bonus_multiplier == config.continuation_bonus_multiplier.value
+            && self.malus_multiplier == config.continuation_malus_multiplier.value
     }
 
     #[inline(always)]
     pub fn reset(&mut self) {
-        self.continuations.fill(0);
+        let size = self.max_moves * NUM_COLORS * NUM_SQUARES * NUM_SQUARES * NUM_SQUARES;
+        self.continuations = vec![0; size];
     }
 
     #[inline(always)]
@@ -32,26 +63,20 @@ impl ContinuationHistory {
         src: Square,
         dst: Square,
     ) -> i16 {
-        if ply >= MAX_CONT_PLIES {
+        if ply >= self.max_moves {
             return 0;
         }
         if let Some(p_to) = prev_to {
-            self.continuations[Self::index(ply, color, p_to, src, dst)]
+            self.continuations[self.index(ply, color, p_to, src, dst)]
         } else {
             0
         }
     }
 
     #[inline(always)]
-    pub fn get(
-        &self,
-        color: Color,
-        prev_to: &[Option<Square>; MAX_CONT_PLIES],
-        src: Square,
-        dst: Square,
-    ) -> i16 {
+    pub fn get(&self, color: Color, prev_to: &[Option<Square>], src: Square, dst: Square) -> i16 {
         let mut score = 0;
-        for (ply, p_to) in prev_to.iter().enumerate() {
+        for (ply, p_to) in prev_to.iter().enumerate().take(self.max_moves) {
             score += self.get_ply(ply, color, *p_to, src, dst);
         }
         score
@@ -59,36 +84,50 @@ impl ContinuationHistory {
 
     #[inline(always)]
     pub fn get_bonus(&self, remaining_depth: u8) -> i32 {
-        BONUS[remaining_depth.min(MAX_DEPTH as u8) as usize]
+        let depth = remaining_depth.min(MAX_DEPTH as u8) as i32;
+        self.bonus_multiplier * depth
     }
 
     #[inline(always)]
     pub fn get_malus(&self, remaining_depth: u8) -> i32 {
-        MALUS[remaining_depth.min(MAX_DEPTH as u8) as usize]
+        let depth = remaining_depth.min(MAX_DEPTH as u8) as i32;
+        -self.malus_multiplier * depth
     }
 
     #[inline(always)]
-    fn update_entry(entry: &mut i16, delta: i32) {
+    pub fn get_prev_to_squares(&self, move_stack: &[ChessMove]) -> Vec<Option<Square>> {
+        let len = move_stack.len();
+        let mut vec = vec![None; self.max_moves];
+        for i in 0..self.max_moves {
+            if i < len {
+                vec[i] = Some(move_stack[len - 1 - i].get_dest());
+            }
+        }
+        vec
+    }
+
+    #[inline(always)]
+    fn update_entry(entry: &mut i16, delta: i32, max_history: i32) {
         let h = *entry as i32;
-        let b = delta.clamp(-MAX_HISTORY, MAX_HISTORY);
-        let new = h + b - ((h * b.abs()) / MAX_HISTORY);
-        *entry = new.clamp(-MAX_HISTORY, MAX_HISTORY) as i16;
+        let b = delta.clamp(-max_history, max_history);
+        let new = h + b - ((h * b.abs()) / max_history);
+        *entry = new.clamp(-max_history, max_history) as i16;
     }
 
     #[inline(always)]
     fn update_continuations(
         &mut self,
         color: Color,
-        prev_to: &[Option<Square>; MAX_CONT_PLIES],
+        prev_to: &[Option<Square>],
         src: Square,
         dst: Square,
         delta: i32,
     ) {
-        for (ply, p_to_opt) in prev_to.iter().enumerate() {
+        for (ply, p_to_opt) in prev_to.iter().enumerate().take(self.max_moves) {
             if let Some(p_to) = *p_to_opt {
-                let idx = Self::index(ply, color, p_to, src, dst);
+                let idx = self.index(ply, color, p_to, src, dst);
                 let entry = &mut self.continuations[idx];
-                Self::update_entry(entry, delta);
+                Self::update_entry(entry, delta, self.max_history);
             }
         }
     }
@@ -97,7 +136,7 @@ impl ContinuationHistory {
     pub fn update_quiet_all(
         &mut self,
         board: &Board,
-        prev_to: &[Option<Square>; MAX_CONT_PLIES],
+        prev_to: &[Option<Square>],
         mv: ChessMove,
         delta: i32,
     ) {
@@ -108,7 +147,7 @@ impl ContinuationHistory {
 
 impl ContinuationHistory {
     #[inline(always)]
-    fn index(ply: usize, color: Color, prev_to: Square, src: Square, dst: Square) -> usize {
+    fn index(&self, ply: usize, color: Color, prev_to: Square, src: Square, dst: Square) -> usize {
         let ply_idx = ply;
         let color_idx = color.to_index();
         let prev_to_idx = prev_to.to_index();
@@ -127,25 +166,3 @@ impl ContinuationHistory {
             + dst_idx
     }
 }
-
-const BONUS: [i32; MAX_DEPTH + 1] = {
-    let mut table = [0; MAX_DEPTH + 1];
-    let mut i = 0;
-    while i <= MAX_DEPTH {
-        let depth = i as i32;
-        table[i] = 9 * depth; // slightly smaller than quiet history bonus
-        i += 1;
-    }
-    table
-};
-
-const MALUS: [i32; MAX_DEPTH + 1] = {
-    let mut table = [0; MAX_DEPTH + 1];
-    let mut i = 0;
-    while i <= MAX_DEPTH {
-        let depth = i as i32;
-        table[i] = -(7 * depth);
-        i += 1;
-    }
-    table
-};

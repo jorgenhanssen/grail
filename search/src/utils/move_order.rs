@@ -3,7 +3,7 @@
 use chess::{Board, ChessMove, MoveGen, Piece, Square};
 use evaluation::piece_value;
 
-use crate::utils::{see, CaptureHistory, ContinuationHistory, HistoryHeuristic, MAX_CONT_PLIES};
+use crate::utils::{see, CaptureHistory, ContinuationHistory, HistoryHeuristic};
 
 struct ScoredMove {
     mov: ChessMove,
@@ -28,7 +28,7 @@ pub struct MainMoveGenerator {
     best_move: Option<ChessMove>,
 
     // Continuation history context
-    prev_to: [Option<Square>; MAX_CONT_PLIES],
+    prev_to: Vec<Option<Square>>,
 
     killer_moves: [Option<ChessMove>; 2],
     killer_index: usize,
@@ -42,7 +42,7 @@ impl MainMoveGenerator {
     pub fn new(
         best_move: Option<ChessMove>,
         killer_moves: [Option<ChessMove>; 2],
-        prev_to: [Option<Square>; 2], // [1-ply, 2-ply]
+        prev_to: &[Option<Square>],
         game_phase: f32,
     ) -> Self {
         Self {
@@ -50,12 +50,7 @@ impl MainMoveGenerator {
             game_phase,
             best_move,
 
-            prev_to: {
-                let mut arr = [None; MAX_CONT_PLIES];
-                let len = prev_to.len().min(MAX_CONT_PLIES);
-                arr[..len].copy_from_slice(&prev_to[..len]);
-                arr
-            },
+            prev_to: prev_to.to_vec(),
 
             killer_moves,
             killer_index: 0,
