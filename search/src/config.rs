@@ -1,3 +1,4 @@
+use evaluation::PieceValues;
 use std::str::FromStr;
 use uci::{UciOption, UciOptionType, UciOutput};
 
@@ -44,20 +45,6 @@ macro_rules! define_config {
                 Ok(())
             }
 
-            pub fn get_piece_values(&self) -> evaluation::piece_values::PieceValues {
-                evaluation::piece_values::PieceValues {
-                    pawn_value_mg: self.hce_pawn_value_mg.value,
-                    pawn_value_eg: self.hce_pawn_value_eg.value,
-                    knight_value_mg: self.hce_knight_value_mg.value,
-                    knight_value_eg: self.hce_knight_value_eg.value,
-                    bishop_value_mg: self.hce_bishop_value_mg.value,
-                    bishop_value_eg: self.hce_bishop_value_eg.value,
-                    rook_value_mg: self.hce_rook_value_mg.value,
-                    rook_value_eg: self.hce_rook_value_eg.value,
-                    queen_value_mg: self.hce_queen_value_mg.value,
-                    queen_value_eg: self.hce_queen_value_eg.value,
-                }
-            }
         }
     };
 }
@@ -145,6 +132,23 @@ define_config!(
     (hce_queen_value_eg: f32, "HCE Queen Value EG", UciOptionType::Spin { min: 800, max: 1300 }, 1020.0, cfg!(feature = "tuning")),
 
 );
+
+impl EngineConfig {
+    pub fn get_piece_values(&self) -> PieceValues {
+        PieceValues {
+            pawn_value_mg: self.hce_pawn_value_mg.value,
+            pawn_value_eg: self.hce_pawn_value_eg.value,
+            knight_value_mg: self.hce_knight_value_mg.value,
+            knight_value_eg: self.hce_knight_value_eg.value,
+            bishop_value_mg: self.hce_bishop_value_mg.value,
+            bishop_value_eg: self.hce_bishop_value_eg.value,
+            rook_value_mg: self.hce_rook_value_mg.value,
+            rook_value_eg: self.hce_rook_value_eg.value,
+            queen_value_mg: self.hce_queen_value_mg.value,
+            queen_value_eg: self.hce_queen_value_eg.value,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ConfigParam<T> {
