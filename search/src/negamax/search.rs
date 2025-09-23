@@ -602,6 +602,9 @@ impl NegamaxEngine {
             move_index,
             is_pv_move,
             is_improving,
+            self.config.lmr_min_depth.value,
+            self.config.lmr_divisor.value as f32 / 100.0,
+            self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
         );
         let alpha_child = alpha;
         let beta_child = if !is_pv_move { alpha + 1 } else { beta };

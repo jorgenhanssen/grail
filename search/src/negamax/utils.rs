@@ -54,6 +54,7 @@ pub fn should_lmp_prune(
     move_index > limit
 }
 
+#[allow(clippy::too_many_arguments)]
 #[inline(always)]
 pub fn lmr(
     remaining_depth: u8,
@@ -61,21 +62,25 @@ pub fn lmr(
     move_index: i32,
     is_pv_move: bool,
     is_improving: bool,
+    min_depth: u8,
+    divisor: f32,
+    max_reduction_ratio: f32,
 ) -> u8 {
-    if tactical || remaining_depth < 3 || is_pv_move {
+    if tactical || remaining_depth < min_depth || is_pv_move {
         return 0;
     }
 
     let depth_factor = (remaining_depth as f32).ln();
     let move_factor = (move_index as f32).ln();
 
-    let mut reduction = (depth_factor * move_factor / 2.3).round() as u8;
+    let mut reduction = (depth_factor * move_factor / divisor).round() as u8;
 
     if !is_improving {
         reduction = reduction.saturating_add(1);
     }
 
-    reduction.min(remaining_depth / 2)
+    let max_reduction = (remaining_depth as f32 * max_reduction_ratio) as u8;
+    reduction.min(max_reduction)
 }
 
 pub fn can_delta_prune(board: &Board, in_check: bool, phase: f32) -> bool {
