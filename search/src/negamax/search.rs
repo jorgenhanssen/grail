@@ -29,7 +29,7 @@ use uci::{
     UciOutput,
 };
 
-use super::utils::{improving, lmr, should_lmp_prune, RAZOR_NEAR_MATE};
+use super::utils::{improving, lmr, null_move_reduction, should_lmp_prune, RAZOR_NEAR_MATE};
 use super::{
     controller::SearchController,
     qs_table::QSTable,
@@ -975,25 +975,28 @@ impl NegamaxEngine {
     ) -> Option<i16> {
         // Null move pruning: if giving the opponent a free move still doesn't let
         // them reach beta, the position is strong enough to prune
-        if !(try_null_move && can_null_move_prune(board, remaining_depth, in_check)) {
+        if !(try_null_move
+            && can_null_move_prune(
+                board,
+                remaining_depth,
+                in_check,
+                self.config.nmp_min_depth.value,
+            ))
+        {
             return None;
         }
         let nm_board = board.null_move()?;
         let base_remaining = max_depth - depth;
 
-        // Calculate reduction based on remaining depth and static eval:
-        // deeper positions get more reduction, strong positions get extra reduction
-        let mut r: u8 = 2 + (base_remaining / 3);
-        if let Some(se) = static_eval {
-            if se >= beta + 200 {
-                r = r.saturating_add(1);
-            } else if se <= beta - 200 {
-                r = r.saturating_sub(1).max(2);
-            }
-        }
-        if r >= base_remaining {
-            r = base_remaining.saturating_sub(1).max(2);
-        }
+        // Calculate reduction based on remaining depth and static eval
+        let r = null_move_reduction(
+            base_remaining,
+            static_eval,
+            beta,
+            self.config.nmp_base_reduction.value,
+            self.config.nmp_depth_divisor.value,
+            self.config.nmp_eval_margin.value,
+        );
 
         // Do a reduced depth null search to check if our position is still good enough
         self.position_stack.push(nm_board.get_hash());

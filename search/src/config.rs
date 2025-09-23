@@ -77,6 +77,11 @@ define_config!(
     (lmr_divisor: i32, "LMR Divisor", UciOptionType::Spin { min: 100, max: 400 }, 230, cfg!(feature = "tuning")),
     (lmr_max_reduction_ratio: i32, "LMR Max Reduction Ratio", UciOptionType::Spin { min: 10, max: 100 }, 50, cfg!(feature = "tuning")),
 
+    (nmp_min_depth: u8, "NMP Min Depth", UciOptionType::Spin { min: 2, max: 6 }, 3, cfg!(feature = "tuning")),
+    (nmp_base_reduction: u8, "NMP Base Reduction", UciOptionType::Spin { min: 1, max: 4 }, 2, cfg!(feature = "tuning")),
+    (nmp_depth_divisor: u8, "NMP Depth Divisor", UciOptionType::Spin { min: 2, max: 6 }, 3, cfg!(feature = "tuning")),
+    (nmp_eval_margin: i16, "NMP Eval Margin", UciOptionType::Spin { min: 50, max: 500 }, 200, cfg!(feature = "tuning")),
+
     // TODO: Add other parameters
 
     // (threads: i32, "Threads", UciOptionType::Spin { min: 1, max: 192 }, 1, true),
