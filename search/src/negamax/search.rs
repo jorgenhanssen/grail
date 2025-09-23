@@ -16,9 +16,9 @@ use crate::{
 };
 use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank, Square};
 use evaluation::{
-    piece_value,
+    hce, piece_value,
     scores::{MATE_VALUE, NEG_INFINITY},
-    Evaluator, TraditionalEvaluator,
+    HCE, NNUE,
 };
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -42,14 +42,15 @@ const IID_REDUCTION: u8 = 2;
 const QS_DELTA_MARGIN: i16 = 200;
 
 pub struct NegamaxEngine {
+    hce: Box<dyn HCE>,
+    nnue: Option<Box<dyn NNUE>>,
+
     board: Board,
     nodes: u32,
     killer_moves: [[Option<ChessMove>; 2]; MAX_DEPTH], // 2 per depth
     current_pv: Vec<ChessMove>,
     max_depth_reached: u8,
     stop: Arc<AtomicBool>,
-
-    evaluator: Box<dyn Evaluator>,
 
     window: AspirationWindow,
     tt: TranspositionTable,
@@ -68,14 +69,15 @@ pub struct NegamaxEngine {
 impl Default for NegamaxEngine {
     fn default() -> Self {
         Self {
+            hce: Box::new(hce::Evaluator),
+            nnue: None,
+
             board: Board::default(),
             nodes: 0,
             killer_moves: [[None; 2]; MAX_DEPTH],
             current_pv: Vec::new(),
             max_depth_reached: 1,
             stop: Arc::new(AtomicBool::new(false)),
-
-            evaluator: Box::new(TraditionalEvaluator),
 
             window: AspirationWindow::new(ASP_HALF_START, ASP_WIDEN, ASP_ENABLED_FROM),
             tt: TranspositionTable::new(256),
@@ -93,16 +95,21 @@ impl Default for NegamaxEngine {
 }
 
 impl Engine for NegamaxEngine {
-    fn new(evaluator: Box<dyn Evaluator>) -> Self {
+    fn new(hce: Box<dyn HCE>, nnue: Option<Box<dyn NNUE>>) -> Self {
         Self {
-            evaluator,
+            hce,
+            nnue,
             stop: Arc::new(AtomicBool::new(false)),
             ..Default::default()
         }
     }
 
     fn name(&self) -> String {
-        format!("Negamax ({})", self.evaluator.name())
+        if let Some(nnue) = &self.nnue {
+            format!("Negamax ({})", nnue.name())
+        } else {
+            format!("Negamax ({})", self.hce.name())
+        }
     }
 
     fn new_game(&mut self) {
@@ -196,6 +203,15 @@ impl Engine for NegamaxEngine {
 }
 
 impl NegamaxEngine {
+    #[inline(always)]
+    fn eval(&mut self, board: &Board, phase: f32) -> i16 {
+        if let Some(nnue) = &mut self.nnue {
+            nnue.evaluate(board)
+        } else {
+            self.hce.evaluate(board, phase)
+        }
+    }
+
     #[inline(always)]
     fn prev_to_squares(&self) -> [Option<Square>; MAX_CONT_PLIES] {
         let len = self.move_stack.len();
@@ -354,7 +370,7 @@ impl NegamaxEngine {
         let static_eval = if let Some(tt_se) = tt_static_eval {
             tt_se // Cached in TT
         } else {
-            let eval = self.evaluator.evaluate(board, phase);
+            let eval = self.eval(board, phase);
             if board.side_to_move() == Color::White {
                 eval
             } else {
@@ -681,7 +697,7 @@ impl NegamaxEngine {
 
         let phase = game_phase(board);
 
-        let eval = self.evaluator.evaluate(board, phase);
+        let eval = self.eval(board, phase);
         let stand_pat = if board.side_to_move() == Color::White {
             eval
         } else {

@@ -6,10 +6,9 @@ use ahash::AHashSet;
 use candle_core::Device;
 use candle_nn::VarMap;
 use chess::{Board, ChessMove, Game, MoveGen};
-use evaluation::{Evaluator, TraditionalEvaluator};
+use evaluation::{hce, NNUE};
 use indicatif::{ProgressBar, ProgressStyle};
 use nnue::version::VersionManager;
-use nnue::NNUE;
 use rand::Rng;
 use search::{Engine, NegamaxEngine};
 use std::sync::Mutex;
@@ -72,18 +71,19 @@ impl Generator {
                 let pb = Arc::clone(&pb);
 
                 std::thread::spawn(move || {
-                    let evaluator: Box<dyn Evaluator> = match &nnue_path {
-                        Some(path) => {
-                            let mut varmap = VarMap::new();
-                            let mut nnue = Box::new(NNUE::new(&varmap, &Device::Cpu, version));
-                            varmap.load(path).unwrap();
-                            nnue.enable_nnue();
-                            nnue
-                        }
-                        None => Box::new(TraditionalEvaluator),
+                    let nnue: Option<Box<dyn NNUE>> = if let Some(path) = nnue_path {
+                        let mut varmap = VarMap::new();
+                        let mut nnue = nnue::Evaluator::new(&varmap, &Device::Cpu, version);
+
+                        varmap.load(path).unwrap();
+                        nnue.enable_nnue();
+
+                        Some(Box::new(nnue))
+                    } else {
+                        None
                     };
 
-                    let mut worker = SelfPlayWorker::new(tid, global_evaluated, depth, evaluator);
+                    let mut worker = SelfPlayWorker::new(tid, global_evaluated, depth, nnue);
                     worker.play_games(duration, &pb)
                 })
             })
@@ -116,7 +116,7 @@ impl SelfPlayWorker {
         tid: usize,
         global_evaluated: Arc<Mutex<AHashSet<u64>>>,
         depth: u8,
-        evaluator: Box<dyn Evaluator>,
+        nnue: Option<Box<dyn NNUE>>,
     ) -> Self {
         Self {
             tid,
@@ -124,7 +124,7 @@ impl SelfPlayWorker {
             game: Game::new(),
             depth,
 
-            engine: NegamaxEngine::new(evaluator),
+            engine: NegamaxEngine::new(Box::new(hce::Evaluator), nnue),
             positions_in_current_game: AHashSet::new(),
         }
     }

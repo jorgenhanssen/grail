@@ -1,7 +1,7 @@
 use chess::{BitBoard, Board, Color, Piece, EMPTY};
 
+use crate::hce::pst::{get_pst, sum_pst};
 use crate::piece_values::piece_value;
-use crate::traditional::pst::{get_pst, sum_pst};
 
 #[inline(always)]
 pub(super) fn evaluate(board: &Board, color: Color, color_mask: &BitBoard, phase: f32) -> i16 {
