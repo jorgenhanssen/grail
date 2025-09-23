@@ -88,8 +88,8 @@ pub fn lmr(
     reduction.min(max_reduction)
 }
 
-pub fn can_delta_prune(board: &Board, in_check: bool, phase: f32) -> bool {
-    !in_check && total_material(board, phase) >= 1500
+pub fn can_delta_prune(board: &Board, in_check: bool, phase: f32, material_threshold: i16) -> bool {
+    !in_check && total_material(board, phase) >= material_threshold
 }
 
 #[inline(always)]

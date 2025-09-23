@@ -109,6 +109,13 @@ define_config!(
     (razor_base_margin: i16, "Razor Base Margin", UciOptionType::Spin { min: 200, max: 800 }, 512, cfg!(feature = "tuning")), // Base margin for razor formula
     (razor_depth_coefficient: i16, "Razor Depth Coefficient", UciOptionType::Spin { min: 100, max: 500 }, 293, cfg!(feature = "tuning")), // Coefficient for depth² scaling
 
+    // Quiescence Search - Delta pruning and capture evaluation
+    (qs_delta_margin: i16, "QS Delta Margin", UciOptionType::Spin { min: 50, max: 500 }, 200, cfg!(feature = "tuning")), // Safety margin for delta pruning
+    (qs_delta_material_threshold: i16, "QS Delta Material Threshold", UciOptionType::Spin { min: 200, max: 3000 }, 1500, cfg!(feature = "tuning")), // Minimum material to enable delta pruning
+
+    // Internal Iterative Deepening - Search with reduced depth when no TT move
+    (iid_reduction: u8, "IID Reduction", UciOptionType::Spin { min: 1, max: 4 }, 2, cfg!(feature = "tuning")), // Depth reduction for IID search
+
     // TODO: Add other parameters
 
     // (threads: i32, "Threads", UciOptionType::Spin { min: 1, max: 192 }, 1, true),

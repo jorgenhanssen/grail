@@ -37,8 +37,6 @@ use super::{
 };
 
 const MAX_DEPTH: usize = 100;
-const IID_REDUCTION: u8 = 2;
-const QS_DELTA_MARGIN: i16 = 200;
 
 pub struct NegamaxEngine {
     config: EngineConfig,
@@ -743,7 +741,12 @@ impl NegamaxEngine {
             }
 
             // Node-level delta pruning (big delta)
-            if can_delta_prune(board, in_check, phase) {
+            if can_delta_prune(
+                board,
+                in_check,
+                phase,
+                self.config.qs_delta_material_threshold.value,
+            ) {
                 let mut big_delta = piece_value(Piece::Queen, phase);
                 let promotion_rank = if board.side_to_move() == Color::White {
                     Rank::Seventh
@@ -775,10 +778,15 @@ impl NegamaxEngine {
 
         while let Some(mv) = moves.next() {
             // Per-move delta pruning (skip if capture can't possibly improve alpha)
-            if can_delta_prune(board, in_check, phase) {
+            if can_delta_prune(
+                board,
+                in_check,
+                phase,
+                self.config.qs_delta_material_threshold.value,
+            ) {
                 let captured = board.piece_on(mv.get_dest());
                 if let Some(piece) = captured {
-                    let mut delta = piece_value(piece, phase) + QS_DELTA_MARGIN;
+                    let mut delta = piece_value(piece, phase) + self.config.qs_delta_margin.value;
                     if let Some(promotion) = mv.get_promotion() {
                         delta += piece_value(promotion, phase) - piece_value(Piece::Pawn, phase);
                         // promotion bonus
@@ -1127,7 +1135,7 @@ impl NegamaxEngine {
         if !(allow_iid && need_iid && remaining_depth >= 4 && !in_check) {
             return None;
         }
-        let shallow_max = max_depth.saturating_sub(IID_REDUCTION);
+        let shallow_max = max_depth.saturating_sub(self.config.iid_reduction.value);
         let (.., shallow_line) = self.search_subtree(
             board,
             depth,
