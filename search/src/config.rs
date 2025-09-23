@@ -53,9 +53,16 @@ define_config!(
 
     // Tuning parameters
     (aspiration_window_size: i16, "Aspiration Window Size", UciOptionType::Spin { min: 10, max: 100 }, 40, cfg!(feature = "tuning")),
-    (aspiration_window_widen: i16, "Aspiration Window Widening", UciOptionType::Spin { min: 1, max: 5 }, 2, cfg!(feature = "tuning")),
+    (aspiration_window_widen: i16, "Aspiration Window Widening", UciOptionType::Spin { min: 1, max: 4 }, 2, cfg!(feature = "tuning")),
     (aspiration_window_depth: u8, "Aspiration Window Depth", UciOptionType::Spin { min: 1, max: 10 }, 4, cfg!(feature = "tuning")),
     (aspiration_window_retries: i16, "Aspiration Window Retries", UciOptionType::Spin { min: 1, max: 5 }, 2, cfg!(feature = "tuning")),
+
+    (history_max_value: i32, "History Max Value", UciOptionType::Spin { min: 128, max: 1024 }, 512, cfg!(feature = "tuning")),
+    (history_reduction_threshold: i16, "History Reduction Threshold", UciOptionType::Spin { min: -200, max: 200 }, -8, cfg!(feature = "tuning")),
+    (history_prune_threshold: i16, "History Prune Threshold", UciOptionType::Spin { min: -200, max: 0 }, -64, cfg!(feature = "tuning")),
+    (history_min_move_index: i32, "History Min Move Index", UciOptionType::Spin { min: 1, max: 10 }, 5, cfg!(feature = "tuning")),
+    (history_bonus_multiplier: i32, "History Bonus Multiplier", UciOptionType::Spin { min: 0, max: 50 }, 13, cfg!(feature = "tuning")),
+    (history_malus_multiplier: i32, "History Malus Multiplier", UciOptionType::Spin { min: 0, max: 50 }, 2, cfg!(feature = "tuning")),
 
     // TODO: Add other parameters
 

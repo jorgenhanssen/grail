@@ -87,7 +87,7 @@ impl Default for NegamaxEngine {
             position_stack: Vec::with_capacity(MAX_DEPTH),
             move_stack: Vec::with_capacity(MAX_DEPTH),
 
-            history_heuristic: HistoryHeuristic::new(),
+            history_heuristic: HistoryHeuristic::new(1, 1, 1, 1, 1, 1),
             capture_history: CaptureHistory::new(),
             continuation_history: Box::new(ContinuationHistory::new()),
             eval_stack: Vec::with_capacity(MAX_DEPTH),
@@ -117,6 +117,10 @@ impl Engine for NegamaxEngine {
 
         if init || old_config.hash_size.value != config.hash_size.value {
             self.configure_transposition_tables();
+        }
+
+        if init || !self.history_heuristic.matches_config(config) {
+            self.history_heuristic.configure(config);
         }
     }
 
