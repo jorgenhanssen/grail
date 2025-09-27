@@ -39,6 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             UciInput::SetOption { name, value } => {
                 if let Err(e) = config.update_from_uci(name, value) {
+                    // TODO: Consider sending info back to the GUI
                     debug!("Option setting failed: {}", e);
                 } else {
                     debug!("Set option '{}' to '{}'", name, value);
