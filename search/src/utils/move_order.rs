@@ -1,9 +1,9 @@
 // Move ordering inspired by Black Marlin
 
 use chess::{Board, ChessMove, MoveGen, Piece, Square};
-use evaluation::piece_value;
+use evaluation::piece_values::PieceValues;
 
-use crate::utils::{see, CaptureHistory, ContinuationHistory, HistoryHeuristic, MAX_CONT_PLIES};
+use crate::utils::{see, CaptureHistory, ContinuationHistory, HistoryHeuristic};
 
 struct ScoredMove {
     mov: ChessMove,
@@ -28,7 +28,7 @@ pub struct MainMoveGenerator {
     best_move: Option<ChessMove>,
 
     // Continuation history context
-    prev_to: [Option<Square>; MAX_CONT_PLIES],
+    prev_to: Vec<Option<Square>>,
 
     killer_moves: [Option<ChessMove>; 2],
     killer_index: usize,
@@ -36,26 +36,24 @@ pub struct MainMoveGenerator {
     good_captures: Vec<ScoredMove>,
     bad_captures: Vec<ScoredMove>,
     quiets: Vec<ScoredMove>,
+
+    piece_values: PieceValues,
 }
 
 impl MainMoveGenerator {
     pub fn new(
         best_move: Option<ChessMove>,
         killer_moves: [Option<ChessMove>; 2],
-        prev_to: [Option<Square>; 2], // [1-ply, 2-ply]
+        prev_to: &[Option<Square>],
         game_phase: f32,
+        piece_values: PieceValues,
     ) -> Self {
         Self {
             gen_phase: Phase::BestMove,
             game_phase,
             best_move,
 
-            prev_to: {
-                let mut arr = [None; MAX_CONT_PLIES];
-                let len = prev_to.len().min(MAX_CONT_PLIES);
-                arr[..len].copy_from_slice(&prev_to[..len]);
-                arr
-            },
+            prev_to: prev_to.to_vec(),
 
             killer_moves,
             killer_index: 0,
@@ -63,6 +61,8 @@ impl MainMoveGenerator {
             good_captures: Vec::new(),
             bad_captures: Vec::new(),
             quiets: Vec::new(),
+
+            piece_values,
         }
     }
 
@@ -96,7 +96,13 @@ impl MainMoveGenerator {
 
                 self.good_captures.push(ScoredMove {
                     mov,
-                    score: capture_score(board, mov, capture_history, self.game_phase),
+                    score: capture_score(
+                        board,
+                        mov,
+                        capture_history,
+                        self.game_phase,
+                        &self.piece_values,
+                    ),
                 });
             }
         }
@@ -105,7 +111,9 @@ impl MainMoveGenerator {
             while let Some(index) = select_highest(&self.good_captures) {
                 let scored_move = self.good_captures.swap_remove(index);
 
-                if scored_move.score < 0 || see(board, scored_move.mov, self.game_phase) < 0 {
+                if scored_move.score < 0
+                    || see(board, scored_move.mov, self.game_phase, &self.piece_values) < 0
+                {
                     self.bad_captures.push(scored_move);
                     continue;
                 }
@@ -200,6 +208,7 @@ impl QMoveGenerator {
         board: &Board,
         capture_history: &CaptureHistory,
         phase: f32,
+        piece_values: PieceValues,
     ) -> Self {
         let mut gen = MoveGen::new_legal(board);
 
@@ -211,7 +220,7 @@ impl QMoveGenerator {
             for mov in gen {
                 forcing_moves.push(ScoredMove {
                     mov,
-                    score: capture_score(board, mov, capture_history, phase),
+                    score: capture_score(board, mov, capture_history, phase, &piece_values),
                 });
             }
 
@@ -255,10 +264,11 @@ fn capture_score(
     mv: ChessMove,
     capture_history: &CaptureHistory,
     phase: f32,
+    piece_values: &PieceValues,
 ) -> i16 {
     let victim = board.piece_on(mv.get_dest()).unwrap();
     let attacker = board.piece_on(mv.get_source()).unwrap();
     let hist = capture_history.get(attacker, mv.get_dest(), victim);
 
-    piece_value(victim, phase) + hist
+    piece_values.get(victim, phase) + hist
 }

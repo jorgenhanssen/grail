@@ -10,7 +10,7 @@ use evaluation::{hce, NNUE};
 use indicatif::{ProgressBar, ProgressStyle};
 use nnue::version::VersionManager;
 use rand::Rng;
-use search::{Engine, NegamaxEngine};
+use search::{Engine, EngineConfig, NegamaxEngine};
 use std::sync::Mutex;
 use uci::commands::GoParams;
 
@@ -118,13 +118,19 @@ impl SelfPlayWorker {
         depth: u8,
         nnue: Option<Box<dyn NNUE>>,
     ) -> Self {
+        let config = EngineConfig::default();
+        let hce = Box::new(hce::Evaluator::new(
+            config.get_piece_values(),
+            config.get_hce_config(),
+        ));
+
         Self {
             tid,
             global_evaluated,
             game: Game::new(),
             depth,
 
-            engine: NegamaxEngine::new(Box::new(hce::Evaluator), nnue),
+            engine: NegamaxEngine::new(&config, hce, nnue),
             positions_in_current_game: AHashSet::new(),
         }
     }

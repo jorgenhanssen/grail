@@ -1,20 +1,42 @@
 use chess::{Board, ChessMove, Piece, Square, NUM_PIECES, NUM_SQUARES};
 
-const MAX_HISTORY: i32 = 512;
+use crate::EngineConfig;
+
 const MAX_DEPTH: usize = 100;
 
 #[derive(Clone)]
 pub struct CaptureHistory {
     // Flattened: [moved_piece][dest_square][captured_piece]
     table: Vec<i16>,
+
+    max_history: i32,
+    bonus_multiplier: i32,
+    malus_multiplier: i32,
 }
 
 impl CaptureHistory {
-    pub fn new() -> Self {
+    pub fn new(max_history: i32, bonus_multiplier: i32, malus_multiplier: i32) -> Self {
         const TABLE_SIZE: usize = NUM_PIECES * NUM_SQUARES * NUM_PIECES;
         Self {
             table: vec![0; TABLE_SIZE],
+            max_history,
+            bonus_multiplier,
+            malus_multiplier,
         }
+    }
+
+    pub fn configure(&mut self, config: &EngineConfig) {
+        self.max_history = config.capture_history_max_value.value;
+        self.bonus_multiplier = config.capture_history_bonus_multiplier.value;
+        self.malus_multiplier = config.capture_history_malus_multiplier.value;
+
+        self.reset();
+    }
+
+    pub fn matches_config(&self, config: &EngineConfig) -> bool {
+        self.max_history == config.capture_history_max_value.value
+            && self.bonus_multiplier == config.capture_history_bonus_multiplier.value
+            && self.malus_multiplier == config.capture_history_malus_multiplier.value
     }
 
     #[inline(always)]
@@ -33,12 +55,12 @@ impl CaptureHistory {
         let entry = &mut self.table[idx];
 
         let h = *entry as i32;
-        let b = delta.clamp(-MAX_HISTORY, MAX_HISTORY);
+        let b = delta.clamp(-self.max_history, self.max_history);
 
         // Gravity update like quiet history
-        let new = h + b - ((h * b.abs()) / MAX_HISTORY);
+        let new = h + b - ((h * b.abs()) / self.max_history);
 
-        *entry = new.clamp(-MAX_HISTORY, MAX_HISTORY) as i16;
+        *entry = new.clamp(-self.max_history, self.max_history) as i16;
     }
 
     #[inline(always)]
@@ -69,12 +91,14 @@ impl CaptureHistory {
 
     #[inline(always)]
     pub fn get_bonus(&self, remaining_depth: u8) -> i32 {
-        BONUS[remaining_depth.min(MAX_DEPTH as u8) as usize]
+        let depth = remaining_depth.min(MAX_DEPTH as u8) as i32;
+        self.bonus_multiplier * depth
     }
 
     #[inline(always)]
     pub fn get_malus(&self, remaining_depth: u8) -> i32 {
-        MALUS[remaining_depth.min(MAX_DEPTH as u8) as usize]
+        let depth = remaining_depth.min(MAX_DEPTH as u8) as i32;
+        -self.malus_multiplier * depth
     }
 }
 
@@ -89,25 +113,3 @@ fn piece_index(piece: Piece) -> usize {
         Piece::Pawn => 5,
     }
 }
-
-const BONUS: [i32; MAX_DEPTH + 1] = {
-    let mut table = [0; MAX_DEPTH + 1];
-    let mut i = 0;
-    while i <= MAX_DEPTH {
-        let depth = i as i32;
-        table[i] = depth * depth;
-        i += 1;
-    }
-    table
-};
-
-const MALUS: [i32; MAX_DEPTH + 1] = {
-    let mut table = [0; MAX_DEPTH + 1];
-    let mut i = 0;
-    while i <= MAX_DEPTH {
-        let depth = i as i32;
-        table[i] = -2 * depth;
-        i += 1;
-    }
-    table
-};

@@ -1,22 +1,22 @@
+use crate::EngineConfig;
 use crate::{
     negamax::{
-        aspiration::{
-            AspirationWindow, Pass, ASP_ENABLED_FROM, ASP_HALF_START, ASP_MAX_RETRIES, ASP_WIDEN,
-        },
+        aspiration::{AspirationWindow, Pass},
         utils::{
             can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
-            can_reverse_futility_prune, rfp_margin, FUTILITY_MARGINS, RAZOR_MARGINS,
+            can_reverse_futility_prune, futility_margin, razor_margin, rfp_margin,
         },
     },
     utils::{
         convert_centipawn_score, convert_mate_score, game_phase, see, CaptureHistory,
-        ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator, MAX_CONT_PLIES,
+        ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator,
     },
     Engine,
 };
-use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank, Square};
+use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank};
+use evaluation::PieceValues;
 use evaluation::{
-    hce, piece_value,
+    hce,
     scores::{MATE_VALUE, NEG_INFINITY},
     HCE, NNUE,
 };
@@ -30,7 +30,7 @@ use uci::{
     UciOutput,
 };
 
-use super::utils::{improving, lmr, should_lmp_prune, RAZOR_NEAR_MATE};
+use super::utils::{improving, lmr, null_move_reduction, should_lmp_prune, RAZOR_NEAR_MATE};
 use super::{
     controller::SearchController,
     qs_table::QSTable,
@@ -38,10 +38,11 @@ use super::{
 };
 
 const MAX_DEPTH: usize = 100;
-const IID_REDUCTION: u8 = 2;
-const QS_DELTA_MARGIN: i16 = 200;
 
 pub struct NegamaxEngine {
+    config: EngineConfig,
+    piece_values: PieceValues,
+
     hce: Box<dyn HCE>,
     nnue: Option<Box<dyn NNUE>>,
 
@@ -52,7 +53,6 @@ pub struct NegamaxEngine {
     max_depth_reached: u8,
     stop: Arc<AtomicBool>,
 
-    window: AspirationWindow,
     tt: TranspositionTable,
     qs_tt: QSTable,
 
@@ -66,41 +66,65 @@ pub struct NegamaxEngine {
     eval_stack: Vec<i16>,
 }
 
-impl Default for NegamaxEngine {
-    fn default() -> Self {
-        Self {
-            hce: Box::new(hce::Evaluator),
-            nnue: None,
+impl Engine for NegamaxEngine {
+    fn new(config: &EngineConfig, hce: Box<dyn HCE>, nnue: Option<Box<dyn NNUE>>) -> Self {
+        let mut instance = Self {
+            config: config.clone(),
+            piece_values: config.get_piece_values(),
+            stop: Arc::new(AtomicBool::new(false)),
+
+            hce,
+            nnue,
 
             board: Board::default(),
             nodes: 0,
             killer_moves: [[None; 2]; MAX_DEPTH],
             current_pv: Vec::new(),
             max_depth_reached: 1,
-            stop: Arc::new(AtomicBool::new(false)),
 
-            window: AspirationWindow::new(ASP_HALF_START, ASP_WIDEN, ASP_ENABLED_FROM),
-            tt: TranspositionTable::new(256),
-            qs_tt: QSTable::new(128),
+            tt: TranspositionTable::new(1),
+            qs_tt: QSTable::new(1),
 
-            position_stack: Vec::with_capacity(MAX_DEPTH),
             move_stack: Vec::with_capacity(MAX_DEPTH),
-
-            history_heuristic: HistoryHeuristic::new(),
-            capture_history: CaptureHistory::new(),
-            continuation_history: Box::new(ContinuationHistory::new()),
             eval_stack: Vec::with_capacity(MAX_DEPTH),
-        }
-    }
-}
+            position_stack: Vec::with_capacity(MAX_DEPTH),
 
-impl Engine for NegamaxEngine {
-    fn new(hce: Box<dyn HCE>, nnue: Option<Box<dyn NNUE>>) -> Self {
-        Self {
-            hce,
-            nnue,
-            stop: Arc::new(AtomicBool::new(false)),
-            ..Default::default()
+            history_heuristic: HistoryHeuristic::new(1, 1, 1, 1, 1, 1),
+            capture_history: CaptureHistory::new(1, 1, 1),
+            continuation_history: Box::new(ContinuationHistory::new(1, 1, 1, 1)),
+        };
+
+        instance.configure(config, true);
+
+        instance
+    }
+
+    fn configure(&mut self, config: &EngineConfig, init: bool) {
+        let old_config = self.config.clone();
+        self.config = config.clone();
+
+        // Update the HCE
+        // TODO: Find a better way to do this
+        self.piece_values = config.get_piece_values();
+        self.hce = Box::new(hce::Evaluator::new(
+            self.piece_values,
+            config.get_hce_config(),
+        ));
+
+        if init || old_config.hash_size.value != config.hash_size.value {
+            self.configure_transposition_tables();
+        }
+
+        if init || !self.history_heuristic.matches_config(config) {
+            self.history_heuristic.configure(config);
+        }
+
+        if init || !self.capture_history.matches_config(config) {
+            self.capture_history.configure(config);
+        }
+
+        if init || !self.continuation_history.matches_config(config) {
+            self.continuation_history.configure(config);
         }
     }
 
@@ -143,6 +167,12 @@ impl Engine for NegamaxEngine {
 
         self.init_search();
 
+        let mut window = AspirationWindow::new(
+            self.config.aspiration_window_size.value,
+            self.config.aspiration_window_widen.value,
+            self.config.aspiration_window_depth.value,
+        );
+
         let mut controller = SearchController::new(params, &self.board);
         let stop = Arc::clone(&self.stop);
         controller.on_stop(move || stop.store(true, Ordering::Relaxed));
@@ -159,18 +189,18 @@ impl Engine for NegamaxEngine {
                 break;
             }
 
-            self.window.begin_depth(depth, best_score);
+            window.begin_depth(depth, best_score);
             let mut retries = 0;
 
             loop {
-                let (alpha, beta) = self.window.bounds();
+                let (alpha, beta) = window.bounds();
                 let (mv, score) = self.search_root(depth, alpha, beta);
 
                 if mv.is_none() {
                     break;
                 }
 
-                match self.window.analyse_pass(score) {
+                match window.analyse_pass(score) {
                     Pass::Hit(s) => {
                         best_move = mv;
                         best_score = s;
@@ -187,8 +217,8 @@ impl Engine for NegamaxEngine {
 
                         retries += 1;
 
-                        if retries >= ASP_MAX_RETRIES {
-                            self.window.fully_extend();
+                        if retries >= self.config.aspiration_window_retries.value {
+                            window.fully_extend();
                             retries = 0;
                         }
                     }
@@ -212,17 +242,6 @@ impl NegamaxEngine {
         }
     }
 
-    #[inline(always)]
-    fn prev_to_squares(&self) -> [Option<Square>; MAX_CONT_PLIES] {
-        let len = self.move_stack.len();
-        let mut arr = [None; MAX_CONT_PLIES];
-        for (i, slot) in arr.iter_mut().enumerate() {
-            if i < len {
-                *slot = Some(self.move_stack[len - 1 - i].get_dest());
-            }
-        }
-        arr
-    }
     #[inline(always)]
     pub fn init_game(&mut self) {
         self.tt.clear();
@@ -255,12 +274,15 @@ impl NegamaxEngine {
     ) -> (Option<ChessMove>, i16) {
         let best_move = self.current_pv.first().cloned();
 
-        let prev_to = self.prev_to_squares();
+        let prev_to = self
+            .continuation_history
+            .get_prev_to_squares(&self.move_stack);
         let mut moves = MainMoveGenerator::new(
             best_move,
             [None; 2],
-            [prev_to[0], prev_to[1]],
+            &prev_to,
             game_phase(&self.board),
+            self.config.get_piece_values(),
         );
 
         let mut best_score = NEG_INFINITY;
@@ -441,12 +463,15 @@ impl NegamaxEngine {
 
         let mut best_move_depth = depth;
 
-        let prev_to = self.prev_to_squares();
+        let prev_to = self
+            .continuation_history
+            .get_prev_to_squares(&self.move_stack);
         let mut movegen = MainMoveGenerator::new(
             maybe_tt_move,
             self.killer_moves[depth as usize],
-            [prev_to[0], prev_to[1]],
+            &prev_to,
             phase,
+            self.config.get_piece_values(),
         );
 
         // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff
@@ -471,6 +496,10 @@ impl NegamaxEngine {
                 remaining_depth,
                 move_index,
                 is_improving,
+                self.config.lmp_max_depth.value,
+                self.config.lmp_base_moves.value,
+                self.config.lmp_depth_multiplier.value,
+                self.config.lmp_improving_reduction.value,
             ) {
                 continue;
             }
@@ -579,6 +608,9 @@ impl NegamaxEngine {
             move_index,
             is_pv_move,
             is_improving,
+            self.config.lmr_min_depth.value,
+            self.config.lmr_divisor.value as f32 / 100.0,
+            self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
         );
         let alpha_child = alpha;
         let beta_child = if !is_pv_move { alpha + 1 } else { beta };
@@ -712,9 +744,15 @@ impl NegamaxEngine {
                 return (stand_pat, Vec::new());
             }
 
+            let total_material = self.piece_values.total_material(board, phase);
+
             // Node-level delta pruning (big delta)
-            if can_delta_prune(board, in_check, phase) {
-                let mut big_delta = piece_value(Piece::Queen, phase);
+            if can_delta_prune(
+                in_check,
+                self.config.qs_delta_material_threshold.value,
+                total_material,
+            ) {
+                let mut big_delta = self.piece_values.get(Piece::Queen, phase);
                 let promotion_rank = if board.side_to_move() == Color::White {
                     Rank::Seventh
                 } else {
@@ -725,7 +763,8 @@ impl NegamaxEngine {
                 let promoting_pawns = pawns & rank_mask;
 
                 if promoting_pawns != chess::EMPTY {
-                    big_delta += piece_value(Piece::Queen, phase) - piece_value(Piece::Pawn, phase);
+                    big_delta += self.piece_values.get(Piece::Queen, phase)
+                        - self.piece_values.get(Piece::Pawn, phase);
                 }
 
                 if stand_pat + big_delta < alpha {
@@ -741,16 +780,28 @@ impl NegamaxEngine {
         let mut best_line = Vec::new();
         let mut best_eval = if in_check { NEG_INFINITY } else { stand_pat };
 
-        let mut moves = QMoveGenerator::new(in_check, board, &self.capture_history, phase);
+        let mut moves = QMoveGenerator::new(
+            in_check,
+            board,
+            &self.capture_history,
+            phase,
+            self.piece_values,
+        );
 
         while let Some(mv) = moves.next() {
             // Per-move delta pruning (skip if capture can't possibly improve alpha)
-            if can_delta_prune(board, in_check, phase) {
+            if can_delta_prune(
+                in_check,
+                self.config.qs_delta_material_threshold.value,
+                self.piece_values.total_material(board, phase),
+            ) {
                 let captured = board.piece_on(mv.get_dest());
                 if let Some(piece) = captured {
-                    let mut delta = piece_value(piece, phase) + QS_DELTA_MARGIN;
+                    let mut delta =
+                        self.piece_values.get(piece, phase) + self.config.qs_delta_margin.value;
                     if let Some(promotion) = mv.get_promotion() {
-                        delta += piece_value(promotion, phase) - piece_value(Piece::Pawn, phase);
+                        delta += self.piece_values.get(promotion, phase)
+                            - self.piece_values.get(Piece::Pawn, phase);
                         // promotion bonus
                     }
                     if stand_pat + delta < alpha {
@@ -762,7 +813,7 @@ impl NegamaxEngine {
                 }
             }
 
-            if !in_check && see(board, mv, phase) < 0 {
+            if !in_check && see(board, mv, phase, &self.piece_values) < 0 {
                 continue;
             }
 
@@ -809,7 +860,9 @@ impl NegamaxEngine {
         quiets_searched: &[ChessMove],
         captures_searched: &[ChessMove],
     ) {
-        let prev_to = self.prev_to_squares();
+        let prev_to = self
+            .continuation_history
+            .get_prev_to_squares(&self.move_stack);
         if is_quiet {
             // Add killer move for quiet moves
             let killers = &mut self.killer_moves[depth];
@@ -897,10 +950,19 @@ impl NegamaxEngine {
         alpha: i16,
         static_eval: i16,
     ) -> bool {
-        if !can_futility_prune(remaining_depth, in_check) {
+        if !can_futility_prune(
+            remaining_depth,
+            in_check,
+            self.config.futility_max_depth.value,
+        ) {
             return false;
         }
-        !is_tactical && static_eval + FUTILITY_MARGINS[remaining_depth as usize] <= alpha
+        let margin = futility_margin(
+            remaining_depth,
+            self.config.futility_base_margin.value,
+            self.config.futility_depth_multiplier.value,
+        );
+        !is_tactical && static_eval + margin <= alpha
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -914,11 +976,16 @@ impl NegamaxEngine {
         in_check: bool,
         static_eval: i16,
     ) -> Option<i16> {
-        if !can_razor_prune(remaining_depth, in_check) {
+        if !can_razor_prune(remaining_depth, in_check, self.config.razor_max_depth.value) {
             return None;
         }
         // If static eval already near/above alpha threshold, do not razor
-        if static_eval >= alpha - RAZOR_MARGINS[remaining_depth as usize] {
+        let margin = razor_margin(
+            remaining_depth,
+            self.config.razor_base_margin.value,
+            self.config.razor_depth_coefficient.value,
+        );
+        if static_eval >= alpha - margin {
             return None;
         }
         // Q search with null window
@@ -947,25 +1014,28 @@ impl NegamaxEngine {
     ) -> Option<i16> {
         // Null move pruning: if giving the opponent a free move still doesn't let
         // them reach beta, the position is strong enough to prune
-        if !(try_null_move && can_null_move_prune(board, remaining_depth, in_check)) {
+        if !(try_null_move
+            && can_null_move_prune(
+                board,
+                remaining_depth,
+                in_check,
+                self.config.nmp_min_depth.value,
+            ))
+        {
             return None;
         }
         let nm_board = board.null_move()?;
         let base_remaining = max_depth - depth;
 
-        // Calculate reduction based on remaining depth and static eval:
-        // deeper positions get more reduction, strong positions get extra reduction
-        let mut r: u8 = 2 + (base_remaining / 3);
-        if let Some(se) = static_eval {
-            if se >= beta + 200 {
-                r = r.saturating_add(1);
-            } else if se <= beta - 200 {
-                r = r.saturating_sub(1).max(2);
-            }
-        }
-        if r >= base_remaining {
-            r = base_remaining.saturating_sub(1).max(2);
-        }
+        // Calculate reduction based on remaining depth and static eval
+        let r = null_move_reduction(
+            base_remaining,
+            static_eval,
+            beta,
+            self.config.nmp_base_reduction.value,
+            self.config.nmp_depth_divisor.value,
+            self.config.nmp_eval_margin.value,
+        );
 
         // Do a reduced depth null search to check if our position is still good enough
         self.position_stack.push(nm_board.get_hash());
@@ -1027,10 +1097,21 @@ impl NegamaxEngine {
         alpha: i16,
         is_improving: bool,
     ) -> Option<i16> {
-        if !can_reverse_futility_prune(remaining_depth, in_check, is_pv_node) {
+        if !can_reverse_futility_prune(
+            remaining_depth,
+            in_check,
+            is_pv_node,
+            self.config.rfp_max_depth.value,
+        ) {
             return None;
         }
-        let margin = rfp_margin(remaining_depth, is_improving);
+        let margin = rfp_margin(
+            remaining_depth,
+            self.config.rfp_base_margin.value,
+            self.config.rfp_depth_multiplier.value,
+            is_improving,
+            self.config.rfp_improving_bonus.value,
+        );
         if static_eval - margin >= beta && static_eval.abs() < RAZOR_NEAR_MATE {
             let rfp_depth = depth;
             self.tt.store(
@@ -1067,7 +1148,7 @@ impl NegamaxEngine {
         if !(allow_iid && need_iid && remaining_depth >= 4 && !in_check) {
             return None;
         }
-        let shallow_max = max_depth.saturating_sub(IID_REDUCTION);
+        let shallow_max = max_depth.saturating_sub(self.config.iid_reduction.value);
         let (.., shallow_line) = self.search_subtree(
             board,
             depth,
@@ -1078,5 +1159,16 @@ impl NegamaxEngine {
             false, // disable nested IID
         );
         shallow_line.first().copied()
+    }
+}
+
+impl NegamaxEngine {
+    fn configure_transposition_tables(&mut self) {
+        let total_size_mb = self.config.hash_size.value;
+        let qs_size_mb = total_size_mb / 3;
+        let main_size_mb = total_size_mb - qs_size_mb;
+
+        self.tt = TranspositionTable::new(main_size_mb as usize);
+        self.qs_tt = QSTable::new(qs_size_mb as usize);
     }
 }

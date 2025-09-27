@@ -1,23 +1,65 @@
 use chess::{Board, ChessMove, Color, Square, NUM_COLORS, NUM_SQUARES};
 
-const MAX_HISTORY: i32 = 512;
+use crate::EngineConfig;
+
 const MAX_DEPTH: usize = 100;
-const HISTORY_REDUCE_THRESHOLD: i16 = -8; // reduce quiet late moves if history <= -8
-const HISTORY_LEAF_THRESHOLD: i16 = -64; // prune quiet late moves if history very low
-const HISTORY_MOVE_GATE: i32 = 5; // only consider after some moves have been tried
+const HISTORY_SIZE: usize = NUM_COLORS * NUM_SQUARES * NUM_SQUARES;
 
 #[derive(Clone)]
 pub struct HistoryHeuristic {
     // Flattened: [color][from][to]
     history: Vec<i16>,
+
+    max_history: i32,
+    reduction_threshold: i16,
+    prune_threshold: i16,
+    min_move_index: i32,
+
+    bonus_multiplier: i32,
+    malus_multiplier: i32,
 }
 
 impl HistoryHeuristic {
-    pub fn new() -> Self {
-        const HISTORY_SIZE: usize = NUM_COLORS * NUM_SQUARES * NUM_SQUARES;
+    pub fn new(
+        max_history: i32,
+        reduction_threshold: i16,
+        prune_threshold: i16,
+        min_move_index: i32,
+        bonus_multiplier: i32,
+        malus_multiplier: i32,
+    ) -> Self {
         Self {
             history: vec![0; HISTORY_SIZE],
+
+            max_history,
+            reduction_threshold,
+            prune_threshold,
+            min_move_index,
+
+            bonus_multiplier,
+            malus_multiplier,
         }
+    }
+
+    pub fn configure(&mut self, config: &EngineConfig) {
+        self.max_history = config.history_max_value.value;
+        self.reduction_threshold = config.history_reduction_threshold.value;
+        self.prune_threshold = config.history_prune_threshold.value;
+        self.min_move_index = config.history_min_move_index.value;
+
+        self.bonus_multiplier = config.history_bonus_multiplier.value;
+        self.malus_multiplier = config.history_malus_multiplier.value;
+
+        self.reset();
+    }
+
+    pub fn matches_config(&self, config: &EngineConfig) -> bool {
+        self.max_history == config.history_max_value.value
+            && self.reduction_threshold == config.history_reduction_threshold.value
+            && self.prune_threshold == config.history_prune_threshold.value
+            && self.min_move_index == config.history_min_move_index.value
+            && self.bonus_multiplier == config.history_bonus_multiplier.value
+            && self.malus_multiplier == config.history_malus_multiplier.value
     }
 
     #[inline(always)]
@@ -36,12 +78,12 @@ impl HistoryHeuristic {
         let entry = &mut self.history[idx];
 
         let h = *entry as i32;
-        let b = bonus.clamp(-(MAX_HISTORY), MAX_HISTORY);
+        let b = bonus.clamp(-(self.max_history), self.max_history);
 
         // History gravity formula
-        let new = h + b - ((h * b.abs()) / MAX_HISTORY);
+        let new = h + b - ((h * b.abs()) / self.max_history);
 
-        *entry = new.clamp(-(MAX_HISTORY), MAX_HISTORY) as i16;
+        *entry = new.clamp(-(self.max_history), self.max_history) as i16;
     }
 
     #[inline(always)]
@@ -84,7 +126,7 @@ impl HistoryHeuristic {
             && !in_check
             && !is_tactical
             && !is_pv_move
-            && move_index >= HISTORY_MOVE_GATE)
+            && move_index >= self.min_move_index)
         {
             return false;
         }
@@ -94,7 +136,7 @@ impl HistoryHeuristic {
         let dest = mv.get_dest();
         let hist_score = self.get(color, source, dest);
 
-        if hist_score < HISTORY_REDUCE_THRESHOLD {
+        if hist_score < self.reduction_threshold {
             // Only apply additional reductions/pruning when position isn't improving
             if !is_improving {
                 *reduction = reduction.saturating_add(1);
@@ -102,7 +144,7 @@ impl HistoryHeuristic {
 
             let projected_child_max = max_depth.saturating_sub(*reduction);
             if !is_improving
-                && hist_score < HISTORY_LEAF_THRESHOLD
+                && hist_score < self.prune_threshold
                 && projected_child_max <= depth + 1
             {
                 return true; // prune
@@ -114,32 +156,11 @@ impl HistoryHeuristic {
 
     #[inline(always)]
     pub fn get_bonus(&self, remaining_depth: u8) -> i32 {
-        BONUS[remaining_depth.min(MAX_DEPTH as u8) as usize]
+        self.bonus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
     }
 
     #[inline(always)]
     pub fn get_malus(&self, remaining_depth: u8) -> i32 {
-        MALUS[remaining_depth.min(MAX_DEPTH as u8) as usize]
+        -self.malus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
     }
 }
-
-const BONUS: [i32; MAX_DEPTH + 1] = {
-    let mut table = [0; MAX_DEPTH + 1];
-    let mut i = 0;
-    while i <= MAX_DEPTH {
-        let depth = i as i32;
-        table[i] = 13 * depth;
-        i += 1;
-    }
-    table
-};
-const MALUS: [i32; MAX_DEPTH + 1] = {
-    let mut table = [0; MAX_DEPTH + 1];
-    let mut i = 0;
-    while i <= MAX_DEPTH {
-        let depth = i as i32;
-        table[i] = -(10 * depth);
-        i += 1;
-    }
-    table
-};

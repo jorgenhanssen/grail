@@ -11,9 +11,9 @@ pub enum UciInput {
 
     Stop,
     Quit,
+    SetOption { name: String, value: String },
     Unknown(String),
     // TODO: Implement
-    // SetOption { name: String, value: Option<String> },
     // PonderHit,
 }
 
@@ -28,8 +28,7 @@ pub enum UciOutput {
         ponder: Option<ChessMove>,
     },
     Info(Info),
-    // TODO: Implement
-    // EngineOptions(EngineOptions),
+    Option(String),
 }
 
 #[derive(Debug)]

@@ -8,7 +8,7 @@ use chess::{Board, Piece};
 pub use move_order::{MainMoveGenerator, QMoveGenerator};
 
 pub use capture_history::CaptureHistory;
-pub use continuation_history::{ContinuationHistory, MAX_CONT_PLIES};
+pub use continuation_history::ContinuationHistory;
 use evaluation::scores::MATE_VALUE;
 pub use history_heuristic::HistoryHeuristic;
 pub use see::see;
