@@ -66,45 +66,32 @@ pub struct NegamaxEngine {
     eval_stack: Vec<i16>,
 }
 
-impl Default for NegamaxEngine {
-    fn default() -> Self {
-        Self {
-            config: EngineConfig::default(),
-            piece_values: PieceValues::default(),
+impl Engine for NegamaxEngine {
+    fn new(config: &EngineConfig, hce: Box<dyn HCE>, nnue: Option<Box<dyn NNUE>>) -> Self {
+        let mut instance = Self {
+            config: config.clone(),
+            piece_values: config.get_piece_values(),
+            stop: Arc::new(AtomicBool::new(false)),
 
-            hce: Box::new(hce::Evaluator::default()),
-            nnue: None,
+            hce,
+            nnue,
 
             board: Board::default(),
             nodes: 0,
             killer_moves: [[None; 2]; MAX_DEPTH],
             current_pv: Vec::new(),
             max_depth_reached: 1,
-            stop: Arc::new(AtomicBool::new(false)),
 
             tt: TranspositionTable::new(1),
             qs_tt: QSTable::new(1),
 
-            position_stack: Vec::with_capacity(MAX_DEPTH),
             move_stack: Vec::with_capacity(MAX_DEPTH),
+            eval_stack: Vec::with_capacity(MAX_DEPTH),
+            position_stack: Vec::with_capacity(MAX_DEPTH),
 
             history_heuristic: HistoryHeuristic::new(1, 1, 1, 1, 1, 1),
             capture_history: CaptureHistory::new(1, 1, 1),
             continuation_history: Box::new(ContinuationHistory::new(1, 1, 1, 1)),
-            eval_stack: Vec::with_capacity(MAX_DEPTH),
-        }
-    }
-}
-
-impl Engine for NegamaxEngine {
-    fn new(config: &EngineConfig, hce: Box<dyn HCE>, nnue: Option<Box<dyn NNUE>>) -> Self {
-        let mut instance = Self {
-            config: config.clone(),
-
-            hce,
-            nnue,
-            stop: Arc::new(AtomicBool::new(false)),
-            ..Default::default()
         };
 
         instance.configure(config, true);
@@ -119,7 +106,7 @@ impl Engine for NegamaxEngine {
         // Update the HCE
         // TODO: Find a better way to do this
         self.piece_values = config.get_piece_values();
-        self.hce = Box::new(hce::Evaluator::with_config(
+        self.hce = Box::new(hce::Evaluator::new(
             self.piece_values,
             config.get_hce_config(),
         ));

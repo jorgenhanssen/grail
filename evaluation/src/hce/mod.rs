@@ -15,21 +15,13 @@ use crate::piece_values::PieceValues;
 use crate::scores::MATE_VALUE;
 use chess::{Board, BoardStatus, Color};
 
-#[derive(Default)]
 pub struct Evaluator {
     piece_values: PieceValues,
     config: HCEConfig,
 }
 
 impl Evaluator {
-    pub fn new(piece_values: PieceValues) -> Self {
-        Self {
-            piece_values,
-            config: HCEConfig::default(),
-        }
-    }
-
-    pub fn with_config(piece_values: PieceValues, config: HCEConfig) -> Self {
+    pub fn new(piece_values: PieceValues, config: HCEConfig) -> Self {
         Self {
             piece_values,
             config,

@@ -14,23 +14,6 @@ pub struct PieceValues {
     pub queen_value_eg: f32,
 }
 
-impl Default for PieceValues {
-    fn default() -> Self {
-        Self {
-            pawn_value_mg: 98.0,
-            pawn_value_eg: 113.0,
-            knight_value_mg: 325.0,
-            knight_value_eg: 340.0,
-            bishop_value_mg: 335.0,
-            bishop_value_eg: 350.0,
-            rook_value_mg: 510.0,
-            rook_value_eg: 560.0,
-            queen_value_mg: 975.0,
-            queen_value_eg: 1020.0,
-        }
-    }
-}
-
 impl PieceValues {
     pub fn get(&self, piece: Piece, phase: f32) -> i16 {
         let (mg, eg) = match piece {
