@@ -15,6 +15,7 @@ impl Decoder {
 
             _ if input.starts_with("position") => self.decode_position(input),
             _ if input.starts_with("go") => self.decode_go(input),
+            _ if input.starts_with("setoption") => self.decode_setoption(input),
             _ if input.starts_with("stop") => UciInput::Stop,
             _ if input.starts_with("quit") => UciInput::Quit,
 
@@ -55,6 +56,24 @@ impl Decoder {
 
         UciInput::Position(board)
     }
+
+    fn decode_setoption(&self, input: &str) -> UciInput {
+        // Parse setoption name <name> value <value>
+        if let Some(name_start) = input.find("name ") {
+            if let Some(value_start) = input.find(" value ") {
+                let name_part = &input[name_start + 5..value_start];
+                let value_part = &input[value_start + 7..];
+
+                return UciInput::SetOption {
+                    name: name_part.trim().to_string(),
+                    value: value_part.trim().to_string(),
+                };
+            }
+        }
+
+        UciInput::Unknown(input.to_string())
+    }
+
     fn decode_go(&self, input: &str) -> UciInput {
         UciInput::Go(GoParams {
             ponder: input.contains("ponder"),

@@ -6,7 +6,7 @@ pub mod network;
 pub mod samples;
 pub mod version;
 
-pub use evaluator::NNUE;
+pub use evaluator::Evaluator;
 
 #[cfg(test)]
 mod tests {

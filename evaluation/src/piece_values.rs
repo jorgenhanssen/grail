@@ -1,36 +1,37 @@
-use chess::{Piece, ALL_PIECES};
+use chess::{Board, Piece, ALL_PIECES};
 
-pub const PAWN_MG: i16 = 98;
-pub const PAWN_EG: i16 = 113;
-pub const KNIGHT_MG: i16 = 325;
-pub const KNIGHT_EG: i16 = 340;
-pub const BISHOP_MG: i16 = 335;
-pub const BISHOP_EG: i16 = 350;
-pub const ROOK_MG: i16 = 510;
-pub const ROOK_EG: i16 = 560;
-pub const QUEEN_MG: i16 = 975;
-pub const QUEEN_EG: i16 = 1020;
-pub const KING_MG: i16 = 0;
-pub const KING_EG: i16 = 0;
-
-#[inline(always)]
-pub fn piece_value(piece: Piece, phase: f32) -> i16 {
-    let (mg, eg) = match piece {
-        Piece::Pawn => (PAWN_MG as f32, PAWN_EG as f32),
-        Piece::Knight => (KNIGHT_MG as f32, KNIGHT_EG as f32),
-        Piece::Bishop => (BISHOP_MG as f32, BISHOP_EG as f32),
-        Piece::Rook => (ROOK_MG as f32, ROOK_EG as f32),
-        Piece::Queen => (QUEEN_MG as f32, QUEEN_EG as f32),
-        Piece::King => (KING_MG as f32, KING_EG as f32),
-    };
-    ((mg * phase) + (eg * (1.0 - phase))).round() as i16
+#[derive(Debug, Clone, Copy)]
+pub struct PieceValues {
+    pub pawn_value_mg: f32,
+    pub pawn_value_eg: f32,
+    pub knight_value_mg: f32,
+    pub knight_value_eg: f32,
+    pub bishop_value_mg: f32,
+    pub bishop_value_eg: f32,
+    pub rook_value_mg: f32,
+    pub rook_value_eg: f32,
+    pub queen_value_mg: f32,
+    pub queen_value_eg: f32,
 }
 
-#[inline(always)]
-pub fn total_material(board: &chess::Board, phase: f32) -> i16 {
-    let mut material = 0;
-    for piece in ALL_PIECES {
-        material += piece_value(piece, phase) * (board.pieces(piece).popcnt() as i16);
+impl PieceValues {
+    pub fn get(&self, piece: Piece, phase: f32) -> i16 {
+        let (mg, eg) = match piece {
+            Piece::Pawn => (self.pawn_value_mg, self.pawn_value_eg),
+            Piece::Knight => (self.knight_value_mg, self.knight_value_eg),
+            Piece::Bishop => (self.bishop_value_mg, self.bishop_value_eg),
+            Piece::Rook => (self.rook_value_mg, self.rook_value_eg),
+            Piece::Queen => (self.queen_value_mg, self.queen_value_eg),
+            Piece::King => return 0, // Cut early for king
+        };
+        ((mg * phase) + (eg * (1.0 - phase))).round() as i16
     }
-    material
+
+    pub fn total_material(&self, board: &Board, phase: f32) -> i16 {
+        let mut material = 0;
+        for piece in ALL_PIECES {
+            material += self.get(piece, phase) * (board.pieces(piece).popcnt() as i16);
+        }
+        material
+    }
 }

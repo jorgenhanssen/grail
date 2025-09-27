@@ -1,19 +1,19 @@
 use chess::{Board, ChessMove, Piece};
-use evaluation::piece_value;
+use evaluation::piece_values::PieceValues;
 
 #[inline]
-pub fn see(board: &Board, mv: ChessMove, phase: f32) -> i16 {
+pub fn see(board: &Board, mv: ChessMove, phase: f32, piece_values: &PieceValues) -> i16 {
     let target = mv.get_dest();
 
     let mut initial_gain: i16 = if let Some(victim) = board.piece_on(target) {
-        piece_value(victim, phase)
+        piece_values.get(victim, phase)
     } else {
         0
     };
 
     // Account for promotion delta
     if let Some(promo) = mv.get_promotion() {
-        initial_gain += piece_value(promo, phase) - piece_value(Piece::Pawn, phase);
+        initial_gain += piece_values.get(promo, phase) - piece_values.get(Piece::Pawn, phase);
     }
 
     // Gains list stores the net gain after each ply using the CPW swaplist method
@@ -34,7 +34,7 @@ pub fn see(board: &Board, mv: ChessMove, phase: f32) -> i16 {
         let mut best_value = i16::MAX;
         for mov in recaptures {
             if let Some(attacker) = current_board.piece_on(mov.get_source()) {
-                let val = piece_value(attacker, phase);
+                let val = piece_values.get(attacker, phase);
                 if val < best_value {
                     best_value = val;
                     best_recapture = Some(mov);
@@ -49,7 +49,7 @@ pub fn see(board: &Board, mv: ChessMove, phase: f32) -> i16 {
                 let captured_piece = current_board
                     .piece_on(target)
                     .expect("target must be occupied before recapture");
-                let captured_value = piece_value(captured_piece, phase);
+                let captured_value = piece_values.get(captured_piece, phase);
                 gains.push(captured_value - prev);
                 current_board = current_board.make_move_new(best);
             }

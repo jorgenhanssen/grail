@@ -23,6 +23,15 @@ build-grail:
 run-grail:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo run --release --bin grail
 
+build-grail-tuning:
+	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin grail --features tuning
+run-grail-tuning:
+	RUSTFLAGS="$(RUSTFLAGS)" cargo run --release --bin grail --features tuning
+build-grail-nnue:
+	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin grail --features nnue
+run-grail-nnue:
+	RUSTFLAGS="$(RUSTFLAGS)" cargo run --release --bin grail --features nnue
+
 build-generate:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin generate
 run-generate:

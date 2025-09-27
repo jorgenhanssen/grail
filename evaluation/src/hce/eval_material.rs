@@ -1,10 +1,16 @@
 use chess::{BitBoard, Board, Color, Piece, EMPTY};
 
-use crate::piece_values::piece_value;
-use crate::traditional::pst::{get_pst, sum_pst};
+use crate::hce::pst::{get_pst, sum_pst};
+use crate::piece_values::PieceValues;
 
 #[inline(always)]
-pub(super) fn evaluate(board: &Board, color: Color, color_mask: &BitBoard, phase: f32) -> i16 {
+pub(super) fn evaluate(
+    board: &Board,
+    color: Color,
+    color_mask: &BitBoard,
+    phase: f32,
+    piece_values: &PieceValues,
+) -> i16 {
     let pawn_mask = board.pieces(Piece::Pawn) & color_mask;
     let knight_mask = board.pieces(Piece::Knight) & color_mask;
     let bishop_mask = board.pieces(Piece::Bishop) & color_mask;
@@ -14,11 +20,11 @@ pub(super) fn evaluate(board: &Board, color: Color, color_mask: &BitBoard, phase
 
     let mut cp = 0i16;
 
-    cp += piece_value(Piece::Pawn, phase) * pawn_mask.popcnt() as i16;
-    cp += piece_value(Piece::Knight, phase) * knight_mask.popcnt() as i16;
-    cp += piece_value(Piece::Bishop, phase) * bishop_mask.popcnt() as i16;
-    cp += piece_value(Piece::Rook, phase) * rook_mask.popcnt() as i16;
-    cp += piece_value(Piece::Queen, phase) * queen_mask.popcnt() as i16;
+    cp += piece_values.get(Piece::Pawn, phase) * pawn_mask.popcnt() as i16;
+    cp += piece_values.get(Piece::Knight, phase) * knight_mask.popcnt() as i16;
+    cp += piece_values.get(Piece::Bishop, phase) * bishop_mask.popcnt() as i16;
+    cp += piece_values.get(Piece::Rook, phase) * rook_mask.popcnt() as i16;
+    cp += piece_values.get(Piece::Queen, phase) * queen_mask.popcnt() as i16;
 
     let pst = get_pst(color);
     if pawn_mask != EMPTY {

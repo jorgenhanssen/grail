@@ -7,14 +7,13 @@ use ahash::AHashSet;
 use candle_core::Device;
 use candle_nn::VarMap;
 use chess::{Board, ChessMove, Game, MoveGen};
-use evaluation::{Evaluator, TraditionalEvaluator};
+use evaluation::{hce, NNUE};
 use indicatif::{ProgressBar, ProgressStyle};
 use nnue::version::VersionManager;
-use nnue::NNUE;
 use rand::distributions::WeightedIndex;
 use rand::prelude::Distribution;
 use rand::Rng;
-use search::{Engine, NegamaxEngine};
+use search::{Engine, EngineConfig, NegamaxEngine};
 use std::sync::Mutex;
 use uci::commands::GoParams;
 
@@ -90,19 +89,19 @@ impl Generator {
                 let pb = Arc::clone(&pb);
 
                 std::thread::spawn(move || {
-                    let evaluator: Box<dyn Evaluator> = match &nnue_path {
-                        Some(path) => {
-                            let mut varmap = VarMap::new();
-                            let mut nnue = Box::new(NNUE::new(&varmap, &Device::Cpu, version));
-                            varmap.load(path).unwrap();
-                            nnue.enable_nnue();
-                            nnue
-                        }
-                        None => Box::new(TraditionalEvaluator),
+                    let nnue: Option<Box<dyn NNUE>> = if let Some(path) = nnue_path {
+                        let mut varmap = VarMap::new();
+                        let mut nnue = nnue::Evaluator::new(&varmap, &Device::Cpu, version);
+
+                        varmap.load(path).unwrap();
+                        nnue.enable_nnue();
+
+                        Some(Box::new(nnue))
+                    } else {
+                        None
                     };
 
-                    let mut worker =
-                        SelfPlayWorker::new(tid, global_distributions, depth, evaluator);
+                    let mut worker = SelfPlayWorker::new(tid, global_distributions, depth, nnue);
                     worker.play_games(duration, &pb)
                 })
             })
@@ -135,15 +134,21 @@ impl SelfPlayWorker {
         tid: usize,
         global_distributions: MoveDistributions,
         depth: u8,
-        evaluator: Box<dyn Evaluator>,
+        nnue: Option<Box<dyn NNUE>>,
     ) -> Self {
+        let config = EngineConfig::default();
+        let hce = Box::new(hce::Evaluator::new(
+            config.get_piece_values(),
+            config.get_hce_config(),
+        ));
+
         Self {
             tid,
             global_distributions,
             game: Game::new(),
             depth,
 
-            engine: NegamaxEngine::new(evaluator),
+            engine: NegamaxEngine::new(&config, hce, nnue),
             positions_in_current_game: AHashSet::new(),
         }
     }

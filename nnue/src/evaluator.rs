@@ -1,6 +1,6 @@
 use candle_nn::{VarBuilder, VarMap};
 use chess::Board;
-use evaluation::Evaluator;
+use evaluation::NNUE;
 
 use crate::{
     encoding::encode_board_bitset,
@@ -8,13 +8,13 @@ use crate::{
 };
 use candle_core::{DType, Device};
 
-pub struct NNUE {
+pub struct Evaluator {
     nnue_network: NNUENetwork,
     network: Network,
     version: u32,
 }
 
-impl NNUE {
+impl Evaluator {
     pub fn new(varmap: &VarMap, device: &Device, version: u32) -> Self {
         let vs = VarBuilder::from_varmap(varmap, DType::F32, device);
         let network = Network::new(&vs).unwrap();
@@ -32,13 +32,13 @@ impl NNUE {
     }
 }
 
-impl Evaluator for NNUE {
+impl NNUE for Evaluator {
     fn name(&self) -> String {
         format!("NNUE-{}", self.version)
     }
 
     #[inline(always)]
-    fn evaluate(&mut self, board: &Board, _: f32) -> i16 {
+    fn evaluate(&mut self, board: &Board) -> i16 {
         let bitset = encode_board_bitset(board);
         self.nnue_network
             .forward_bitset(&bitset)
