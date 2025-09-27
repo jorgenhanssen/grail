@@ -57,7 +57,7 @@ define_config!(
     (aspiration_window_size: i16, "Aspiration Window Size", UciOptionType::Spin { min: 10, max: 100 }, 40, cfg!(feature = "tuning")), // Initial window size in centipawns
     (aspiration_window_widen: i16, "Aspiration Window Widening", UciOptionType::Spin { min: 1, max: 4 }, 2, cfg!(feature = "tuning")), // Factor to widen window on fail
     (aspiration_window_depth: u8, "Aspiration Window Depth", UciOptionType::Spin { min: 1, max: 10 }, 4, cfg!(feature = "tuning")), // Minimum depth to use aspiration
-    (aspiration_window_retries: i16, "Aspiration Window Retries", UciOptionType::Spin { min: 1, max: 5 }, 2, cfg!(feature = "tuning")), // Max retries before full window
+    (aspiration_window_retries: i16, "Aspiration Window Retries", UciOptionType::Spin { min: 1, max: 5 }, 3, cfg!(feature = "tuning")), // Max retries before full window
 
     // History Heuristic - Track move success/failure for ordering
     (history_max_value: i32, "History Max Value", UciOptionType::Spin { min: 128, max: 1024 }, 512, cfg!(feature = "tuning")), // Maximum  history score (absolute value)
@@ -65,7 +65,7 @@ define_config!(
     (history_prune_threshold: i16, "History Prune Threshold", UciOptionType::Spin { min: -512, max: 512 }, -64, cfg!(feature = "tuning")), // Score below which to prune moves
     (history_min_move_index: i32, "History Min Move Index", UciOptionType::Spin { min: 1, max: 10 }, 5, cfg!(feature = "tuning")), // Minimum move number for history pruning
     (history_bonus_multiplier: i32, "History Bonus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 13, cfg!(feature = "tuning")), // Scaling for successful moves
-    (history_malus_multiplier: i32, "History Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 2, cfg!(feature = "tuning")), // Scaling for failed moves
+    (history_malus_multiplier: i32, "History Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 4, cfg!(feature = "tuning")), // Scaling for failed moves
 
     // Capture History - Track capture move success for ordering
     (capture_history_max_value: i32, "Capture History Max Value", UciOptionType::Spin { min: 128, max: 1024 }, 512, cfg!(feature = "tuning")), // Maximum capture history score (absolute value)
@@ -76,7 +76,7 @@ define_config!(
     (continuation_max_value: i32, "Continuation Max Value", UciOptionType::Spin { min: 128, max: 1024 }, 512, cfg!(feature = "tuning")), // Maximum continuation score (absolute value)
     (continuation_max_moves: usize, "Continuation Max Moves", UciOptionType::Spin { min: 1, max: 4 }, 3, cfg!(feature = "tuning")), // Number of previous moves to consider
     (continuation_bonus_multiplier: i32, "Continuation Bonus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 9, cfg!(feature = "tuning")), // Scaling for successful continuations
-    (continuation_malus_multiplier: i32, "Continuation Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 7, cfg!(feature = "tuning")), // Scaling for failed continuations
+    (continuation_malus_multiplier: i32, "Continuation Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 9, cfg!(feature = "tuning")), // Scaling for failed continuations
 
     // Late Move Reduction - Reduce search depth for later moves
     (lmr_min_depth: u8, "LMR Min Depth", UciOptionType::Spin { min: 1, max: 6 }, 3, cfg!(feature = "tuning")), // Minimum depth to apply LMR
@@ -90,18 +90,18 @@ define_config!(
     (nmp_eval_margin: i16, "NMP Eval Margin", UciOptionType::Spin { min: 50, max: 500 }, 200, cfg!(feature = "tuning")), // Eval margin for reduction adjustment
 
     // Late Move Pruning - Prune quiet moves after a limit based on depth
-    (lmp_max_depth: u8, "LMP Max Depth", UciOptionType::Spin { min: 4, max: 12 }, 8, cfg!(feature = "tuning")), // Maximum depth to apply LMP
+    (lmp_max_depth: u8, "LMP Max Depth", UciOptionType::Spin { min: 4, max: 12 }, 9, cfg!(feature = "tuning")), // Maximum depth to apply LMP
     (lmp_base_moves: i32, "LMP Base Moves", UciOptionType::Spin { min: 1, max: 6 }, 2, cfg!(feature = "tuning")), // Base move limit for formula
     (lmp_depth_multiplier: i32, "LMP Depth Multiplier", UciOptionType::Spin { min: 1, max: 6 }, 2, cfg!(feature = "tuning")), // Depth scaling factor for triangular formula
     (lmp_improving_reduction: i32, "LMP Improving Reduction", UciOptionType::Spin { min: 70, max: 95 }, 85, cfg!(feature = "tuning")), // Limit percentage when not improving
 
     // Futility Pruning - Prune moves that can't improve alpha
-    (futility_max_depth: u8, "Futility Max Depth", UciOptionType::Spin { min: 1, max: 6 }, 3, cfg!(feature = "tuning")), // Maximum depth to apply futility pruning
+    (futility_max_depth: u8, "Futility Max Depth", UciOptionType::Spin { min: 1, max: 6 }, 4, cfg!(feature = "tuning")), // Maximum depth to apply futility pruning
     (futility_base_margin: i16, "Futility Base Margin", UciOptionType::Spin { min: 50, max: 300 }, 150, cfg!(feature = "tuning")), // Base margin at depth 1
     (futility_depth_multiplier: i16, "Futility Depth Multiplier", UciOptionType::Spin { min: 50, max: 200 }, 100, cfg!(feature = "tuning")), // Additional margin per depth
 
     // Reverse Futility Pruning - Prune positions that are too good (static beta cutoff)
-    (rfp_max_depth: u8, "RFP Max Depth", UciOptionType::Spin { min: 1, max: 6 }, 3, cfg!(feature = "tuning")), // Maximum depth to apply RFP
+    (rfp_max_depth: u8, "RFP Max Depth", UciOptionType::Spin { min: 1, max: 6 }, 5, cfg!(feature = "tuning")), // Maximum depth to apply RFP
     (rfp_base_margin: i16, "RFP Base Margin", UciOptionType::Spin { min: 50, max: 300 }, 150, cfg!(feature = "tuning")), // Base margin at depth 1
     (rfp_depth_multiplier: i16, "RFP Depth Multiplier", UciOptionType::Spin { min: 50, max: 200 }, 100, cfg!(feature = "tuning")), // Additional margin per depth
     (rfp_improving_bonus: i16, "RFP Improving Bonus", UciOptionType::Spin { min: 20, max: 100 }, 50, cfg!(feature = "tuning")), // Margin reduction for improving positions
@@ -116,7 +116,7 @@ define_config!(
     (qs_delta_material_threshold: i16, "QS Delta Material Threshold", UciOptionType::Spin { min: 200, max: 3000 }, 1500, cfg!(feature = "tuning")), // Minimum material to enable delta pruning
 
     // Internal Iterative Deepening - Search with reduced depth when no TT move
-    (iid_reduction: u8, "IID Reduction", UciOptionType::Spin { min: 1, max: 4 }, 2, cfg!(feature = "tuning")), // Depth reduction for IID search
+    (iid_reduction: u8, "IID Reduction", UciOptionType::Spin { min: 1, max: 4 }, 3, cfg!(feature = "tuning")), // Depth reduction for IID search
 
 
     // HCE Piece Values
@@ -137,9 +137,9 @@ define_config!(
     // Pawn structure
     (hce_doubled_pawn_penalty: i16, "HCE Doubled Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 30, cfg!(feature = "tuning")),
     (hce_tripled_pawn_penalty: i16, "HCE Tripled Pawn Penalty", UciOptionType::Spin { min: 0, max: 150 }, 60, cfg!(feature = "tuning")),
-    (hce_isolated_pawn_penalty: i16, "HCE Isolated Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 40, cfg!(feature = "tuning")),
-    (hce_passed_pawn_linear: i16, "HCE Passed Pawn Linear", UciOptionType::Spin { min: 0, max: 20 }, 6, cfg!(feature = "tuning")),
-    (hce_passed_pawn_quadratic: i16, "HCE Passed Pawn Quadratic", UciOptionType::Spin { min: 0, max: 10 }, 2, cfg!(feature = "tuning")),
+    (hce_isolated_pawn_penalty: i16, "HCE Isolated Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 39, cfg!(feature = "tuning")),
+    (hce_passed_pawn_linear: i16, "HCE Passed Pawn Linear", UciOptionType::Spin { min: 0, max: 20 }, 7, cfg!(feature = "tuning")),
+    (hce_passed_pawn_quadratic: i16, "HCE Passed Pawn Quadratic", UciOptionType::Spin { min: 0, max: 10 }, 3, cfg!(feature = "tuning")),
 
     // Piece bonuses
     (hce_bishop_pair_bonus: i16, "HCE Bishop Pair Bonus", UciOptionType::Spin { min: 0, max: 150 }, 50, cfg!(feature = "tuning")),
@@ -150,7 +150,7 @@ define_config!(
     // Mobility multipliers
     (hce_knight_mobility_multiplier: i16, "HCE Knight Mobility Multiplier", UciOptionType::Spin { min: 1, max: 10 }, 5, cfg!(feature = "tuning")),
     (hce_bishop_mobility_multiplier: i16, "HCE Bishop Mobility Multiplier", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")),
-    (hce_rook_mobility_multiplier: i16, "HCE Rook Mobility Multiplier", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")),
+    (hce_rook_mobility_multiplier: i16, "HCE Rook Mobility Multiplier", UciOptionType::Spin { min: 1, max: 10 }, 4, cfg!(feature = "tuning")),
     (hce_queen_mobility_multiplier: i16, "HCE Queen Mobility Multiplier", UciOptionType::Spin { min: 1, max: 5 }, 1, cfg!(feature = "tuning")),
 
     // King safety - Pawn shield

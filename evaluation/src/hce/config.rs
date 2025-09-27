@@ -49,9 +49,9 @@ impl Default for HCEConfig {
 
             doubled_pawn_penalty: 30,
             tripled_pawn_penalty: 60,
-            isolated_pawn_penalty: 40,
-            passed_pawn_linear: 6,    // Linear growth per rank
-            passed_pawn_quadratic: 2, // Quadratic acceleration
+            isolated_pawn_penalty: 39,
+            passed_pawn_linear: 7,    // Linear growth per rank
+            passed_pawn_quadratic: 3, // Quadratic acceleration
 
             bishop_pair_bonus: 50,
             rook_open_file_bonus: 15,
