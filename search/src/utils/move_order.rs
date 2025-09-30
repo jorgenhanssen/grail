@@ -3,7 +3,7 @@
 use chess::{Board, ChessMove, MoveGen, Piece, Square};
 use evaluation::piece_values::PieceValues;
 
-use crate::utils::{see, CaptureHistory, ContinuationHistory, HistoryHeuristic};
+use crate::utils::{gives_check, see, CaptureHistory, ContinuationHistory, HistoryHeuristic};
 
 struct ScoredMove {
     mov: ChessMove,
@@ -171,7 +171,9 @@ impl MainMoveGenerator {
                             mov.get_dest(),
                         );
 
-                        hist + cont
+                        let check_bonus = if gives_check(board, mov) { 1000 } else { 0 };
+
+                        hist + cont + check_bonus
                     }
                 };
 

@@ -4,7 +4,7 @@ mod history_heuristic;
 mod move_order;
 mod see;
 
-use chess::{Board, Piece};
+use chess::{Board, ChessMove, Piece};
 pub use move_order::{MainMoveGenerator, QMoveGenerator};
 
 pub use capture_history::CaptureHistory;
@@ -65,4 +65,9 @@ pub fn convert_mate_score(score: i16) -> Score {
 #[inline(always)]
 pub fn convert_centipawn_score(score: i16) -> Score {
     Score::Centipawns(score)
+}
+
+pub fn gives_check(board: &Board, mv: ChessMove) -> bool {
+    let new_board = board.make_move_new(mv);
+    new_board.checkers().popcnt() > 0
 }
