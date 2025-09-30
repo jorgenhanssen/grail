@@ -67,7 +67,7 @@ pub fn convert_centipawn_score(score: i16) -> Score {
     Score::Centipawns(score)
 }
 
+#[inline(always)]
 pub fn gives_check(board: &Board, mv: ChessMove) -> bool {
-    let new_board = board.make_move_new(mv);
-    new_board.checkers().popcnt() > 0
+    board.make_move_new(mv).checkers().popcnt() > 0
 }
