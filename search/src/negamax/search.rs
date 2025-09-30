@@ -283,6 +283,7 @@ impl NegamaxEngine {
             &prev_to,
             game_phase(&self.board),
             self.config.get_piece_values(),
+            self.config.quiet_check_bonus.value,
         );
 
         let mut best_score = NEG_INFINITY;
@@ -472,6 +473,7 @@ impl NegamaxEngine {
             &prev_to,
             phase,
             self.config.get_piece_values(),
+            self.config.quiet_check_bonus.value,
         );
 
         // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff

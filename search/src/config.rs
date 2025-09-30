@@ -78,6 +78,9 @@ define_config!(
     (continuation_bonus_multiplier: i32, "Continuation Bonus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 9, cfg!(feature = "tuning")), // Scaling for successful continuations
     (continuation_malus_multiplier: i32, "Continuation Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")), // Scaling for failed continuations
 
+    // Quiet Check Bonus - Bonus for quiet moves that check
+    (quiet_check_bonus: i16, "Quiet Check Bonus", UciOptionType::Spin { min: 0, max: 2000 }, 1000, cfg!(feature = "tuning")), // Bonus for quiet moves that check
+
     // Late Move Reduction - Reduce search depth for later moves
     (lmr_min_depth: u8, "LMR Min Depth", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")), // Minimum depth to apply LMR
     (lmr_divisor: i32, "LMR Divisor", UciOptionType::Spin { min: 100, max: 400 }, 230, cfg!(feature = "tuning")), // Formula divisor (2.30 scaled by 100)

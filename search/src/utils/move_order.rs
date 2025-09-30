@@ -38,6 +38,7 @@ pub struct MainMoveGenerator {
     quiets: Vec<ScoredMove>,
 
     piece_values: PieceValues,
+    quiet_check_bonus: i16,
 }
 
 impl MainMoveGenerator {
@@ -47,6 +48,7 @@ impl MainMoveGenerator {
         prev_to: &[Option<Square>],
         game_phase: f32,
         piece_values: PieceValues,
+        quiet_check_bonus: i16,
     ) -> Self {
         Self {
             gen_phase: Phase::BestMove,
@@ -63,6 +65,7 @@ impl MainMoveGenerator {
             quiets: Vec::new(),
 
             piece_values,
+            quiet_check_bonus,
         }
     }
 
@@ -171,7 +174,11 @@ impl MainMoveGenerator {
                             mov.get_dest(),
                         );
 
-                        let check_bonus = if gives_check(board, mov) { 1000 } else { 0 };
+                        let check_bonus = if gives_check(board, mov) {
+                            self.quiet_check_bonus
+                        } else {
+                            0
+                        };
 
                         hist + cont + check_bonus
                     }
