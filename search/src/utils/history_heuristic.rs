@@ -70,7 +70,7 @@ impl HistoryHeuristic {
 
     #[inline(always)]
     pub fn get(&self, color: Color, source: Square, dest: Square, threats: &ThreatMap) -> i16 {
-        let is_threatened = threats.is_my_piece_threatened(source);
+        let is_threatened = threats.is_threatened(source);
         self.history[Self::index(color, is_threatened, source, dest)]
     }
 
@@ -100,7 +100,7 @@ impl HistoryHeuristic {
         let color = board.side_to_move();
         let source = mv.get_source();
         let dest = mv.get_dest();
-        let is_threatened = threats.is_my_piece_threatened(source);
+        let is_threatened = threats.is_threatened(source);
         self.update_move(color, is_threatened, source, dest, delta);
     }
 

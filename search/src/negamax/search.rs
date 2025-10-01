@@ -275,7 +275,7 @@ impl NegamaxEngine {
         let best_move = self.current_pv.first().cloned();
 
         let phase = game_phase(&self.board);
-        let threats = ThreatMap::new(&self.board, phase, &self.config.get_piece_values());
+        let threats = ThreatMap::new(&self.board);
 
         let prev_to = self
             .continuation_history
@@ -468,7 +468,7 @@ impl NegamaxEngine {
 
         let mut best_move_depth = depth;
 
-        let threats = ThreatMap::new(board, phase, &self.config.get_piece_values());
+        let threats = ThreatMap::new(board);
 
         let prev_to = self
             .continuation_history

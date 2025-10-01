@@ -2,88 +2,54 @@ use chess::{
     get_bishop_moves, get_knight_moves, get_pawn_attacks, get_rook_moves, BitBoard, Board, Color,
     Piece, Square, EMPTY,
 };
-use evaluation::piece_values::PieceValues;
 
 #[derive(Clone, Copy, Debug)]
 pub struct ThreatMap {
-    /// Threats against side-to-move's pieces
-    pub my_threats: BitBoard,
-    /// Threats against opponent's pieces
-    pub their_threats: BitBoard,
+    // Threats against side-to-move's pieces
+    pub threats: BitBoard,
 }
 
 impl ThreatMap {
-    pub fn new(board: &Board, _phase: f32, _piece_values: &PieceValues) -> Self {
-        let us = board.side_to_move();
-        let them = !us;
+    pub fn new(board: &Board) -> Self {
+        let me = board.side_to_move();
+        let them = !me;
         let occupied = board.combined();
 
-        let our_pieces = board.color_combined(us);
+        let my_pieces = board.color_combined(me);
         let their_pieces = board.color_combined(them);
 
-        let our_pawns = board.pieces(Piece::Pawn) & our_pieces;
-        let our_knights = board.pieces(Piece::Knight) & our_pieces;
-        let our_bishops = board.pieces(Piece::Bishop) & our_pieces;
-        let our_rooks = board.pieces(Piece::Rook) & our_pieces;
-        let our_queens = board.pieces(Piece::Queen) & our_pieces;
+        let my_knights = board.pieces(Piece::Knight) & my_pieces;
+        let my_bishops = board.pieces(Piece::Bishop) & my_pieces;
+        let my_rooks = board.pieces(Piece::Rook) & my_pieces;
+        let my_queens = board.pieces(Piece::Queen) & my_pieces;
 
         let their_pawns = board.pieces(Piece::Pawn) & their_pieces;
         let their_knights = board.pieces(Piece::Knight) & their_pieces;
         let their_bishops = board.pieces(Piece::Bishop) & their_pieces;
         let their_rooks = board.pieces(Piece::Rook) & their_pieces;
-        let their_queens = board.pieces(Piece::Queen) & their_pieces;
 
-        let our_minors = our_knights | our_bishops;
-        let our_majors = our_rooks | our_queens;
-        let our_non_pawns = our_minors | our_majors;
+        let my_minors = my_knights | my_bishops;
+        let my_majors = my_rooks | my_queens;
+        let my_non_pawns = my_minors | my_majors;
 
-        let their_minors = their_knights | their_bishops;
-        let their_majors = their_rooks | their_queens;
-        let their_non_pawns = their_minors | their_majors;
-
-        let my_threats = compute_threats(
+        let threats = compute_threats(
             their_pawns,
             their_knights,
             their_bishops,
             their_rooks,
             them,
-            our_non_pawns,
-            our_majors,
-            our_queens,
+            my_non_pawns,
+            my_majors,
+            my_queens,
             *occupied,
         );
 
-        let their_threats = compute_threats(
-            our_pawns,
-            our_knights,
-            our_bishops,
-            our_rooks,
-            us,
-            their_non_pawns,
-            their_majors,
-            their_queens,
-            *occupied,
-        );
-
-        Self {
-            my_threats,
-            their_threats,
-        }
+        Self { threats }
     }
 
-    #[inline]
-    pub fn my_threat_count(&self) -> u32 {
-        self.my_threats.popcnt()
-    }
-
-    #[inline]
-    pub fn their_threat_count(&self) -> u32 {
-        self.their_threats.popcnt()
-    }
-
-    #[inline]
-    pub fn is_my_piece_threatened(&self, square: Square) -> bool {
-        self.my_threats & BitBoard::from_square(square) != EMPTY
+    #[inline(always)]
+    pub fn is_threatened(&self, square: Square) -> bool {
+        self.threats & BitBoard::from_square(square) != EMPTY
     }
 }
 
