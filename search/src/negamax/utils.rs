@@ -180,13 +180,8 @@ pub fn can_reverse_futility_prune(
     in_check: bool,
     is_pv_node: bool,
     max_depth: u8,
-    opponent_threat_count: u32,
 ) -> bool {
-    remaining_depth <= max_depth
-        && remaining_depth > 0
-        && !in_check
-        && !is_pv_node
-        && opponent_threat_count == 0
+    remaining_depth <= max_depth && remaining_depth > 0 && !in_check && !is_pv_node
 }
 
 #[inline(always)]

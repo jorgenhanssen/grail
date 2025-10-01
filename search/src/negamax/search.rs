@@ -411,8 +411,6 @@ impl NegamaxEngine {
             return (score, Vec::new());
         }
 
-        let threats = ThreatMap::new(board, phase, &self.config.get_piece_values());
-
         if let Some(score) = self.try_null_move_prune(
             board,
             depth,
@@ -424,7 +422,6 @@ impl NegamaxEngine {
             in_check,
             try_null_move,
             Some(static_eval),
-            threats.my_threat_count(),
         ) {
             return (score, Vec::new());
         }
@@ -459,7 +456,6 @@ impl NegamaxEngine {
             max_depth,
             alpha,
             is_improving,
-            threats.my_threat_count(),
         ) {
             return (score, Vec::new());
         }
@@ -472,9 +468,12 @@ impl NegamaxEngine {
 
         let mut best_move_depth = depth;
 
+        let threats = ThreatMap::new(board, phase, &self.config.get_piece_values());
+
         let prev_to = self
             .continuation_history
             .get_prev_to_squares(&self.move_stack);
+
         let mut movegen = MainMoveGenerator::new(
             maybe_tt_move,
             self.killer_moves[depth as usize],
@@ -528,7 +527,6 @@ impl NegamaxEngine {
                 is_improving,
                 static_eval,
                 &threats,
-                phase,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
                     break;
@@ -600,8 +598,7 @@ impl NegamaxEngine {
         move_index: i32,
         is_improving: bool,
         static_eval: i16,
-        parent_threats: &ThreatMap,
-        phase: f32,
+        threats: &ThreatMap,
     ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
         let new_board = board.make_move_new(m);
         let gives_check = new_board.checkers().popcnt() > 0;
@@ -629,12 +626,6 @@ impl NegamaxEngine {
             self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
         );
 
-        // Reduce less when move creates new threats against opponent
-        let child_threats = ThreatMap::new(&new_board, phase, &self.config.get_piece_values());
-        if child_threats.my_threat_count() > parent_threats.their_threat_count() {
-            reduction = reduction.saturating_sub(1);
-        }
-
         let alpha_child = alpha;
         let beta_child = if !is_pv_move { alpha + 1 } else { beta };
 
@@ -651,7 +642,7 @@ impl NegamaxEngine {
             move_index,
             is_improving,
             &mut reduction,
-            parent_threats,
+            threats,
         ) {
             return None;
         }
@@ -1037,18 +1028,11 @@ impl NegamaxEngine {
         in_check: bool,
         try_null_move: bool,
         static_eval: Option<i16>,
-        opponent_threat_count: u32,
     ) -> Option<i16> {
         // Null move pruning: if giving the opponent a free move still doesn't let
         // them reach beta, the position is strong enough to prune
 
-        // Don't do NMP if opponent has threats at shallow depth (like Black Marlin)
-        // If they have threats against our pieces, passing the move lets them capture
-        let shallow_with_threats =
-            opponent_threat_count > 0 && remaining_depth <= self.config.nmp_threat_depth.value;
-
         if !(try_null_move
-            && !shallow_with_threats
             && can_null_move_prune(
                 board,
                 remaining_depth,
@@ -1130,14 +1114,12 @@ impl NegamaxEngine {
         _max_depth: u8,
         alpha: i16,
         is_improving: bool,
-        opponent_threat_count: u32,
     ) -> Option<i16> {
         if !can_reverse_futility_prune(
             remaining_depth,
             in_check,
             is_pv_node,
             self.config.rfp_max_depth.value,
-            opponent_threat_count,
         ) {
             return None;
         }
