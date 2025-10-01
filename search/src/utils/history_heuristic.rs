@@ -4,7 +4,7 @@ use crate::utils::ThreatMap;
 use crate::EngineConfig;
 
 const MAX_DEPTH: usize = 100;
-// Threat-aware history: [color][is_threatened][from][to] (similar to Black Marlin)
+// [color][is_threatened][from][to] (similar to Black Marlin)
 const HISTORY_SIZE: usize = NUM_COLORS * 2 * NUM_SQUARES * NUM_SQUARES;
 
 #[derive(Clone)]

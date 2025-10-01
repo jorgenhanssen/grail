@@ -274,7 +274,6 @@ impl NegamaxEngine {
     ) -> (Option<ChessMove>, i16) {
         let best_move = self.current_pv.first().cloned();
 
-        let phase = game_phase(&self.board);
         let threats = ThreatMap::new(&self.board);
 
         let prev_to = self
@@ -284,7 +283,7 @@ impl NegamaxEngine {
             best_move,
             [None; 2],
             &prev_to,
-            phase,
+            game_phase(&self.board),
             self.config.get_piece_values(),
             self.config.quiet_check_bonus.value,
             threats,
@@ -598,7 +597,7 @@ impl NegamaxEngine {
         move_index: i32,
         is_improving: bool,
         static_eval: i16,
-        threats: &ThreatMap,
+        pre_move_threats: &ThreatMap,
     ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
         let new_board = board.make_move_new(m);
         let gives_check = new_board.checkers().popcnt() > 0;
@@ -642,7 +641,7 @@ impl NegamaxEngine {
             move_index,
             is_improving,
             &mut reduction,
-            threats,
+            pre_move_threats,
         ) {
             return None;
         }
