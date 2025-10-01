@@ -9,7 +9,7 @@ use crate::{
     },
     utils::{
         convert_centipawn_score, convert_mate_score, game_phase, see, CaptureHistory,
-        ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator,
+        ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator, ThreatMap,
     },
     Engine,
 };
@@ -274,6 +274,9 @@ impl NegamaxEngine {
     ) -> (Option<ChessMove>, i16) {
         let best_move = self.current_pv.first().cloned();
 
+        let phase = game_phase(&self.board);
+        let threats = ThreatMap::new(&self.board, phase, &self.config.get_piece_values());
+
         let prev_to = self
             .continuation_history
             .get_prev_to_squares(&self.move_stack);
@@ -281,9 +284,10 @@ impl NegamaxEngine {
             best_move,
             [None; 2],
             &prev_to,
-            game_phase(&self.board),
+            phase,
             self.config.get_piece_values(),
             self.config.quiet_check_bonus.value,
+            threats,
         );
 
         let mut best_score = NEG_INFINITY;
@@ -407,6 +411,8 @@ impl NegamaxEngine {
             return (score, Vec::new());
         }
 
+        let opponent_threats = ThreatMap::new(board, phase, &self.config.get_piece_values());
+
         if let Some(score) = self.try_null_move_prune(
             board,
             depth,
@@ -418,6 +424,7 @@ impl NegamaxEngine {
             in_check,
             try_null_move,
             Some(static_eval),
+            opponent_threats.my_threat_count(),
         ) {
             return (score, Vec::new());
         }
@@ -452,6 +459,7 @@ impl NegamaxEngine {
             max_depth,
             alpha,
             is_improving,
+            opponent_threats.my_threat_count(),
         ) {
             return (score, Vec::new());
         }
@@ -474,6 +482,7 @@ impl NegamaxEngine {
             phase,
             self.config.get_piece_values(),
             self.config.quiet_check_bonus.value,
+            opponent_threats,
         );
 
         // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff
@@ -518,6 +527,8 @@ impl NegamaxEngine {
                 move_index,
                 is_improving,
                 static_eval,
+                &opponent_threats,
+                phase,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
                     break;
@@ -541,6 +552,7 @@ impl NegamaxEngine {
                         is_quiet,
                         &quiets_searched,
                         &captures_searched,
+                        &opponent_threats,
                     );
 
                     break; // beta cutoff
@@ -588,6 +600,8 @@ impl NegamaxEngine {
         move_index: i32,
         is_improving: bool,
         static_eval: i16,
+        parent_threats: &ThreatMap,
+        phase: f32,
     ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
         let new_board = board.make_move_new(m);
         let gives_check = new_board.checkers().popcnt() > 0;
@@ -614,10 +628,18 @@ impl NegamaxEngine {
             self.config.lmr_divisor.value as f32 / 100.0,
             self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
         );
+
+        // Reduce less when move creates new threats against opponent
+        let threats_after = ThreatMap::new(&new_board, phase, &self.config.get_piece_values());
+        if threats_after.my_threat_count() > parent_threats.their_threat_count() {
+            reduction = reduction.saturating_sub(1);
+        }
+
         let alpha_child = alpha;
         let beta_child = if !is_pv_move { alpha + 1 } else { beta };
 
         // History-leaf pruning / extra reduction on quiet late moves
+        let parent_threats = ThreatMap::new(board, phase, &self.config.get_piece_values());
         if self.history_heuristic.maybe_reduce_or_prune(
             board,
             m,
@@ -630,6 +652,7 @@ impl NegamaxEngine {
             move_index,
             is_improving,
             &mut reduction,
+            &parent_threats,
         ) {
             return None;
         }
@@ -861,6 +884,7 @@ impl NegamaxEngine {
         is_quiet: bool,
         quiets_searched: &[ChessMove],
         captures_searched: &[ChessMove],
+        threats: &ThreatMap,
     ) {
         let prev_to = self
             .continuation_history
@@ -875,7 +899,7 @@ impl NegamaxEngine {
 
             // Boost the quiet move that caused the cutoff
             let bonus = self.history_heuristic.get_bonus(remaining_depth);
-            self.history_heuristic.update(board, mv, bonus);
+            self.history_heuristic.update(board, mv, bonus, threats);
 
             // Continuation history bonus for quiet cutoff move
             let cont_bonus = self.continuation_history.get_bonus(remaining_depth);
@@ -891,7 +915,8 @@ impl NegamaxEngine {
             // Apply malus to all previously searched quiet moves
             let quiet_malus = self.history_heuristic.get_malus(remaining_depth);
             for &q in quiets_searched {
-                self.history_heuristic.update(board, q, quiet_malus);
+                self.history_heuristic
+                    .update(board, q, quiet_malus, threats);
             }
 
             // Continuation history malus for previously searched quiets
@@ -1013,10 +1038,18 @@ impl NegamaxEngine {
         in_check: bool,
         try_null_move: bool,
         static_eval: Option<i16>,
+        opponent_threat_count: u32,
     ) -> Option<i16> {
         // Null move pruning: if giving the opponent a free move still doesn't let
         // them reach beta, the position is strong enough to prune
+
+        // Don't do NMP if opponent has threats at shallow depth (like Black Marlin)
+        // If they have threats against our pieces, passing the move lets them capture
+        let shallow_with_threats =
+            opponent_threat_count > 0 && remaining_depth <= self.config.nmp_threat_depth.value;
+
         if !(try_null_move
+            && !shallow_with_threats
             && can_null_move_prune(
                 board,
                 remaining_depth,
@@ -1098,15 +1131,18 @@ impl NegamaxEngine {
         _max_depth: u8,
         alpha: i16,
         is_improving: bool,
+        opponent_threat_count: u32,
     ) -> Option<i16> {
         if !can_reverse_futility_prune(
             remaining_depth,
             in_check,
             is_pv_node,
             self.config.rfp_max_depth.value,
+            opponent_threat_count,
         ) {
             return None;
         }
+
         let margin = rfp_margin(
             remaining_depth,
             self.config.rfp_base_margin.value,

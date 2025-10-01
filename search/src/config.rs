@@ -91,6 +91,7 @@ define_config!(
     (nmp_base_reduction: u8, "NMP Base Reduction", UciOptionType::Spin { min: 1, max: 10 }, 2, cfg!(feature = "tuning")), // Base depth reduction
     (nmp_depth_divisor: u8, "NMP Depth Divisor", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")), // Divide depth by this for extra reduction
     (nmp_eval_margin: i16, "NMP Eval Margin", UciOptionType::Spin { min: 0, max: 500 }, 200, cfg!(feature = "tuning")), // Eval margin for reduction adjustment
+    (nmp_threat_depth: u8, "NMP Threat Depth", UciOptionType::Spin { min: 0, max: 20 }, 7, cfg!(feature = "tuning")), // Disable NMP at shallow depth when opponent has threats
 
     // Late Move Pruning - Prune quiet moves after a limit based on depth
     (lmp_max_depth: u8, "LMP Max Depth", UciOptionType::Spin { min: 0, max: 20 }, 8, cfg!(feature = "tuning")), // Maximum depth to apply LMP

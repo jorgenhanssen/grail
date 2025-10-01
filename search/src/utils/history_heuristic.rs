@@ -1,13 +1,14 @@
 use chess::{Board, ChessMove, Color, Square, NUM_COLORS, NUM_SQUARES};
 
+use crate::utils::ThreatMap;
 use crate::EngineConfig;
 
 const MAX_DEPTH: usize = 100;
-const HISTORY_SIZE: usize = NUM_COLORS * NUM_SQUARES * NUM_SQUARES;
+// Threat-aware history: [color][is_threatened][from][to] (similar to Black Marlin)
+const HISTORY_SIZE: usize = NUM_COLORS * 2 * NUM_SQUARES * NUM_SQUARES;
 
 #[derive(Clone)]
 pub struct HistoryHeuristic {
-    // Flattened: [color][from][to]
     history: Vec<i16>,
 
     max_history: i32,
@@ -68,13 +69,21 @@ impl HistoryHeuristic {
     }
 
     #[inline(always)]
-    pub fn get(&self, color: Color, source: Square, dest: Square) -> i16 {
-        self.history[Self::index(color, source, dest)]
+    pub fn get(&self, color: Color, source: Square, dest: Square, threats: &ThreatMap) -> i16 {
+        let is_threatened = threats.is_my_piece_threatened(source);
+        self.history[Self::index(color, is_threatened, source, dest)]
     }
 
     #[inline(always)]
-    fn update_move(&mut self, c: Color, source: Square, dest: Square, bonus: i32) {
-        let idx = Self::index(c, source, dest);
+    fn update_move(
+        &mut self,
+        c: Color,
+        is_threatened: bool,
+        source: Square,
+        dest: Square,
+        bonus: i32,
+    ) {
+        let idx = Self::index(c, is_threatened, source, dest);
         let entry = &mut self.history[idx];
 
         let h = *entry as i32;
@@ -87,23 +96,29 @@ impl HistoryHeuristic {
     }
 
     #[inline(always)]
-    pub fn update(&mut self, board: &Board, mv: ChessMove, delta: i32) {
+    pub fn update(&mut self, board: &Board, mv: ChessMove, delta: i32, threats: &ThreatMap) {
         let color = board.side_to_move();
         let source = mv.get_source();
         let dest = mv.get_dest();
-        self.update_move(color, source, dest, delta);
+        let is_threatened = threats.is_my_piece_threatened(source);
+        self.update_move(color, is_threatened, source, dest, delta);
     }
 
     #[inline(always)]
-    fn index(color: Color, source: Square, dest: Square) -> usize {
+    fn index(color: Color, is_threatened: bool, source: Square, dest: Square) -> usize {
         let color_idx = color.to_index();
+        let threat_idx = is_threatened as usize;
         let source_idx = source.to_index();
         let dest_idx = dest.to_index();
 
-        let color_stride = NUM_SQUARES * NUM_SQUARES;
+        let color_stride = 2 * NUM_SQUARES * NUM_SQUARES;
+        let threat_stride = NUM_SQUARES * NUM_SQUARES;
         let source_stride = NUM_SQUARES;
 
-        color_idx * color_stride + source_idx * source_stride + dest_idx
+        color_idx * color_stride
+            + threat_idx * threat_stride
+            + source_idx * source_stride
+            + dest_idx
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -121,6 +136,7 @@ impl HistoryHeuristic {
         move_index: i32,
         is_improving: bool,
         reduction: &mut u8,
+        threats: &ThreatMap,
     ) -> bool {
         if !(remaining_depth > 0
             && !in_check
@@ -134,7 +150,7 @@ impl HistoryHeuristic {
         let color = board.side_to_move();
         let source = mv.get_source();
         let dest = mv.get_dest();
-        let hist_score = self.get(color, source, dest);
+        let hist_score = self.get(color, source, dest, threats);
 
         if hist_score < self.reduction_threshold {
             // Only apply additional reductions/pruning when position isn't improving

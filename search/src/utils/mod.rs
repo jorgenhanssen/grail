@@ -3,6 +3,7 @@ mod continuation_history;
 mod history_heuristic;
 mod move_order;
 mod see;
+mod threats;
 
 use chess::{Board, ChessMove, Piece};
 pub use move_order::{MainMoveGenerator, QMoveGenerator};
@@ -12,6 +13,7 @@ pub use continuation_history::ContinuationHistory;
 use evaluation::scores::MATE_VALUE;
 pub use history_heuristic::HistoryHeuristic;
 pub use see::see;
+pub use threats::ThreatMap;
 use uci::commands::Score;
 
 #[inline(always)]
