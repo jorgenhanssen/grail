@@ -411,7 +411,7 @@ impl NegamaxEngine {
             return (score, Vec::new());
         }
 
-        let opponent_threats = ThreatMap::new(board, phase, &self.config.get_piece_values());
+        let threats = ThreatMap::new(board, phase, &self.config.get_piece_values());
 
         if let Some(score) = self.try_null_move_prune(
             board,
@@ -424,7 +424,7 @@ impl NegamaxEngine {
             in_check,
             try_null_move,
             Some(static_eval),
-            opponent_threats.my_threat_count(),
+            threats.my_threat_count(),
         ) {
             return (score, Vec::new());
         }
@@ -459,7 +459,7 @@ impl NegamaxEngine {
             max_depth,
             alpha,
             is_improving,
-            opponent_threats.my_threat_count(),
+            threats.my_threat_count(),
         ) {
             return (score, Vec::new());
         }
@@ -482,7 +482,7 @@ impl NegamaxEngine {
             phase,
             self.config.get_piece_values(),
             self.config.quiet_check_bonus.value,
-            opponent_threats,
+            threats,
         );
 
         // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff
@@ -527,7 +527,7 @@ impl NegamaxEngine {
                 move_index,
                 is_improving,
                 static_eval,
-                &opponent_threats,
+                &threats,
                 phase,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
@@ -552,7 +552,7 @@ impl NegamaxEngine {
                         is_quiet,
                         &quiets_searched,
                         &captures_searched,
-                        &opponent_threats,
+                        &threats,
                     );
 
                     break; // beta cutoff
@@ -630,8 +630,8 @@ impl NegamaxEngine {
         );
 
         // Reduce less when move creates new threats against opponent
-        let threats_after = ThreatMap::new(&new_board, phase, &self.config.get_piece_values());
-        if threats_after.my_threat_count() > parent_threats.their_threat_count() {
+        let child_threats = ThreatMap::new(&new_board, phase, &self.config.get_piece_values());
+        if child_threats.my_threat_count() > parent_threats.their_threat_count() {
             reduction = reduction.saturating_sub(1);
         }
 
