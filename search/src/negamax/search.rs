@@ -639,7 +639,6 @@ impl NegamaxEngine {
         let beta_child = if !is_pv_move { alpha + 1 } else { beta };
 
         // History-leaf pruning / extra reduction on quiet late moves
-        let parent_threats = ThreatMap::new(board, phase, &self.config.get_piece_values());
         if self.history_heuristic.maybe_reduce_or_prune(
             board,
             m,
@@ -652,7 +651,7 @@ impl NegamaxEngine {
             move_index,
             is_improving,
             &mut reduction,
-            &parent_threats,
+            parent_threats,
         ) {
             return None;
         }
