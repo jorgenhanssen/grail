@@ -1,14 +1,14 @@
 use super::HCEConfig;
-use chess::{get_bishop_moves, Board, Color, Piece, EMPTY};
+use crate::hce::context::EvalContext;
+use chess::{get_bishop_moves, Color, EMPTY};
 
 #[inline(always)]
-pub(super) fn evaluate(board: &Board, color: Color, phase: f32, config: &HCEConfig) -> i16 {
-    let bishops = board.pieces(Piece::Bishop) & board.color_combined(color);
+pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
+    let bishops = ctx.bishops_for(color);
     if bishops == EMPTY {
         return 0;
     }
 
-    let occupied = *board.combined();
     let mut cp = 0i16;
 
     // Bishop pair bonus
@@ -17,8 +17,8 @@ pub(super) fn evaluate(board: &Board, color: Color, phase: f32, config: &HCEConf
     }
 
     for sq in bishops {
-        let mobility = get_bishop_moves(sq, occupied).popcnt() as i16;
-        cp += ((config.bishop_mobility_multiplier * mobility) as f32 * phase).round() as i16;
+        let mobility = get_bishop_moves(sq, ctx.all_pieces).popcnt() as i16;
+        cp += ((config.bishop_mobility_multiplier * mobility) as f32 * ctx.phase).round() as i16;
     }
 
     cp

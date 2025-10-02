@@ -1,6 +1,7 @@
 mod capture_history;
 mod continuation_history;
 mod history_heuristic;
+pub mod memory;
 mod move_order;
 mod see;
 mod threats;

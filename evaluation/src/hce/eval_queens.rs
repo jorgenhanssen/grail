@@ -1,21 +1,20 @@
 use super::HCEConfig;
-use chess::{get_bishop_moves, get_rook_moves, Board, Color, Piece, EMPTY};
+use crate::hce::context::EvalContext;
+use chess::{get_bishop_moves, get_rook_moves, Color, EMPTY};
 
 #[inline(always)]
-pub(super) fn evaluate(board: &Board, color: Color, phase: f32, config: &HCEConfig) -> i16 {
-    let my_pieces = board.color_combined(color);
-    let queens = board.pieces(Piece::Queen) & my_pieces;
+pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
+    let queens = ctx.queens_for(color);
     if queens == EMPTY {
         return 0;
     }
 
-    let occupied = *board.combined();
-
+    let my_pieces = ctx.color_mask_for(color);
     let mut cp = 0i16;
     for sq in queens {
-        let moves = get_bishop_moves(sq, occupied) | get_rook_moves(sq, occupied);
+        let moves = get_bishop_moves(sq, ctx.all_pieces) | get_rook_moves(sq, ctx.all_pieces);
         let mobility = (moves & !my_pieces).popcnt() as i16;
-        cp += ((config.queen_mobility_multiplier * mobility) as f32 * phase).round() as i16;
+        cp += ((config.queen_mobility_multiplier * mobility) as f32 * ctx.phase).round() as i16;
     }
 
     cp

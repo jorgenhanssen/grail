@@ -1,16 +1,16 @@
 use super::HCEConfig;
-use chess::{get_file, get_rook_moves, Board, Color, Piece, Rank, EMPTY};
+use crate::hce::context::EvalContext;
+use chess::{get_file, get_rook_moves, Color, Rank, EMPTY};
 
 #[inline(always)]
-pub(super) fn evaluate(board: &Board, color: Color, phase: f32, config: &HCEConfig) -> i16 {
-    let rooks = board.pieces(Piece::Rook) & board.color_combined(color);
+pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
+    let rooks = ctx.rooks_for(color);
     if rooks == EMPTY {
         return 0;
     }
 
-    let our_pawns = board.pieces(Piece::Pawn) & board.color_combined(color);
-    let their_pawns = board.pieces(Piece::Pawn) & board.color_combined(!color);
-    let occupied = *board.combined();
+    let our_pawns = ctx.pawns_for(color);
+    let their_pawns = ctx.pawns_for(!color);
 
     let mut cp = 0i16;
     for sq in rooks {
@@ -33,8 +33,8 @@ pub(super) fn evaluate(board: &Board, color: Color, phase: f32, config: &HCEConf
             cp += config.rook_seventh_rank_bonus;
         }
 
-        let mobility = get_rook_moves(sq, occupied).popcnt() as i16;
-        cp += ((config.rook_mobility_multiplier * mobility) as f32 * phase).round() as i16;
+        let mobility = get_rook_moves(sq, ctx.all_pieces).popcnt() as i16;
+        cp += ((config.rook_mobility_multiplier * mobility) as f32 * ctx.phase).round() as i16;
     }
     cp
 }

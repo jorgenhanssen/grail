@@ -119,9 +119,24 @@ impl MainMoveGenerator {
             while let Some(index) = select_highest(&self.good_captures) {
                 let scored_move = self.good_captures.swap_remove(index);
 
-                if scored_move.score < 0
-                    || see(board, scored_move.mov, self.game_phase, &self.piece_values) < 0
-                {
+                if scored_move.score < 0 {
+                    self.bad_captures.push(scored_move);
+                    continue;
+                }
+
+                // Use MVV-LVA for quick filtering before expensive SEE
+                let victim = board.piece_on(scored_move.mov.get_dest()).unwrap();
+                let attacker = board.piece_on(scored_move.mov.get_source()).unwrap();
+                let victim_value = self.piece_values.get(victim, self.game_phase);
+                let attacker_value = self.piece_values.get(attacker, self.game_phase);
+
+                // If victim is more valuable than attacker, it's likely good - skip SEE
+                if victim_value > attacker_value {
+                    return Some(scored_move.mov);
+                }
+
+                // Only run expensive SEE if capture seems questionable
+                if see(board, scored_move.mov, self.game_phase, &self.piece_values) < 0 {
                     self.bad_captures.push(scored_move);
                     continue;
                 }
@@ -135,6 +150,7 @@ impl MainMoveGenerator {
             while self.killer_index < 2 {
                 let killer = self.killer_moves[self.killer_index];
                 self.killer_index += 1;
+
                 if let Some(killer) = killer {
                     if Some(killer) == self.best_move {
                         continue;

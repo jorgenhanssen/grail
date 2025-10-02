@@ -349,12 +349,6 @@ impl NegamaxEngine {
             return (0, Vec::new()); // repetition = draw
         }
 
-        // Terminal checks
-        match board.status() {
-            BoardStatus::Checkmate => return (-(MATE_VALUE - depth as i16), Vec::new()),
-            BoardStatus::Stalemate => return (0, Vec::new()),
-            BoardStatus::Ongoing => {}
-        }
         if depth >= max_depth {
             return self.quiescence_search(board, alpha, beta, depth);
         }
@@ -568,6 +562,16 @@ impl NegamaxEngine {
 
         self.eval_stack.pop();
 
+        // Check for terminal position (no legal moves)
+        if move_index == -1 {
+            // No moves were found - either checkmate or stalemate
+            return if in_check {
+                (-(MATE_VALUE - depth as i16), Vec::new()) // Checkmate
+            } else {
+                (0, Vec::new()) // Stalemate
+            };
+        }
+
         // Store TT entry with the depth actually searched for the best move
         self.tt.store(
             hash,
@@ -600,6 +604,11 @@ impl NegamaxEngine {
         pre_move_threats: &ThreatMap,
     ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
         let new_board = board.make_move_new(m);
+        let child_hash = new_board.get_hash();
+
+        // Prefetch TT entry for child position to hide memory latency
+        self.tt.prefetch(child_hash);
+
         let gives_check = new_board.checkers().popcnt() > 0;
 
         // Consider move tactical if it's check, capture, or promotion
@@ -717,16 +726,6 @@ impl NegamaxEngine {
             return (0, Vec::new()); // Treat as a draw
         }
 
-        match board.status() {
-            BoardStatus::Checkmate => {
-                return (-(MATE_VALUE - depth as i16), Vec::new());
-            }
-            BoardStatus::Stalemate => {
-                return (0, Vec::new());
-            }
-            BoardStatus::Ongoing => {}
-        }
-
         let in_check = board.checkers().popcnt() > 0;
 
         let original_alpha = alpha;
@@ -827,13 +826,29 @@ impl NegamaxEngine {
                 }
             }
 
-            if !in_check && see(board, mv, phase, &self.piece_values) < 0 {
-                continue;
+            // Use MVV-LVA for quick pruning before expensive SEE
+            if !in_check {
+                if let Some(victim) = board.piece_on(mv.get_dest()) {
+                    if let Some(attacker) = board.piece_on(mv.get_source()) {
+                        let victim_value = self.piece_values.get(victim, phase);
+                        let attacker_value = self.piece_values.get(attacker, phase);
+                        // Only run expensive SEE if capture seems questionable (equal/lower value)
+                        if victim_value <= attacker_value
+                            && see(board, mv, phase, &self.piece_values) < 0
+                        {
+                            continue;
+                        }
+                    }
+                }
             }
 
             let new_board = board.make_move_new(mv);
+            let child_hash = new_board.get_hash();
 
-            self.position_stack.push(new_board.get_hash());
+            // Prefetch QS TT entry to hide memory latency
+            self.qs_tt.prefetch(child_hash);
+
+            self.position_stack.push(child_hash);
             let (child_score, mut child_line) =
                 self.quiescence_search(&new_board, -beta, -alpha, depth + 1);
             self.position_stack.pop();
@@ -855,6 +870,11 @@ impl NegamaxEngine {
             if alpha >= beta {
                 break; // Beta cutoff
             }
+        }
+
+        // If in check and no legal moves improved the position, it's checkmate
+        if in_check && best_eval == NEG_INFINITY {
+            return (-(MATE_VALUE - depth as i16), Vec::new());
         }
 
         self.qs_tt

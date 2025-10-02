@@ -1,14 +1,15 @@
 use super::HCEConfig;
-use chess::{get_adjacent_files, get_file, BitBoard, Board, Color, Piece, ALL_FILES, EMPTY};
+use crate::hce::context::EvalContext;
+use chess::{get_adjacent_files, get_file, BitBoard, Color, ALL_FILES, EMPTY};
 
 #[inline(always)]
-pub(super) fn evaluate(board: &Board, color: Color, config: &HCEConfig) -> i16 {
-    let my_pawns = board.pieces(Piece::Pawn) & board.color_combined(color);
+pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
+    let my_pawns = ctx.pawns_for(color);
     if my_pawns == EMPTY {
         return 0;
     }
 
-    let enemy_pawns = board.pieces(Piece::Pawn) & board.color_combined(!color);
+    let enemy_pawns = ctx.pawns_for(!color);
     let mut score = 0i16;
 
     // doubled / tripled / isolated penalties
