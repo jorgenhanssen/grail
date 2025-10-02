@@ -1,10 +1,9 @@
-use chess::{BitBoard, Board, Color, Piece, Square};
+use chess::{BitBoard, Board, Color, Piece, Square, NUM_COLORS};
 
 // Pre-computed evaluation context to avoid redundant bitboard lookups
 pub struct EvalContext {
     pub all_pieces: BitBoard,
-    pub white_pieces: BitBoard,
-    pub black_pieces: BitBoard,
+    pub pieces_by_color: [BitBoard; NUM_COLORS],
 
     pub pawns: BitBoard,
     pub knights: BitBoard,
@@ -12,8 +11,7 @@ pub struct EvalContext {
     pub rooks: BitBoard,
     pub queens: BitBoard,
 
-    pub white_king_sq: Square,
-    pub black_king_sq: Square,
+    pub king_sqs: [Square; NUM_COLORS],
 
     pub phase: f32,
     pub inv_phase: f32,
@@ -29,33 +27,27 @@ impl EvalContext {
             bishops: *board.pieces(Piece::Bishop),
             rooks: *board.pieces(Piece::Rook),
             queens: *board.pieces(Piece::Queen),
-            white_pieces: *board.color_combined(Color::White),
-            black_pieces: *board.color_combined(Color::Black),
-            white_king_sq: board.king_square(Color::White),
-            black_king_sq: board.king_square(Color::Black),
+            pieces_by_color: [
+                *board.color_combined(Color::White),
+                *board.color_combined(Color::Black),
+            ],
+            king_sqs: [
+                board.king_square(Color::White),
+                board.king_square(Color::Black),
+            ],
             phase,
             inv_phase: 1.0 - phase,
         }
     }
 
-    // Utility methods to reduce code duplication
-
     #[inline(always)]
     pub fn color_mask_for(&self, color: Color) -> &BitBoard {
-        if color == Color::White {
-            &self.white_pieces
-        } else {
-            &self.black_pieces
-        }
+        &self.pieces_by_color[color.to_index()]
     }
 
     #[inline(always)]
     pub fn king_sq_for(&self, color: Color) -> Square {
-        if color == Color::White {
-            self.white_king_sq
-        } else {
-            self.black_king_sq
-        }
+        self.king_sqs[color.to_index()]
     }
 
     #[inline(always)]
