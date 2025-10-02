@@ -4,23 +4,12 @@ use chess::{get_adjacent_files, get_file, BitBoard, Color, ALL_FILES, EMPTY};
 
 #[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let color_mask = if color == Color::White {
-        &ctx.white_pieces
-    } else {
-        &ctx.black_pieces
-    };
-
-    let my_pawns = ctx.pawns & color_mask;
+    let my_pawns = ctx.pawns_for(color);
     if my_pawns == EMPTY {
         return 0;
     }
 
-    let enemy_color_mask = if color == Color::White {
-        &ctx.black_pieces
-    } else {
-        &ctx.white_pieces
-    };
-    let enemy_pawns = ctx.pawns & enemy_color_mask;
+    let enemy_pawns = ctx.pawns_for(!color);
     let mut score = 0i16;
 
     // doubled / tripled / isolated penalties

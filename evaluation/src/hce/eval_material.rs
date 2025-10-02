@@ -6,25 +6,15 @@ use crate::piece_values::PieceValues;
 
 #[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, piece_values: &PieceValues) -> i16 {
-    let color_mask = if color == Color::White {
-        &ctx.white_pieces
-    } else {
-        &ctx.black_pieces
-    };
-
     // Use pre-fetched piece bitboards from context
-    let pawn_mask = ctx.pawns & color_mask;
-    let knight_mask = ctx.knights & color_mask;
-    let bishop_mask = ctx.bishops & color_mask;
-    let rook_mask = ctx.rooks & color_mask;
-    let queen_mask = ctx.queens & color_mask;
+    let pawn_mask = ctx.pawns_for(color);
+    let knight_mask = ctx.knights_for(color);
+    let bishop_mask = ctx.bishops_for(color);
+    let rook_mask = ctx.rooks_for(color);
+    let queen_mask = ctx.queens_for(color);
 
     // King mask - reconstruct from king square
-    let king_sq = if color == Color::White {
-        ctx.white_king_sq
-    } else {
-        ctx.black_king_sq
-    };
+    let king_sq = ctx.king_sq_for(color);
     let king_mask = BitBoard(1u64 << king_sq.to_int());
 
     let mut cp = 0i16;

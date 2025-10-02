@@ -4,17 +4,12 @@ use chess::{get_bishop_moves, get_rook_moves, Color, EMPTY};
 
 #[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let my_pieces = if color == Color::White {
-        &ctx.white_pieces
-    } else {
-        &ctx.black_pieces
-    };
-
-    let queens = ctx.queens & my_pieces;
+    let queens = ctx.queens_for(color);
     if queens == EMPTY {
         return 0;
     }
 
+    let my_pieces = ctx.color_mask_for(color);
     let mut cp = 0i16;
     for sq in queens {
         let moves = get_bishop_moves(sq, ctx.all_pieces) | get_rook_moves(sq, ctx.all_pieces);

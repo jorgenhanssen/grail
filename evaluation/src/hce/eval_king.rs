@@ -19,18 +19,8 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
 // weight the closer ones more. Most relevant in the opening/middlegame.
 #[inline(always)]
 fn pawn_shield_phase_bonus(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let color_mask = if color == Color::White {
-        &ctx.white_pieces
-    } else {
-        &ctx.black_pieces
-    };
-
-    let my_pawns = ctx.pawns & color_mask;
-    let king_sq = if color == Color::White {
-        ctx.white_king_sq
-    } else {
-        ctx.black_king_sq
-    };
+    let my_pawns = ctx.pawns_for(color);
+    let king_sq = ctx.king_sq_for(color);
     let files_window = king_files_window(king_sq);
     let (front_rank_1, front_rank_2) = if color == Color::White {
         (Rank::Second, Rank::Third)
@@ -48,25 +38,10 @@ fn pawn_shield_phase_bonus(ctx: &EvalContext, color: Color, config: &HCEConfig) 
 // Penalize no own pawns (fully open worse) and thin cover. Mostly an opening/middlegame concern.
 #[inline(always)]
 fn king_file_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let king_sq = if color == Color::White {
-        ctx.white_king_sq
-    } else {
-        ctx.black_king_sq
-    };
-
+    let king_sq = ctx.king_sq_for(color);
     let files_window = king_files_window(king_sq);
-    let color_mask = if color == Color::White {
-        &ctx.white_pieces
-    } else {
-        &ctx.black_pieces
-    };
-    let enemy_color_mask = if color == Color::White {
-        &ctx.black_pieces
-    } else {
-        &ctx.white_pieces
-    };
-    let my_pawns = ctx.pawns & color_mask;
-    let their_pawns = ctx.pawns & enemy_color_mask;
+    let my_pawns = ctx.pawns_for(color);
+    let their_pawns = ctx.pawns_for(!color);
     let our_file_pawns = (my_pawns & files_window).popcnt();
     let their_file_pawns = (their_pawns & files_window).popcnt();
     let mut file_penalty = 0i16;
@@ -87,22 +62,12 @@ fn king_file_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfig) 
 #[inline(always)]
 fn king_ring_phase_pressure(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let enemy = !color;
-    let enemy_color_mask = if enemy == Color::White {
-        &ctx.white_pieces
-    } else {
-        &ctx.black_pieces
-    };
-
-    let king_sq = if color == Color::White {
-        ctx.white_king_sq
-    } else {
-        ctx.black_king_sq
-    };
+    let king_sq = ctx.king_sq_for(color);
     let king_zone = KING_ZONES[king_sq.to_index()];
     let mut pressure = 0i16;
 
     // Knights
-    let knights = ctx.knights & enemy_color_mask;
+    let knights = ctx.knights_for(enemy);
     for sq in knights {
         let attacks = chess::get_knight_moves(sq) & king_zone;
         if attacks != EMPTY {
@@ -110,7 +75,7 @@ fn king_ring_phase_pressure(ctx: &EvalContext, color: Color, config: &HCEConfig)
         }
     }
     // Bishops
-    let bishops = ctx.bishops & enemy_color_mask;
+    let bishops = ctx.bishops_for(enemy);
     for sq in bishops {
         let attacks = chess::get_bishop_moves(sq, ctx.all_pieces) & king_zone;
         if attacks != EMPTY {
@@ -118,7 +83,7 @@ fn king_ring_phase_pressure(ctx: &EvalContext, color: Color, config: &HCEConfig)
         }
     }
     // Rooks
-    let rooks = ctx.rooks & enemy_color_mask;
+    let rooks = ctx.rooks_for(enemy);
     for sq in rooks {
         let attacks = chess::get_rook_moves(sq, ctx.all_pieces) & king_zone;
         if attacks != EMPTY {
@@ -126,7 +91,7 @@ fn king_ring_phase_pressure(ctx: &EvalContext, color: Color, config: &HCEConfig)
         }
     }
     // Queens
-    let queens = ctx.queens & enemy_color_mask;
+    let queens = ctx.queens_for(enemy);
     for sq in queens {
         let attacks = (chess::get_bishop_moves(sq, ctx.all_pieces)
             | chess::get_rook_moves(sq, ctx.all_pieces))
@@ -136,7 +101,7 @@ fn king_ring_phase_pressure(ctx: &EvalContext, color: Color, config: &HCEConfig)
         }
     }
     // Pawns
-    let pawns = ctx.pawns & enemy_color_mask;
+    let pawns = ctx.pawns_for(enemy);
     for sq in pawns {
         let f = sq.get_file() as i8;
         let r = sq.get_rank() as i8;
@@ -173,11 +138,7 @@ fn central_king_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfi
         return 0;
     }
 
-    let sq = if color == Color::White {
-        ctx.white_king_sq
-    } else {
-        ctx.black_king_sq
-    };
+    let sq = ctx.king_sq_for(color);
 
     let file_idx = sq.get_file() as i32;
     let rank_idx = sq.get_rank() as i32;
@@ -202,11 +163,7 @@ fn endgame_king_activity(ctx: &EvalContext, color: Color, config: &HCEConfig) ->
         return 0;
     }
 
-    let king_sq = if color == Color::White {
-        ctx.white_king_sq
-    } else {
-        ctx.black_king_sq
-    };
+    let king_sq = ctx.king_sq_for(color);
 
     let file = king_sq.get_file() as i32;
     let rank = king_sq.get_rank() as i32;

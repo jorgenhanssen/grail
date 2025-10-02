@@ -37,4 +37,49 @@ impl EvalContext {
             inv_phase: 1.0 - phase,
         }
     }
+
+    // Utility methods to reduce code duplication
+
+    #[inline(always)]
+    pub fn color_mask_for(&self, color: Color) -> &BitBoard {
+        if color == Color::White {
+            &self.white_pieces
+        } else {
+            &self.black_pieces
+        }
+    }
+
+    #[inline(always)]
+    pub fn king_sq_for(&self, color: Color) -> Square {
+        if color == Color::White {
+            self.white_king_sq
+        } else {
+            self.black_king_sq
+        }
+    }
+
+    #[inline(always)]
+    pub fn pawns_for(&self, color: Color) -> BitBoard {
+        self.pawns & self.color_mask_for(color)
+    }
+
+    #[inline(always)]
+    pub fn knights_for(&self, color: Color) -> BitBoard {
+        self.knights & self.color_mask_for(color)
+    }
+
+    #[inline(always)]
+    pub fn bishops_for(&self, color: Color) -> BitBoard {
+        self.bishops & self.color_mask_for(color)
+    }
+
+    #[inline(always)]
+    pub fn rooks_for(&self, color: Color) -> BitBoard {
+        self.rooks & self.color_mask_for(color)
+    }
+
+    #[inline(always)]
+    pub fn queens_for(&self, color: Color) -> BitBoard {
+        self.queens & self.color_mask_for(color)
+    }
 }

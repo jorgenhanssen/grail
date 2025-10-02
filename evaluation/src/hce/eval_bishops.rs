@@ -4,13 +4,7 @@ use chess::{get_bishop_moves, Color, EMPTY};
 
 #[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let color_mask = if color == Color::White {
-        &ctx.white_pieces
-    } else {
-        &ctx.black_pieces
-    };
-
-    let bishops = ctx.bishops & color_mask;
+    let bishops = ctx.bishops_for(color);
     if bishops == EMPTY {
         return 0;
     }

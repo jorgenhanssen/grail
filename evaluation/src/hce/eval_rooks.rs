@@ -4,24 +4,13 @@ use chess::{get_file, get_rook_moves, Color, Rank, EMPTY};
 
 #[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let color_mask = if color == Color::White {
-        &ctx.white_pieces
-    } else {
-        &ctx.black_pieces
-    };
-
-    let rooks = ctx.rooks & color_mask;
+    let rooks = ctx.rooks_for(color);
     if rooks == EMPTY {
         return 0;
     }
 
-    let enemy_color_mask = if color == Color::White {
-        &ctx.black_pieces
-    } else {
-        &ctx.white_pieces
-    };
-    let our_pawns = ctx.pawns & color_mask;
-    let their_pawns = ctx.pawns & enemy_color_mask;
+    let our_pawns = ctx.pawns_for(color);
+    let their_pawns = ctx.pawns_for(!color);
 
     let mut cp = 0i16;
     for sq in rooks {

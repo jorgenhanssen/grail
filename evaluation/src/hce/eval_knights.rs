@@ -4,17 +4,12 @@ use chess::{get_knight_moves, Color, EMPTY};
 
 #[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let my_pieces = if color == Color::White {
-        &ctx.white_pieces
-    } else {
-        &ctx.black_pieces
-    };
-
-    let knights = ctx.knights & my_pieces;
+    let knights = ctx.knights_for(color);
     if knights == EMPTY {
         return 0;
     }
 
+    let my_pieces = ctx.color_mask_for(color);
     let mut cp = 0i16;
     for sq in knights {
         let squares = get_knight_moves(sq);
