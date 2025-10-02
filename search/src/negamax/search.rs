@@ -9,7 +9,7 @@ use crate::{
     },
     utils::{
         convert_centipawn_score, convert_mate_score, game_phase, see, CaptureHistory,
-        ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator,
+        ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator, ThreatMap,
     },
     Engine,
 };
@@ -274,6 +274,8 @@ impl NegamaxEngine {
     ) -> (Option<ChessMove>, i16) {
         let best_move = self.current_pv.first().cloned();
 
+        let threats = ThreatMap::new(&self.board);
+
         let prev_to = self
             .continuation_history
             .get_prev_to_squares(&self.move_stack);
@@ -284,6 +286,7 @@ impl NegamaxEngine {
             game_phase(&self.board),
             self.config.get_piece_values(),
             self.config.quiet_check_bonus.value,
+            threats,
         );
 
         let mut best_score = NEG_INFINITY;
@@ -464,9 +467,12 @@ impl NegamaxEngine {
 
         let mut best_move_depth = depth;
 
+        let threats = ThreatMap::new(board);
+
         let prev_to = self
             .continuation_history
             .get_prev_to_squares(&self.move_stack);
+
         let mut movegen = MainMoveGenerator::new(
             maybe_tt_move,
             self.killer_moves[depth as usize],
@@ -474,6 +480,7 @@ impl NegamaxEngine {
             phase,
             self.config.get_piece_values(),
             self.config.quiet_check_bonus.value,
+            threats,
         );
 
         // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff
@@ -518,6 +525,7 @@ impl NegamaxEngine {
                 move_index,
                 is_improving,
                 static_eval,
+                &threats,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
                     break;
@@ -541,6 +549,7 @@ impl NegamaxEngine {
                         is_quiet,
                         &quiets_searched,
                         &captures_searched,
+                        &threats,
                     );
 
                     break; // beta cutoff
@@ -588,6 +597,7 @@ impl NegamaxEngine {
         move_index: i32,
         is_improving: bool,
         static_eval: i16,
+        pre_move_threats: &ThreatMap,
     ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
         let new_board = board.make_move_new(m);
         let gives_check = new_board.checkers().popcnt() > 0;
@@ -614,6 +624,7 @@ impl NegamaxEngine {
             self.config.lmr_divisor.value as f32 / 100.0,
             self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
         );
+
         let alpha_child = alpha;
         let beta_child = if !is_pv_move { alpha + 1 } else { beta };
 
@@ -630,6 +641,7 @@ impl NegamaxEngine {
             move_index,
             is_improving,
             &mut reduction,
+            pre_move_threats,
         ) {
             return None;
         }
@@ -861,6 +873,7 @@ impl NegamaxEngine {
         is_quiet: bool,
         quiets_searched: &[ChessMove],
         captures_searched: &[ChessMove],
+        threats: &ThreatMap,
     ) {
         let prev_to = self
             .continuation_history
@@ -875,7 +888,7 @@ impl NegamaxEngine {
 
             // Boost the quiet move that caused the cutoff
             let bonus = self.history_heuristic.get_bonus(remaining_depth);
-            self.history_heuristic.update(board, mv, bonus);
+            self.history_heuristic.update(board, mv, bonus, threats);
 
             // Continuation history bonus for quiet cutoff move
             let cont_bonus = self.continuation_history.get_bonus(remaining_depth);
@@ -891,7 +904,8 @@ impl NegamaxEngine {
             // Apply malus to all previously searched quiet moves
             let quiet_malus = self.history_heuristic.get_malus(remaining_depth);
             for &q in quiets_searched {
-                self.history_heuristic.update(board, q, quiet_malus);
+                self.history_heuristic
+                    .update(board, q, quiet_malus, threats);
             }
 
             // Continuation history malus for previously searched quiets
@@ -1016,6 +1030,7 @@ impl NegamaxEngine {
     ) -> Option<i16> {
         // Null move pruning: if giving the opponent a free move still doesn't let
         // them reach beta, the position is strong enough to prune
+
         if !(try_null_move
             && can_null_move_prune(
                 board,
@@ -1107,6 +1122,7 @@ impl NegamaxEngine {
         ) {
             return None;
         }
+
         let margin = rfp_margin(
             remaining_depth,
             self.config.rfp_base_margin.value,

@@ -121,7 +121,6 @@ define_config!(
     // Internal Iterative Deepening - Search with reduced depth when no TT move
     (iid_reduction: u8, "IID Reduction", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")), // Depth reduction for IID search
 
-
     // Piece Values
     (piece_value_pawn_mg: f32, "Piece Value Pawn MG", UciOptionType::Spin { min: 50, max: 150 }, 98.0, cfg!(feature = "tuning")),
     (piece_value_pawn_eg: f32, "Piece Value Pawn EG", UciOptionType::Spin { min: 50, max: 150 }, 113.0, cfg!(feature = "tuning")),
