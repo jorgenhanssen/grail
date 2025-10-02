@@ -349,12 +349,6 @@ impl NegamaxEngine {
             return (0, Vec::new()); // repetition = draw
         }
 
-        // Terminal checks
-        match board.status() {
-            BoardStatus::Checkmate => return (-(MATE_VALUE - depth as i16), Vec::new()),
-            BoardStatus::Stalemate => return (0, Vec::new()),
-            BoardStatus::Ongoing => {}
-        }
         if depth >= max_depth {
             return self.quiescence_search(board, alpha, beta, depth);
         }
@@ -568,6 +562,16 @@ impl NegamaxEngine {
 
         self.eval_stack.pop();
 
+        // Check for terminal position (no legal moves)
+        if move_index == -1 {
+            // No moves were found - either checkmate or stalemate
+            return if in_check {
+                (-(MATE_VALUE - depth as i16), Vec::new()) // Checkmate
+            } else {
+                (0, Vec::new()) // Stalemate
+            };
+        }
+
         // Store TT entry with the depth actually searched for the best move
         self.tt.store(
             hash,
@@ -722,16 +726,6 @@ impl NegamaxEngine {
             return (0, Vec::new()); // Treat as a draw
         }
 
-        match board.status() {
-            BoardStatus::Checkmate => {
-                return (-(MATE_VALUE - depth as i16), Vec::new());
-            }
-            BoardStatus::Stalemate => {
-                return (0, Vec::new());
-            }
-            BoardStatus::Ongoing => {}
-        }
-
         let in_check = board.checkers().popcnt() > 0;
 
         let original_alpha = alpha;
@@ -876,6 +870,11 @@ impl NegamaxEngine {
             if alpha >= beta {
                 break; // Beta cutoff
             }
+        }
+
+        // If in check and no legal moves improved the position, it's checkmate
+        if in_check && best_eval == NEG_INFINITY {
+            return (-(MATE_VALUE - depth as i16), Vec::new());
         }
 
         self.qs_tt
