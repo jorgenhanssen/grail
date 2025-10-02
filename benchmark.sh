@@ -34,7 +34,7 @@ sum_dnps=0
 ok=0
 
 # Build the engine
-make build-grail
+# make build-grail
 
 # --- Header
 echo "| FEN # | Time (ms) | Δ        | Nodes     | Δ        | NPS     | Δ        |"

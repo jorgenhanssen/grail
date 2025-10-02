@@ -12,8 +12,7 @@ pub use config::HCEConfig;
 
 use crate::def::HCE;
 use crate::piece_values::PieceValues;
-use crate::scores::MATE_VALUE;
-use chess::{Board, BoardStatus, Color};
+use chess::{Board, Color};
 
 pub struct Evaluator {
     piece_values: PieceValues,
@@ -35,21 +34,6 @@ impl HCE for Evaluator {
     }
 
     fn evaluate(&mut self, board: &Board, phase: f32) -> i16 {
-        let is_white = board.side_to_move() == Color::White;
-
-        match board.status() {
-            BoardStatus::Checkmate => {
-                // If it's White to move and board is checkmated => White lost
-                if is_white {
-                    return -MATE_VALUE;
-                } else {
-                    return MATE_VALUE;
-                }
-            }
-            BoardStatus::Stalemate => return 0,
-            BoardStatus::Ongoing => {}
-        }
-
         let white_mask = board.color_combined(Color::White);
         let black_mask = board.color_combined(Color::Black);
 
