@@ -1,4 +1,5 @@
 mod config;
+mod context;
 mod eval_bishops;
 mod eval_king;
 mod eval_knights;
@@ -9,6 +10,7 @@ mod eval_rooks;
 mod pst;
 
 pub use config::HCEConfig;
+use context::EvalContext;
 
 use crate::def::HCE;
 use crate::piece_values::PieceValues;
@@ -34,48 +36,30 @@ impl HCE for Evaluator {
     }
 
     fn evaluate(&mut self, board: &Board, phase: f32) -> i16 {
-        // Pre-compute inverse phase to avoid redundant calculations
-        let inv_phase = 1.0 - phase;
-
-        let white_mask = board.color_combined(Color::White);
-        let black_mask = board.color_combined(Color::Black);
+        let ctx = EvalContext::new(board, phase);
 
         let mut cp: i16 = 0;
 
-        cp += eval_material::evaluate(
-            board,
-            Color::White,
-            white_mask,
-            phase,
-            inv_phase,
-            &self.piece_values,
-        );
-        cp -= eval_material::evaluate(
-            board,
-            Color::Black,
-            black_mask,
-            phase,
-            inv_phase,
-            &self.piece_values,
-        );
+        cp += eval_material::evaluate(&ctx, Color::White, &self.piece_values);
+        cp -= eval_material::evaluate(&ctx, Color::Black, &self.piece_values);
 
-        cp += eval_pawns::evaluate(board, Color::White, &self.config);
-        cp -= eval_pawns::evaluate(board, Color::Black, &self.config);
+        cp += eval_pawns::evaluate(&ctx, Color::White, &self.config);
+        cp -= eval_pawns::evaluate(&ctx, Color::Black, &self.config);
 
-        cp += eval_rooks::evaluate(board, Color::White, phase, &self.config);
-        cp -= eval_rooks::evaluate(board, Color::Black, phase, &self.config);
+        cp += eval_rooks::evaluate(&ctx, Color::White, &self.config);
+        cp -= eval_rooks::evaluate(&ctx, Color::Black, &self.config);
 
-        cp += eval_bishops::evaluate(board, Color::White, phase, &self.config);
-        cp -= eval_bishops::evaluate(board, Color::Black, phase, &self.config);
+        cp += eval_bishops::evaluate(&ctx, Color::White, &self.config);
+        cp -= eval_bishops::evaluate(&ctx, Color::Black, &self.config);
 
-        cp += eval_knights::evaluate(board, Color::White, phase, &self.config);
-        cp -= eval_knights::evaluate(board, Color::Black, phase, &self.config);
+        cp += eval_knights::evaluate(&ctx, Color::White, &self.config);
+        cp -= eval_knights::evaluate(&ctx, Color::Black, &self.config);
 
-        cp += eval_queens::evaluate(board, Color::White, phase, &self.config);
-        cp -= eval_queens::evaluate(board, Color::Black, phase, &self.config);
+        cp += eval_queens::evaluate(&ctx, Color::White, &self.config);
+        cp -= eval_queens::evaluate(&ctx, Color::Black, &self.config);
 
-        cp += eval_king::evaluate(board, Color::White, phase, &self.config);
-        cp -= eval_king::evaluate(board, Color::Black, phase, &self.config);
+        cp += eval_king::evaluate(&ctx, Color::White, &self.config);
+        cp -= eval_king::evaluate(&ctx, Color::Black, &self.config);
 
         // Tempo bonus
         if board.side_to_move() == Color::White {
