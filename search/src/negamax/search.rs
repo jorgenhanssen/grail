@@ -827,8 +827,20 @@ impl NegamaxEngine {
                 }
             }
 
-            if !in_check && see(board, mv, phase, &self.piece_values) < 0 {
-                continue;
+            // Use MVV-LVA for quick pruning before expensive SEE
+            if !in_check {
+                if let Some(victim) = board.piece_on(mv.get_dest()) {
+                    if let Some(attacker) = board.piece_on(mv.get_source()) {
+                        let victim_value = self.piece_values.get(victim, phase);
+                        let attacker_value = self.piece_values.get(attacker, phase);
+                        // Only run expensive SEE if capture seems questionable (equal/lower value)
+                        if victim_value <= attacker_value
+                            && see(board, mv, phase, &self.piece_values) < 0
+                        {
+                            continue;
+                        }
+                    }
+                }
             }
 
             let new_board = board.make_move_new(mv);
