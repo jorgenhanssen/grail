@@ -9,6 +9,7 @@ pub(super) fn evaluate(
     color: Color,
     color_mask: &BitBoard,
     phase: f32,
+    inv_phase: f32,
     piece_values: &PieceValues,
 ) -> i16 {
     let pawn_mask = board.pieces(Piece::Pawn) & color_mask;
@@ -28,21 +29,21 @@ pub(super) fn evaluate(
 
     let pst = get_pst(color);
     if pawn_mask != EMPTY {
-        cp += sum_pst(pawn_mask, pst.pawn, phase);
+        cp += sum_pst(pawn_mask, pst.pawn, phase, inv_phase);
     }
     if knight_mask != EMPTY {
-        cp += sum_pst(knight_mask, pst.knight, phase);
+        cp += sum_pst(knight_mask, pst.knight, phase, inv_phase);
     }
     if bishop_mask != EMPTY {
-        cp += sum_pst(bishop_mask, pst.bishop, phase);
+        cp += sum_pst(bishop_mask, pst.bishop, phase, inv_phase);
     }
     if rook_mask != EMPTY {
-        cp += sum_pst(rook_mask, pst.rook, phase);
+        cp += sum_pst(rook_mask, pst.rook, phase, inv_phase);
     }
     if queen_mask != EMPTY {
-        cp += sum_pst(queen_mask, pst.queen, phase);
+        cp += sum_pst(queen_mask, pst.queen, phase, inv_phase);
     }
-    cp += sum_pst(king_mask, pst.king, phase); // king always present
+    cp += sum_pst(king_mask, pst.king, phase, inv_phase); // king always present
 
     cp
 }

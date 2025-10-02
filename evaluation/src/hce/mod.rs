@@ -34,13 +34,30 @@ impl HCE for Evaluator {
     }
 
     fn evaluate(&mut self, board: &Board, phase: f32) -> i16 {
+        // Pre-compute inverse phase to avoid redundant calculations
+        let inv_phase = 1.0 - phase;
+
         let white_mask = board.color_combined(Color::White);
         let black_mask = board.color_combined(Color::Black);
 
         let mut cp: i16 = 0;
 
-        cp += eval_material::evaluate(board, Color::White, white_mask, phase, &self.piece_values);
-        cp -= eval_material::evaluate(board, Color::Black, black_mask, phase, &self.piece_values);
+        cp += eval_material::evaluate(
+            board,
+            Color::White,
+            white_mask,
+            phase,
+            inv_phase,
+            &self.piece_values,
+        );
+        cp -= eval_material::evaluate(
+            board,
+            Color::Black,
+            black_mask,
+            phase,
+            inv_phase,
+            &self.piece_values,
+        );
 
         cp += eval_pawns::evaluate(board, Color::White, &self.config);
         cp -= eval_pawns::evaluate(board, Color::Black, &self.config);
