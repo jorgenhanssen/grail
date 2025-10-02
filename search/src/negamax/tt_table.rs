@@ -81,6 +81,18 @@ impl TranspositionTable {
         }
     }
 
+    // Prefetch TT entry into cache
+    #[inline(always)]
+    pub fn prefetch(&self, hash: u64) {
+        let idx = (hash as usize) & self.mask;
+        let base = idx * CLUSTER_SIZE;
+
+        unsafe {
+            let ptr = self.entries.as_ptr().add(base) as *const u8;
+            crate::utils::memory::prefetch(ptr);
+        }
+    }
+
     #[inline(always)]
     pub fn probe(
         &self,

@@ -600,6 +600,11 @@ impl NegamaxEngine {
         pre_move_threats: &ThreatMap,
     ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
         let new_board = board.make_move_new(m);
+        let child_hash = new_board.get_hash();
+
+        // Prefetch TT entry for child position to hide memory latency
+        self.tt.prefetch(child_hash);
+
         let gives_check = new_board.checkers().popcnt() > 0;
 
         // Consider move tactical if it's check, capture, or promotion
@@ -844,8 +849,12 @@ impl NegamaxEngine {
             }
 
             let new_board = board.make_move_new(mv);
+            let child_hash = new_board.get_hash();
 
-            self.position_stack.push(new_board.get_hash());
+            // Prefetch QS TT entry to hide memory latency
+            self.qs_tt.prefetch(child_hash);
+
+            self.position_stack.push(child_hash);
             let (child_score, mut child_line) =
                 self.quiescence_search(&new_board, -beta, -alpha, depth + 1);
             self.position_stack.pop();

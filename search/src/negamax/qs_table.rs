@@ -54,6 +54,19 @@ impl QSTable {
         idx * CLUSTER_SIZE
     }
 
+    // Prefetch QS entry into cache
+    #[inline(always)]
+    pub fn prefetch(&self, hash: u64) {
+        // Most cases is not check, so this is a reasonable guesstimate
+        let mixed = mix_key(hash, false);
+        let start = self.cluster_start(mixed);
+
+        unsafe {
+            let ptr = self.entries.as_ptr().add(start) as *const u8;
+            crate::utils::memory::prefetch(ptr);
+        }
+    }
+
     #[inline(always)]
     pub fn probe(&self, hash: u64, in_check: bool) -> Option<(i16, Bound)> {
         let mixed = mix_key(hash, in_check);
