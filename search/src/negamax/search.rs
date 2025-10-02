@@ -30,7 +30,9 @@ use uci::{
     UciOutput,
 };
 
-use super::utils::{improving, lmr, null_move_reduction, should_lmp_prune, RAZOR_NEAR_MATE};
+use super::utils::{
+    improving, lmr, mate_distance_prune, null_move_reduction, should_lmp_prune, RAZOR_NEAR_MATE,
+};
 use super::{
     controller::SearchController,
     qs_table::QSTable,
@@ -335,7 +337,7 @@ impl NegamaxEngine {
         depth: u8,
         max_depth: u8,
         mut alpha: i16,
-        beta: i16,
+        mut beta: i16,
         try_null_move: bool,
         allow_iid: bool,
     ) -> (i16, Vec<ChessMove>) {
@@ -347,6 +349,10 @@ impl NegamaxEngine {
         let hash = *self.position_stack.last().unwrap();
         if self.is_cycle(hash) {
             return (0, Vec::new()); // repetition = draw
+        }
+
+        if mate_distance_prune(&mut alpha, &mut beta, depth) {
+            return (alpha, Vec::new());
         }
 
         if depth >= max_depth {
@@ -710,7 +716,7 @@ impl NegamaxEngine {
         &mut self,
         board: &Board,
         mut alpha: i16,
-        beta: i16,
+        mut beta: i16,
         depth: u8,
     ) -> (i16, Vec<ChessMove>) {
         // Check if we should stop searching
@@ -724,6 +730,10 @@ impl NegamaxEngine {
         let hash = *self.position_stack.last().unwrap();
         if self.is_cycle(hash) {
             return (0, Vec::new()); // Treat as a draw
+        }
+
+        if mate_distance_prune(&mut alpha, &mut beta, depth) {
+            return (alpha, Vec::new());
         }
 
         let in_check = board.checkers().popcnt() > 0;

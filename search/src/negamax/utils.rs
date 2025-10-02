@@ -203,3 +203,22 @@ pub fn improving(eval: i16, eval_stack: &[i16]) -> bool {
     let prev_move_eval = eval_stack[eval_stack.len() - 2];
     eval > prev_move_eval - IMPROVING_MARGIN
 }
+
+// Mate distance pruning (MDP)
+//
+// Adjusts alpha-beta bounds based on the maximum possible mate score at current depth.
+// Returns true if the search can be pruned immediately.
+//
+// Example: A mate found at depth D is at least D plies from root, so:
+// - Best possible score: MATE_VALUE - depth (mate-in-D)
+// - Worst possible score: -(MATE_VALUE - depth) (mated-in-D)
+#[inline(always)]
+pub fn mate_distance_prune(alpha: &mut i16, beta: &mut i16, depth: u8) -> bool {
+    let mate_in_depth = MATE_VALUE - depth as i16;
+    let mated_in_depth = -(MATE_VALUE - depth as i16);
+
+    *alpha = (*alpha).max(mated_in_depth);
+    *beta = (*beta).min(mate_in_depth);
+
+    *alpha >= *beta
+}
