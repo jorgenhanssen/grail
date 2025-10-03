@@ -10,6 +10,7 @@ tuning = []
 evaluation = { path = "../evaluation" }
 uci = { path = "../uci" }
 
+arrayvec = { workspace = true }
 chess = { workspace = true }
 ahash = { workspace = true }
 log = { workspace = true }

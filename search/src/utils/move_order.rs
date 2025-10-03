@@ -1,11 +1,17 @@
 // Move ordering inspired by Black Marlin
 
+use arrayvec::ArrayVec;
 use chess::{Board, ChessMove, MoveGen, Piece, Square};
 use evaluation::piece_values::PieceValues;
 
 use crate::utils::{
     gives_check, see, CaptureHistory, ContinuationHistory, HistoryHeuristic, ThreatMap,
 };
+
+// Should be enough to handle most positions
+pub const MAX_CAPTURES: usize = 32;
+pub const MAX_QUIETS: usize = 96;
+pub const MAX_FORCING_MOVES: usize = 32;
 
 struct ScoredMove {
     mov: ChessMove,
@@ -35,9 +41,9 @@ pub struct MainMoveGenerator {
     killer_moves: [Option<ChessMove>; 2],
     killer_index: usize,
 
-    good_captures: Vec<ScoredMove>,
-    bad_captures: Vec<ScoredMove>,
-    quiets: Vec<ScoredMove>,
+    good_captures: ArrayVec<ScoredMove, MAX_CAPTURES>,
+    bad_captures: ArrayVec<ScoredMove, MAX_CAPTURES>,
+    quiets: ArrayVec<ScoredMove, MAX_QUIETS>,
 
     piece_values: PieceValues,
     quiet_check_bonus: i16,
@@ -64,9 +70,9 @@ impl MainMoveGenerator {
             killer_moves,
             killer_index: 0,
 
-            good_captures: Vec::new(),
-            bad_captures: Vec::new(),
-            quiets: Vec::new(),
+            good_captures: ArrayVec::new(),
+            bad_captures: ArrayVec::new(),
+            quiets: ArrayVec::new(),
 
             piece_values,
             quiet_check_bonus,
@@ -97,7 +103,7 @@ impl MainMoveGenerator {
             let capture_mask = board.color_combined(!board.side_to_move());
             gen.set_iterator_mask(*capture_mask);
 
-            for mov in gen {
+            for mov in gen.take(MAX_CAPTURES) {
                 if Some(mov) == self.best_move {
                     continue;
                 }
@@ -170,7 +176,7 @@ impl MainMoveGenerator {
             let mut gen = MoveGen::new_legal(board);
             gen.set_iterator_mask(!board.combined());
 
-            for mov in gen {
+            for mov in gen.take(MAX_QUIETS) {
                 if Some(mov) == self.best_move {
                     continue;
                 }
@@ -230,7 +236,7 @@ impl MainMoveGenerator {
 }
 
 pub struct QMoveGenerator {
-    forcing_moves: Vec<ScoredMove>,
+    forcing_moves: ArrayVec<ScoredMove, MAX_FORCING_MOVES>,
 }
 
 impl QMoveGenerator {
@@ -246,9 +252,9 @@ impl QMoveGenerator {
         if !in_check {
             gen.set_iterator_mask(*board.color_combined(!board.side_to_move()));
 
-            let mut forcing_moves = vec![];
+            let mut forcing_moves = ArrayVec::new();
 
-            for mov in gen {
+            for mov in gen.take(MAX_FORCING_MOVES) {
                 forcing_moves.push(ScoredMove {
                     mov,
                     score: capture_score(board, mov, capture_history, phase, &piece_values),
@@ -257,9 +263,11 @@ impl QMoveGenerator {
 
             Self { forcing_moves }
         } else {
-            Self {
-                forcing_moves: gen.map(|mov| ScoredMove { mov, score: 0 }).collect(),
+            let mut forcing_moves = ArrayVec::new();
+            for mov in gen.take(MAX_FORCING_MOVES) {
+                forcing_moves.push(ScoredMove { mov, score: 0 });
             }
+            Self { forcing_moves }
         }
     }
 
@@ -276,16 +284,15 @@ fn select_highest(array: &[ScoredMove]) -> Option<usize> {
     if array.is_empty() {
         return None;
     }
-    let mut best: Option<(i16, usize)> = None;
-    for (index, mv) in array.iter().enumerate() {
-        if let Some((best_score, _)) = best {
-            if mv.score <= best_score {
-                continue;
-            }
+    let mut best_score = array[0].score;
+    let mut best_index = 0;
+    for (index, mv) in array.iter().enumerate().skip(1) {
+        if mv.score > best_score {
+            best_score = mv.score;
+            best_index = index;
         }
-        best = Some((mv.score, index));
     }
-    best.map(|(_, index)| index)
+    Some(best_index)
 }
 
 // Replacement scoring for captures using Capture History.

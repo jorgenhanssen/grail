@@ -7,7 +7,7 @@ mod see;
 mod threats;
 
 use chess::{Board, ChessMove, Piece};
-pub use move_order::{MainMoveGenerator, QMoveGenerator};
+pub use move_order::{MainMoveGenerator, QMoveGenerator, MAX_CAPTURES, MAX_QUIETS};
 
 pub use capture_history::CaptureHistory;
 pub use continuation_history::ContinuationHistory;
