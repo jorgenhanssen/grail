@@ -64,9 +64,9 @@ impl MainMoveGenerator {
             killer_moves,
             killer_index: 0,
 
-            good_captures: Vec::new(),
-            bad_captures: Vec::new(),
-            quiets: Vec::new(),
+            good_captures: Vec::with_capacity(16),
+            bad_captures: Vec::with_capacity(16),
+            quiets: Vec::with_capacity(48),
 
             piece_values,
             quiet_check_bonus,
@@ -246,7 +246,7 @@ impl QMoveGenerator {
         if !in_check {
             gen.set_iterator_mask(*board.color_combined(!board.side_to_move()));
 
-            let mut forcing_moves = vec![];
+            let mut forcing_moves = Vec::with_capacity(16);
 
             for mov in gen {
                 forcing_moves.push(ScoredMove {
@@ -257,9 +257,11 @@ impl QMoveGenerator {
 
             Self { forcing_moves }
         } else {
-            Self {
-                forcing_moves: gen.map(|mov| ScoredMove { mov, score: 0 }).collect(),
+            let mut forcing_moves = Vec::with_capacity(32);
+            for mov in gen {
+                forcing_moves.push(ScoredMove { mov, score: 0 });
             }
+            Self { forcing_moves }
         }
     }
 
