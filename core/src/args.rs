@@ -10,6 +10,10 @@ pub struct Args {
     #[arg(short, long)]
     pub log_file: Option<PathBuf>,
 
+    /// Run a benchmark search from the starting position to the specified depth
+    #[arg(long)]
+    pub bench: Option<u8>,
+
     #[command(subcommand)]
     pub engines: Option<Engines>,
 }
