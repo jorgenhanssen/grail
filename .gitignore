@@ -26,3 +26,5 @@ Cargo.lock
 nnue/versions/
 
 tournament-games.pgn
+
+flamegraph.svg
