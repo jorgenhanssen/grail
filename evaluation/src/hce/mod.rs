@@ -7,18 +7,22 @@ mod eval_material;
 mod eval_pawns;
 mod eval_queens;
 mod eval_rooks;
+mod pawn_cache;
 mod pst;
 
 pub use config::HCEConfig;
 use context::EvalContext;
+use pawn_cache::PawnCache;
 
 use crate::def::HCE;
+use crate::hce::pawn_cache::CachedPawnEvaluation;
 use crate::piece_values::PieceValues;
 use chess::{Board, Color};
 
 pub struct Evaluator {
     piece_values: PieceValues,
     config: HCEConfig,
+    pawn_cache: PawnCache,
 }
 
 impl Evaluator {
@@ -26,6 +30,7 @@ impl Evaluator {
         Self {
             piece_values,
             config,
+            pawn_cache: PawnCache::new(),
         }
     }
 }
@@ -43,8 +48,23 @@ impl HCE for Evaluator {
         cp += eval_material::evaluate(&ctx, Color::White, &self.piece_values);
         cp -= eval_material::evaluate(&ctx, Color::Black, &self.piece_values);
 
-        cp += eval_pawns::evaluate(&ctx, Color::White, &self.config);
-        cp -= eval_pawns::evaluate(&ctx, Color::Black, &self.config);
+        // Pawn eval with incremental cache
+        if let Some(scores) = self.pawn_cache.get(&ctx) {
+            cp += scores.white;
+            cp -= scores.black;
+        } else {
+            let white_score = eval_pawns::evaluate(&ctx, Color::White, &self.config);
+            let black_score = eval_pawns::evaluate(&ctx, Color::Black, &self.config);
+
+            cp += white_score;
+            cp -= black_score;
+
+            let cache_entry = CachedPawnEvaluation {
+                white: white_score,
+                black: black_score,
+            };
+            self.pawn_cache.set(&ctx, cache_entry);
+        };
 
         cp += eval_rooks::evaluate(&ctx, Color::White, &self.config);
         cp -= eval_rooks::evaluate(&ctx, Color::Black, &self.config);
