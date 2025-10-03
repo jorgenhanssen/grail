@@ -278,16 +278,15 @@ fn select_highest(array: &[ScoredMove]) -> Option<usize> {
     if array.is_empty() {
         return None;
     }
-    let mut best: Option<(i16, usize)> = None;
-    for (index, mv) in array.iter().enumerate() {
-        if let Some((best_score, _)) = best {
-            if mv.score <= best_score {
-                continue;
-            }
+    let mut best_score = array[0].score;
+    let mut best_index = 0;
+    for (index, mv) in array.iter().enumerate().skip(1) {
+        if mv.score > best_score {
+            best_score = mv.score;
+            best_index = index;
         }
-        best = Some((mv.score, index));
     }
-    best.map(|(_, index)| index)
+    Some(best_index)
 }
 
 // Replacement scoring for captures using Capture History.
