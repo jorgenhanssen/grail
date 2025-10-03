@@ -7,11 +7,8 @@ pub struct CachedPawnEvaluation {
     pub black: i16,
 }
 
-/// Incremental pawn evaluation cache.
-///
-/// Caches pawn evaluation scores based on pawn structure.
-/// Since pawn eval only depends on pawn positions, we can reuse
-/// results when the pawn structure hasn't changed.
+// Caches a single pawn evaluation for a given board.
+// Rational is similar as for NNUE - pawn structures change very little between moves, so we can reuse the evaluation.
 pub struct PawnCache {
     white_pawns: BitBoard,
     black_pawns: BitBoard,

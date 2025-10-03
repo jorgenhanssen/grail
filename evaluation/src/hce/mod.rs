@@ -48,7 +48,6 @@ impl HCE for Evaluator {
         cp += eval_material::evaluate(&ctx, Color::White, &self.piece_values);
         cp -= eval_material::evaluate(&ctx, Color::Black, &self.piece_values);
 
-        // Pawn eval with incremental cache
         if let Some(scores) = self.pawn_cache.get(&ctx) {
             cp += scores.white;
             cp -= scores.black;
