@@ -10,9 +10,11 @@ use crate::{
     utils::{
         convert_centipawn_score, convert_mate_score, game_phase, see, CaptureHistory,
         ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator, ThreatMap,
+        MAX_CAPTURES, MAX_QUIETS,
     },
     Engine,
 };
+use arrayvec::ArrayVec;
 use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank};
 use evaluation::PieceValues;
 use evaluation::{
@@ -484,8 +486,8 @@ impl NegamaxEngine {
         );
 
         // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff
-        let mut quiets_searched: Vec<ChessMove> = Vec::with_capacity(8);
-        let mut captures_searched: Vec<ChessMove> = Vec::with_capacity(8);
+        let mut quiets_searched: ArrayVec<ChessMove, { MAX_QUIETS }> = ArrayVec::new();
+        let mut captures_searched: ArrayVec<ChessMove, { MAX_CAPTURES }> = ArrayVec::new();
 
         let mut move_index = -1;
         while let Some(m) = movegen.next(
@@ -558,10 +560,10 @@ impl NegamaxEngine {
                 if is_quiet {
                     // If we have a quiet move later that causes a cutoff, then this
                     // move should have been sorted after, so let's punish it!
-                    quiets_searched.push(m);
+                    let _ = quiets_searched.try_push(m);
                 } else {
                     // Similarly track captures that didn't cause cutoff
-                    captures_searched.push(m);
+                    let _ = captures_searched.try_push(m);
                 }
             }
         }

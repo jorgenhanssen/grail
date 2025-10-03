@@ -9,9 +9,9 @@ use crate::utils::{
 };
 
 // Should be enough to handle most positions
-const MAX_CAPTURES: usize = 32;
-const MAX_QUIETS: usize = 96;
-const MAX_FORCING_MOVES: usize = 32;
+pub const MAX_CAPTURES: usize = 32;
+pub const MAX_QUIETS: usize = 96;
+pub const MAX_FORCING_MOVES: usize = 32;
 
 struct ScoredMove {
     mov: ChessMove,
