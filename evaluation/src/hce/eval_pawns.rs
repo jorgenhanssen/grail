@@ -90,10 +90,10 @@ fn is_backward_pawn(sq: Square, color: Color, my_pawns: BitBoard, enemy_pawns: B
 
     // Check if any adjacent pawn is behind or level with this pawn
     for adjacent_pawn in friendly_adjacent_pawns {
-        let rank = adjacent_pawn.get_rank();
+        let adjacent_rank = adjacent_pawn.get_rank();
         let is_behind_or_level = match color {
-            Color::White => rank.to_index() <= rank.to_index(),
-            Color::Black => rank.to_index() >= rank.to_index(),
+            Color::White => adjacent_rank.to_index() <= rank.to_index(),
+            Color::Black => adjacent_rank.to_index() >= rank.to_index(),
         };
 
         if is_behind_or_level {
