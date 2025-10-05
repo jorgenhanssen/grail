@@ -164,6 +164,10 @@ impl MainMoveGenerator {
                     if !board.legal(killer) {
                         continue;
                     }
+                    // Skip if it's a capture (already searched in capture phases)
+                    if board.piece_on(killer.get_dest()).is_some() {
+                        continue;
+                    }
                     return Some(killer);
                 }
             }
