@@ -140,6 +140,8 @@ define_config!(
     (hce_doubled_pawn_penalty: i16, "HCE Doubled Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 30, cfg!(feature = "tuning")),
     (hce_tripled_pawn_penalty: i16, "HCE Tripled Pawn Penalty", UciOptionType::Spin { min: 0, max: 150 }, 60, cfg!(feature = "tuning")),
     (hce_isolated_pawn_penalty: i16, "HCE Isolated Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 39, cfg!(feature = "tuning")),
+    (hce_backward_pawn_penalty: i16, "HCE Backward Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 20, cfg!(feature = "tuning")),
+    (hce_backward_pawn_half_open_penalty: i16, "HCE Backward Pawn Half Open Penalty", UciOptionType::Spin { min: 0, max: 50 }, 10, cfg!(feature = "tuning")),
 
     (hce_passed_pawn_linear: i16, "HCE Passed Pawn Linear", UciOptionType::Spin { min: 0, max: 20 }, 7, cfg!(feature = "tuning")),
     (hce_passed_pawn_quadratic: i16, "HCE Passed Pawn Quadratic", UciOptionType::Spin { min: 0, max: 10 }, 4, cfg!(feature = "tuning")),
@@ -202,6 +204,8 @@ impl EngineConfig {
             doubled_pawn_penalty: self.hce_doubled_pawn_penalty.value,
             tripled_pawn_penalty: self.hce_tripled_pawn_penalty.value,
             isolated_pawn_penalty: self.hce_isolated_pawn_penalty.value,
+            backward_pawn_penalty: self.hce_backward_pawn_penalty.value,
+            backward_pawn_half_open_penalty: self.hce_backward_pawn_half_open_penalty.value,
             passed_pawn_linear: self.hce_passed_pawn_linear.value,
             passed_pawn_quadratic: self.hce_passed_pawn_quadratic.value,
 
