@@ -9,13 +9,13 @@ use crate::{
     },
     utils::{
         convert_centipawn_score, convert_mate_score, game_phase, see, CaptureHistory,
-        ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator, ThreatMap,
-        MAX_CAPTURES, MAX_QUIETS,
+        ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator, MAX_CAPTURES,
+        MAX_QUIETS,
     },
     Engine,
 };
 use arrayvec::ArrayVec;
-use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank};
+use chess::{get_rank, BitBoard, Board, BoardStatus, ChessMove, Color, Piece, Rank};
 use evaluation::PieceValues;
 use evaluation::{
     hce,
@@ -238,11 +238,11 @@ impl Engine for NegamaxEngine {
 
 impl NegamaxEngine {
     #[inline(always)]
-    fn eval(&mut self, board: &Board, phase: f32) -> i16 {
+    fn eval(&mut self, position: &utils::Position, phase: f32) -> i16 {
         if let Some(nnue) = &mut self.nnue {
-            nnue.evaluate(board)
+            nnue.evaluate(position.board)
         } else {
-            self.hce.evaluate(board, phase)
+            self.hce.evaluate(position, phase)
         }
     }
 
@@ -278,7 +278,8 @@ impl NegamaxEngine {
     ) -> (Option<ChessMove>, i16) {
         let best_move = self.current_pv.first().cloned();
 
-        let threats = ThreatMap::new(&self.board);
+        let position = utils::Position::new(&self.board);
+        let threats = position.threats();
 
         let prev_to = self
             .continuation_history
@@ -395,10 +396,12 @@ impl NegamaxEngine {
         let remaining_depth = max_depth - depth;
         let in_check = board.checkers().popcnt() > 0;
 
+        let position = utils::Position::new(board);
+
         let static_eval = if let Some(tt_se) = tt_static_eval {
             tt_se // Cached in TT
         } else {
-            let eval = self.eval(board, phase);
+            let eval = self.eval(&position, phase);
             if board.side_to_move() == Color::White {
                 eval
             } else {
@@ -469,7 +472,7 @@ impl NegamaxEngine {
 
         let mut best_move_depth = depth;
 
-        let threats = ThreatMap::new(board);
+        let threats = position.threats();
 
         let prev_to = self
             .continuation_history
@@ -527,7 +530,7 @@ impl NegamaxEngine {
                 move_index,
                 is_improving,
                 static_eval,
-                &threats,
+                threats,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
                     break;
@@ -551,7 +554,7 @@ impl NegamaxEngine {
                         is_quiet,
                         &quiets_searched,
                         &captures_searched,
-                        &threats,
+                        threats,
                     );
 
                     break; // beta cutoff
@@ -609,7 +612,7 @@ impl NegamaxEngine {
         move_index: i32,
         is_improving: bool,
         static_eval: i16,
-        pre_move_threats: &ThreatMap,
+        pre_move_threats: BitBoard,
     ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
         let new_board = board.make_move_new(m);
         let child_hash = new_board.get_hash();
@@ -753,8 +756,9 @@ impl NegamaxEngine {
         }
 
         let phase = game_phase(board);
+        let position = utils::Position::new(board);
 
-        let eval = self.eval(board, phase);
+        let eval = self.eval(&position, phase);
         let stand_pat = if board.side_to_move() == Color::White {
             eval
         } else {
@@ -905,7 +909,7 @@ impl NegamaxEngine {
         is_quiet: bool,
         quiets_searched: &[ChessMove],
         captures_searched: &[ChessMove],
-        threats: &ThreatMap,
+        threats: BitBoard,
     ) {
         let prev_to = self
             .continuation_history

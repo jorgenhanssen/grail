@@ -6,6 +6,7 @@ members = [
   "nnue", 
   "uci", 
   "tournament",
+  "utils",
 ]
 
 [workspace.dependencies]

@@ -1,7 +1,5 @@
-use chess::{Board, ChessMove, Color, Square, NUM_COLORS, NUM_SQUARES};
-
-use crate::utils::ThreatMap;
 use crate::EngineConfig;
+use chess::{BitBoard, Board, ChessMove, Color, Square, EMPTY, NUM_COLORS, NUM_SQUARES};
 
 const MAX_DEPTH: usize = 100;
 // [color][is_threatened][from][to] (similar to Black Marlin)
@@ -69,8 +67,8 @@ impl HistoryHeuristic {
     }
 
     #[inline(always)]
-    pub fn get(&self, color: Color, source: Square, dest: Square, threats: &ThreatMap) -> i16 {
-        let is_threatened = threats.is_threatened(source);
+    pub fn get(&self, color: Color, source: Square, dest: Square, threats: BitBoard) -> i16 {
+        let is_threatened = threats & BitBoard::from_square(source) != EMPTY;
         self.history[Self::index(color, is_threatened, source, dest)]
     }
 
@@ -96,11 +94,11 @@ impl HistoryHeuristic {
     }
 
     #[inline(always)]
-    pub fn update(&mut self, board: &Board, mv: ChessMove, delta: i32, threats: &ThreatMap) {
+    pub fn update(&mut self, board: &Board, mv: ChessMove, delta: i32, threats: BitBoard) {
         let color = board.side_to_move();
         let source = mv.get_source();
         let dest = mv.get_dest();
-        let is_threatened = threats.is_threatened(source);
+        let is_threatened = threats & BitBoard::from_square(source) != EMPTY;
         self.update_move(color, is_threatened, source, dest, delta);
     }
 
@@ -136,7 +134,7 @@ impl HistoryHeuristic {
         move_index: i32,
         is_improving: bool,
         reduction: &mut u8,
-        threats: &ThreatMap,
+        threats: BitBoard,
     ) -> bool {
         if !(remaining_depth > 0
             && !in_check

@@ -1,6 +1,6 @@
 use super::HCEConfig;
 use crate::hce::context::EvalContext;
-use chess::{get_adjacent_files, get_file, get_rank, BitBoard, Color, Rank, EMPTY};
+use chess::{get_adjacent_files, get_file, get_rank, BitBoard, Color, Piece, Rank, EMPTY};
 
 // Sum the king-safety bits: shield, files, ring pressure, center, activity.
 // Middlegame terms matter more; king activity matters more in the endgame.
@@ -19,8 +19,10 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
 // weight the closer ones more. Most relevant in the opening/middlegame.
 #[inline(always)]
 fn pawn_shield_phase_bonus(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let my_pawns = ctx.pawns_for(color);
-    let king_sq = ctx.king_sq_for(color);
+    let board = ctx.position.board;
+    let pawns = board.pieces(Piece::Pawn);
+    let my_pawns = pawns & board.color_combined(color);
+    let king_sq = board.king_square(color);
     let files_window = king_files_window(king_sq);
     let (front_rank_1, front_rank_2) = if color == Color::White {
         (Rank::Second, Rank::Third)
@@ -38,10 +40,12 @@ fn pawn_shield_phase_bonus(ctx: &EvalContext, color: Color, config: &HCEConfig) 
 // Penalize no own pawns (fully open worse) and thin cover. Mostly an opening/middlegame concern.
 #[inline(always)]
 fn king_file_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let king_sq = ctx.king_sq_for(color);
+    let board = ctx.position.board;
+    let king_sq = board.king_square(color);
     let files_window = king_files_window(king_sq);
-    let my_pawns = ctx.pawns_for(color);
-    let their_pawns = ctx.pawns_for(!color);
+    let pawns = board.pieces(Piece::Pawn);
+    let my_pawns = pawns & board.color_combined(color);
+    let their_pawns = pawns & board.color_combined(!color);
     let our_file_pawns = (my_pawns & files_window).popcnt();
     let their_file_pawns = (their_pawns & files_window).popcnt();
     let mut file_penalty = 0i16;
@@ -62,12 +66,16 @@ fn king_file_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfig) 
 #[inline(always)]
 fn king_ring_phase_pressure(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let enemy = !color;
-    let king_sq = ctx.king_sq_for(color);
+    let board = ctx.position.board;
+    let king_sq = board.king_square(color);
     let king_zone = KING_ZONES[king_sq.to_index()];
     let mut pressure = 0i16;
 
+    let all_pieces = board.combined();
+    let enemy_pieces = board.color_combined(enemy);
+
     // Knights
-    let knights = ctx.knights_for(enemy);
+    let knights = board.pieces(Piece::Knight) & enemy_pieces;
     for sq in knights {
         let attacks = chess::get_knight_moves(sq) & king_zone;
         if attacks != EMPTY {
@@ -75,33 +83,33 @@ fn king_ring_phase_pressure(ctx: &EvalContext, color: Color, config: &HCEConfig)
         }
     }
     // Bishops
-    let bishops = ctx.bishops_for(enemy);
+    let bishops = board.pieces(Piece::Bishop) & enemy_pieces;
     for sq in bishops {
-        let attacks = chess::get_bishop_moves(sq, ctx.all_pieces) & king_zone;
+        let attacks = chess::get_bishop_moves(sq, *all_pieces) & king_zone;
         if attacks != EMPTY {
             pressure += config.king_pressure_bishop * (attacks.popcnt() as i16);
         }
     }
     // Rooks
-    let rooks = ctx.rooks_for(enemy);
+    let rooks = board.pieces(Piece::Rook) & enemy_pieces;
     for sq in rooks {
-        let attacks = chess::get_rook_moves(sq, ctx.all_pieces) & king_zone;
+        let attacks = chess::get_rook_moves(sq, *all_pieces) & king_zone;
         if attacks != EMPTY {
             pressure += config.king_pressure_rook * (attacks.popcnt() as i16);
         }
     }
     // Queens
-    let queens = ctx.queens_for(enemy);
+    let queens = board.pieces(Piece::Queen) & enemy_pieces;
     for sq in queens {
-        let attacks = (chess::get_bishop_moves(sq, ctx.all_pieces)
-            | chess::get_rook_moves(sq, ctx.all_pieces))
+        let attacks = (chess::get_bishop_moves(sq, *all_pieces)
+            | chess::get_rook_moves(sq, *all_pieces))
             & king_zone;
         if attacks != EMPTY {
             pressure += config.king_pressure_queen * (attacks.popcnt() as i16);
         }
     }
     // Pawns
-    let pawns = ctx.pawns_for(enemy);
+    let pawns = board.pieces(Piece::Pawn) & enemy_pieces;
     for sq in pawns {
         let f = sq.get_file() as i8;
         let r = sq.get_rank() as i8;
@@ -138,7 +146,7 @@ fn central_king_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfi
         return 0;
     }
 
-    let sq = ctx.king_sq_for(color);
+    let sq = ctx.position.board.king_square(color);
 
     let file_idx = sq.get_file() as i32;
     let rank_idx = sq.get_rank() as i32;
@@ -163,7 +171,7 @@ fn endgame_king_activity(ctx: &EvalContext, color: Color, config: &HCEConfig) ->
         return 0;
     }
 
-    let king_sq = ctx.king_sq_for(color);
+    let king_sq = ctx.position.board.king_square(color);
 
     let file = king_sq.get_file() as i32;
     let rank = king_sq.get_rank() as i32;

@@ -9,6 +9,7 @@ tuning = []
 [dependencies]
 evaluation = { path = "../evaluation" }
 uci = { path = "../uci" }
+utils = { path = "../utils" }
 
 arrayvec = { workspace = true }
 chess = { workspace = true }

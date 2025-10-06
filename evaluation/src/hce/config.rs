@@ -17,11 +17,8 @@ pub struct HCEConfig {
     pub rook_semi_open_file_bonus: i16,
     pub rook_seventh_rank_bonus: i16,
 
-    // Mobility multipliers
-    pub knight_mobility_multiplier: i16,
-    pub bishop_mobility_multiplier: i16,
-    pub rook_mobility_multiplier: i16,
-    pub queen_mobility_multiplier: i16,
+    // Space advantage
+    pub space_multiplier: i16,
 
     // King safety - Pawn shield
     pub king_shield_r1_bonus: i16, // pawns on 2nd/7th ranks

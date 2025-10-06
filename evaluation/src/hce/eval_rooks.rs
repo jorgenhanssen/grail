@@ -1,16 +1,18 @@
 use super::HCEConfig;
 use crate::hce::context::EvalContext;
-use chess::{get_file, get_rook_moves, Color, Rank, EMPTY};
+use chess::{get_file, Color, Piece, Rank, EMPTY};
 
 #[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let rooks = ctx.rooks_for(color);
+    let board = ctx.position.board;
+    let rooks = board.pieces(Piece::Rook) & board.color_combined(color);
     if rooks == EMPTY {
         return 0;
     }
 
-    let our_pawns = ctx.pawns_for(color);
-    let their_pawns = ctx.pawns_for(!color);
+    let pawns = board.pieces(Piece::Pawn);
+    let our_pawns = pawns & board.color_combined(color);
+    let their_pawns = pawns & board.color_combined(!color);
 
     let mut cp = 0i16;
     for sq in rooks {
@@ -32,9 +34,6 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
         {
             cp += config.rook_seventh_rank_bonus;
         }
-
-        let mobility = get_rook_moves(sq, ctx.all_pieces).popcnt() as i16;
-        cp += ((config.rook_mobility_multiplier * mobility) as f32 * ctx.phase).round() as i16;
     }
     cp
 }

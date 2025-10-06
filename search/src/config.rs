@@ -152,11 +152,8 @@ define_config!(
     (hce_rook_semi_open_file_bonus: i16, "HCE Rook Semi-Open File Bonus", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
     (hce_rook_seventh_rank_bonus: i16, "HCE Rook Seventh Rank Bonus", UciOptionType::Spin { min: 0, max: 50 }, 20, cfg!(feature = "tuning")),
 
-    // Mobility multipliers
-    (hce_knight_mobility_multiplier: i16, "HCE Knight Mobility Multiplier", UciOptionType::Spin { min: 1, max: 10 }, 5, cfg!(feature = "tuning")),
-    (hce_bishop_mobility_multiplier: i16, "HCE Bishop Mobility Multiplier", UciOptionType::Spin { min: 1, max: 10 }, 4, cfg!(feature = "tuning")),
-    (hce_rook_mobility_multiplier: i16, "HCE Rook Mobility Multiplier", UciOptionType::Spin { min: 1, max: 10 }, 4, cfg!(feature = "tuning")),
-    (hce_queen_mobility_multiplier: i16, "HCE Queen Mobility Multiplier", UciOptionType::Spin { min: 1, max: 5 }, 1, cfg!(feature = "tuning")),
+    // Space advantage
+    (hce_space_multiplier: i16, "HCE Space Multiplier", UciOptionType::Spin { min: 0, max: 10 }, 5, cfg!(feature = "tuning")),
 
     // King safety - Pawn shield
     (hce_king_shield_r1_bonus: i16, "HCE King Shield R1 Bonus", UciOptionType::Spin { min: 0, max: 50 }, 12, cfg!(feature = "tuning")),
@@ -215,11 +212,8 @@ impl EngineConfig {
             rook_semi_open_file_bonus: self.hce_rook_semi_open_file_bonus.value,
             rook_seventh_rank_bonus: self.hce_rook_seventh_rank_bonus.value,
 
-            // Mobility multipliers
-            knight_mobility_multiplier: self.hce_knight_mobility_multiplier.value,
-            bishop_mobility_multiplier: self.hce_bishop_mobility_multiplier.value,
-            rook_mobility_multiplier: self.hce_rook_mobility_multiplier.value,
-            queen_mobility_multiplier: self.hce_queen_mobility_multiplier.value,
+            // Space advantage
+            space_multiplier: self.hce_space_multiplier.value,
 
             // King safety
             king_shield_r1_bonus: self.hce_king_shield_r1_bonus.value,

@@ -7,6 +7,7 @@ mod eval_material;
 mod eval_pawns;
 mod eval_queens;
 mod eval_rooks;
+mod eval_space;
 mod pawn_cache;
 mod pst;
 
@@ -17,7 +18,8 @@ use pawn_cache::PawnCache;
 use crate::def::HCE;
 use crate::hce::pawn_cache::CachedPawnEvaluation;
 use crate::piece_values::PieceValues;
-use chess::{Board, Color};
+use chess::Color;
+use utils::Position;
 
 pub struct Evaluator {
     piece_values: PieceValues,
@@ -40,8 +42,9 @@ impl HCE for Evaluator {
         "HCE".to_string()
     }
 
-    fn evaluate(&mut self, board: &Board, phase: f32) -> i16 {
-        let ctx = EvalContext::new(board, phase);
+    fn evaluate(&mut self, position: &Position, phase: f32) -> i16 {
+        let ctx = EvalContext::new(position, phase);
+        let board = position.board;
 
         let mut cp: i16 = 0;
 
@@ -79,6 +82,10 @@ impl HCE for Evaluator {
 
         cp += eval_king::evaluate(&ctx, Color::White, &self.config);
         cp -= eval_king::evaluate(&ctx, Color::Black, &self.config);
+
+        // Space advantage (general mobility)
+        cp += eval_space::evaluate(&ctx, Color::White, &self.config);
+        cp -= eval_space::evaluate(&ctx, Color::Black, &self.config);
 
         // Tempo bonus
         if board.side_to_move() == Color::White {
