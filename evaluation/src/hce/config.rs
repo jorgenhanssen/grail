@@ -43,4 +43,7 @@ pub struct HCEConfig {
     // King safety - Positional
     pub king_central_penalty: i16, // penalty for central king in middlegame
     pub king_activity_bonus: i16,  // endgame king activity multiplier
+
+    // Threats
+    pub threats_multiplier: i16,
 }
