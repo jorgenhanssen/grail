@@ -153,7 +153,7 @@ define_config!(
     (hce_rook_seventh_rank_bonus: i16, "HCE Rook Seventh Rank Bonus", UciOptionType::Spin { min: 0, max: 50 }, 20, cfg!(feature = "tuning")),
 
     // Space advantage
-    (hce_space_multiplier: i16, "HCE Space Multiplier", UciOptionType::Spin { min: 0, max: 10 }, 5, cfg!(feature = "tuning")),
+    (hce_space_multiplier: i16, "HCE Space Multiplier", UciOptionType::Spin { min: 0, max: 10 }, 4, cfg!(feature = "tuning")),
 
     // King safety - Pawn shield
     (hce_king_shield_r1_bonus: i16, "HCE King Shield R1 Bonus", UciOptionType::Spin { min: 0, max: 50 }, 12, cfg!(feature = "tuning")),
