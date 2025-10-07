@@ -1,6 +1,6 @@
 use chess::{
     get_bishop_moves, get_knight_moves, get_pawn_attacks, get_rook_moves, BitBoard, Board, Color,
-    Piece, NUM_COLORS,
+    Piece, EMPTY, NUM_COLORS,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -38,7 +38,16 @@ impl Attacks {
         let white_queens = queens & white_pieces;
         let black_queens = queens & black_pieces;
 
-        let (white_space, white_attacks) = compute_attacks_for_color(
+        // Compute piece groupings for threat detection
+        let white_minors = white_knights | white_bishops;
+        let black_minors = black_knights | black_bishops;
+        let white_majors = white_rooks | white_queens;
+        let black_majors = black_rooks | black_queens;
+        let white_non_pawns = white_minors | white_majors;
+        let black_non_pawns = black_minors | black_majors;
+
+        // Compute attacks and threats in a single pass for each color
+        let (white_space, white_attacks, black_threats) = compute(
             Color::White,
             *white_pieces,
             white_pawns,
@@ -46,10 +55,13 @@ impl Attacks {
             white_bishops,
             white_rooks,
             white_queens,
+            black_non_pawns,
+            black_majors,
+            black_queens,
             *all_pieces,
         );
 
-        let (black_space, black_attacks) = compute_attacks_for_color(
+        let (black_space, black_attacks, white_threats) = compute(
             Color::Black,
             *black_pieces,
             black_pawns,
@@ -57,16 +69,11 @@ impl Attacks {
             black_bishops,
             black_rooks,
             black_queens,
+            white_non_pawns,
+            white_majors,
+            white_queens,
             *all_pieces,
         );
-
-        // Pre-compute threats for both colors
-        // Threats = opponent attacks & my valuable pieces (non-pawns)
-        let white_non_pawns = *white_pieces & !pawns;
-        let black_non_pawns = *black_pieces & !pawns;
-
-        let white_threats = black_attacks & white_non_pawns;
-        let black_threats = white_attacks & black_non_pawns;
 
         Self {
             space: [white_space, black_space],
@@ -76,8 +83,10 @@ impl Attacks {
     }
 }
 
+/// Compute attacks, space, and threats in a single pass
+/// This is optimized to avoid iterating through pieces multiple times
 #[allow(clippy::too_many_arguments)]
-fn compute_attacks_for_color(
+fn compute(
     color: Color,
     my_pieces: BitBoard,
     pawns: BitBoard,
@@ -85,45 +94,75 @@ fn compute_attacks_for_color(
     bishops: BitBoard,
     rooks: BitBoard,
     queens: BitBoard,
+    opponent_non_pawns: BitBoard,
+    opponent_majors: BitBoard,
+    opponent_queens: BitBoard,
     all_pieces: BitBoard,
-) -> (i16, BitBoard) {
+) -> (i16, BitBoard, BitBoard) {
     let mut space = 0i16;
-    let mut attacks = BitBoard::default();
+    let mut attacks = EMPTY;
+    let mut threats = EMPTY;
 
-    // Pawn attacks
-    for sq in pawns {
-        let squares = get_pawn_attacks(sq, color, all_pieces);
-        space += squares.popcnt() as i16;
-        attacks |= squares;
+    // Check if we need to compute threats at all
+    let has_non_pawns = opponent_non_pawns != EMPTY;
+    let has_majors = opponent_majors != EMPTY;
+    let has_queens = opponent_queens != EMPTY;
+
+    if pawns != EMPTY {
+        for sq in pawns {
+            let squares = get_pawn_attacks(sq, color, all_pieces);
+            space += squares.popcnt() as i16;
+            attacks |= squares;
+            // Pawns threaten any non-pawn piece
+            if has_non_pawns {
+                threats |= squares & opponent_non_pawns;
+            }
+        }
     }
 
-    // Knight attacks/space
-    for sq in knights {
-        let squares = get_knight_moves(sq);
-        space += (squares & !my_pieces).popcnt() as i16;
-        attacks |= squares;
+    if knights != EMPTY {
+        for sq in knights {
+            let squares = get_knight_moves(sq);
+            space += (squares & !my_pieces).popcnt() as i16;
+            attacks |= squares;
+            // Knights (minor pieces) threaten major pieces
+            if has_majors {
+                threats |= squares & opponent_majors;
+            }
+        }
     }
 
-    // Bishop attacks/space
-    for sq in bishops {
-        let squares = get_bishop_moves(sq, all_pieces);
-        space += (squares & !my_pieces).popcnt() as i16;
-        attacks |= squares;
+    if bishops != EMPTY {
+        for sq in bishops {
+            let squares = get_bishop_moves(sq, all_pieces);
+            space += (squares & !my_pieces).popcnt() as i16;
+            attacks |= squares;
+            // Bishops (minor pieces) threaten major pieces
+            if has_majors {
+                threats |= squares & opponent_majors;
+            }
+        }
     }
 
-    // Rook attacks/space
-    for sq in rooks {
-        let squares = get_rook_moves(sq, all_pieces);
-        space += (squares & !my_pieces).popcnt() as i16;
-        attacks |= squares;
+    if rooks != EMPTY {
+        for sq in rooks {
+            let squares = get_rook_moves(sq, all_pieces);
+            space += (squares & !my_pieces).popcnt() as i16;
+            attacks |= squares;
+
+            if has_queens {
+                threats |= squares & opponent_queens;
+            }
+        }
     }
 
-    // Queen attacks/space
-    for sq in queens {
-        let squares = get_bishop_moves(sq, all_pieces) | get_rook_moves(sq, all_pieces);
-        space += (squares & !my_pieces).popcnt() as i16;
-        attacks |= squares;
+    if queens != EMPTY {
+        for sq in queens {
+            let squares = get_bishop_moves(sq, all_pieces) | get_rook_moves(sq, all_pieces);
+            space += (squares & !my_pieces).popcnt() as i16;
+            attacks |= squares;
+        }
     }
 
-    (space, attacks)
+    (space, attacks, threats)
 }
