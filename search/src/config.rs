@@ -179,6 +179,9 @@ define_config!(
     (hce_king_central_penalty: i16, "HCE King Central Penalty", UciOptionType::Spin { min: 0, max: 50 }, 20, cfg!(feature = "tuning")),
     (hce_king_activity_bonus: i16, "HCE King Activity Bonus", UciOptionType::Spin { min: 0, max: 50 }, 14, cfg!(feature = "tuning")),
 
+    // Threats
+    (hce_threats_multiplier: i16, "HCE Threats Multiplier", UciOptionType::Spin { min: 0, max: 50 }, 20, cfg!(feature = "tuning")),
+
 );
 
 impl EngineConfig {
@@ -236,6 +239,9 @@ impl EngineConfig {
             king_pressure_pawn: self.hce_king_pressure_pawn.value,
             king_central_penalty: self.hce_king_central_penalty.value,
             king_activity_bonus: self.hce_king_activity_bonus.value,
+
+            // Threats
+            threats_multiplier: self.hce_threats_multiplier.value,
         }
     }
 }

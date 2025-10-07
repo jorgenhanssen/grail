@@ -8,6 +8,7 @@ mod eval_pawns;
 mod eval_queens;
 mod eval_rooks;
 mod eval_space;
+mod eval_threats;
 mod pawn_cache;
 mod pst;
 
@@ -88,6 +89,9 @@ impl HCE for Evaluator {
 
         cp += eval_space::evaluate_support(&ctx, Color::White, &self.config);
         cp -= eval_space::evaluate_support(&ctx, Color::Black, &self.config);
+
+        cp += eval_threats::evaluate(&ctx, Color::White, &self.config);
+        cp -= eval_threats::evaluate(&ctx, Color::Black, &self.config);
 
         // Tempo bonus
         if board.side_to_move() == Color::White {
