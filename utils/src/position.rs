@@ -7,7 +7,7 @@ use std::cell::OnceCell;
 /// Position wrapper that lazily computes and caches attack map
 /// This allows sharing expensive attack computations between:
 /// - Threat detection (move ordering)
-/// - Mobility evaluation (space evaluation)
+/// - Space evaluation (HCE)
 pub struct Position<'a> {
     pub board: &'a Board,
     // Lazy-computed attack map - computed once and reused
@@ -44,18 +44,18 @@ impl<'a> Position<'a> {
 }
 
 /// Pre-computed attack patterns for all pieces
-/// This is computed once and reused for both threats and mobility
+/// This is computed once and reused for both threats and space
 #[derive(Clone, Copy, Debug)]
 pub struct AttackMap {
-    // Total mobility (number of squares attacked/controlled) for each color
-    pub mobility: [i16; NUM_COLORS],
+    // Total space (number of squares attacked/controlled) for each color
+    space: [i16; NUM_COLORS],
 
     // Attack bitboards for each color (all squares attacked by that color)
-    pub attacks: [BitBoard; NUM_COLORS],
+    attacks: [BitBoard; NUM_COLORS],
 
     // Threats: which valuable pieces (non-pawns) are attacked by opponent
     // threats[color] = opponent's attacks & my non-pawns
-    pub threats: [BitBoard; NUM_COLORS],
+    threats: [BitBoard; NUM_COLORS],
 }
 
 impl AttackMap {
@@ -81,7 +81,7 @@ impl AttackMap {
         let white_queens = queens & white_pieces;
         let black_queens = queens & black_pieces;
 
-        let (white_mobility, white_attacks) = Self::compute_attacks_for_color(
+        let (white_space, white_attacks) = Self::compute_attacks_for_color(
             Color::White,
             *white_pieces,
             white_pawns,
@@ -92,7 +92,7 @@ impl AttackMap {
             *all_pieces,
         );
 
-        let (black_mobility, black_attacks) = Self::compute_attacks_for_color(
+        let (black_space, black_attacks) = Self::compute_attacks_for_color(
             Color::Black,
             *black_pieces,
             black_pawns,
@@ -112,7 +112,7 @@ impl AttackMap {
         let black_threats = white_attacks & black_non_pawns;
 
         Self {
-            mobility: [white_mobility, black_mobility],
+            space: [white_space, black_space],
             attacks: [white_attacks, black_attacks],
             threats: [white_threats, black_threats],
         }
@@ -129,50 +129,50 @@ impl AttackMap {
         queens: BitBoard,
         all_pieces: BitBoard,
     ) -> (i16, BitBoard) {
-        let mut mobility = 0i16;
+        let mut space = 0i16;
         let mut attacks = BitBoard::default();
 
         // Pawn attacks
         for sq in pawns {
             let squares = get_pawn_attacks(sq, color, all_pieces);
-            mobility += squares.popcnt() as i16;
+            space += squares.popcnt() as i16;
             attacks |= squares;
         }
 
-        // Knight attacks/mobility
+        // Knight attacks/space
         for sq in knights {
             let squares = get_knight_moves(sq);
-            mobility += (squares & !my_pieces).popcnt() as i16;
+            space += (squares & !my_pieces).popcnt() as i16;
             attacks |= squares;
         }
 
-        // Bishop attacks/mobility
+        // Bishop attacks/space
         for sq in bishops {
             let squares = get_bishop_moves(sq, all_pieces);
-            mobility += (squares & !my_pieces).popcnt() as i16;
+            space += (squares & !my_pieces).popcnt() as i16;
             attacks |= squares;
         }
 
-        // Rook attacks/mobility
+        // Rook attacks/space
         for sq in rooks {
             let squares = get_rook_moves(sq, all_pieces);
-            mobility += (squares & !my_pieces).popcnt() as i16;
+            space += (squares & !my_pieces).popcnt() as i16;
             attacks |= squares;
         }
 
-        // Queen attacks/mobility
+        // Queen attacks/space
         for sq in queens {
             let squares = get_bishop_moves(sq, all_pieces) | get_rook_moves(sq, all_pieces);
-            mobility += (squares & !my_pieces).popcnt() as i16;
+            space += (squares & !my_pieces).popcnt() as i16;
             attacks |= squares;
         }
 
-        (mobility, attacks)
+        (space, attacks)
     }
 
     #[inline(always)]
-    pub fn mobility_for(&self, color: Color) -> i16 {
-        self.mobility[color.to_index()]
+    pub fn space_for(&self, color: Color) -> i16 {
+        self.space[color.to_index()]
     }
 
     #[inline(always)]

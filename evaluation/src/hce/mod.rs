@@ -83,7 +83,6 @@ impl HCE for Evaluator {
         cp += eval_king::evaluate(&ctx, Color::White, &self.config);
         cp -= eval_king::evaluate(&ctx, Color::Black, &self.config);
 
-        // Space advantage (general mobility)
         cp += eval_space::evaluate(&ctx, Color::White, &self.config);
         cp -= eval_space::evaluate(&ctx, Color::Black, &self.config);
 
