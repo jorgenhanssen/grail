@@ -86,6 +86,9 @@ impl HCE for Evaluator {
         cp += eval_space::evaluate(&ctx, Color::White, &self.config);
         cp -= eval_space::evaluate(&ctx, Color::Black, &self.config);
 
+        cp += eval_space::evaluate_support(&ctx, Color::White, &self.config);
+        cp -= eval_space::evaluate_support(&ctx, Color::Black, &self.config);
+
         // Tempo bonus
         if board.side_to_move() == Color::White {
             cp += self.config.tempo_bonus;

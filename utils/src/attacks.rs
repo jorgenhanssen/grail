@@ -13,6 +13,9 @@ pub struct Attacks {
 
     // Threats: which valuable pieces (non-pawns) are attacked by opponent
     pub threats: [BitBoard; NUM_COLORS],
+
+    // Support: which of our pieces are defended by our own pieces
+    pub support: [BitBoard; NUM_COLORS],
 }
 
 impl Attacks {
@@ -75,10 +78,15 @@ impl Attacks {
             *all_pieces,
         );
 
+        // Compute support: which of our pieces are defended by our own pieces
+        let white_support = white_attacks & *white_pieces;
+        let black_support = black_attacks & *black_pieces;
+
         Self {
             space: [white_space, black_space],
             attacks: [white_attacks, black_attacks],
             threats: [white_threats, black_threats],
+            support: [white_support, black_support],
         }
     }
 }
@@ -111,7 +119,7 @@ fn compute(
     if pawns != EMPTY {
         for sq in pawns {
             let squares = get_pawn_attacks(sq, color, all_pieces);
-            space += squares.popcnt() as i16;
+            space += (squares & !my_pieces).popcnt() as i16;
             attacks |= squares;
             // Pawns threaten any non-pawn piece
             if has_non_pawns {

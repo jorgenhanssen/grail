@@ -20,6 +20,10 @@ pub struct HCEConfig {
     // Space advantage
     pub space_multiplier: i16,
 
+    // Piece coordination
+    pub supported_minor_bonus: i16, // bonus for defended knights/bishops
+    pub supported_major_bonus: i16, // bonus for defended rooks/queens
+
     // King safety - Pawn shield
     pub king_shield_r1_bonus: i16, // pawns on 2nd/7th ranks
     pub king_shield_r2_bonus: i16, // pawns on 3rd/6th ranks

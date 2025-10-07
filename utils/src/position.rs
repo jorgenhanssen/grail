@@ -37,4 +37,9 @@ impl<'a> Position<'a> {
     pub fn threats_for(&self, color: Color) -> BitBoard {
         self.attacks().threats[color.to_index()]
     }
+
+    #[inline(always)]
+    pub fn support_for(&self, color: Color) -> BitBoard {
+        self.attacks().support[color.to_index()]
+    }
 }

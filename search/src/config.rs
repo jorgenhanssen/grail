@@ -155,6 +155,10 @@ define_config!(
     // Space advantage
     (hce_space_multiplier: i16, "HCE Space Multiplier", UciOptionType::Spin { min: 0, max: 10 }, 4, cfg!(feature = "tuning")),
 
+    // Piece coordination
+    (hce_supported_minor_bonus: i16, "HCE Supported Minor Bonus", UciOptionType::Spin { min: 0, max: 20 }, 5, cfg!(feature = "tuning")),
+    (hce_supported_major_bonus: i16, "HCE Supported Major Bonus", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
+
     // King safety - Pawn shield
     (hce_king_shield_r1_bonus: i16, "HCE King Shield R1 Bonus", UciOptionType::Spin { min: 0, max: 50 }, 12, cfg!(feature = "tuning")),
     (hce_king_shield_r2_bonus: i16, "HCE King Shield R2 Bonus", UciOptionType::Spin { min: 0, max: 50 }, 6, cfg!(feature = "tuning")),
@@ -214,6 +218,10 @@ impl EngineConfig {
 
             // Space advantage
             space_multiplier: self.hce_space_multiplier.value,
+
+            // Piece coordination
+            supported_minor_bonus: self.hce_supported_minor_bonus.value,
+            supported_major_bonus: self.hce_supported_major_bonus.value,
 
             // King safety
             king_shield_r1_bonus: self.hce_king_shield_r1_bonus.value,
