@@ -1,5 +1,5 @@
 use super::context::EvalContext;
-use chess::{BitBoard, Color};
+use chess::{BitBoard, Color, Piece};
 
 #[derive(Debug, Clone, Copy)]
 pub struct CachedPawnEvaluation {
@@ -26,8 +26,10 @@ impl PawnCache {
 
     #[inline(always)]
     pub fn get(&self, ctx: &EvalContext) -> Option<CachedPawnEvaluation> {
-        let white_pawns = ctx.pawns_for(Color::White);
-        let black_pawns = ctx.pawns_for(Color::Black);
+        let board = ctx.position.board;
+        let pawns = board.pieces(Piece::Pawn);
+        let white_pawns = pawns & board.color_combined(Color::White);
+        let black_pawns = pawns & board.color_combined(Color::Black);
 
         if white_pawns == self.white_pawns && black_pawns == self.black_pawns {
             Some(self.evaluation)
@@ -38,8 +40,10 @@ impl PawnCache {
 
     #[inline(always)]
     pub fn set(&mut self, ctx: &EvalContext, cache_entry: CachedPawnEvaluation) {
-        self.white_pawns = ctx.pawns_for(Color::White);
-        self.black_pawns = ctx.pawns_for(Color::Black);
+        let board = ctx.position.board;
+        let pawns = board.pieces(Piece::Pawn);
+        self.white_pawns = pawns & board.color_combined(Color::White);
+        self.black_pawns = pawns & board.color_combined(Color::Black);
         self.evaluation = cache_entry;
     }
 }

@@ -1,12 +1,10 @@
 // Move ordering inspired by Black Marlin
 
 use arrayvec::ArrayVec;
-use chess::{Board, ChessMove, MoveGen, Piece, Square};
+use chess::{BitBoard, Board, ChessMove, MoveGen, Piece, Square};
 use evaluation::piece_values::PieceValues;
 
-use crate::utils::{
-    gives_check, see, CaptureHistory, ContinuationHistory, HistoryHeuristic, ThreatMap,
-};
+use crate::utils::{gives_check, see, CaptureHistory, ContinuationHistory, HistoryHeuristic};
 
 // Should be enough to handle most positions
 pub const MAX_CAPTURES: usize = 32;
@@ -47,7 +45,7 @@ pub struct MainMoveGenerator {
 
     piece_values: PieceValues,
     quiet_check_bonus: i16,
-    threats: ThreatMap,
+    threats: BitBoard,
 }
 
 impl MainMoveGenerator {
@@ -58,7 +56,7 @@ impl MainMoveGenerator {
         game_phase: f32,
         piece_values: PieceValues,
         quiet_check_bonus: i16,
-        threats: ThreatMap,
+        threats: BitBoard,
     ) -> Self {
         Self {
             gen_phase: Phase::BestMove,
@@ -196,7 +194,7 @@ impl MainMoveGenerator {
                             board.side_to_move(),
                             mov.get_source(),
                             mov.get_dest(),
-                            &self.threats,
+                            self.threats,
                         );
 
                         let cont = continuation_history.get(

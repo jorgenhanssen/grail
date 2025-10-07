@@ -6,12 +6,14 @@ use chess::{
 
 #[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let my_pawns = ctx.pawns_for(color);
+    let board = ctx.position.board;
+    let pawns = board.pieces(chess::Piece::Pawn);
+    let my_pawns = pawns & board.color_combined(color);
     if my_pawns == EMPTY {
         return 0;
     }
 
-    let enemy_pawns = ctx.pawns_for(!color);
+    let enemy_pawns = pawns & board.color_combined(!color);
     let mut score = 0i16;
 
     // doubled / tripled / isolated penalties
@@ -109,6 +111,9 @@ fn is_backward_pawn(sq: Square, color: Color, my_pawns: BitBoard, enemy_pawns: B
         _ => return false, // Can't move forward
     };
 
+    // We use `color` here because we want the forward-diagonal attack squares
+    // from the stop square relative to our pawn. Those are exactly the squares
+    // enemy pawns must occupy to attack that stop square.
     if get_pawn_attacks(Square::make_square(stop_rank, file), color, enemy_pawns) != EMPTY {
         // Enemy pawns control the stop square - definitely backward
         return true;
