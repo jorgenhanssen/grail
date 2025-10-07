@@ -1,11 +1,11 @@
 use chess::{BitBoard, Board, Color};
 use std::cell::OnceCell;
 
-use crate::attacks::Attacks;
+use crate::board_metrics::BoardMetrics;
 
 pub struct Position<'a> {
     pub board: &'a Board,
-    attacks: OnceCell<Attacks>,
+    metrics: OnceCell<BoardMetrics>,
 }
 
 impl<'a> Position<'a> {
@@ -13,33 +13,33 @@ impl<'a> Position<'a> {
     pub fn new(board: &'a Board) -> Self {
         Self {
             board,
-            attacks: OnceCell::new(),
+            metrics: OnceCell::new(),
         }
     }
 
-    /// Get or compute the attack map (computed once, cached for reuse)
+    /// Get or compute the position metrics (computed once, cached for reuse)
     #[inline(always)]
-    fn attacks(&self) -> &Attacks {
-        self.attacks.get_or_init(|| Attacks::new(self.board))
+    fn metrics(&self) -> &BoardMetrics {
+        self.metrics.get_or_init(|| BoardMetrics::new(self.board))
     }
 
     #[inline(always)]
     pub fn space_for(&self, color: Color) -> i16 {
-        self.attacks().space[color.to_index()]
+        self.metrics().space[color.to_index()]
     }
 
     #[inline(always)]
     pub fn attacks_for(&self, color: Color) -> BitBoard {
-        self.attacks().attacks[color.to_index()]
+        self.metrics().attacks[color.to_index()]
     }
 
     #[inline(always)]
     pub fn threats_for(&self, color: Color) -> BitBoard {
-        self.attacks().threats[color.to_index()]
+        self.metrics().threats[color.to_index()]
     }
 
     #[inline(always)]
     pub fn support_for(&self, color: Color) -> BitBoard {
-        self.attacks().support[color.to_index()]
+        self.metrics().support[color.to_index()]
     }
 }

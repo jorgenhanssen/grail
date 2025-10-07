@@ -4,7 +4,7 @@ use chess::{
 };
 
 #[derive(Clone, Copy, Debug)]
-pub struct Attacks {
+pub struct BoardMetrics {
     // Total space (number of squares attacked/controlled) for each color
     pub space: [i16; NUM_COLORS],
 
@@ -18,7 +18,7 @@ pub struct Attacks {
     pub support: [BitBoard; NUM_COLORS],
 }
 
-impl Attacks {
+impl BoardMetrics {
     pub fn new(board: &Board) -> Self {
         let all_pieces = board.combined();
         let white_pieces = board.color_combined(Color::White);
