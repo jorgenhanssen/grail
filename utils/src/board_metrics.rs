@@ -49,7 +49,6 @@ impl BoardMetrics {
         let white_non_pawns = white_minors | white_majors;
         let black_non_pawns = black_minors | black_majors;
 
-        // Compute attacks and threats in a single pass for each color
         let (white_space, white_attacks, black_threats) = compute(
             Color::White,
             *white_pieces,
@@ -78,7 +77,7 @@ impl BoardMetrics {
             *all_pieces,
         );
 
-        // Compute support: which of our pieces are defended by our own pieces
+        // Which of our pieces are defended by our own pieces
         let white_support = white_attacks & *white_pieces;
         let black_support = black_attacks & *black_pieces;
 

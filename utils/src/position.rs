@@ -17,7 +17,7 @@ impl<'a> Position<'a> {
         }
     }
 
-    /// Get or compute the position metrics (computed once, cached for reuse)
+    // Get or compute the board metrics (computed once, cached for reuse)
     #[inline(always)]
     fn metrics(&self) -> &BoardMetrics {
         self.metrics.get_or_init(|| BoardMetrics::new(self.board))
