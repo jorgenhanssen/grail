@@ -279,7 +279,7 @@ impl NegamaxEngine {
         let best_move = self.current_pv.first().cloned();
 
         let position = utils::Position::new(&self.board);
-        let threats = position.threats();
+        let threats = position.threats_for(self.board.side_to_move());
 
         let prev_to = self
             .continuation_history
@@ -472,7 +472,7 @@ impl NegamaxEngine {
 
         let mut best_move_depth = depth;
 
-        let threats = position.threats();
+        let threats = position.threats_for(board.side_to_move());
 
         let prev_to = self
             .continuation_history

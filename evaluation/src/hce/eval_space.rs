@@ -6,7 +6,6 @@ use chess::Color;
 /// Uses cached attack map from Position (shared with threat detection)
 #[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let attack_map = ctx.position.attack_map();
-    let space = attack_map.space_for(color);
+    let space = ctx.position.space_for(color);
     config.space_multiplier * space
 }
