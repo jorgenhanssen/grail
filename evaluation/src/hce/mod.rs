@@ -2,10 +2,8 @@ mod config;
 mod context;
 mod eval_bishops;
 mod eval_king;
-mod eval_knights;
 mod eval_material;
 mod eval_pawns;
-mod eval_queens;
 mod eval_rooks;
 mod eval_space;
 mod eval_threats;
@@ -74,12 +72,6 @@ impl HCE for Evaluator {
 
         cp += eval_bishops::evaluate(&ctx, Color::White, &self.config);
         cp -= eval_bishops::evaluate(&ctx, Color::Black, &self.config);
-
-        cp += eval_knights::evaluate(&ctx, Color::White, &self.config);
-        cp -= eval_knights::evaluate(&ctx, Color::Black, &self.config);
-
-        cp += eval_queens::evaluate(&ctx, Color::White, &self.config);
-        cp -= eval_queens::evaluate(&ctx, Color::Black, &self.config);
 
         cp += eval_king::evaluate(&ctx, Color::White, &self.config);
         cp -= eval_king::evaluate(&ctx, Color::Black, &self.config);
