@@ -47,7 +47,4 @@ build-train-cuda:
 run-train-cuda:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo run --release -p nnue --bin train --features cuda
 
-build-tournament:
-	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin tournament
-
-build-all: build-grail build-generate build-train build-tournament
+build-all: build-grail build-generate build-train
