@@ -25,6 +25,4 @@ Cargo.lock
 # nnue models and data
 nnue/versions/
 
-tournament-games.pgn
-
 flamegraph.svg
