@@ -2,7 +2,7 @@ mod args;
 
 use args::Args;
 use candle_core::{DType, Device, Result as CandleResult, Tensor};
-use candle_nn::{loss::mse, AdamW, Module, Optimizer, ParamsAdamW, VarBuilder, VarMap};
+use candle_nn::{AdamW, Module, Optimizer, ParamsAdamW, VarBuilder, VarMap};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::LevelFilter;
@@ -11,6 +11,25 @@ use rand::seq::SliceRandom;
 use rand::thread_rng;
 use simplelog::{Config, SimpleLogger};
 use std::{error::Error, fs::File, io::BufReader};
+
+// Huber loss: quadratic for small errors, linear for large errors
+// This prevents mate scores from dominating the loss while still providing
+// strong gradients for learning subtle positional differences
+fn huber_loss(pred: &Tensor, target: &Tensor, delta: f64) -> CandleResult<Tensor> {
+    let diff = (pred - target)?;
+    let abs_diff = diff.abs()?;
+
+    // For |error| <= delta: 0.5 * error^2
+    // For |error| > delta: delta * (|error| - 0.5 * delta)
+    let quadratic = (diff.sqr()? * 0.5)?;
+    let linear = (((&abs_diff - delta * 0.5)?) * delta)?;
+
+    // Use where to select between quadratic and linear based on threshold
+    let mask = abs_diff.le(delta)?;
+    let loss = mask.where_cond(&quadratic, &linear)?;
+
+    loss.mean_all()
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = init()?;
@@ -43,8 +62,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
 
     log::info!("Training network");
-    let trainer = Trainer::new(args.batch_size, args.epochs);
-    trainer.fit(&net, &samples, &train_idx, &mut opt, &device, 0.1, 2)?;
+    let trainer = Trainer::new(args.batch_size, args.epochs, args.lr_decay);
+    trainer.fit(
+        &net,
+        &samples,
+        &train_idx,
+        &mut opt,
+        &device,
+        0.1,
+        args.early_stop_patience,
+    )?;
 
     evaluate(&net, &samples, &test_idx, &device, &manager)?;
 
@@ -59,11 +86,16 @@ fn main() -> Result<(), Box<dyn Error>> {
 struct Trainer {
     batch_size: usize,
     epochs: usize,
+    lr_decay: f64,
 }
 
 impl Trainer {
-    fn new(batch_size: usize, epochs: usize) -> Self {
-        Self { batch_size, epochs }
+    fn new(batch_size: usize, epochs: usize, lr_decay: f64) -> Self {
+        Self {
+            batch_size,
+            epochs,
+            lr_decay,
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -107,8 +139,14 @@ impl Trainer {
                 0.0
             };
 
-            progress_bar.set_message(format!("val: {:.0}, loss: {:.0}", val_loss, train_loss));
+            progress_bar.set_message(format!("val: {:.5}, loss: {:.5}", val_loss, train_loss));
             progress_bar.finish();
+
+            // Learning rate decay
+            if self.lr_decay < 1.0 {
+                let new_lr = opt.learning_rate() * self.lr_decay;
+                opt.set_learning_rate(new_lr);
+            }
 
             // Early stopping
             if val_loss < best_val_loss {
@@ -146,7 +184,7 @@ impl Trainer {
             batch_count += 1;
 
             let current_loss = epoch_loss_sum / batch_count as f32;
-            progress_bar.set_message(format!("loss: {:.0}", current_loss));
+            progress_bar.set_message(format!("loss: {:.5}", current_loss));
             progress_bar.inc(1);
         }
 
@@ -162,7 +200,10 @@ impl Trainer {
         y_batch: &Tensor,
     ) -> CandleResult<f32> {
         let preds = net.forward(x_batch)?;
-        let loss = mse(&preds, y_batch)?;
+        // Huber loss with delta=0.2 (in scaled space = 1000 cp)
+        // Errors < 1000 cp: quadratic loss (strong gradients)
+        // Errors > 1000 cp: linear loss (prevents outlier/mate domination)
+        let loss = huber_loss(&preds, y_batch, 0.2)?;
         opt.backward_step(&loss)?;
         f32::try_from(loss)
     }
@@ -181,7 +222,7 @@ impl Trainer {
         for batch_res in batched_iter {
             let (x_val, y_val) = batch_res?;
             let preds = net.forward(&x_val)?;
-            let loss = candle_nn::loss::mse(&preds, &y_val)?;
+            let loss = huber_loss(&preds, &y_val, 0.2)?;
             total_loss += f32::try_from(loss)?;
             batch_count += 1;
         }
@@ -236,7 +277,7 @@ fn evaluate(
     for batch_res in batched_iter {
         let (x_batch, y_batch) = batch_res?;
         let preds = net.forward(&x_batch)?;
-        let batch_loss = candle_nn::loss::mse(&preds, &y_batch)?;
+        let batch_loss = huber_loss(&preds, &y_batch, 0.2)?;
         total_loss += f32::try_from(batch_loss)?;
         total_count += 1;
 
@@ -260,7 +301,7 @@ fn evaluate(
     writeln!(file, "Label      Prediction")?;
     writeln!(file, "--------------------")?;
     for (label, pred) in all_labels.iter().zip(all_preds.iter()) {
-        writeln!(file, "{:<10.0} {:.0}", label, pred)?;
+        writeln!(file, "{:<10.0} {:.5}", label, pred)?;
     }
 
     log::info!("Evaluation written to {}", file_path.display());

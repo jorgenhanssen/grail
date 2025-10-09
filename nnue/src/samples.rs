@@ -7,6 +7,7 @@ use rand::rngs::ThreadRng;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 
 use crate::encoding::{encode_board, NUM_FEATURES};
+use crate::network::SCALE_FACTOR;
 
 pub const CP_MAX: i16 = 5000;
 pub const CP_MIN: i16 = -5000;
@@ -88,7 +89,8 @@ impl Samples {
                 Board::from_str(&fen).unwrap_or_else(|_| panic!("Invalid FEN in sample: {}", fen));
             let features = encode_board(&board);
             feature_data.extend_from_slice(&features);
-            score_data.push(score as f32);
+            // Scale the target by SCALE_FACTOR to normalize it
+            score_data.push((score as f32) / SCALE_FACTOR);
         }
 
         let x = Tensor::from_iter(feature_data.into_iter(), device)?
@@ -186,7 +188,8 @@ impl<'a> Iterator for BatchedSamplesIdx<'a> {
                 Board::from_str(fen).unwrap_or_else(|_| panic!("Invalid FEN in sample: {}", fen));
             let features = encode_board(&board);
             feature_data.extend_from_slice(&features);
-            score_data.push(score as f32);
+            // Scale the target by SCALE_FACTOR to normalize it
+            score_data.push((score as f32) / SCALE_FACTOR);
         }
 
         let x = match Tensor::from_iter(feature_data, self.device) {

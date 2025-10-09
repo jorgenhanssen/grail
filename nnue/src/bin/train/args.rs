@@ -5,12 +5,18 @@ use clap::Parser;
 #[command(author = "Jørgen Hanssen <jorgen@hanssen.io>")]
 #[command(version = "0.1.0")]
 pub struct Args {
-    #[arg(long, default_value_t = 30)]
+    #[arg(long, default_value_t = 100)]
     pub epochs: usize,
 
-    #[arg(long, default_value_t = 512)]
+    #[arg(long, default_value_t = 1024)]
     pub batch_size: usize,
 
-    #[arg(long, default_value_t = 0.004)]
+    #[arg(long, default_value_t = 0.001)]
     pub learning_rate: f64,
+
+    #[arg(long, default_value_t = 0.95)]
+    pub lr_decay: f64,
+
+    #[arg(long, default_value_t = 8)]
+    pub early_stop_patience: u64,
 }

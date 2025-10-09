@@ -3,12 +3,18 @@ use candle_nn::{linear, Linear, Module, VarBuilder};
 use std::simd::prelude::SimdFloat;
 
 use crate::encoding::{NUM_FEATURES, NUM_U64S};
+use crate::samples::CP_MAX;
 
 use std::simd::f32x8;
 const SIMD_WIDTH: usize = 8;
 
-const EMBEDDING_SIZE: usize = 256;
-const HIDDEN_SIZE: usize = 32;
+const EMBEDDING_SIZE: usize = 512;
+const HIDDEN1_SIZE: usize = 32;
+const HIDDEN2_SIZE: usize = 32;
+
+// Scale factor for output: we scale centipawns to [-1, 1] range for more stable training.
+// With CP_MAX=5000, SCALE_FACTOR=5000 gives us target range of ±1
+pub const SCALE_FACTOR: f32 = CP_MAX as f32;
 
 pub struct Network {
     embedding: Linear,
@@ -22,10 +28,10 @@ impl Network {
         let network = Self {
             embedding: linear(NUM_FEATURES, EMBEDDING_SIZE, vs.pp("embedding"))?,
 
-            hidden1: linear(EMBEDDING_SIZE, HIDDEN_SIZE, vs.pp("hidden1"))?,
-            hidden2: linear(HIDDEN_SIZE, HIDDEN_SIZE, vs.pp("hidden2"))?,
+            hidden1: linear(EMBEDDING_SIZE, HIDDEN1_SIZE, vs.pp("hidden1"))?,
+            hidden2: linear(HIDDEN1_SIZE, HIDDEN2_SIZE, vs.pp("hidden2"))?,
 
-            output: linear(HIDDEN_SIZE, 1, vs.pp("output"))?,
+            output: linear(HIDDEN2_SIZE, 1, vs.pp("output"))?,
         };
 
         Ok(network)
@@ -42,7 +48,9 @@ impl Module for Network {
         x = x.apply(&self.hidden1)?.relu()?;
         x = x.apply(&self.hidden2)?.relu()?;
 
-        // Output layer
+        // Output layer - linear output (no activation)
+        // Network learns to output in scaled space
+        // Scaling back to centipawns happens only during inference
         x = x.apply(&self.output)?;
 
         Ok(x)
@@ -100,8 +108,8 @@ pub struct NNUENetwork {
 
     // Accumulated state
     embedding_buffer: [f32; EMBEDDING_SIZE],
-    hidden1_buffer: [f32; HIDDEN_SIZE],
-    hidden2_buffer: [f32; HIDDEN_SIZE],
+    hidden1_buffer: [f32; HIDDEN1_SIZE],
+    hidden2_buffer: [f32; HIDDEN2_SIZE],
     output_buffer: [f32; 1],
 
     // Input state for change detection
@@ -131,8 +139,8 @@ impl NNUENetwork {
         let mut embedding_buffer = [0.0; EMBEDDING_SIZE];
         embedding_buffer.copy_from_slice(&embedding.biases);
 
-        let hidden1_buffer = [0.0; HIDDEN_SIZE];
-        let hidden2_buffer = [0.0; HIDDEN_SIZE];
+        let hidden1_buffer = [0.0; HIDDEN1_SIZE];
+        let hidden2_buffer = [0.0; HIDDEN2_SIZE];
         let output_buffer = [0.0; 1];
 
         let current_input = [0u64; NUM_U64S];
@@ -247,7 +255,8 @@ impl NNUENetwork {
         self.output
             .forward(&self.hidden2_buffer, &mut self.output_buffer);
 
-        self.output_buffer[0]
+        // Scale the output to centipawn space
+        self.output_buffer[0] * SCALE_FACTOR
     }
 
     // Forward pass with a pre-encoded bitset input. Skips float-to-bit conversion.
@@ -292,7 +301,8 @@ impl NNUENetwork {
         self.output
             .forward(&self.hidden2_buffer, &mut self.output_buffer);
 
-        self.output_buffer[0]
+        // Scale the output to centipawn space
+        self.output_buffer[0] * SCALE_FACTOR
     }
 }
 
