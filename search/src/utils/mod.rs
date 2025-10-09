@@ -1,11 +1,12 @@
 mod capture_history;
 mod continuation_history;
 mod history_heuristic;
+pub mod memory;
 mod move_order;
 mod see;
 
-use chess::{Board, Piece};
-pub use move_order::{MainMoveGenerator, QMoveGenerator};
+use chess::{Board, ChessMove, Piece};
+pub use move_order::{MainMoveGenerator, QMoveGenerator, MAX_CAPTURES, MAX_QUIETS};
 
 pub use capture_history::CaptureHistory;
 pub use continuation_history::ContinuationHistory;
@@ -65,4 +66,9 @@ pub fn convert_mate_score(score: i16) -> Score {
 #[inline(always)]
 pub fn convert_centipawn_score(score: i16) -> Score {
     Score::Centipawns(score)
+}
+
+#[inline(always)]
+pub fn gives_check(board: &Board, mv: ChessMove) -> bool {
+    board.make_move_new(mv).checkers().popcnt() > 0
 }

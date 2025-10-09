@@ -1,8 +1,8 @@
 [package]
-name = "evaluation"
+name = "utils"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 chess = { workspace = true }
-utils = { path = "../utils" }
+

@@ -56,7 +56,7 @@ define_config!(
     // Aspiration Windows - Search with tight bounds around expected score
     (aspiration_window_size: i16, "Aspiration Window Size", UciOptionType::Spin { min: 10, max: 100 }, 40, cfg!(feature = "tuning")), // Initial window size in centipawns
     (aspiration_window_widen: i16, "Aspiration Window Widening", UciOptionType::Spin { min: 2, max: 4 }, 2, cfg!(feature = "tuning")), // Factor to widen window on fail
-    (aspiration_window_depth: u8, "Aspiration Window Depth", UciOptionType::Spin { min: 1, max: 10 }, 4, cfg!(feature = "tuning")), // Minimum depth to use aspiration
+    (aspiration_window_depth: u8, "Aspiration Window Depth", UciOptionType::Spin { min: 1, max: 10 }, 5, cfg!(feature = "tuning")), // Minimum depth to use aspiration
     (aspiration_window_retries: i16, "Aspiration Window Retries", UciOptionType::Spin { min: 1, max: 5 }, 3, cfg!(feature = "tuning")), // Max retries before full window
 
     // History Heuristic - Track move success/failure for ordering
@@ -69,14 +69,17 @@ define_config!(
 
     // Capture History - Track capture move success for ordering
     (capture_history_max_value: i32, "Capture History Max Value", UciOptionType::Spin { min: 128, max: 1024 }, 512, cfg!(feature = "tuning")), // Maximum capture history score (absolute value)
-    (capture_history_bonus_multiplier: i32, "Capture History Bonus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")), // Scaling for successful captures
+    (capture_history_bonus_multiplier: i32, "Capture History Bonus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 9, cfg!(feature = "tuning")), // Scaling for successful captures
     (capture_history_malus_multiplier: i32, "Capture History Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 2, cfg!(feature = "tuning")), // Scaling for failed captures
 
     // Continuation History - Track move sequences for ordering
     (continuation_max_value: i32, "Continuation Max Value", UciOptionType::Spin { min: 128, max: 1024 }, 512, cfg!(feature = "tuning")), // Maximum continuation score (absolute value)
-    (continuation_max_moves: usize, "Continuation Max Moves", UciOptionType::Spin { min: 1, max: 4 }, 3, cfg!(feature = "tuning")), // Number of previous moves to consider
+    (continuation_max_moves: usize, "Continuation Max Moves", UciOptionType::Spin { min: 1, max: 4 }, 4, cfg!(feature = "tuning")), // Number of previous moves to consider
     (continuation_bonus_multiplier: i32, "Continuation Bonus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 9, cfg!(feature = "tuning")), // Scaling for successful continuations
-    (continuation_malus_multiplier: i32, "Continuation Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 9, cfg!(feature = "tuning")), // Scaling for failed continuations
+    (continuation_malus_multiplier: i32, "Continuation Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")), // Scaling for failed continuations
+
+    // Quiet Check Bonus - Bonus for quiet moves that check
+    (quiet_check_bonus: i16, "Quiet Check Bonus", UciOptionType::Spin { min: 0, max: 2000 }, 1000, cfg!(feature = "tuning")), // Bonus for quiet moves that check
 
     // Late Move Reduction - Reduce search depth for later moves
     (lmr_min_depth: u8, "LMR Min Depth", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")), // Minimum depth to apply LMR
@@ -84,13 +87,13 @@ define_config!(
     (lmr_max_reduction_ratio: i32, "LMR Max Reduction Ratio", UciOptionType::Spin { min: 10, max: 100 }, 50, cfg!(feature = "tuning")), // Max reduction as % of depth (half of depth as default)
 
     // Null Move Pruning - Skip a turn to test position strength
-    (nmp_min_depth: u8, "NMP Min Depth", UciOptionType::Spin { min: 2, max: 10 }, 3, cfg!(feature = "tuning")), // Minimum depth to try null move
+    (nmp_min_depth: u8, "NMP Min Depth", UciOptionType::Spin { min: 2, max: 10 }, 4, cfg!(feature = "tuning")), // Minimum depth to try null move
     (nmp_base_reduction: u8, "NMP Base Reduction", UciOptionType::Spin { min: 1, max: 10 }, 2, cfg!(feature = "tuning")), // Base depth reduction
     (nmp_depth_divisor: u8, "NMP Depth Divisor", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")), // Divide depth by this for extra reduction
     (nmp_eval_margin: i16, "NMP Eval Margin", UciOptionType::Spin { min: 0, max: 500 }, 200, cfg!(feature = "tuning")), // Eval margin for reduction adjustment
 
     // Late Move Pruning - Prune quiet moves after a limit based on depth
-    (lmp_max_depth: u8, "LMP Max Depth", UciOptionType::Spin { min: 0, max: 20 }, 9, cfg!(feature = "tuning")), // Maximum depth to apply LMP
+    (lmp_max_depth: u8, "LMP Max Depth", UciOptionType::Spin { min: 0, max: 20 }, 8, cfg!(feature = "tuning")), // Maximum depth to apply LMP
     (lmp_base_moves: i32, "LMP Base Moves", UciOptionType::Spin { min: 1, max: 10 }, 2, cfg!(feature = "tuning")), // Base move limit for formula
     (lmp_depth_multiplier: i32, "LMP Depth Multiplier", UciOptionType::Spin { min: 1, max: 10 }, 2, cfg!(feature = "tuning")), // Depth scaling factor for triangular formula
     (lmp_improving_reduction: i32, "LMP Improving Reduction", UciOptionType::Spin { min: 50, max: 100 }, 85, cfg!(feature = "tuning")), // Limit percentage when not improving
@@ -118,7 +121,6 @@ define_config!(
     // Internal Iterative Deepening - Search with reduced depth when no TT move
     (iid_reduction: u8, "IID Reduction", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")), // Depth reduction for IID search
 
-
     // Piece Values
     (piece_value_pawn_mg: f32, "Piece Value Pawn MG", UciOptionType::Spin { min: 50, max: 150 }, 98.0, cfg!(feature = "tuning")),
     (piece_value_pawn_eg: f32, "Piece Value Pawn EG", UciOptionType::Spin { min: 50, max: 150 }, 113.0, cfg!(feature = "tuning")),
@@ -138,8 +140,11 @@ define_config!(
     (hce_doubled_pawn_penalty: i16, "HCE Doubled Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 30, cfg!(feature = "tuning")),
     (hce_tripled_pawn_penalty: i16, "HCE Tripled Pawn Penalty", UciOptionType::Spin { min: 0, max: 150 }, 60, cfg!(feature = "tuning")),
     (hce_isolated_pawn_penalty: i16, "HCE Isolated Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 39, cfg!(feature = "tuning")),
+    (hce_backward_pawn_penalty: i16, "HCE Backward Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 20, cfg!(feature = "tuning")),
+    (hce_backward_pawn_half_open_penalty: i16, "HCE Backward Pawn Half Open Penalty", UciOptionType::Spin { min: 0, max: 50 }, 10, cfg!(feature = "tuning")),
+
     (hce_passed_pawn_linear: i16, "HCE Passed Pawn Linear", UciOptionType::Spin { min: 0, max: 20 }, 7, cfg!(feature = "tuning")),
-    (hce_passed_pawn_quadratic: i16, "HCE Passed Pawn Quadratic", UciOptionType::Spin { min: 0, max: 10 }, 3, cfg!(feature = "tuning")),
+    (hce_passed_pawn_quadratic: i16, "HCE Passed Pawn Quadratic", UciOptionType::Spin { min: 0, max: 10 }, 4, cfg!(feature = "tuning")),
 
     // Piece bonuses
     (hce_bishop_pair_bonus: i16, "HCE Bishop Pair Bonus", UciOptionType::Spin { min: 0, max: 150 }, 50, cfg!(feature = "tuning")),
@@ -147,11 +152,12 @@ define_config!(
     (hce_rook_semi_open_file_bonus: i16, "HCE Rook Semi-Open File Bonus", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
     (hce_rook_seventh_rank_bonus: i16, "HCE Rook Seventh Rank Bonus", UciOptionType::Spin { min: 0, max: 50 }, 20, cfg!(feature = "tuning")),
 
-    // Mobility multipliers
-    (hce_knight_mobility_multiplier: i16, "HCE Knight Mobility Multiplier", UciOptionType::Spin { min: 1, max: 10 }, 5, cfg!(feature = "tuning")),
-    (hce_bishop_mobility_multiplier: i16, "HCE Bishop Mobility Multiplier", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")),
-    (hce_rook_mobility_multiplier: i16, "HCE Rook Mobility Multiplier", UciOptionType::Spin { min: 1, max: 10 }, 4, cfg!(feature = "tuning")),
-    (hce_queen_mobility_multiplier: i16, "HCE Queen Mobility Multiplier", UciOptionType::Spin { min: 1, max: 5 }, 1, cfg!(feature = "tuning")),
+    // Space advantage
+    (hce_space_multiplier: i16, "HCE Space Multiplier", UciOptionType::Spin { min: 0, max: 10 }, 4, cfg!(feature = "tuning")),
+
+    // Piece coordination
+    (hce_supported_minor_bonus: i16, "HCE Supported Minor Bonus", UciOptionType::Spin { min: 0, max: 20 }, 5, cfg!(feature = "tuning")),
+    (hce_supported_major_bonus: i16, "HCE Supported Major Bonus", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
 
     // King safety - Pawn shield
     (hce_king_shield_r1_bonus: i16, "HCE King Shield R1 Bonus", UciOptionType::Spin { min: 0, max: 50 }, 12, cfg!(feature = "tuning")),
@@ -172,6 +178,9 @@ define_config!(
     // King safety - Positional
     (hce_king_central_penalty: i16, "HCE King Central Penalty", UciOptionType::Spin { min: 0, max: 50 }, 20, cfg!(feature = "tuning")),
     (hce_king_activity_bonus: i16, "HCE King Activity Bonus", UciOptionType::Spin { min: 0, max: 50 }, 14, cfg!(feature = "tuning")),
+
+    // Threats
+    (hce_threats_multiplier: i16, "HCE Threats Multiplier", UciOptionType::Spin { min: 0, max: 50 }, 20, cfg!(feature = "tuning")),
 
 );
 
@@ -199,6 +208,8 @@ impl EngineConfig {
             doubled_pawn_penalty: self.hce_doubled_pawn_penalty.value,
             tripled_pawn_penalty: self.hce_tripled_pawn_penalty.value,
             isolated_pawn_penalty: self.hce_isolated_pawn_penalty.value,
+            backward_pawn_penalty: self.hce_backward_pawn_penalty.value,
+            backward_pawn_half_open_penalty: self.hce_backward_pawn_half_open_penalty.value,
             passed_pawn_linear: self.hce_passed_pawn_linear.value,
             passed_pawn_quadratic: self.hce_passed_pawn_quadratic.value,
 
@@ -208,11 +219,12 @@ impl EngineConfig {
             rook_semi_open_file_bonus: self.hce_rook_semi_open_file_bonus.value,
             rook_seventh_rank_bonus: self.hce_rook_seventh_rank_bonus.value,
 
-            // Mobility multipliers
-            knight_mobility_multiplier: self.hce_knight_mobility_multiplier.value,
-            bishop_mobility_multiplier: self.hce_bishop_mobility_multiplier.value,
-            rook_mobility_multiplier: self.hce_rook_mobility_multiplier.value,
-            queen_mobility_multiplier: self.hce_queen_mobility_multiplier.value,
+            // Space advantage
+            space_multiplier: self.hce_space_multiplier.value,
+
+            // Piece coordination
+            supported_minor_bonus: self.hce_supported_minor_bonus.value,
+            supported_major_bonus: self.hce_supported_major_bonus.value,
 
             // King safety
             king_shield_r1_bonus: self.hce_king_shield_r1_bonus.value,
@@ -227,6 +239,9 @@ impl EngineConfig {
             king_pressure_pawn: self.hce_king_pressure_pawn.value,
             king_central_penalty: self.hce_king_central_penalty.value,
             king_activity_bonus: self.hce_king_activity_bonus.value,
+
+            // Threats
+            threats_multiplier: self.hce_threats_multiplier.value,
         }
     }
 }

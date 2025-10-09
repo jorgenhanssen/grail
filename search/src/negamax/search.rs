@@ -9,11 +9,13 @@ use crate::{
     },
     utils::{
         convert_centipawn_score, convert_mate_score, game_phase, see, CaptureHistory,
-        ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator,
+        ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator, MAX_CAPTURES,
+        MAX_QUIETS,
     },
     Engine,
 };
-use chess::{get_rank, Board, BoardStatus, ChessMove, Color, Piece, Rank};
+use arrayvec::ArrayVec;
+use chess::{get_rank, BitBoard, Board, BoardStatus, ChessMove, Color, Piece, Rank};
 use evaluation::PieceValues;
 use evaluation::{
     hce,
@@ -30,7 +32,9 @@ use uci::{
     UciOutput,
 };
 
-use super::utils::{improving, lmr, null_move_reduction, should_lmp_prune, RAZOR_NEAR_MATE};
+use super::utils::{
+    improving, lmr, mate_distance_prune, null_move_reduction, should_lmp_prune, RAZOR_NEAR_MATE,
+};
 use super::{
     controller::SearchController,
     qs_table::QSTable,
@@ -234,11 +238,11 @@ impl Engine for NegamaxEngine {
 
 impl NegamaxEngine {
     #[inline(always)]
-    fn eval(&mut self, board: &Board, phase: f32) -> i16 {
+    fn eval(&mut self, position: &utils::Position, phase: f32) -> i16 {
         if let Some(nnue) = &mut self.nnue {
-            nnue.evaluate(board)
+            nnue.evaluate(position.board)
         } else {
-            self.hce.evaluate(board, phase)
+            self.hce.evaluate(position, phase)
         }
     }
 
@@ -274,6 +278,9 @@ impl NegamaxEngine {
     ) -> (Option<ChessMove>, i16) {
         let best_move = self.current_pv.first().cloned();
 
+        let position = utils::Position::new(&self.board);
+        let threats = position.threats_for(self.board.side_to_move());
+
         let prev_to = self
             .continuation_history
             .get_prev_to_squares(&self.move_stack);
@@ -283,6 +290,8 @@ impl NegamaxEngine {
             &prev_to,
             game_phase(&self.board),
             self.config.get_piece_values(),
+            self.config.quiet_check_bonus.value,
+            threats,
         );
 
         let mut best_score = NEG_INFINITY;
@@ -331,7 +340,7 @@ impl NegamaxEngine {
         depth: u8,
         max_depth: u8,
         mut alpha: i16,
-        beta: i16,
+        mut beta: i16,
         try_null_move: bool,
         allow_iid: bool,
     ) -> (i16, Vec<ChessMove>) {
@@ -345,12 +354,10 @@ impl NegamaxEngine {
             return (0, Vec::new()); // repetition = draw
         }
 
-        // Terminal checks
-        match board.status() {
-            BoardStatus::Checkmate => return (-(MATE_VALUE - depth as i16), Vec::new()),
-            BoardStatus::Stalemate => return (0, Vec::new()),
-            BoardStatus::Ongoing => {}
+        if mate_distance_prune(&mut alpha, &mut beta, depth) {
+            return (alpha, Vec::new());
         }
+
         if depth >= max_depth {
             return self.quiescence_search(board, alpha, beta, depth);
         }
@@ -389,10 +396,12 @@ impl NegamaxEngine {
         let remaining_depth = max_depth - depth;
         let in_check = board.checkers().popcnt() > 0;
 
+        let position = utils::Position::new(board);
+
         let static_eval = if let Some(tt_se) = tt_static_eval {
             tt_se // Cached in TT
         } else {
-            let eval = self.eval(board, phase);
+            let eval = self.eval(&position, phase);
             if board.side_to_move() == Color::White {
                 eval
             } else {
@@ -463,20 +472,25 @@ impl NegamaxEngine {
 
         let mut best_move_depth = depth;
 
+        let threats = position.threats_for(board.side_to_move());
+
         let prev_to = self
             .continuation_history
             .get_prev_to_squares(&self.move_stack);
+
         let mut movegen = MainMoveGenerator::new(
             maybe_tt_move,
             self.killer_moves[depth as usize],
             &prev_to,
             phase,
             self.config.get_piece_values(),
+            self.config.quiet_check_bonus.value,
+            threats,
         );
 
         // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff
-        let mut quiets_searched: Vec<ChessMove> = Vec::with_capacity(8);
-        let mut captures_searched: Vec<ChessMove> = Vec::with_capacity(8);
+        let mut quiets_searched: ArrayVec<ChessMove, { MAX_QUIETS }> = ArrayVec::new();
+        let mut captures_searched: ArrayVec<ChessMove, { MAX_CAPTURES }> = ArrayVec::new();
 
         let mut move_index = -1;
         while let Some(m) = movegen.next(
@@ -516,6 +530,7 @@ impl NegamaxEngine {
                 move_index,
                 is_improving,
                 static_eval,
+                threats,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
                     break;
@@ -539,6 +554,7 @@ impl NegamaxEngine {
                         is_quiet,
                         &quiets_searched,
                         &captures_searched,
+                        threats,
                     );
 
                     break; // beta cutoff
@@ -547,15 +563,25 @@ impl NegamaxEngine {
                 if is_quiet {
                     // If we have a quiet move later that causes a cutoff, then this
                     // move should have been sorted after, so let's punish it!
-                    quiets_searched.push(m);
+                    let _ = quiets_searched.try_push(m);
                 } else {
                     // Similarly track captures that didn't cause cutoff
-                    captures_searched.push(m);
+                    let _ = captures_searched.try_push(m);
                 }
             }
         }
 
         self.eval_stack.pop();
+
+        // Check for terminal position (no legal moves)
+        if move_index == -1 {
+            // No moves were found - either checkmate or stalemate
+            return if in_check {
+                (-(MATE_VALUE - depth as i16), Vec::new()) // Checkmate
+            } else {
+                (0, Vec::new()) // Stalemate
+            };
+        }
 
         // Store TT entry with the depth actually searched for the best move
         self.tt.store(
@@ -586,8 +612,14 @@ impl NegamaxEngine {
         move_index: i32,
         is_improving: bool,
         static_eval: i16,
+        pre_move_threats: BitBoard,
     ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
         let new_board = board.make_move_new(m);
+        let child_hash = new_board.get_hash();
+
+        // Prefetch TT entry for child position to hide memory latency
+        self.tt.prefetch(child_hash);
+
         let gives_check = new_board.checkers().popcnt() > 0;
 
         // Consider move tactical if it's check, capture, or promotion
@@ -612,6 +644,7 @@ impl NegamaxEngine {
             self.config.lmr_divisor.value as f32 / 100.0,
             self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
         );
+
         let alpha_child = alpha;
         let beta_child = if !is_pv_move { alpha + 1 } else { beta };
 
@@ -628,6 +661,7 @@ impl NegamaxEngine {
             move_index,
             is_improving,
             &mut reduction,
+            pre_move_threats,
         ) {
             return None;
         }
@@ -687,7 +721,7 @@ impl NegamaxEngine {
         &mut self,
         board: &Board,
         mut alpha: i16,
-        beta: i16,
+        mut beta: i16,
         depth: u8,
     ) -> (i16, Vec<ChessMove>) {
         // Check if we should stop searching
@@ -703,14 +737,8 @@ impl NegamaxEngine {
             return (0, Vec::new()); // Treat as a draw
         }
 
-        match board.status() {
-            BoardStatus::Checkmate => {
-                return (-(MATE_VALUE - depth as i16), Vec::new());
-            }
-            BoardStatus::Stalemate => {
-                return (0, Vec::new());
-            }
-            BoardStatus::Ongoing => {}
+        if mate_distance_prune(&mut alpha, &mut beta, depth) {
+            return (alpha, Vec::new());
         }
 
         let in_check = board.checkers().popcnt() > 0;
@@ -728,8 +756,9 @@ impl NegamaxEngine {
         }
 
         let phase = game_phase(board);
+        let position = utils::Position::new(board);
 
-        let eval = self.eval(board, phase);
+        let eval = self.eval(&position, phase);
         let stand_pat = if board.side_to_move() == Color::White {
             eval
         } else {
@@ -813,13 +842,29 @@ impl NegamaxEngine {
                 }
             }
 
-            if !in_check && see(board, mv, phase, &self.piece_values) < 0 {
-                continue;
+            // Use MVV-LVA for quick pruning before expensive SEE
+            if !in_check {
+                if let Some(victim) = board.piece_on(mv.get_dest()) {
+                    if let Some(attacker) = board.piece_on(mv.get_source()) {
+                        let victim_value = self.piece_values.get(victim, phase);
+                        let attacker_value = self.piece_values.get(attacker, phase);
+                        // Only run expensive SEE if capture seems questionable (equal/lower value)
+                        if victim_value <= attacker_value
+                            && see(board, mv, phase, &self.piece_values) < 0
+                        {
+                            continue;
+                        }
+                    }
+                }
             }
 
             let new_board = board.make_move_new(mv);
+            let child_hash = new_board.get_hash();
 
-            self.position_stack.push(new_board.get_hash());
+            // Prefetch QS TT entry to hide memory latency
+            self.qs_tt.prefetch(child_hash);
+
+            self.position_stack.push(child_hash);
             let (child_score, mut child_line) =
                 self.quiescence_search(&new_board, -beta, -alpha, depth + 1);
             self.position_stack.pop();
@@ -843,6 +888,11 @@ impl NegamaxEngine {
             }
         }
 
+        // If in check and no legal moves improved the position, it's checkmate
+        if in_check && best_eval == NEG_INFINITY {
+            return (-(MATE_VALUE - depth as i16), Vec::new());
+        }
+
         self.qs_tt
             .store(hash, best_eval, original_alpha, original_beta, in_check);
         (best_eval, best_line)
@@ -859,6 +909,7 @@ impl NegamaxEngine {
         is_quiet: bool,
         quiets_searched: &[ChessMove],
         captures_searched: &[ChessMove],
+        threats: BitBoard,
     ) {
         let prev_to = self
             .continuation_history
@@ -873,7 +924,7 @@ impl NegamaxEngine {
 
             // Boost the quiet move that caused the cutoff
             let bonus = self.history_heuristic.get_bonus(remaining_depth);
-            self.history_heuristic.update(board, mv, bonus);
+            self.history_heuristic.update(board, mv, bonus, threats);
 
             // Continuation history bonus for quiet cutoff move
             let cont_bonus = self.continuation_history.get_bonus(remaining_depth);
@@ -889,7 +940,8 @@ impl NegamaxEngine {
             // Apply malus to all previously searched quiet moves
             let quiet_malus = self.history_heuristic.get_malus(remaining_depth);
             for &q in quiets_searched {
-                self.history_heuristic.update(board, q, quiet_malus);
+                self.history_heuristic
+                    .update(board, q, quiet_malus, threats);
             }
 
             // Continuation history malus for previously searched quiets
@@ -1014,6 +1066,7 @@ impl NegamaxEngine {
     ) -> Option<i16> {
         // Null move pruning: if giving the opponent a free move still doesn't let
         // them reach beta, the position is strong enough to prune
+
         if !(try_null_move
             && can_null_move_prune(
                 board,
@@ -1105,6 +1158,7 @@ impl NegamaxEngine {
         ) {
             return None;
         }
+
         let margin = rfp_margin(
             remaining_depth,
             self.config.rfp_base_margin.value,

@@ -16,9 +16,11 @@ pub fn see(board: &Board, mv: ChessMove, phase: f32, piece_values: &PieceValues)
         initial_gain += piece_values.get(promo, phase) - piece_values.get(Piece::Pawn, phase);
     }
 
-    // Gains list stores the net gain after each ply using the CPW swaplist method
-    let mut gains: Vec<i16> = Vec::with_capacity(8);
-    gains.push(initial_gain);
+    // Gains list stores the net gain after each ply using the CPW swaplist method.
+    // 16 max captures should be safe.
+    let mut gains: [i16; 16] = [0; 16];
+    let mut gains_length = 1;
+    gains[0] = initial_gain;
 
     // Simulate alternating recaptures choosing the least valuable attacker each time
     let mut current_board = board.make_move_new(mv);
@@ -45,12 +47,14 @@ pub fn see(board: &Board, mv: ChessMove, phase: f32, piece_values: &PieceValues)
         match best_recapture {
             Some(best) => {
                 // Forward pass: net gain at this ply is captured piece value minus previous net
-                let prev = *gains.last().unwrap();
+                let prev = gains[gains_length - 1];
                 let captured_piece = current_board
                     .piece_on(target)
                     .expect("target must be occupied before recapture");
                 let captured_value = piece_values.get(captured_piece, phase);
-                gains.push(captured_value - prev);
+
+                gains[gains_length] = captured_value - prev;
+                gains_length += 1;
                 current_board = current_board.make_move_new(best);
             }
             None => break,
@@ -58,7 +62,7 @@ pub fn see(board: &Board, mv: ChessMove, phase: f32, piece_values: &PieceValues)
     }
 
     // Backward induction (CPW): gains[i-1] = -max(-gains[i-1], gains[i])
-    let mut i = gains.len();
+    let mut i = gains_length;
     while i > 1 {
         let next = gains[i - 1];
         let prev = gains[i - 2];

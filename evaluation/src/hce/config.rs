@@ -6,8 +6,10 @@ pub struct HCEConfig {
     pub doubled_pawn_penalty: i16,
     pub tripled_pawn_penalty: i16,
     pub isolated_pawn_penalty: i16,
-    pub passed_pawn_linear: i16, // Linear component of passed pawn bonus
-    pub passed_pawn_quadratic: i16, // Quadratic component (rank-1)^2
+    pub backward_pawn_penalty: i16,
+    pub backward_pawn_half_open_penalty: i16, // Extra penalty if on half-open file
+    pub passed_pawn_linear: i16,              // Linear component of passed pawn bonus
+    pub passed_pawn_quadratic: i16,           // Quadratic component (rank-1)^2
 
     // Piece bonuses
     pub bishop_pair_bonus: i16,
@@ -15,11 +17,12 @@ pub struct HCEConfig {
     pub rook_semi_open_file_bonus: i16,
     pub rook_seventh_rank_bonus: i16,
 
-    // Mobility multipliers
-    pub knight_mobility_multiplier: i16,
-    pub bishop_mobility_multiplier: i16,
-    pub rook_mobility_multiplier: i16,
-    pub queen_mobility_multiplier: i16,
+    // Space advantage
+    pub space_multiplier: i16,
+
+    // Piece coordination
+    pub supported_minor_bonus: i16, // bonus for defended knights/bishops
+    pub supported_major_bonus: i16, // bonus for defended rooks/queens
 
     // King safety - Pawn shield
     pub king_shield_r1_bonus: i16, // pawns on 2nd/7th ranks
@@ -40,4 +43,7 @@ pub struct HCEConfig {
     // King safety - Positional
     pub king_central_penalty: i16, // penalty for central king in middlegame
     pub king_activity_bonus: i16,  // endgame king activity multiplier
+
+    // Threats
+    pub threats_multiplier: i16,
 }

@@ -1,14 +1,19 @@
 use super::HCEConfig;
-use chess::{get_adjacent_files, get_file, BitBoard, Board, Color, Piece, ALL_FILES, EMPTY};
+use crate::hce::context::EvalContext;
+use chess::{
+    get_adjacent_files, get_file, get_pawn_attacks, BitBoard, Color, Rank, Square, ALL_FILES, EMPTY,
+};
 
 #[inline(always)]
-pub(super) fn evaluate(board: &Board, color: Color, config: &HCEConfig) -> i16 {
-    let my_pawns = board.pieces(Piece::Pawn) & board.color_combined(color);
+pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
+    let board = ctx.position.board;
+    let pawns = board.pieces(chess::Piece::Pawn);
+    let my_pawns = pawns & board.color_combined(color);
     if my_pawns == EMPTY {
         return 0;
     }
 
-    let enemy_pawns = board.pieces(Piece::Pawn) & board.color_combined(!color);
+    let enemy_pawns = pawns & board.color_combined(!color);
     let mut score = 0i16;
 
     // doubled / tripled / isolated penalties
@@ -32,8 +37,9 @@ pub(super) fn evaluate(board: &Board, color: Color, config: &HCEConfig) -> i16 {
         }
     }
 
-    // passed-pawn bonus
+    // passed-pawn bonus and backward pawn penalty
     for sq in my_pawns {
+        // Passed pawn bonus
         let blockers = PASSED_PAWN_MASKS[color as usize][sq.to_index()];
         if (enemy_pawns & blockers).popcnt() == 0 {
             // convert to white's perspective: rank 0..7
@@ -51,9 +57,71 @@ pub(super) fn evaluate(board: &Board, color: Color, config: &HCEConfig) -> i16 {
                 score += bonus;
             }
         }
+
+        // Backward pawn penalty
+        if is_backward_pawn(sq, color, my_pawns, enemy_pawns) {
+            score -= config.backward_pawn_penalty;
+
+            // Extra penalty if on a half-open file (no enemy pawns to block it)
+            let file_mask = get_file(sq.get_file());
+            if (enemy_pawns & file_mask).popcnt() == 0 {
+                score -= config.backward_pawn_half_open_penalty;
+            }
+        }
     }
 
     score
+}
+
+// Check if a pawn is backward (https://www.chessprogramming.org/Backward_Pawn)
+//
+// A backward pawn is a positional weakness defined by:
+// 1. Behind ALL friendly pawns on adjacent files (no pawn can defend it)
+// 2. Stop square (one square ahead) is unsafe to push to
+#[inline(always)]
+fn is_backward_pawn(sq: Square, color: Color, my_pawns: BitBoard, enemy_pawns: BitBoard) -> bool {
+    let file = sq.get_file();
+    let rank = sq.get_rank();
+
+    let friendly_adjacent_pawns = my_pawns & get_adjacent_files(file);
+
+    if friendly_adjacent_pawns == EMPTY {
+        // No pawns on adjacent files - not backward, just isolated
+        return false;
+    }
+
+    // Check if any adjacent pawn is behind or level with this pawn
+    for adjacent_pawn in friendly_adjacent_pawns {
+        let adjacent_rank = adjacent_pawn.get_rank();
+        let is_behind_or_level = match color {
+            Color::White => adjacent_rank.to_index() <= rank.to_index(),
+            Color::Black => adjacent_rank.to_index() >= rank.to_index(),
+        };
+
+        if is_behind_or_level {
+            // Found a pawn that could potentially support - not backward
+            return false;
+        }
+    }
+
+    // Check if stop square is safely pushable
+    let stop_rank = match color {
+        Color::White if rank.to_index() < 7 => Rank::from_index(rank.to_index() + 1),
+        Color::Black if rank.to_index() > 0 => Rank::from_index(rank.to_index() - 1),
+        _ => return false, // Can't move forward
+    };
+
+    // We use `color` here because we want the forward-diagonal attack squares
+    // from the stop square relative to our pawn. Those are exactly the squares
+    // enemy pawns must occupy to attack that stop square.
+    if get_pawn_attacks(Square::make_square(stop_rank, file), color, enemy_pawns) != EMPTY {
+        // Enemy pawns control the stop square - definitely backward
+        return true;
+    }
+
+    // Behind friendly pawns but stop square not attacked by enemy pawns.
+    // Still backward because it lacks pawn support to push safely.
+    true
 }
 
 /// Pre-computed passed-pawn masks: [color][square].

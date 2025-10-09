@@ -6,10 +6,9 @@ COMMAND="negamax"
 DEPTH=16
 
 # --- Baselines
-baseline_time=(737 1316 175 1993 286 173 620 265 711 389)
-baseline_nodes=(1860597 3079967 545868 5005595 800335 530061 1563257 854798 1798116 1050657)
-baseline_nps=(2522333 2339387 3115122 2511576 2794017 3056395 2519951 3223967 2527620 2697382)
-
+baseline_time=(540 1471 239 2794 206 256 550 156 800 371)
+baseline_nodes=(1577862 3917792 862543 8219509 679189 875228 1635425 591480 2333411 1176205)
+baseline_nps=(2917867 2663135 3603894 2940985 3291961 3414679 2970034 3769756 2914566 3164365)
 
 FENS=(
   "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -34,7 +33,7 @@ sum_dnps=0
 ok=0
 
 # Build the engine
-make build-grail
+# make build-grail
 
 # --- Header
 echo "| FEN # | Time (ms) | Δ        | Nodes     | Δ        | NPS     | Δ        |"

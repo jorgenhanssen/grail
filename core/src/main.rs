@@ -1,4 +1,5 @@
 mod args;
+mod bench;
 mod engine;
 mod nnue;
 
@@ -17,6 +18,12 @@ const ENGINE_AUTHOR: &str = "Jørgen Hanssen";
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = init()?;
+
+    // If bench is specified, run benchmark and exit
+    if let Some(depth) = args.bench {
+        bench::run(&args, depth);
+        return Ok(());
+    }
 
     let mut uci = UciConnection::new();
 
