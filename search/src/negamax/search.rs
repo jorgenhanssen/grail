@@ -531,6 +531,7 @@ impl NegamaxEngine {
                 is_improving,
                 static_eval,
                 threats,
+                phase,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
                     break;
@@ -613,6 +614,7 @@ impl NegamaxEngine {
         is_improving: bool,
         static_eval: i16,
         pre_move_threats: BitBoard,
+        phase: f32,
     ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
         let new_board = board.make_move_new(m);
         let child_hash = new_board.get_hash();
@@ -627,8 +629,17 @@ impl NegamaxEngine {
         let is_promotion = m.get_promotion() == Some(Piece::Queen);
         let is_tactical = in_check || gives_check || is_capture || is_promotion;
 
-        // Futility prune
-        if self.try_futility_prune(remaining_depth, in_check, is_tactical, alpha, static_eval) {
+        // AEL-style futility pruning: check if static_eval + margin + material_gain <= alpha
+        if self.try_futility_prune(
+            board,
+            m,
+            remaining_depth,
+            in_check,
+            gives_check,
+            alpha,
+            static_eval,
+            phase,
+        ) {
             return None;
         }
 
@@ -993,15 +1004,24 @@ impl NegamaxEngine {
             .unwrap();
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     fn try_futility_prune(
         &self,
+        board: &Board,
+        mv: ChessMove,
         remaining_depth: u8,
         in_check: bool,
-        is_tactical: bool,
+        gives_check: bool,
         alpha: i16,
         static_eval: i16,
+        phase: f32,
     ) -> bool {
+        // Don't prune checks or when in check
+        if in_check || gives_check {
+            return false;
+        }
+
         if !can_futility_prune(
             remaining_depth,
             in_check,
@@ -1009,12 +1029,30 @@ impl NegamaxEngine {
         ) {
             return false;
         }
+
+        // Calculate futility margin based on remaining depth
         let margin = futility_margin(
             remaining_depth,
             self.config.futility_base_margin.value,
             self.config.futility_depth_multiplier.value,
         );
-        !is_tactical && static_eval + margin <= alpha
+
+        // Calculate material gain from this move
+        let mut material_gain = 0;
+
+        // Capture value
+        if let Some(captured_piece) = board.piece_on(mv.get_dest()) {
+            material_gain += self.piece_values.get(captured_piece, phase);
+        }
+
+        // Promotion value (net gain = promoted piece - pawn)
+        if let Some(promo_piece) = mv.get_promotion() {
+            material_gain += self.piece_values.get(promo_piece, phase)
+                - self.piece_values.get(Piece::Pawn, phase);
+        }
+
+        // AEL-style futility: prune if even with material gain we can't beat alpha
+        static_eval + margin + material_gain <= alpha
     }
 
     #[allow(clippy::too_many_arguments)]
