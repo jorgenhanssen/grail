@@ -22,10 +22,12 @@ pub struct TTEntry {
     pub depth: u8,
     pub bound: Bound,
     pub best_move_packed: u16,
+    pub generation: u8, // Tracks freshness (increments per search)
 }
 
 impl TTEntry {
     #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
     pub fn set(
         &mut self,
         key: u64,
@@ -34,6 +36,7 @@ impl TTEntry {
         static_eval: i16,
         bound: Bound,
         best_move_packed: u16,
+        generation: u8,
     ) {
         self.key = key;
         self.depth = depth;
@@ -41,6 +44,7 @@ impl TTEntry {
         self.static_eval = static_eval;
         self.bound = bound;
         self.best_move_packed = best_move_packed;
+        self.generation = generation;
     }
 }
 
@@ -50,6 +54,7 @@ const MIN_BUCKETS: usize = 1024;
 pub struct TranspositionTable {
     entries: Vec<TTEntry>,
     mask: usize,
+    generation: u8,
 }
 
 impl TranspositionTable {
@@ -68,6 +73,7 @@ impl TranspositionTable {
         Self {
             entries: vec![TTEntry::default(); total_entries],
             mask: buckets - 1,
+            generation: 0,
         }
     }
 
@@ -79,6 +85,12 @@ impl TranspositionTable {
             let size = self.entries.len() * size_of::<TTEntry>();
             std::ptr::write_bytes(ptr, 0, size);
         }
+        self.generation = 0;
+    }
+
+    #[inline(always)]
+    pub fn age(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
     }
 
     // Prefetch TT entry into cache
@@ -211,11 +223,24 @@ impl TranspositionTable {
         let end = base + CLUSTER_SIZE;
 
         let cluster = &mut self.entries[base..end];
+        let current_gen = self.generation;
 
-        // 1) Exact key hit: update if new info is at least as deep
+        // Depth bonus for valuable bound types (exact/lower more useful than upper)
+        let depth_bonus = |b: Bound| -> i16 {
+            match b {
+                Bound::Exact | Bound::Lower => 1,
+                Bound::Upper => 0,
+            }
+        };
+
+        // 1) Exact key hit: Replace only if deeper or better bound (depth-preferential)
         for e in cluster.iter_mut() {
             if e.key == hash {
-                if stored_depth >= e.depth {
+                let new_value = stored_depth as i16 + depth_bonus(bound);
+                let old_value = e.depth as i16 + depth_bonus(e.bound);
+
+                // Only replace if new entry is better (deeper or better bound type)
+                if new_value >= old_value {
                     e.set(
                         hash,
                         stored_depth,
@@ -223,6 +248,7 @@ impl TranspositionTable {
                         stored_se,
                         bound,
                         best_move_packed,
+                        current_gen,
                     );
                 }
                 return;
@@ -239,18 +265,28 @@ impl TranspositionTable {
                     stored_se,
                     bound,
                     best_move_packed,
+                    current_gen,
                 );
                 return;
             }
         }
 
-        // 3) Simple depth-preferential replacement (proven strategy)
+        // 3) Find victim: depth-preferential with age and bound considerations
+        // Prefer replacing: shallow entries, old entries, upper bounds
         let mut victim_idx = 0;
-        let mut min_depth = cluster[0].depth;
+        let mut min_score = i16::MAX;
 
-        for (i, entry) in cluster.iter().enumerate().skip(1) {
-            if entry.depth < min_depth {
-                min_depth = entry.depth;
+        for (i, entry) in cluster.iter().enumerate() {
+            let age = current_gen.wrapping_sub(entry.generation) as i16;
+            let entry_depth = entry.depth as i16 + depth_bonus(entry.bound);
+
+            // Score = depth value - age penalty
+            // Lower score = better candidate for replacement
+            // Age penalty divided by 8 to be gentle (only matters in tournaments)
+            let score = entry_depth - (age / 8);
+
+            if score < min_score {
+                min_score = score;
                 victim_idx = i;
             }
         }
@@ -262,6 +298,7 @@ impl TranspositionTable {
             stored_se,
             bound,
             best_move_packed,
+            current_gen,
         );
     }
 }
