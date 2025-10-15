@@ -180,7 +180,7 @@ define_config!(
     (hce_king_activity_bonus: i16, "HCE King Activity Bonus", UciOptionType::Spin { min: 0, max: 50 }, 14, cfg!(feature = "tuning")),
 
     // Threats
-    (hce_threats_multiplier: i16, "HCE Threats Multiplier", UciOptionType::Spin { min: 0, max: 50 }, 20, cfg!(feature = "tuning")),
+    (hce_threats_multiplier: i16, "HCE Threats Multiplier", UciOptionType::Spin { min: 0, max: 100 }, 50, cfg!(feature = "tuning")),
 
 );
 
