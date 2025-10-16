@@ -17,7 +17,7 @@ struct QSEntry {
 
 pub struct QSTable {
     entries: Vec<QSEntry>,
-    mask: usize,
+    buckets: usize,
 }
 
 impl QSTable {
@@ -26,16 +26,13 @@ impl QSTable {
         let bytes = mb.saturating_mul(1024 * 1024);
         let entry_size = size_of::<QSEntry>().max(1);
         let max_entries = (bytes / entry_size).max(CLUSTER_SIZE);
-        let buckets = {
-            let b = max_entries.div_ceil(CLUSTER_SIZE);
-            let b = b.max(MIN_BUCKETS);
-            b.next_power_of_two()
-        };
+
+        let buckets = (max_entries / CLUSTER_SIZE).max(MIN_BUCKETS);
         let total_entries = buckets * CLUSTER_SIZE;
 
         Self {
             entries: vec![QSEntry::default(); total_entries],
-            mask: buckets - 1,
+            buckets,
         }
     }
 
@@ -50,7 +47,7 @@ impl QSTable {
 
     #[inline(always)]
     fn cluster_start(&self, mixed_key: u64) -> usize {
-        let idx = (mixed_key as usize) & self.mask;
+        let idx = (mixed_key as usize) % self.buckets;
         idx * CLUSTER_SIZE
     }
 

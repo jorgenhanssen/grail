@@ -49,7 +49,7 @@ const MIN_BUCKETS: usize = 1024;
 
 pub struct TranspositionTable {
     entries: Vec<TTEntry>,
-    mask: usize,
+    buckets: usize,
 }
 
 impl TranspositionTable {
@@ -58,16 +58,13 @@ impl TranspositionTable {
         let bytes = mb.saturating_mul(1024 * 1024);
         let entry_size = size_of::<TTEntry>().max(1);
         let max_entries = (bytes / entry_size).max(CLUSTER_SIZE);
-        let buckets = {
-            let b = max_entries.div_ceil(CLUSTER_SIZE);
-            let b = b.max(MIN_BUCKETS);
-            b.next_power_of_two()
-        };
+
+        let buckets = (max_entries / CLUSTER_SIZE).max(MIN_BUCKETS);
         let total_entries = buckets * CLUSTER_SIZE;
 
         Self {
             entries: vec![TTEntry::default(); total_entries],
-            mask: buckets - 1,
+            buckets,
         }
     }
 
@@ -84,7 +81,7 @@ impl TranspositionTable {
     // Prefetch TT entry into cache
     #[inline(always)]
     pub fn prefetch(&self, hash: u64) {
-        let idx = (hash as usize) & self.mask;
+        let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
 
         unsafe {
@@ -101,7 +98,7 @@ impl TranspositionTable {
         max_depth: u8,
     ) -> Option<(i16, Bound, Option<ChessMove>, Option<i16>)> {
         let needed_depth = max_depth - depth;
-        let idx = (hash as usize) & self.mask;
+        let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
 
         // Compare entries (4 at a time with SIMD)
@@ -137,7 +134,7 @@ impl TranspositionTable {
 
     #[inline(always)]
     pub fn probe_hint(&self, hash: u64) -> Option<(Option<ChessMove>, Option<i16>)> {
-        let idx = (hash as usize) & self.mask;
+        let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
 
         let cluster = &self.entries[base..base + 4];
@@ -206,7 +203,7 @@ impl TranspositionTable {
         let stored_value = value;
         let stored_se = static_eval.unwrap_or(i16::MIN);
 
-        let idx = (hash as usize) & self.mask;
+        let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
         let end = base + CLUSTER_SIZE;
 
