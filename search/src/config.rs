@@ -51,7 +51,7 @@ macro_rules! define_config {
 
 define_config!(
     // Standard UCI parameters
-    (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 1024 }, 384, true),
+    (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 2048 }, 1024, true),
 
     // Aspiration Windows - Search with tight bounds around expected score
     (aspiration_window_size: i16, "Aspiration Window Size", UciOptionType::Spin { min: 10, max: 100 }, 40, cfg!(feature = "tuning")), // Initial window size in centipawns

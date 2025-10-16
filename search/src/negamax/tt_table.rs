@@ -2,7 +2,7 @@ use crate::negamax::utils::MATE_SCORE_BOUND;
 use chess::{ChessMove, Piece, Square};
 use std::mem::size_of;
 use std::simd::prelude::SimdPartialEq;
-use std::simd::u64x4;
+use std::simd::u32x4;
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum Bound {
@@ -16,24 +16,27 @@ pub enum Bound {
 #[repr(C)]
 pub struct TTEntry {
     // 0 = empty slot
-    pub key: u64,
+    pub key: u32,
     pub value: i16,
     pub static_eval: i16, // i16::MIN denotes "unknown"
     pub depth: u8,
     pub bound: Bound,
     pub best_move_packed: u16,
+    pub generation: u8, // Tracks freshness (increments per search)
 }
 
 impl TTEntry {
     #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
     pub fn set(
         &mut self,
-        key: u64,
+        key: u32,
         depth: u8,
         value: i16,
         static_eval: i16,
         bound: Bound,
         best_move_packed: u16,
+        generation: u8,
     ) {
         self.key = key;
         self.depth = depth;
@@ -41,6 +44,7 @@ impl TTEntry {
         self.static_eval = static_eval;
         self.bound = bound;
         self.best_move_packed = best_move_packed;
+        self.generation = generation;
     }
 }
 
@@ -50,6 +54,7 @@ const MIN_BUCKETS: usize = 1024;
 pub struct TranspositionTable {
     entries: Vec<TTEntry>,
     buckets: usize,
+    generation: u8,
 }
 
 impl TranspositionTable {
@@ -65,6 +70,7 @@ impl TranspositionTable {
         Self {
             entries: vec![TTEntry::default(); total_entries],
             buckets,
+            generation: 0,
         }
     }
 
@@ -76,6 +82,12 @@ impl TranspositionTable {
             let size = self.entries.len() * size_of::<TTEntry>();
             std::ptr::write_bytes(ptr, 0, size);
         }
+        self.generation = 0;
+    }
+
+    #[inline(always)]
+    pub fn age(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
     }
 
     // Prefetch TT entry into cache
@@ -100,22 +112,32 @@ impl TranspositionTable {
         let needed_depth = max_depth - depth;
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
+        let key32 = hash as u32;
 
-        // Compare entries (4 at a time with SIMD)
+        // Compare entries
         let cluster = &self.entries[base..base + 4];
-        let keys = u64x4::from_array([
+        let keys = u32x4::from_array([
             cluster[0].key,
             cluster[1].key,
             cluster[2].key,
             cluster[3].key,
         ]);
-        let target_keys = u64x4::splat(hash);
+        let target_keys = u32x4::splat(key32);
         let key_matches = keys.simd_eq(target_keys);
 
         // Check each match with depth requirement (most likely first)
         for (i, entry) in cluster.iter().enumerate() {
             if key_matches.test(i) && entry.depth >= needed_depth {
-                let val = entry.value;
+                // Adjust mate scores relative to current position
+                let val = if entry.value.abs() >= MATE_SCORE_BOUND {
+                    if entry.value > 0 {
+                        entry.value - depth as i16
+                    } else {
+                        entry.value + depth as i16
+                    }
+                } else {
+                    entry.value
+                };
                 let se_opt = if entry.static_eval == i16::MIN {
                     None
                 } else {
@@ -136,15 +158,16 @@ impl TranspositionTable {
     pub fn probe_hint(&self, hash: u64) -> Option<(Option<ChessMove>, Option<i16>)> {
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
+        let key32 = hash as u32;
 
         let cluster = &self.entries[base..base + 4];
-        let keys = u64x4::from_array([
+        let keys = u32x4::from_array([
             cluster[0].key,
             cluster[1].key,
             cluster[2].key,
             cluster[3].key,
         ]);
-        let target_keys = u64x4::splat(hash);
+        let target_keys = u32x4::splat(key32);
         let key_matches = keys.simd_eq(target_keys);
 
         // Prefer deepest entry as hint
@@ -187,6 +210,7 @@ impl TranspositionTable {
     ) {
         let stored_depth = max_depth - depth;
         let best_move_packed = pack_move(best_move);
+        let key32 = hash as u32;
 
         let bound = if value <= alpha {
             Bound::Upper
@@ -196,11 +220,16 @@ impl TranspositionTable {
             Bound::Exact
         };
 
-        if value.abs() >= MATE_SCORE_BOUND {
-            return;
-        }
-
-        let stored_value = value;
+        // Store mate scores relative to root so they remain valid from different plies
+        let stored_value = if value.abs() >= MATE_SCORE_BOUND {
+            if value > 0 {
+                value + depth as i16
+            } else {
+                value - depth as i16
+            }
+        } else {
+            value
+        };
         let stored_se = static_eval.unwrap_or(i16::MIN);
 
         let idx = (hash as usize) % self.buckets;
@@ -208,57 +237,83 @@ impl TranspositionTable {
         let end = base + CLUSTER_SIZE;
 
         let cluster = &mut self.entries[base..end];
+        let current_gen = self.generation;
 
-        // 1) Exact key hit: update if new info is at least as deep
+        // Depth bonus for valuable bound types (exact/lower more useful than upper)
+        let depth_bonus = |b: Bound| -> i16 {
+            match b {
+                Bound::Exact | Bound::Lower => 1,
+                Bound::Upper => 0,
+            }
+        };
+
+        // Exact key hit: Replace only if deeper or better bound
         for e in cluster.iter_mut() {
-            if e.key == hash {
-                if stored_depth >= e.depth {
+            if e.key == key32 {
+                let new_value = stored_depth as i16 + depth_bonus(bound);
+                let old_value = e.depth as i16 + depth_bonus(e.bound);
+
+                // Always replace if new bound is Exact and old isn't.
+                // Otherwise, only replace if new entry is deeper or better bound type
+                let should_replace =
+                    (bound == Bound::Exact && e.bound != Bound::Exact) || new_value >= old_value;
+
+                if should_replace {
                     e.set(
-                        hash,
+                        key32,
                         stored_depth,
                         stored_value,
                         stored_se,
                         bound,
                         best_move_packed,
+                        current_gen,
                     );
                 }
                 return;
             }
         }
 
-        // 2) Empty slot
+        // Empty slot
         for e in cluster.iter_mut() {
             if e.key == 0 {
                 e.set(
-                    hash,
+                    key32,
                     stored_depth,
                     stored_value,
                     stored_se,
                     bound,
                     best_move_packed,
+                    current_gen,
                 );
                 return;
             }
         }
 
-        // 3) Simple depth-preferential replacement (proven strategy)
+        // Prefer replacing: shallow entries, old entries, upper bounds
         let mut victim_idx = 0;
-        let mut min_depth = cluster[0].depth;
+        let mut min_score = i16::MAX;
 
-        for (i, entry) in cluster.iter().enumerate().skip(1) {
-            if entry.depth < min_depth {
-                min_depth = entry.depth;
+        for (i, entry) in cluster.iter().enumerate() {
+            let age = current_gen.wrapping_sub(entry.generation) as i16;
+            let entry_depth = entry.depth as i16 + depth_bonus(entry.bound);
+
+            // Lower score = better candidate for replacement
+            let score = (8 * entry_depth) - age;
+
+            if score < min_score {
+                min_score = score;
                 victim_idx = i;
             }
         }
 
         cluster[victim_idx].set(
-            hash,
+            key32,
             stored_depth,
             stored_value,
             stored_se,
             bound,
             best_move_packed,
+            current_gen,
         );
     }
 }
