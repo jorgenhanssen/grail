@@ -2,7 +2,7 @@ use crate::negamax::utils::MATE_SCORE_BOUND;
 use chess::{ChessMove, Piece, Square};
 use std::mem::size_of;
 use std::simd::prelude::SimdPartialEq;
-use std::simd::u64x4;
+use std::simd::u32x4;
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum Bound {
@@ -16,7 +16,7 @@ pub enum Bound {
 #[repr(C)]
 pub struct TTEntry {
     // 0 = empty slot
-    pub key: u64,
+    pub key: u32,
     pub value: i16,
     pub static_eval: i16, // i16::MIN denotes "unknown"
     pub depth: u8,
@@ -30,7 +30,7 @@ impl TTEntry {
     #[allow(clippy::too_many_arguments)]
     pub fn set(
         &mut self,
-        key: u64,
+        key: u32,
         depth: u8,
         value: i16,
         static_eval: i16,
@@ -112,16 +112,17 @@ impl TranspositionTable {
         let needed_depth = max_depth - depth;
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
+        let key32 = hash as u32;
 
         // Compare entries (4 at a time with SIMD)
         let cluster = &self.entries[base..base + 4];
-        let keys = u64x4::from_array([
+        let keys = u32x4::from_array([
             cluster[0].key,
             cluster[1].key,
             cluster[2].key,
             cluster[3].key,
         ]);
-        let target_keys = u64x4::splat(hash);
+        let target_keys = u32x4::splat(key32);
         let key_matches = keys.simd_eq(target_keys);
 
         // Check each match with depth requirement (most likely first)
@@ -148,15 +149,16 @@ impl TranspositionTable {
     pub fn probe_hint(&self, hash: u64) -> Option<(Option<ChessMove>, Option<i16>)> {
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
+        let key32 = hash as u32;
 
         let cluster = &self.entries[base..base + 4];
-        let keys = u64x4::from_array([
+        let keys = u32x4::from_array([
             cluster[0].key,
             cluster[1].key,
             cluster[2].key,
             cluster[3].key,
         ]);
-        let target_keys = u64x4::splat(hash);
+        let target_keys = u32x4::splat(key32);
         let key_matches = keys.simd_eq(target_keys);
 
         // Prefer deepest entry as hint
@@ -199,6 +201,7 @@ impl TranspositionTable {
     ) {
         let stored_depth = max_depth - depth;
         let best_move_packed = pack_move(best_move);
+        let key32 = hash as u32;
 
         let bound = if value <= alpha {
             Bound::Upper
@@ -232,14 +235,14 @@ impl TranspositionTable {
 
         // 1) Exact key hit: Replace only if deeper or better bound (depth-preferential)
         for e in cluster.iter_mut() {
-            if e.key == hash {
+            if e.key == key32 {
                 let new_value = stored_depth as i16 + depth_bonus(bound);
                 let old_value = e.depth as i16 + depth_bonus(e.bound);
 
                 // Only replace if new entry is better (deeper or better bound type)
                 if new_value >= old_value {
                     e.set(
-                        hash,
+                        key32,
                         stored_depth,
                         stored_value,
                         stored_se,
@@ -256,7 +259,7 @@ impl TranspositionTable {
         for e in cluster.iter_mut() {
             if e.key == 0 {
                 e.set(
-                    hash,
+                    key32,
                     stored_depth,
                     stored_value,
                     stored_se,
@@ -289,7 +292,7 @@ impl TranspositionTable {
         }
 
         cluster[victim_idx].set(
-            hash,
+            key32,
             stored_depth,
             stored_value,
             stored_se,

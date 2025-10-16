@@ -1,7 +1,7 @@
 use super::tt_table::Bound;
 use std::mem::size_of;
 use std::simd::prelude::SimdPartialEq;
-use std::simd::u64x4;
+use std::simd::u32x4;
 
 const CLUSTER_SIZE: usize = 4;
 const MIN_BUCKETS: usize = 1024;
@@ -10,7 +10,7 @@ const MIN_BUCKETS: usize = 1024;
 #[repr(C)]
 struct QSEntry {
     // 0 denotes empty
-    key: u64, // position hash with bit 0 toggled when in_check
+    key: u32, // position hash with bit 0 toggled when in_check
     value: i16,
     bound: Bound,
 }
@@ -46,7 +46,7 @@ impl QSTable {
     }
 
     #[inline(always)]
-    fn cluster_start(&self, mixed_key: u64) -> usize {
+    fn cluster_start(&self, mixed_key: u32) -> usize {
         let idx = (mixed_key as usize) % self.buckets;
         idx * CLUSTER_SIZE
     }
@@ -72,13 +72,13 @@ impl QSTable {
         let cluster = &self.entries[start..end];
 
         // SIMD compare 4 keys at once
-        let keys = u64x4::from_array([
+        let keys = u32x4::from_array([
             cluster[0].key,
             cluster[1].key,
             cluster[2].key,
             cluster[3].key,
         ]);
-        let target = u64x4::splat(mixed);
+        let target = u32x4::splat(mixed);
         let mask = keys.simd_eq(target);
 
         for (i, e) in cluster.iter().enumerate() {
@@ -141,10 +141,11 @@ impl QSTable {
 }
 
 #[inline(always)]
-fn mix_key(hash: u64, in_check: bool) -> u64 {
+fn mix_key(hash: u64, in_check: bool) -> u32 {
+    let key32 = hash as u32;
     if in_check {
-        hash ^ 0x1
+        key32 ^ 0x1
     } else {
-        hash
+        key32
     }
 }
