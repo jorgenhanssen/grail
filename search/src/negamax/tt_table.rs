@@ -280,10 +280,8 @@ impl TranspositionTable {
             let age = current_gen.wrapping_sub(entry.generation) as i16;
             let entry_depth = entry.depth as i16 + depth_bonus(entry.bound);
 
-            // Score = depth value - age penalty
             // Lower score = better candidate for replacement
-            // Age penalty divided by 8 to be gentle (only matters in tournaments)
-            let score = entry_depth - (age / 8);
+            let score = (8 * entry_depth) - age;
 
             if score < min_score {
                 min_score = score;
