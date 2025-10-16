@@ -114,7 +114,7 @@ impl TranspositionTable {
         let base = idx * CLUSTER_SIZE;
         let key32 = hash as u32;
 
-        // Compare entries (4 at a time with SIMD)
+        // Compare entries
         let cluster = &self.entries[base..base + 4];
         let keys = u32x4::from_array([
             cluster[0].key,
@@ -128,7 +128,16 @@ impl TranspositionTable {
         // Check each match with depth requirement (most likely first)
         for (i, entry) in cluster.iter().enumerate() {
             if key_matches.test(i) && entry.depth >= needed_depth {
-                let val = entry.value;
+                // Adjust mate scores relative to current position
+                let val = if entry.value.abs() >= MATE_SCORE_BOUND {
+                    if entry.value > 0 {
+                        entry.value - depth as i16
+                    } else {
+                        entry.value + depth as i16
+                    }
+                } else {
+                    entry.value
+                };
                 let se_opt = if entry.static_eval == i16::MIN {
                     None
                 } else {
@@ -211,11 +220,16 @@ impl TranspositionTable {
             Bound::Exact
         };
 
-        if value.abs() >= MATE_SCORE_BOUND {
-            return;
-        }
-
-        let stored_value = value;
+        // Store mate scores relative to root so they remain valid from different plies
+        let stored_value = if value.abs() >= MATE_SCORE_BOUND {
+            if value > 0 {
+                value + depth as i16
+            } else {
+                value - depth as i16
+            }
+        } else {
+            value
+        };
         let stored_se = static_eval.unwrap_or(i16::MIN);
 
         let idx = (hash as usize) % self.buckets;
@@ -233,14 +247,18 @@ impl TranspositionTable {
             }
         };
 
-        // 1) Exact key hit: Replace only if deeper or better bound (depth-preferential)
+        // Exact key hit: Replace only if deeper or better bound
         for e in cluster.iter_mut() {
             if e.key == key32 {
                 let new_value = stored_depth as i16 + depth_bonus(bound);
                 let old_value = e.depth as i16 + depth_bonus(e.bound);
 
-                // Only replace if new entry is better (deeper or better bound type)
-                if new_value >= old_value {
+                // Always replace if new bound is Exact and old isn't.
+                // Otherwise, only replace if new entry is deeper or better bound type
+                let should_replace =
+                    (bound == Bound::Exact && e.bound != Bound::Exact) || new_value >= old_value;
+
+                if should_replace {
                     e.set(
                         key32,
                         stored_depth,
@@ -255,7 +273,7 @@ impl TranspositionTable {
             }
         }
 
-        // 2) Empty slot
+        // Empty slot
         for e in cluster.iter_mut() {
             if e.key == 0 {
                 e.set(
@@ -271,7 +289,6 @@ impl TranspositionTable {
             }
         }
 
-        // 3) Find victim: depth-preferential with age and bound considerations
         // Prefer replacing: shallow entries, old entries, upper bounds
         let mut victim_idx = 0;
         let mut min_score = i16::MAX;
