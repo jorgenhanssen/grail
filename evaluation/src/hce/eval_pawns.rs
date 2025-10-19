@@ -1,5 +1,6 @@
 use super::HCEConfig;
 use crate::hce::context::EvalContext;
+use arrayvec::ArrayVec;
 use chess::{
     get_adjacent_files, get_file, get_pawn_attacks, BitBoard, Color, Rank, Square, ALL_FILES, EMPTY,
 };
@@ -37,7 +38,8 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
         }
     }
 
-    // passed-pawn bonus and backward pawn penalty
+    // passed-pawn bonus with diminishing returns for multiple passed pawns
+    let mut passed_pawn_bonuses = ArrayVec::<i16, 8>::new();
     for sq in my_pawns {
         // Passed pawn bonus
         let blockers = PASSED_PAWN_MASKS[color as usize][sq.to_index()];
@@ -54,10 +56,20 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
                 // Skip rank 0 (no bonus)
                 let bonus = config.passed_pawn_linear * effective_rank
                     + config.passed_pawn_quadratic * effective_rank * effective_rank;
-                score += bonus;
+                passed_pawn_bonuses.push(bonus);
             }
         }
+    }
 
+    // Sort passed pawns by bonus (most advanced first) and apply diminishing returns
+    // First pawn gets full bonus, second gets bonus/2, third gets bonus/3, etc.
+    passed_pawn_bonuses.sort_unstable_by(|a, b| b.cmp(a));
+    for (idx, bonus) in passed_pawn_bonuses.iter().enumerate() {
+        score += bonus / (idx as i16 + 1);
+    }
+
+    // backward pawn penalty
+    for sq in my_pawns {
         // Backward pawn penalty
         if is_backward_pawn(sq, color, my_pawns, enemy_pawns) {
             score -= config.backward_pawn_penalty;
