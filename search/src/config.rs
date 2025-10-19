@@ -145,6 +145,7 @@ define_config!(
 
     (hce_passed_pawn_linear: i16, "HCE Passed Pawn Linear", UciOptionType::Spin { min: 0, max: 20 }, 6, cfg!(feature = "tuning")),
     (hce_passed_pawn_quadratic: i16, "HCE Passed Pawn Quadratic", UciOptionType::Spin { min: 0, max: 10 }, 5, cfg!(feature = "tuning")),
+    (hce_pawn_storm_bonus: i16, "HCE Pawn Storm Bonus", UciOptionType::Spin { min: 0, max: 10 }, 2, cfg!(feature = "tuning")),
 
     // Piece bonuses
     (hce_bishop_pair_bonus: i16, "HCE Bishop Pair Bonus", UciOptionType::Spin { min: 0, max: 150 }, 50, cfg!(feature = "tuning")),
@@ -212,6 +213,7 @@ impl EngineConfig {
             backward_pawn_half_open_penalty: self.hce_backward_pawn_half_open_penalty.value,
             passed_pawn_linear: self.hce_passed_pawn_linear.value,
             passed_pawn_quadratic: self.hce_passed_pawn_quadratic.value,
+            pawn_storm_bonus: self.hce_pawn_storm_bonus.value,
 
             // Piece bonuses
             bishop_pair_bonus: self.hce_bishop_pair_bonus.value,

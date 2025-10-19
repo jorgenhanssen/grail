@@ -67,6 +67,10 @@ impl HCE for Evaluator {
             self.pawn_cache.set(&ctx, cache_entry);
         };
 
+        // Pawn storms - evaluated separately because it depends on king positions
+        cp += eval_pawns::evaluate_pawn_storm(&ctx, Color::White, &self.config);
+        cp -= eval_pawns::evaluate_pawn_storm(&ctx, Color::Black, &self.config);
+
         cp += eval_rooks::evaluate(&ctx, Color::White, &self.config);
         cp -= eval_rooks::evaluate(&ctx, Color::Black, &self.config);
 
