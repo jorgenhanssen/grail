@@ -301,7 +301,7 @@ fn evaluate(
     writeln!(file, "Label      Prediction")?;
     writeln!(file, "--------------------")?;
     for (label, pred) in all_labels.iter().zip(all_preds.iter()) {
-        writeln!(file, "{:<10.0} {:.5}", label, pred)?;
+        writeln!(file, "{:<10.5} {:.5}", label, pred)?;
     }
 
     log::info!("Evaluation written to {}", file_path.display());
