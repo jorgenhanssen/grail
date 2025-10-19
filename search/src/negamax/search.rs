@@ -268,6 +268,8 @@ impl NegamaxEngine {
         self.position_stack.push(self.board.get_hash());
         self.move_stack.clear();
         self.eval_stack.clear();
+
+        self.tt.age();
     }
 
     pub fn search_root(

@@ -51,7 +51,7 @@ macro_rules! define_config {
 
 define_config!(
     // Standard UCI parameters
-    (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 1024 }, 384, true),
+    (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 2048 }, 1024, true),
 
     // Aspiration Windows - Search with tight bounds around expected score
     (aspiration_window_size: i16, "Aspiration Window Size", UciOptionType::Spin { min: 10, max: 100 }, 40, cfg!(feature = "tuning")), // Initial window size in centipawns
@@ -143,8 +143,8 @@ define_config!(
     (hce_backward_pawn_penalty: i16, "HCE Backward Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 20, cfg!(feature = "tuning")),
     (hce_backward_pawn_half_open_penalty: i16, "HCE Backward Pawn Half Open Penalty", UciOptionType::Spin { min: 0, max: 50 }, 10, cfg!(feature = "tuning")),
 
-    (hce_passed_pawn_linear: i16, "HCE Passed Pawn Linear", UciOptionType::Spin { min: 0, max: 20 }, 7, cfg!(feature = "tuning")),
-    (hce_passed_pawn_quadratic: i16, "HCE Passed Pawn Quadratic", UciOptionType::Spin { min: 0, max: 10 }, 4, cfg!(feature = "tuning")),
+    (hce_passed_pawn_linear: i16, "HCE Passed Pawn Linear", UciOptionType::Spin { min: 0, max: 20 }, 6, cfg!(feature = "tuning")),
+    (hce_passed_pawn_quadratic: i16, "HCE Passed Pawn Quadratic", UciOptionType::Spin { min: 0, max: 10 }, 5, cfg!(feature = "tuning")),
 
     // Piece bonuses
     (hce_bishop_pair_bonus: i16, "HCE Bishop Pair Bonus", UciOptionType::Spin { min: 0, max: 150 }, 50, cfg!(feature = "tuning")),

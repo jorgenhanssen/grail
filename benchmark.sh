@@ -3,7 +3,7 @@ set -e
 
 ENGINE="./target/release/grail"
 COMMAND="negamax"
-DEPTH=16
+DEPTH=18
 
 # --- Baselines
 baseline_time=(640 728 150 2675 198 112 336 505 769 522)
