@@ -2,14 +2,13 @@ use super::HCEConfig;
 use crate::hce::context::EvalContext;
 use arrayvec::ArrayVec;
 use chess::{
-    get_adjacent_files, get_file, get_pawn_attacks, BitBoard, Color, File, Piece, Rank, Square,
-    ALL_FILES, EMPTY,
+    get_adjacent_files, get_file, get_pawn_attacks, BitBoard, Color, Rank, Square, ALL_FILES, EMPTY,
 };
 
 #[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let board = ctx.position.board;
-    let pawns = board.pieces(Piece::Pawn);
+    let pawns = board.pieces(chess::Piece::Pawn);
     let my_pawns = pawns & board.color_combined(color);
     if my_pawns == EMPTY {
         return 0;
@@ -84,54 +83,6 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
     }
 
     score
-}
-
-/// Evaluate pawn storms - must be called separately from cached pawn eval
-/// because it depends on king positions, not just pawn structure
-#[inline(always)]
-pub(super) fn evaluate_pawn_storm(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let board = ctx.position.board;
-    let pawns = board.pieces(Piece::Pawn);
-    let my_pawns = pawns & board.color_combined(color);
-    if my_pawns == EMPTY {
-        return 0;
-    }
-
-    let our_king = board.king_square(color);
-    let enemy_king = board.king_square(!color);
-
-    // Detect opposite-side castling (kingside = files e-h, queenside = files a-d)
-    let our_king_kingside = our_king.get_file() as usize >= 4;
-    let enemy_king_kingside = enemy_king.get_file() as usize >= 4;
-
-    if our_king_kingside != enemy_king_kingside {
-        // Kings on opposite sides - reward advancing pawns toward enemy king
-        let mut score = 0i16;
-        for pawn_sq in my_pawns {
-            let pawn_file = pawn_sq.get_file();
-            let pawn_rank = pawn_sq.get_rank();
-
-            // Check if pawn is on enemy king's side
-            let on_enemy_side = if enemy_king_kingside {
-                pawn_file >= File::E // Kingside files
-            } else {
-                pawn_file <= File::D // Queenside files
-            };
-
-            if on_enemy_side {
-                // Bonus increases with advancement
-                let advancement = if color == Color::White {
-                    pawn_rank.to_index() as i16 // 0-7, higher = more advanced
-                } else {
-                    (7 - pawn_rank.to_index()) as i16 // Flip for black
-                };
-                score += config.pawn_storm_bonus * advancement;
-            }
-        }
-        score
-    } else {
-        0
-    }
 }
 
 // Check if a pawn is backward (https://www.chessprogramming.org/Backward_Pawn)

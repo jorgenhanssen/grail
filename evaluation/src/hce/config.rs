@@ -10,7 +10,6 @@ pub struct HCEConfig {
     pub backward_pawn_half_open_penalty: i16, // Extra penalty if on half-open file
     pub passed_pawn_linear: i16,              // Linear component of passed pawn bonus
     pub passed_pawn_quadratic: i16,           // Quadratic component (rank-1)^2
-    pub pawn_storm_bonus: i16,                // Bonus per rank for pawns storming enemy king
 
     // Piece bonuses
     pub bishop_pair_bonus: i16,
