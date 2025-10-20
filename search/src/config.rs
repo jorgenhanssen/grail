@@ -182,6 +182,10 @@ define_config!(
     // Threats
     (hce_threats_multiplier: i16, "HCE Threats Multiplier", UciOptionType::Spin { min: 0, max: 100 }, 50, cfg!(feature = "tuning")),
 
+    // Piece Repetition - Penalty for moving the same piece multiple times in a row
+    (piece_repetition_base_penalty: i16, "Piece Repetition Base Penalty", UciOptionType::Spin { min: 0, max: 100 }, 10, cfg!(feature = "tuning")), // Base penalty per consecutive move
+    (piece_repetition_min_phase: f32, "Piece Repetition Min Phase", UciOptionType::Spin { min: 0, max: 100 }, 50.0, cfg!(feature = "tuning")), // Minimum game phase (0-100) to apply penalty
+
 );
 
 impl EngineConfig {
