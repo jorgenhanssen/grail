@@ -62,6 +62,7 @@ pub struct NegamaxEngine {
 
     position_stack: Vec<u64>,
     move_stack: Vec<ChessMove>,
+    piece_stack: Vec<Piece>,
 
     history_heuristic: HistoryHeuristic,
     capture_history: CaptureHistory,
@@ -90,6 +91,7 @@ impl Engine for NegamaxEngine {
             qs_tt: QSTable::new(1),
 
             move_stack: Vec::with_capacity(MAX_DEPTH),
+            piece_stack: Vec::with_capacity(MAX_DEPTH),
             eval_stack: Vec::with_capacity(MAX_DEPTH),
             position_stack: Vec::with_capacity(MAX_DEPTH),
 
@@ -239,11 +241,15 @@ impl Engine for NegamaxEngine {
 impl NegamaxEngine {
     #[inline(always)]
     fn eval(&mut self, position: &utils::Position, phase: f32) -> i16 {
-        if let Some(nnue) = &mut self.nnue {
+        let mut score = if let Some(nnue) = &mut self.nnue {
             nnue.evaluate(position.board)
         } else {
             self.hce.evaluate(position, phase)
-        }
+        };
+
+        score = self.apply_penalties(score, phase);
+
+        score
     }
 
     #[inline(always)]
@@ -267,6 +273,7 @@ impl NegamaxEngine {
         self.position_stack.clear();
         self.position_stack.push(self.board.get_hash());
         self.move_stack.clear();
+        self.piece_stack.clear();
         self.eval_stack.clear();
 
         self.tt.age();
@@ -306,15 +313,18 @@ impl NegamaxEngine {
             &self.capture_history,
             &self.continuation_history,
         ) {
+            let moved_piece = self.board.piece_on(m.get_source()).unwrap();
             let new_board = self.board.make_move_new(m);
 
             self.position_stack.push(new_board.get_hash());
             self.move_stack.push(m);
+            self.piece_stack.push(moved_piece);
             let (child_value, mut pv) =
                 self.search_subtree(&new_board, 1, depth, -beta, -alpha, true, true);
             let score = -child_value;
             self.position_stack.pop();
             self.move_stack.pop();
+            self.piece_stack.pop();
 
             // Check if we were stopped during the subtree search
             if self.stop.load(Ordering::Relaxed) {
@@ -616,6 +626,7 @@ impl NegamaxEngine {
         static_eval: i16,
         pre_move_threats: BitBoard,
     ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
+        let moved_piece = board.piece_on(m.get_source()).unwrap();
         let new_board = board.make_move_new(m);
         let child_hash = new_board.get_hash();
 
@@ -673,6 +684,7 @@ impl NegamaxEngine {
 
         self.position_stack.push(new_board.get_hash());
         self.move_stack.push(m);
+        self.piece_stack.push(moved_piece);
         let (child_value, pv_line) = self.search_subtree(
             &new_board,
             depth + 1,
@@ -683,11 +695,13 @@ impl NegamaxEngine {
             true,
         );
         self.move_stack.pop();
+        self.piece_stack.pop();
         let mut value = -child_value;
         let mut line = pv_line;
 
         if reduction > 0 && value > alpha {
             self.move_stack.push(m);
+            self.piece_stack.push(moved_piece);
             let (re_child_value, re_line) = self.search_subtree(
                 &new_board,
                 depth + 1,
@@ -698,6 +712,7 @@ impl NegamaxEngine {
                 true,
             );
             self.move_stack.pop();
+            self.piece_stack.pop();
             value = -re_child_value;
             line = re_line;
             actual_depth = max_depth;
@@ -705,9 +720,11 @@ impl NegamaxEngine {
 
         if !is_pv_move && value > alpha {
             self.move_stack.push(m);
+            self.piece_stack.push(moved_piece);
             let (full_child_value, full_line) =
                 self.search_subtree(&new_board, depth + 1, max_depth, -beta, -alpha, true, true);
             self.move_stack.pop();
+            self.piece_stack.pop();
             value = -full_child_value;
             line = full_line;
             actual_depth = max_depth;
@@ -1215,6 +1232,43 @@ impl NegamaxEngine {
             false, // disable nested IID
         );
         shallow_line.first().copied()
+    }
+
+    #[inline(always)]
+    fn apply_penalties(&self, score: i16, phase: f32) -> i16 {
+        let mut adjusted_score = score;
+
+        // Piece repetition penalty (opening/middlegame)
+        let min_phase = self.config.piece_repetition_min_phase.value / 100.0;
+        if phase > min_phase {
+            let normalized_phase = (phase - min_phase) / (1.0 - min_phase);
+            let penalty = self.piece_repetition_penalty();
+            adjusted_score -= ((penalty as f32) * normalized_phase).round() as i16;
+        }
+
+        adjusted_score
+    }
+
+    #[inline(always)]
+    fn piece_repetition_penalty(&self) -> i16 {
+        let stack_len = self.piece_stack.len();
+        let base_penalty = self.config.piece_repetition_base_penalty.value;
+
+        let last_piece = self.piece_stack[stack_len - 1];
+
+        let mut consecutive_count = 0;
+        for i in (0..stack_len - 1).rev() {
+            if self.piece_stack[i] != last_piece {
+                break;
+            }
+            consecutive_count += 1;
+        }
+
+        if consecutive_count == 0 {
+            return 0;
+        }
+
+        base_penalty * (1 << consecutive_count) // 2^n scaling
     }
 }
 

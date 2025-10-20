@@ -143,8 +143,8 @@ define_config!(
     (hce_backward_pawn_penalty: i16, "HCE Backward Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 20, cfg!(feature = "tuning")),
     (hce_backward_pawn_half_open_penalty: i16, "HCE Backward Pawn Half Open Penalty", UciOptionType::Spin { min: 0, max: 50 }, 10, cfg!(feature = "tuning")),
 
-    (hce_passed_pawn_linear: i16, "HCE Passed Pawn Linear", UciOptionType::Spin { min: 0, max: 20 }, 7, cfg!(feature = "tuning")),
-    (hce_passed_pawn_quadratic: i16, "HCE Passed Pawn Quadratic", UciOptionType::Spin { min: 0, max: 10 }, 4, cfg!(feature = "tuning")),
+    (hce_passed_pawn_linear: i16, "HCE Passed Pawn Linear", UciOptionType::Spin { min: 0, max: 20 }, 6, cfg!(feature = "tuning")),
+    (hce_passed_pawn_quadratic: i16, "HCE Passed Pawn Quadratic", UciOptionType::Spin { min: 0, max: 10 }, 5, cfg!(feature = "tuning")),
 
     // Piece bonuses
     (hce_bishop_pair_bonus: i16, "HCE Bishop Pair Bonus", UciOptionType::Spin { min: 0, max: 150 }, 50, cfg!(feature = "tuning")),
@@ -181,6 +181,10 @@ define_config!(
 
     // Threats
     (hce_threats_multiplier: i16, "HCE Threats Multiplier", UciOptionType::Spin { min: 0, max: 100 }, 50, cfg!(feature = "tuning")),
+
+    // Piece Repetition - Penalty for moving the same piece multiple times in a row
+    (piece_repetition_base_penalty: i16, "Piece Repetition Base Penalty", UciOptionType::Spin { min: 0, max: 100 }, 10, cfg!(feature = "tuning")), // Base penalty per consecutive move
+    (piece_repetition_min_phase: f32, "Piece Repetition Min Phase", UciOptionType::Spin { min: 0, max: 100 }, 50.0, cfg!(feature = "tuning")), // Minimum game phase (0-100) to apply penalty
 
 );
 
