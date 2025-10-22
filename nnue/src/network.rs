@@ -3,23 +3,15 @@ use candle_nn::{linear, Linear, Module, VarBuilder};
 use std::simd::prelude::SimdFloat;
 
 use crate::encoding::{NUM_FEATURES, NUM_U64S};
-use crate::samples::CP_MAX;
+use crate::samples::{CP_MAX, CP_MIN, TRAINING_SCALE};
 
 use std::simd::f32x8;
 const SIMD_WIDTH: usize = 8;
 
-const EMBEDDING_SIZE: usize = 512;
-const HIDDEN1_SIZE: usize = 32;
-const HIDDEN2_SIZE: usize = 32;
-
-// Scale factor for output: we scale centipawns to [-1, 1] range for more stable training.
-// With CP_MAX=5000, SCALE_FACTOR=5000 gives us target range of ±1
-pub const SCALE_FACTOR: f32 = CP_MAX as f32;
+const EMBEDDING_SIZE: usize = 2048;
 
 pub struct Network {
     embedding: Linear,
-    hidden1: Linear,
-    hidden2: Linear,
     output: Linear,
 }
 
@@ -27,11 +19,7 @@ impl Network {
     pub fn new(vs: &VarBuilder) -> Result<Self> {
         let network = Self {
             embedding: linear(NUM_FEATURES, EMBEDDING_SIZE, vs.pp("embedding"))?,
-
-            hidden1: linear(EMBEDDING_SIZE, HIDDEN1_SIZE, vs.pp("hidden1"))?,
-            hidden2: linear(HIDDEN1_SIZE, HIDDEN2_SIZE, vs.pp("hidden2"))?,
-
-            output: linear(HIDDEN2_SIZE, 1, vs.pp("output"))?,
+            output: linear(EMBEDDING_SIZE, 1, vs.pp("output"))?,
         };
 
         Ok(network)
@@ -41,17 +29,8 @@ impl Network {
 impl Module for Network {
     #[inline]
     fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        // Embedding
-        let mut x = x.apply(&self.embedding)?.relu()?;
-
-        // Hidden layers
-        x = x.apply(&self.hidden1)?.relu()?;
-        x = x.apply(&self.hidden2)?.relu()?;
-
-        // Output layer - linear output (no activation)
-        // Network learns to output in scaled space
-        // Scaling back to centipawns happens only during inference
-        x = x.apply(&self.output)?;
+        let x = x.apply(&self.embedding)?.relu()?;
+        let x = x.apply(&self.output)?;
 
         Ok(x)
     }
@@ -99,8 +78,6 @@ impl LinearLayer {
 
 pub struct NNUENetwork {
     embedding: LinearLayer,
-    hidden1: LinearLayer,
-    hidden2: LinearLayer,
     output: LinearLayer,
 
     // [feature_idx][embedding_idx]
@@ -108,8 +85,6 @@ pub struct NNUENetwork {
 
     // Accumulated state
     embedding_buffer: [f32; EMBEDDING_SIZE],
-    hidden1_buffer: [f32; HIDDEN1_SIZE],
-    hidden2_buffer: [f32; HIDDEN2_SIZE],
     output_buffer: [f32; 1],
 
     // Input state for change detection
@@ -120,8 +95,6 @@ pub struct NNUENetwork {
 impl NNUENetwork {
     pub fn from_network(network: &Network) -> Result<Self> {
         let embedding = LinearLayer::from_candle_linear(&network.embedding)?;
-        let hidden1 = LinearLayer::from_candle_linear(&network.hidden1)?;
-        let hidden2 = LinearLayer::from_candle_linear(&network.hidden2)?;
         let output = LinearLayer::from_candle_linear(&network.output)?;
 
         // Transposed embedding weights for cache-friendly updates.
@@ -139,8 +112,6 @@ impl NNUENetwork {
         let mut embedding_buffer = [0.0; EMBEDDING_SIZE];
         embedding_buffer.copy_from_slice(&embedding.biases);
 
-        let hidden1_buffer = [0.0; HIDDEN1_SIZE];
-        let hidden2_buffer = [0.0; HIDDEN2_SIZE];
         let output_buffer = [0.0; 1];
 
         let current_input = [0u64; NUM_U64S];
@@ -148,13 +119,9 @@ impl NNUENetwork {
 
         Ok(Self {
             embedding,
-            hidden1,
-            hidden2,
             output,
             embedding_weights_by_feature,
             embedding_buffer,
-            hidden1_buffer,
-            hidden2_buffer,
             output_buffer,
             current_input,
             previous_input,
@@ -244,22 +211,14 @@ impl NNUENetwork {
         activated_embedding.copy_from_slice(&self.embedding_buffer);
         simd_relu(&mut activated_embedding);
 
-        self.hidden1
-            .forward(&activated_embedding, &mut self.hidden1_buffer);
-        simd_relu(&mut self.hidden1_buffer);
-
-        self.hidden2
-            .forward(&self.hidden1_buffer, &mut self.hidden2_buffer);
-        simd_relu(&mut self.hidden2_buffer);
-
         self.output
-            .forward(&self.hidden2_buffer, &mut self.output_buffer);
+            .forward(&activated_embedding, &mut self.output_buffer);
 
-        // Scale the output to centipawn space
-        self.output_buffer[0] * SCALE_FACTOR
+        let cp = self.output_buffer[0] * TRAINING_SCALE;
+        cp.clamp(CP_MIN as f32, CP_MAX as f32)
     }
 
-    // Forward pass with a pre-encoded bitset input. Skips float-to-bit conversion.
+    // Forward pass with a pre-encoded bitset input for incremental updates.
     #[inline(always)]
     pub fn forward_bitset(&mut self, bitset: &[u64; NUM_U64S]) -> f32 {
         // Copy bitset into current_input buffer
@@ -285,28 +244,18 @@ impl NNUENetwork {
         // Store current input for next time
         self.previous_input.copy_from_slice(&self.current_input);
 
-        // Activate embedding (ReLU) from pre-activation buffer
         let mut activated_embedding = [0.0; EMBEDDING_SIZE];
         activated_embedding.copy_from_slice(&self.embedding_buffer);
         simd_relu(&mut activated_embedding);
 
-        self.hidden1
-            .forward(&activated_embedding, &mut self.hidden1_buffer);
-        simd_relu(&mut self.hidden1_buffer);
-
-        self.hidden2
-            .forward(&self.hidden1_buffer, &mut self.hidden2_buffer);
-        simd_relu(&mut self.hidden2_buffer);
-
         self.output
-            .forward(&self.hidden2_buffer, &mut self.output_buffer);
+            .forward(&activated_embedding, &mut self.output_buffer);
 
-        // Scale the output to centipawn space
-        self.output_buffer[0] * SCALE_FACTOR
+        let cp = self.output_buffer[0] * TRAINING_SCALE;
+        cp.clamp(CP_MIN as f32, CP_MAX as f32)
     }
 }
 
-// Helper to apply ReLU activation in-place
 #[inline(always)]
 fn simd_relu(values: &mut [f32]) {
     let len = values.len();
@@ -339,7 +288,7 @@ fn simd_relu(values: &mut [f32]) {
 
     // Handle remaining elements
     for j in i..len {
-        values[j] = f32::max(values[j], 0.0);
+        values[j] = values[j].max(0.0);
     }
 }
 

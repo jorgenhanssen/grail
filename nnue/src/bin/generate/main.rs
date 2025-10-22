@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let manager = VersionManager::new()?;
 
-    let generator = Generator::new(num_cpus::get(), &manager)?;
+    let generator = Generator::new(num_cpus::get(), &manager, args.opening_book)?;
     let evaluations = generator.run(args.duration, args.depth);
 
     let samples = Samples::from_evaluations(&evaluations);

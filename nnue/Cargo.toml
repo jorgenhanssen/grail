@@ -7,6 +7,7 @@ edition = "2021"
 search = { path = "../search" }
 evaluation = { path = "../evaluation" }
 uci = { path = "../uci" }
+utils = { path = "../utils" }
 
 ahash = { workspace = true }
 chess = { workspace = true }

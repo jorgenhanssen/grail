@@ -12,22 +12,19 @@ use rand::thread_rng;
 use simplelog::{Config, SimpleLogger};
 use std::{error::Error, fs::File, io::BufReader};
 
-// Huber loss: quadratic for small errors, linear for large errors
-// This prevents mate scores from dominating the loss while still providing
-// strong gradients for learning subtle positional differences
-fn huber_loss(pred: &Tensor, target: &Tensor, delta: f64) -> CandleResult<Tensor> {
-    let diff = (pred - target)?;
+// Huber loss on normalized centipawn targets
+fn eval_loss(pred: &Tensor, eval_target: &Tensor) -> CandleResult<Tensor> {
+    let diff = (pred - eval_target)?;
     let abs_diff = diff.abs()?;
 
-    // For |error| <= delta: 0.5 * error^2
-    // For |error| > delta: delta * (|error| - 0.5 * delta)
+    // Huber delta = 1.0 in normalized space (equivalent to TRAINING_SCALE cp)
+    let huber_delta = 1.0;
+    let is_small = abs_diff.lt(huber_delta)?;
+
     let quadratic = (diff.sqr()? * 0.5)?;
-    let linear = (((&abs_diff - delta * 0.5)?) * delta)?;
+    let linear = ((abs_diff - 0.5 * huber_delta)? * huber_delta)?;
 
-    // Use where to select between quadratic and linear based on threshold
-    let mask = abs_diff.le(delta)?;
-    let loss = mask.where_cond(&quadratic, &linear)?;
-
+    let loss = is_small.where_cond(&quadratic, &linear)?;
     loss.mean_all()
 }
 
@@ -178,8 +175,8 @@ impl Trainer {
         let batched_iter = samples.to_xy_batched_indices(train_idx, self.batch_size, device);
 
         for batch_res in batched_iter {
-            let (x_batch, y_batch) = batch_res?;
-            let loss = self.train_step(net, opt, &x_batch, &y_batch)?;
+            let (x_batch, y_batch, wdl_batch) = batch_res?;
+            let loss = self.train_step(net, opt, &x_batch, &y_batch, &wdl_batch)?;
             epoch_loss_sum += loss;
             batch_count += 1;
 
@@ -198,12 +195,10 @@ impl Trainer {
         opt: &mut AdamW,
         x_batch: &Tensor,
         y_batch: &Tensor,
+        _wdl_batch: &Tensor,
     ) -> CandleResult<f32> {
         let preds = net.forward(x_batch)?;
-        // Huber loss with delta=0.2 (in scaled space = 1000 cp)
-        // Errors < 1000 cp: quadratic loss (strong gradients)
-        // Errors > 1000 cp: linear loss (prevents outlier/mate domination)
-        let loss = huber_loss(&preds, y_batch, 0.2)?;
+        let loss = eval_loss(&preds, y_batch)?;
         opt.backward_step(&loss)?;
         f32::try_from(loss)
     }
@@ -220,9 +215,9 @@ impl Trainer {
 
         let batched_iter = samples.to_xy_batched_indices(val_idx, self.batch_size, device);
         for batch_res in batched_iter {
-            let (x_val, y_val) = batch_res?;
+            let (x_val, y_val, _wdl_val) = batch_res?;
             let preds = net.forward(&x_val)?;
-            let loss = huber_loss(&preds, &y_val, 0.2)?;
+            let loss = eval_loss(&preds, &y_val)?;
             total_loss += f32::try_from(loss)?;
             batch_count += 1;
         }
@@ -275,17 +270,18 @@ fn evaluate(
     let mut all_preds = Vec::new();
 
     for batch_res in batched_iter {
-        let (x_batch, y_batch) = batch_res?;
+        let (x_batch, y_batch, _wdl_batch) = batch_res?;
         let preds = net.forward(&x_batch)?;
-        let batch_loss = huber_loss(&preds, &y_batch, 0.2)?;
+        let batch_loss = eval_loss(&preds, &y_batch)?;
         total_loss += f32::try_from(batch_loss)?;
         total_count += 1;
 
         let batch_size = x_batch.dim(0)?;
         for i in 0..batch_size {
-            let label = f32::try_from(y_batch.get(i)?.squeeze(0)?)?;
+            let target = f32::try_from(y_batch.get(i)?.squeeze(0)?)?;
             let pred = f32::try_from(preds.get(i)?.squeeze(0)?)?;
-            all_labels.push(label);
+
+            all_labels.push(target);
             all_preds.push(pred);
         }
     }
@@ -298,10 +294,10 @@ fn evaluate(
     let mut file = std::fs::File::create(&file_path)?;
     use std::io::Write;
     writeln!(file, "Test Loss: {}", avg_loss)?;
-    writeln!(file, "Label      Prediction")?;
-    writeln!(file, "--------------------")?;
+    writeln!(file, "Target (normalized)  Prediction  (eval/400)")?;
+    writeln!(file, "--------------------------------------------")?;
     for (label, pred) in all_labels.iter().zip(all_preds.iter()) {
-        writeln!(file, "{:<10.5} {:.5}", label, pred)?;
+        writeln!(file, "{:<20.5} {:.5}", label, pred)?;
     }
 
     log::info!("Evaluation written to {}", file_path.display());

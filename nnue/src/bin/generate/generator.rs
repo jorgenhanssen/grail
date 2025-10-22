@@ -1,9 +1,3 @@
-use std::collections::HashMap;
-use std::error::Error;
-use std::time::Instant;
-use std::{path::PathBuf, sync::Arc};
-
-use ahash::AHashSet;
 use candle_core::Device;
 use candle_nn::VarMap;
 use chess::{Board, ChessMove, Game, MoveGen};
@@ -14,51 +8,58 @@ use rand::distributions::WeightedIndex;
 use rand::prelude::Distribution;
 use rand::Rng;
 use search::{Engine, EngineConfig, NegamaxEngine};
-use std::sync::Mutex;
+use std::error::Error;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::Instant;
 use uci::commands::GoParams;
-
-#[derive(Clone)]
-pub struct MoveDistribution {
-    pub moves: Vec<ChessMove>,
-    pub evaluations: Vec<i16>,
-}
-
-impl MoveDistribution {
-    pub fn new(moves: Vec<ChessMove>, evaluations: Vec<i16>) -> Self {
-        Self { moves, evaluations }
-    }
-}
-
-/// Global storage for move evaluation distributions, keyed by position hash
-type MoveDistributions = Arc<Mutex<HashMap<u64, MoveDistribution>>>;
 
 pub struct Generator {
     threads: usize,
     nnue_path: Option<PathBuf>,
     version: u32,
+    opening_book: (PathBuf, usize), // (path, line_count)
 }
 
 impl Generator {
-    pub fn new(threads: usize, manager: &VersionManager) -> Result<Self, Box<dyn Error>> {
+    pub fn new(
+        threads: usize,
+        manager: &VersionManager,
+        opening_book_path: String,
+    ) -> Result<Self, Box<dyn Error>> {
         let version = manager.get_latest_version()?;
+
+        let line_count = count_opening_book_lines(&opening_book_path)?;
+        log::info!(
+            "Loaded opening book with {} positions from {}",
+            line_count,
+            opening_book_path
+        );
+        let opening_book = (PathBuf::from(opening_book_path), line_count);
 
         let generator = match version {
             Some(version) => Self {
                 threads,
                 nnue_path: Some(manager.file_path(version, "model.safetensors")),
                 version,
+                opening_book,
             },
             _ => Self {
                 threads,
                 nnue_path: None,
                 version: 0,
+                opening_book,
             },
         };
 
         Ok(generator)
     }
 
-    pub fn run(&self, duration: u64, depth: u8) -> Vec<(String, i16)> {
+    pub fn run(&self, duration: u64, depth: u8) -> Vec<(String, i16, f32)> {
         let eval_name = match &self.nnue_path {
             Some(path) => path.display().to_string(),
             None => "traditional evaluator".to_string(),
@@ -67,7 +68,7 @@ impl Generator {
         log::info!(
             "Generating samples using {} threads ({})",
             self.threads,
-            eval_name
+            eval_name,
         );
 
         let pb = ProgressBar::new(duration);
@@ -79,13 +80,15 @@ impl Generator {
         );
         let pb = Arc::new(pb);
 
-        let global_distributions: MoveDistributions = Arc::new(Mutex::new(HashMap::new()));
+        let sample_counter = Arc::new(AtomicUsize::new(0));
+        let opening_book = Arc::new(self.opening_book.clone());
 
         let handles: Vec<_> = (0..self.threads)
             .map(|tid| {
                 let nnue_path = self.nnue_path.clone();
                 let version = self.version;
-                let global_distributions = Arc::clone(&global_distributions);
+                let sample_counter = Arc::clone(&sample_counter);
+                let opening_book = Arc::clone(&opening_book);
                 let pb = Arc::clone(&pb);
 
                 std::thread::spawn(move || {
@@ -101,7 +104,8 @@ impl Generator {
                         None
                     };
 
-                    let mut worker = SelfPlayWorker::new(tid, global_distributions, depth, nnue);
+                    let mut worker =
+                        SelfPlayWorker::new(tid, sample_counter, depth, nnue, &opening_book);
                     worker.play_games(duration, &pb)
                 })
             })
@@ -112,31 +116,92 @@ impl Generator {
             .flat_map(|h| h.join().unwrap())
             .collect();
 
-        pb.finish_with_message(format!("Evaluated {} positions", evaluations.len()));
+        pb.finish_with_message(format!("Generated {} samples", evaluations.len()));
 
         evaluations
     }
 }
 
+/// Count lines in opening book EPD file
+fn count_opening_book_lines(path: &str) -> Result<usize, Box<dyn Error>> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+    let mut count = 0;
+
+    for line in reader.lines() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        count += 1;
+    }
+
+    Ok(count)
+}
+
+/// Read a random position from the opening book
+fn read_random_opening_position(
+    path: &PathBuf,
+    line_count: usize,
+) -> Result<String, Box<dyn Error>> {
+    let mut rng = rand::thread_rng();
+    let target_line = rng.gen_range(0..line_count);
+
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+    let mut current_line = 0;
+
+    for line in reader.lines() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        if current_line == target_line {
+            // EPD format is FEN fields (6 fields) followed by optional operations
+            // We extract just the FEN part
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 4 {
+                // Construct FEN from first 4 fields (board, side, castling, ep)
+                // For EPD we set halfmove and fullmove to 0 and 1
+                let fen = format!("{} {} {} {} 0 1", parts[0], parts[1], parts[2], parts[3]);
+                return Ok(fen);
+            }
+        }
+        current_line += 1;
+    }
+
+    Err("Failed to read opening position".into())
+}
+
 struct SelfPlayWorker {
     tid: usize,
-    global_distributions: MoveDistributions,
+    sample_counter: Arc<AtomicUsize>,
     engine: NegamaxEngine,
     depth: u8,
+    opening_book: (PathBuf, usize), // (path, line_count)
 
-    // Specific to ongoing game
+    // Game-specific state
     game: Game,
-    positions_in_current_game: AHashSet<u64>,
+    position_counts: std::collections::HashMap<u64, usize>,
+    current_game_positions: Vec<(String, i16)>,
 }
 
 impl SelfPlayWorker {
     pub fn new(
         tid: usize,
-        global_distributions: MoveDistributions,
+        sample_counter: Arc<AtomicUsize>,
         depth: u8,
         nnue: Option<Box<dyn NNUE>>,
+        opening_book: &(PathBuf, usize),
     ) -> Self {
-        let config = EngineConfig::default();
+        let mut config = EngineConfig::default();
+        // Reduce hash size for data generation (384 MB instead of 1024 MB)
+        // With 32 threads, this reduces RAM from 32GB to ~12GB
+        config.hash_size.value = 384;
+
         let hce = Box::new(hce::Evaluator::new(
             config.get_piece_values(),
             config.get_hce_config(),
@@ -144,16 +209,17 @@ impl SelfPlayWorker {
 
         Self {
             tid,
-            global_distributions,
+            sample_counter,
             game: Game::new(),
             depth,
-
             engine: NegamaxEngine::new(&config, hce, nnue),
-            positions_in_current_game: AHashSet::new(),
+            position_counts: std::collections::HashMap::new(),
+            current_game_positions: Vec::new(),
+            opening_book: opening_book.clone(),
         }
     }
 
-    pub fn play_games(&mut self, duration: u64, pb: &ProgressBar) -> Vec<(String, i16)> {
+    pub fn play_games(&mut self, duration: u64, pb: &ProgressBar) -> Vec<(String, i16, f32)> {
         let start_time = Instant::now();
         let mut evaluations = Vec::new();
 
@@ -166,14 +232,16 @@ impl SelfPlayWorker {
             }
 
             if self.tid == 0 {
-                let global_count = self.global_distributions.lock().unwrap().len();
-                pb.set_message(format!("{} positions", global_count));
+                let sample_count = self.sample_counter.load(Ordering::Relaxed);
+                pb.set_message(format!("{} samples", sample_count));
                 pb.set_position(current_elapsed);
             }
 
-            let terminal = self.play_single_move(&mut evaluations);
+            let terminal = self.play_single_move();
 
             if terminal {
+                // Game ended - assign WDL to all positions and flush
+                self.flush_game_to_evaluations(&mut evaluations);
                 self.reset_game();
             }
         }
@@ -183,22 +251,26 @@ impl SelfPlayWorker {
         evaluations
     }
 
-    fn play_single_move(&mut self, evaluations: &mut Vec<(String, i16)>) -> bool {
-        if self.game.result().is_some() {
+    fn play_single_move(&mut self) -> bool {
+        // Check for game end via chess rules
+        if let Some(_result) = self.game.result() {
             return true;
         }
 
         let board = self.game.current_position();
         let board_hash = board.get_hash();
 
-        // If we've seen this position in the *current game*, we have a cycle.
-        if !self.positions_in_current_game.insert(board_hash) {
+        // Track position repetitions for three-fold repetition
+        *self.position_counts.entry(board_hash).or_insert(0) += 1;
+        if self.position_counts[&board_hash] >= 3 {
+            // Three-fold repetition - end game
             return true;
         }
 
-        // Select and make a move, possibly storing the board's evaluation.
-        let (chosen_move, score) = self.select_move(board, evaluations);
+        // Select move and get evaluation
+        let (chosen_move, score) = self.select_move(board);
 
+        // Check if game should be aborted (stable drawish position)
         if self.should_abort_game(&score) {
             return true;
         }
@@ -208,49 +280,110 @@ impl SelfPlayWorker {
         false
     }
 
-    fn select_move(
-        &mut self,
-        board: chess::Board,
-        evaluations: &mut Vec<(String, i16)>,
-    ) -> (ChessMove, i16) {
-        let board_hash = board.get_hash();
+    fn select_move(&mut self, board: chess::Board) -> (ChessMove, i16) {
+        let num_moves = self.current_game_positions.len();
 
-        // Check if we have a distribution for this position
-        let distribution = {
-            let distributions = self.global_distributions.lock().unwrap();
-            distributions.get(&board_hash).cloned()
+        // Do single deep search to get best move + evaluation
+        let (best_move, engine_score) = self.get_engine_move(&board);
+
+        // Store position with evaluation (from white's perspective)
+        let white_score = if board.side_to_move() == chess::Color::White {
+            engine_score
+        } else {
+            -engine_score
         };
+        self.current_game_positions
+            .push((board.to_string(), white_score));
 
-        match distribution {
-            Some(dist) => {
-                // Distribution exists - skip full evaluation, use weighted random
-                let chosen_move = weighted_random_move(&dist);
-                (chosen_move, 0) // Return 0 as score since we're not doing full eval
-            }
-            None => {
-                // No distribution exists - create one, do full eval, then use weighted random
+        // Apply temperature-based move selection
+        let chosen_move = self.select_move_with_temperature(&board, best_move, num_moves);
 
-                // Create and store the distribution
-                let new_distribution = create_move_distribution(&mut self.engine, &board);
-                {
-                    let mut distributions = self.global_distributions.lock().unwrap();
-                    distributions.insert(board_hash, new_distribution.clone());
+        (chosen_move, engine_score)
+    }
+
+    fn select_move_with_temperature(
+        &mut self,
+        board: &Board,
+        best_move: ChessMove,
+        num_moves: usize,
+    ) -> ChessMove {
+        let mut rng = rand::thread_rng();
+
+        // Logarithmic temperature decay: high early, low later
+        // Formula: temp = 3.0 * exp(-num_moves / 15.0)
+        // At move 0: temp ≈ 3.0 (high randomness)
+        // At move 15: temp ≈ 1.1 (moderate randomness)
+        // At move 30: temp ≈ 0.40 (low randomness)
+        // At move 50: temp ≈ 0.10 (nearly optimal)
+        // At move 60+: temp < 0.05 (essentially optimal)
+        let temperature = 3.0 * (-(num_moves as f32) / 15.0).exp();
+        let temperature = temperature.max(0.01);
+
+        // With very low temperature, just play the best move
+        if temperature < 0.05 {
+            return best_move;
+        }
+
+        // Generate all legal moves
+        let legal_moves: Vec<ChessMove> = MoveGen::new_legal(board).collect();
+        if legal_moves.len() == 1 {
+            return legal_moves[0];
+        }
+
+        // Evaluate all legal moves with quick depth-1 search
+        let mut move_scores = Vec::with_capacity(legal_moves.len());
+        for &chess_move in &legal_moves {
+            let mut board_copy = *board;
+            board_copy = board_copy.make_move_new(chess_move);
+
+            // Quick depth-1 search
+            self.engine.set_position(board_copy);
+            let params = GoParams {
+                depth: Some(1),
+                ..Default::default()
+            };
+
+            let eval = match self.engine.search(&params, None) {
+                Some((_, eval)) => -eval, // Negate because we made the move
+                None => {
+                    // Terminal position
+                    match board_copy.status() {
+                        chess::BoardStatus::Checkmate => -29_000,
+                        chess::BoardStatus::Stalemate => 0,
+                        _ => 0,
+                    }
                 }
+            };
+            move_scores.push(eval);
+        }
 
-                // Do full evaluation for training sample
-                let (_, engine_score) = self.get_engine_move(&board);
+        // Apply temperature scaling to create weighted distribution
+        let min_eval = *move_scores.iter().min().unwrap();
+        let shift = if min_eval < 0 { -min_eval + 100 } else { 100 };
 
-                // Convert to white's perspective
-                let white_score = if board.side_to_move() == chess::Color::White {
-                    engine_score
-                } else {
-                    -engine_score
-                };
-                evaluations.push((board.to_string(), white_score));
+        let weights: Vec<f32> = move_scores
+            .iter()
+            .map(|&eval| {
+                let shifted = (eval + shift).max(1) as f32;
+                shifted.powf(1.0 / temperature)
+            })
+            .collect();
 
-                // Select move using weighted random
-                let chosen_move = weighted_random_move(&new_distribution);
-                (chosen_move, engine_score)
+        // Convert to u32 for WeightedIndex
+        let weights_u32: Vec<u32> = weights
+            .iter()
+            .map(|&w| (w * 1000.0).max(1.0) as u32)
+            .collect();
+
+        match WeightedIndex::new(&weights_u32) {
+            Ok(dist) => {
+                let index = dist.sample(&mut rng);
+                legal_moves[index]
+            }
+            Err(_) => {
+                // Fallback to random selection
+                let index = rng.gen_range(0..legal_moves.len());
+                legal_moves[index]
             }
         }
     }
@@ -267,93 +400,83 @@ impl SelfPlayWorker {
         self.engine.search(&params, None).unwrap()
     }
 
-    fn should_abort_game(&self, score: &i16) -> bool {
-        let num_moves: usize = self.positions_in_current_game.len();
+    fn should_abort_game(&self, _score: &i16) -> bool {
+        let num_moves: usize = self.current_game_positions.len();
 
-        // safety net
-        if num_moves > 500 {
-            return true;
-        }
+        // Check if position has been stable (drawish) for a long time
+        if num_moves >= 40 {
+            let start_idx = num_moves - 40;
+            let last_40_positions = &self.current_game_positions[start_idx..];
 
-        // Abort if moderately long and drawish
-        if num_moves > 200 && score.abs() < 20 {
-            return true;
+            let all_drawish = last_40_positions.iter().all(|(_, eval)| eval.abs() < 20);
+
+            if all_drawish {
+                // Game has been balanced for 40+ moves - it's a draw
+                return true;
+            }
         }
 
         false
     }
 
-    #[inline]
-    fn reset_game(&mut self) {
-        self.game = Game::new();
-        self.positions_in_current_game.clear();
-        self.engine.new_game();
-    }
-}
-
-// Perform shallow search for all legal moves to create evaluation distribution
-#[inline]
-fn create_move_distribution(engine: &mut NegamaxEngine, board: &Board) -> MoveDistribution {
-    let moves: Vec<ChessMove> = MoveGen::new_legal(board).collect();
-    let mut evaluations = Vec::with_capacity(moves.len());
-
-    // Perform shallow search for each move
-    const SHALLOW_DEPTH: u8 = 2;
-    for &chess_move in &moves {
-        let mut board_copy = *board;
-        board_copy = board_copy.make_move_new(chess_move);
-
-        engine.set_position(board_copy);
-        let params = GoParams {
-            depth: Some(SHALLOW_DEPTH),
-            ..Default::default()
+    fn flush_game_to_evaluations(&mut self, evaluations: &mut Vec<(String, i16, f32)>) {
+        // Determine game outcome (WDL from white's perspective)
+        let (wdl, is_decisive) = if let Some(result) = self.game.result() {
+            use chess::GameResult;
+            match result {
+                GameResult::WhiteCheckmates | GameResult::BlackResigns => (1.0, true),
+                GameResult::BlackCheckmates | GameResult::WhiteResigns => (0.0, true),
+                GameResult::Stalemate | GameResult::DrawAccepted | GameResult::DrawDeclared => {
+                    (0.5, false)
+                }
+            }
+        } else {
+            // Game aborted due to stable drawish eval (40+ moves with |eval| < 20)
+            (0.5, false)
         };
 
-        match engine.search(&params, None) {
-            Some((_, eval)) => {
-                evaluations.push(-eval);
+        // For decisive games: include all positions
+        // For drawn games: only include balanced positions (|eval| < 1000)
+        // This prevents labeling clearly winning positions as draws
+        let num_positions = if is_decisive {
+            let count = self.current_game_positions.len();
+            for (fen, score) in self.current_game_positions.drain(..) {
+                evaluations.push((fen, score, wdl));
             }
-            None => {
-                let eval = match board_copy.status() {
-                    chess::BoardStatus::Checkmate => -29_000,
-                    chess::BoardStatus::Stalemate => 0,
-                    _ => 0,
-                };
-                evaluations.push(eval);
+            count
+        } else {
+            let mut count = 0;
+            for (fen, score) in self.current_game_positions.drain(..) {
+                // Only include balanced positions in drawn games
+                if score.abs() < 1000 {
+                    evaluations.push((fen, score, wdl));
+                    count += 1;
+                }
             }
-        }
+            count
+        };
+
+        // Update sample counter
+        self.sample_counter
+            .fetch_add(num_positions, Ordering::Relaxed);
     }
 
-    MoveDistribution::new(moves, evaluations)
-}
-
-// Select a move using weighted random based on evaluations
-#[inline]
-fn weighted_random_move(distribution: &MoveDistribution) -> ChessMove {
-    if distribution.moves.is_empty() {
-        panic!("No legal moves available");
-    }
-
-    let min_eval = *distribution.evaluations.iter().min().unwrap();
-    let shift = if min_eval < 0 { -min_eval + 100 } else { 100 };
-
-    let weights: Vec<u32> = distribution
-        .evaluations
-        .iter()
-        .map(|&eval| (eval + shift).max(1) as u32) // Ensure positive weights
-        .collect();
-
-    match WeightedIndex::new(&weights) {
-        Ok(dist) => {
-            let mut rng = rand::thread_rng();
-            let index = dist.sample(&mut rng);
-            distribution.moves[index]
+    #[inline]
+    fn reset_game(&mut self) {
+        // Read a random position from opening book
+        let (ref path, line_count) = self.opening_book;
+        if let Ok(fen) = read_random_opening_position(path, line_count) {
+            if let Ok(board) = Board::from_str(&fen) {
+                self.game = Game::new_with_board(board);
+            } else {
+                self.game = Game::new();
+            }
+        } else {
+            self.game = Game::new();
         }
-        Err(_) => {
-            // Fallback to random selection if weighted selection fails
-            let mut rng = rand::thread_rng();
-            let index = rng.gen_range(0..distribution.moves.len());
-            distribution.moves[index]
-        }
+
+        self.position_counts.clear();
+        self.current_game_positions.clear();
+        self.engine.new_game();
     }
 }

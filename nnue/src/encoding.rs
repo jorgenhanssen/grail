@@ -1,17 +1,36 @@
-use chess::{Board, Color, Piece, ALL_SQUARES, NUM_COLORS, NUM_PIECES, NUM_SQUARES};
+use chess::{BitBoard, Board, Color, Piece, ALL_SQUARES, NUM_COLORS, NUM_PIECES, NUM_SQUARES};
 
-// One-hot board encoding:
-// - 768 piece placement features (64 squares × 6 pieces × 2 colors)
-// - 1 side-to-move bit
-pub const NUM_FEATURES: usize = NUM_SQUARES * NUM_PIECES * NUM_COLORS + 1;
+// Board encoding feature counts
+const NUM_PIECE_PLACEMENT_FEATURES: usize = NUM_SQUARES * NUM_PIECES * NUM_COLORS; // 768
+const NUM_ATTACK_FEATURES: usize = NUM_SQUARES * 2; // 128 (white + black)
+const NUM_SUPPORT_FEATURES: usize = NUM_SQUARES * 2; // 128 (white + black)
+const NUM_SIDE_TO_MOVE_FEATURES: usize = 1;
+
+pub const NUM_FEATURES: usize = NUM_PIECE_PLACEMENT_FEATURES
+    + NUM_ATTACK_FEATURES
+    + NUM_SUPPORT_FEATURES
+    + NUM_SIDE_TO_MOVE_FEATURES;
 
 pub const NUM_U64S: usize = NUM_FEATURES.div_ceil(64);
 
+const PIECE_FEATURES_END: usize = NUM_PIECE_PLACEMENT_FEATURES;
+const WHITE_ATTACKS_START: usize = PIECE_FEATURES_END;
+const WHITE_ATTACKS_END: usize = WHITE_ATTACKS_START + NUM_SQUARES;
+const BLACK_ATTACKS_START: usize = WHITE_ATTACKS_END;
+const BLACK_ATTACKS_END: usize = BLACK_ATTACKS_START + NUM_SQUARES;
+const WHITE_SUPPORT_START: usize = BLACK_ATTACKS_END;
+const WHITE_SUPPORT_END: usize = WHITE_SUPPORT_START + NUM_SQUARES;
+const BLACK_SUPPORT_START: usize = WHITE_SUPPORT_END;
 const SIDE_TO_MOVE_IDX: usize = NUM_FEATURES - 1;
 
-/// Encodes a board position as a one-hot feature vector.
 #[inline(always)]
-pub fn encode_board(board: &Board) -> [f32; NUM_FEATURES] {
+pub fn encode_board(
+    board: &Board,
+    white_attacks: BitBoard,
+    black_attacks: BitBoard,
+    white_support: BitBoard,
+    black_support: BitBoard,
+) -> [f32; NUM_FEATURES] {
     let mut features = [0f32; NUM_FEATURES];
 
     // Piece placements
@@ -23,6 +42,26 @@ pub fn encode_board(board: &Board) -> [f32; NUM_FEATURES] {
         }
     }
 
+    // White attacks
+    for sq in white_attacks {
+        features[WHITE_ATTACKS_START + sq.to_index()] = 1.0;
+    }
+
+    // Black attacks
+    for sq in black_attacks {
+        features[BLACK_ATTACKS_START + sq.to_index()] = 1.0;
+    }
+
+    // White support
+    for sq in white_support {
+        features[WHITE_SUPPORT_START + sq.to_index()] = 1.0;
+    }
+
+    // Black support
+    for sq in black_support {
+        features[BLACK_SUPPORT_START + sq.to_index()] = 1.0;
+    }
+
     // Side to move
     if board.side_to_move() == Color::White {
         features[SIDE_TO_MOVE_IDX] = 1.0;
@@ -31,9 +70,14 @@ pub fn encode_board(board: &Board) -> [f32; NUM_FEATURES] {
     features
 }
 
-/// Encodes a board position as a bitset (for incremental NNUE updates).
 #[inline(always)]
-pub fn encode_board_bitset(board: &Board) -> [u64; NUM_U64S] {
+pub fn encode_board_bitset(
+    board: &Board,
+    white_attacks: BitBoard,
+    black_attacks: BitBoard,
+    white_support: BitBoard,
+    black_support: BitBoard,
+) -> [u64; NUM_U64S] {
     let mut words = [0u64; NUM_U64S];
 
     // Piece placements
@@ -45,6 +89,30 @@ pub fn encode_board_bitset(board: &Board) -> [u64; NUM_U64S] {
             let bit_idx = offset % 64;
             words[word_idx] |= 1u64 << bit_idx;
         }
+    }
+
+    // White attacks
+    for sq in white_attacks {
+        let idx = WHITE_ATTACKS_START + sq.to_index();
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    // Black attacks
+    for sq in black_attacks {
+        let idx = BLACK_ATTACKS_START + sq.to_index();
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    // White support
+    for sq in white_support {
+        let idx = WHITE_SUPPORT_START + sq.to_index();
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    // Black support
+    for sq in black_support {
+        let idx = BLACK_SUPPORT_START + sq.to_index();
+        words[idx / 64] |= 1u64 << (idx % 64);
     }
 
     // Side to move

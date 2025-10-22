@@ -1,6 +1,7 @@
 use candle_nn::{VarBuilder, VarMap};
-use chess::Board;
+use chess::{Board, Color};
 use evaluation::NNUE;
+use utils::board_metrics::BoardMetrics;
 
 use crate::{
     encoding::encode_board_bitset,
@@ -39,7 +40,20 @@ impl NNUE for Evaluator {
 
     #[inline(always)]
     fn evaluate(&mut self, board: &Board) -> i16 {
-        let bitset = encode_board_bitset(board);
+        // Compute tactical features
+        let metrics = BoardMetrics::new(board);
+        let white_attacks = metrics.attacks[Color::White.to_index()];
+        let black_attacks = metrics.attacks[Color::Black.to_index()];
+        let white_support = metrics.support[Color::White.to_index()];
+        let black_support = metrics.support[Color::Black.to_index()];
+
+        let bitset = encode_board_bitset(
+            board,
+            white_attacks,
+            black_attacks,
+            white_support,
+            black_support,
+        );
         self.nnue_network
             .forward_bitset(&bitset)
             .clamp(i16::MIN as f32, i16::MAX as f32) as i16
