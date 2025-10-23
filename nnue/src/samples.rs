@@ -137,6 +137,8 @@ impl Samples {
             let black_attacks = metrics.attacks[Color::Black.to_index()];
             let white_support = metrics.support[Color::White.to_index()];
             let black_support = metrics.support[Color::Black.to_index()];
+            let white_threats = metrics.threats[Color::White.to_index()];
+            let black_threats = metrics.threats[Color::Black.to_index()];
 
             let features = encode_board(
                 &board,
@@ -144,6 +146,8 @@ impl Samples {
                 black_attacks,
                 white_support,
                 black_support,
+                white_threats,
+                black_threats,
             );
             feature_data.extend_from_slice(&features);
             score_data.push((score as f32) / TRAINING_SCALE);
@@ -324,6 +328,8 @@ impl<'a> BatchedSamplesIdx<'a> {
                         let black_attacks = metrics.attacks[Color::Black.to_index()];
                         let white_support = metrics.support[Color::White.to_index()];
                         let black_support = metrics.support[Color::Black.to_index()];
+                        let white_threats = metrics.threats[Color::White.to_index()];
+                        let black_threats = metrics.threats[Color::Black.to_index()];
 
                         let features = encode_board(
                             &board,
@@ -331,6 +337,8 @@ impl<'a> BatchedSamplesIdx<'a> {
                             black_attacks,
                             white_support,
                             black_support,
+                            white_threats,
+                            black_threats,
                         );
                         feature_data.extend_from_slice(&features);
                         score_data.push((score as f32) / TRAINING_SCALE);

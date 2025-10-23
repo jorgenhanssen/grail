@@ -46,6 +46,8 @@ impl NNUE for Evaluator {
         let black_attacks = metrics.attacks[Color::Black.to_index()];
         let white_support = metrics.support[Color::White.to_index()];
         let black_support = metrics.support[Color::Black.to_index()];
+        let white_threats = metrics.threats[Color::White.to_index()];
+        let black_threats = metrics.threats[Color::Black.to_index()];
 
         let bitset = encode_board_bitset(
             board,
@@ -53,6 +55,8 @@ impl NNUE for Evaluator {
             black_attacks,
             white_support,
             black_support,
+            white_threats,
+            black_threats,
         );
         self.nnue_network
             .forward_bitset(&bitset)

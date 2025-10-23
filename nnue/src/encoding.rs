@@ -2,25 +2,33 @@ use chess::{BitBoard, Board, Color, Piece, ALL_SQUARES, NUM_COLORS, NUM_PIECES, 
 
 // Board encoding feature counts
 const NUM_PIECE_PLACEMENT_FEATURES: usize = NUM_SQUARES * NUM_PIECES * NUM_COLORS; // 768
-const NUM_ATTACK_FEATURES: usize = NUM_SQUARES * 2; // 128 (white + black)
-const NUM_SUPPORT_FEATURES: usize = NUM_SQUARES * 2; // 128 (white + black)
+const NUM_SUPPORT_FEATURES: usize = NUM_SQUARES * 2; // 128 (white + black defended pieces)
+const NUM_SPACE_FEATURES: usize = NUM_SQUARES * 2; // 128 (white + black controlled non-piece squares)
+const NUM_THREAT_FEATURES: usize = NUM_SQUARES * 2; // 128 (white + black threatened pieces)
 const NUM_SIDE_TO_MOVE_FEATURES: usize = 1;
 
 pub const NUM_FEATURES: usize = NUM_PIECE_PLACEMENT_FEATURES
-    + NUM_ATTACK_FEATURES
     + NUM_SUPPORT_FEATURES
-    + NUM_SIDE_TO_MOVE_FEATURES;
+    + NUM_SPACE_FEATURES
+    + NUM_THREAT_FEATURES
+    + NUM_SIDE_TO_MOVE_FEATURES; // 1153 total
 
 pub const NUM_U64S: usize = NUM_FEATURES.div_ceil(64);
 
 const PIECE_FEATURES_END: usize = NUM_PIECE_PLACEMENT_FEATURES;
-const WHITE_ATTACKS_START: usize = PIECE_FEATURES_END;
-const WHITE_ATTACKS_END: usize = WHITE_ATTACKS_START + NUM_SQUARES;
-const BLACK_ATTACKS_START: usize = WHITE_ATTACKS_END;
-const BLACK_ATTACKS_END: usize = BLACK_ATTACKS_START + NUM_SQUARES;
-const WHITE_SUPPORT_START: usize = BLACK_ATTACKS_END;
+const WHITE_SUPPORT_START: usize = PIECE_FEATURES_END;
 const WHITE_SUPPORT_END: usize = WHITE_SUPPORT_START + NUM_SQUARES;
 const BLACK_SUPPORT_START: usize = WHITE_SUPPORT_END;
+const BLACK_SUPPORT_END: usize = BLACK_SUPPORT_START + NUM_SQUARES;
+const WHITE_SPACE_START: usize = BLACK_SUPPORT_END;
+const WHITE_SPACE_END: usize = WHITE_SPACE_START + NUM_SQUARES;
+const BLACK_SPACE_START: usize = WHITE_SPACE_END;
+const BLACK_SPACE_END: usize = BLACK_SPACE_START + NUM_SQUARES;
+const WHITE_THREATS_START: usize = BLACK_SPACE_END;
+const WHITE_THREATS_END: usize = WHITE_THREATS_START + NUM_SQUARES;
+const BLACK_THREATS_START: usize = WHITE_THREATS_END;
+#[allow(dead_code)]
+const BLACK_THREATS_END: usize = BLACK_THREATS_START + NUM_SQUARES;
 const SIDE_TO_MOVE_IDX: usize = NUM_FEATURES - 1;
 
 #[inline(always)]
@@ -30,6 +38,8 @@ pub fn encode_board(
     black_attacks: BitBoard,
     white_support: BitBoard,
     black_support: BitBoard,
+    white_threats: BitBoard,
+    black_threats: BitBoard,
 ) -> [f32; NUM_FEATURES] {
     let mut features = [0f32; NUM_FEATURES];
 
@@ -42,16 +52,6 @@ pub fn encode_board(
         }
     }
 
-    // White attacks
-    for sq in white_attacks {
-        features[WHITE_ATTACKS_START + sq.to_index()] = 1.0;
-    }
-
-    // Black attacks
-    for sq in black_attacks {
-        features[BLACK_ATTACKS_START + sq.to_index()] = 1.0;
-    }
-
     // White support
     for sq in white_support {
         features[WHITE_SUPPORT_START + sq.to_index()] = 1.0;
@@ -60,6 +60,30 @@ pub fn encode_board(
     // Black support
     for sq in black_support {
         features[BLACK_SUPPORT_START + sq.to_index()] = 1.0;
+    }
+
+    // White space (controlled non-piece squares)
+    let white_pieces = board.color_combined(Color::White);
+    let white_space_bb = white_attacks & !*white_pieces;
+    for sq in white_space_bb {
+        features[WHITE_SPACE_START + sq.to_index()] = 1.0;
+    }
+
+    // Black space
+    let black_pieces = board.color_combined(Color::Black);
+    let black_space_bb = black_attacks & !*black_pieces;
+    for sq in black_space_bb {
+        features[BLACK_SPACE_START + sq.to_index()] = 1.0;
+    }
+
+    // White threats
+    for sq in white_threats {
+        features[WHITE_THREATS_START + sq.to_index()] = 1.0;
+    }
+
+    // Black threats
+    for sq in black_threats {
+        features[BLACK_THREATS_START + sq.to_index()] = 1.0;
     }
 
     // Side to move
@@ -77,6 +101,8 @@ pub fn encode_board_bitset(
     black_attacks: BitBoard,
     white_support: BitBoard,
     black_support: BitBoard,
+    white_threats: BitBoard,
+    black_threats: BitBoard,
 ) -> [u64; NUM_U64S] {
     let mut words = [0u64; NUM_U64S];
 
@@ -91,18 +117,6 @@ pub fn encode_board_bitset(
         }
     }
 
-    // White attacks
-    for sq in white_attacks {
-        let idx = WHITE_ATTACKS_START + sq.to_index();
-        words[idx / 64] |= 1u64 << (idx % 64);
-    }
-
-    // Black attacks
-    for sq in black_attacks {
-        let idx = BLACK_ATTACKS_START + sq.to_index();
-        words[idx / 64] |= 1u64 << (idx % 64);
-    }
-
     // White support
     for sq in white_support {
         let idx = WHITE_SUPPORT_START + sq.to_index();
@@ -112,6 +126,34 @@ pub fn encode_board_bitset(
     // Black support
     for sq in black_support {
         let idx = BLACK_SUPPORT_START + sq.to_index();
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    // White space (controlled non-piece squares)
+    let white_pieces = board.color_combined(Color::White);
+    let white_space_bb = white_attacks & !*white_pieces;
+    for sq in white_space_bb {
+        let idx = WHITE_SPACE_START + sq.to_index();
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    // Black space
+    let black_pieces = board.color_combined(Color::Black);
+    let black_space_bb = black_attacks & !*black_pieces;
+    for sq in black_space_bb {
+        let idx = BLACK_SPACE_START + sq.to_index();
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    // White threats
+    for sq in white_threats {
+        let idx = WHITE_THREATS_START + sq.to_index();
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    // Black threats
+    for sq in black_threats {
+        let idx = BLACK_THREATS_START + sq.to_index();
         words[idx / 64] |= 1u64 << (idx % 64);
     }
 
