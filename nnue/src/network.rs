@@ -9,7 +9,7 @@ use std::simd::f32x8;
 const SIMD_WIDTH: usize = 8;
 
 const EMBEDDING_SIZE: usize = 1024;
-const HIDDEN_SIZE: usize = 32;
+const HIDDEN_SIZE: usize = 16;
 
 pub struct Network {
     embedding: Linear,
