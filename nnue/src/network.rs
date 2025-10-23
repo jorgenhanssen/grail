@@ -8,7 +8,7 @@ use crate::samples::{CP_MAX, CP_MIN, TRAINING_SCALE};
 use std::simd::f32x8;
 const SIMD_WIDTH: usize = 8;
 
-const EMBEDDING_SIZE: usize = 2048;
+const EMBEDDING_SIZE: usize = 1024;
 const HIDDEN_SIZE: usize = 32;
 
 pub struct Network {
