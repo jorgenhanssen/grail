@@ -264,13 +264,11 @@ impl NNUENetwork {
             .forward(&activated_embedding, &mut self.hidden_buffer);
 
         // Apply ReLU to hidden
-        let mut activated_hidden = [0.0; HIDDEN_SIZE];
-        activated_hidden.copy_from_slice(&self.hidden_buffer);
-        simd_relu(&mut activated_hidden);
+        simd_relu(&mut self.hidden_buffer);
 
         // Pass through output layer
         self.output
-            .forward(&activated_hidden, &mut self.output_buffer);
+            .forward(&self.hidden_buffer, &mut self.output_buffer);
 
         let cp = self.output_buffer[0] * TRAINING_SCALE;
         cp.clamp(CP_MIN as f32, CP_MAX as f32)
