@@ -9,9 +9,11 @@ use std::simd::f32x8;
 const SIMD_WIDTH: usize = 8;
 
 const EMBEDDING_SIZE: usize = 2048;
+const HIDDEN_SIZE: usize = 32;
 
 pub struct Network {
     embedding: Linear,
+    hidden: Linear,
     output: Linear,
 }
 
@@ -19,7 +21,8 @@ impl Network {
     pub fn new(vs: &VarBuilder) -> Result<Self> {
         let network = Self {
             embedding: linear(NUM_FEATURES, EMBEDDING_SIZE, vs.pp("embedding"))?,
-            output: linear(EMBEDDING_SIZE, 1, vs.pp("output"))?,
+            hidden: linear(EMBEDDING_SIZE, HIDDEN_SIZE, vs.pp("hidden"))?,
+            output: linear(HIDDEN_SIZE, 1, vs.pp("output"))?,
         };
 
         Ok(network)
@@ -30,6 +33,7 @@ impl Module for Network {
     #[inline]
     fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let x = x.apply(&self.embedding)?.relu()?;
+        let x = x.apply(&self.hidden)?.relu()?;
         let x = x.apply(&self.output)?;
 
         Ok(x)
@@ -78,6 +82,7 @@ impl LinearLayer {
 
 pub struct NNUENetwork {
     embedding: LinearLayer,
+    hidden: LinearLayer,
     output: LinearLayer,
 
     // [feature_idx][embedding_idx]
@@ -85,6 +90,7 @@ pub struct NNUENetwork {
 
     // Accumulated state
     embedding_buffer: [f32; EMBEDDING_SIZE],
+    hidden_buffer: [f32; HIDDEN_SIZE],
     output_buffer: [f32; 1],
 
     // Input state for change detection
@@ -95,6 +101,7 @@ pub struct NNUENetwork {
 impl NNUENetwork {
     pub fn from_network(network: &Network) -> Result<Self> {
         let embedding = LinearLayer::from_candle_linear(&network.embedding)?;
+        let hidden = LinearLayer::from_candle_linear(&network.hidden)?;
         let output = LinearLayer::from_candle_linear(&network.output)?;
 
         // Transposed embedding weights for cache-friendly updates.
@@ -112,6 +119,7 @@ impl NNUENetwork {
         let mut embedding_buffer = [0.0; EMBEDDING_SIZE];
         embedding_buffer.copy_from_slice(&embedding.biases);
 
+        let hidden_buffer = [0.0; HIDDEN_SIZE];
         let output_buffer = [0.0; 1];
 
         let current_input = [0u64; NUM_U64S];
@@ -119,9 +127,11 @@ impl NNUENetwork {
 
         Ok(Self {
             embedding,
+            hidden,
             output,
             embedding_weights_by_feature,
             embedding_buffer,
+            hidden_buffer,
             output_buffer,
             current_input,
             previous_input,
@@ -244,12 +254,23 @@ impl NNUENetwork {
         // Store current input for next time
         self.previous_input.copy_from_slice(&self.current_input);
 
+        // Apply ReLU to embedding
         let mut activated_embedding = [0.0; EMBEDDING_SIZE];
         activated_embedding.copy_from_slice(&self.embedding_buffer);
         simd_relu(&mut activated_embedding);
 
+        // Pass through hidden layer
+        self.hidden
+            .forward(&activated_embedding, &mut self.hidden_buffer);
+
+        // Apply ReLU to hidden
+        let mut activated_hidden = [0.0; HIDDEN_SIZE];
+        activated_hidden.copy_from_slice(&self.hidden_buffer);
+        simd_relu(&mut activated_hidden);
+
+        // Pass through output layer
         self.output
-            .forward(&activated_embedding, &mut self.output_buffer);
+            .forward(&activated_hidden, &mut self.output_buffer);
 
         let cp = self.output_buffer[0] * TRAINING_SCALE;
         cp.clamp(CP_MIN as f32, CP_MAX as f32)
