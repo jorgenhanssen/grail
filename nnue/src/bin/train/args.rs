@@ -17,6 +17,6 @@ pub struct Args {
     #[arg(long, default_value_t = 0.95)]
     pub lr_decay: f64,
 
-    #[arg(long, default_value_t = 8)]
+    #[arg(long, default_value_t = 2)]
     pub early_stop_patience: u64,
 }

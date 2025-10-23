@@ -21,6 +21,7 @@ pub struct Samples {
     pub fens: Vec<Box<str>>,
     pub scores: Vec<i16>,
     pub wdl: Vec<f32>, // Win/Draw/Loss: 1.0 = white win, 0.5 = draw, 0.0 = black win
+    pub game_ids: Vec<usize>,
 }
 
 impl Samples {
@@ -29,29 +30,37 @@ impl Samples {
             fens: Vec::new(),
             scores: Vec::new(),
             wdl: Vec::new(),
+            game_ids: Vec::new(),
         }
     }
 
-    pub fn from_evaluations(evals: &[(String, i16, f32)]) -> Self {
+    pub fn from_evaluations(evals: &[(String, i16, f32, usize)]) -> Self {
         let mut fens = Vec::with_capacity(evals.len());
         let mut scores = Vec::with_capacity(evals.len());
         let mut wdl = Vec::with_capacity(evals.len());
-        for (fen, score, outcome) in evals.iter() {
+        let mut game_ids = Vec::with_capacity(evals.len());
+        for (fen, score, outcome, game_id) in evals.iter() {
             fens.push(fen.clone().into_boxed_str());
             scores.push((*score).clamp(CP_MIN, CP_MAX));
             wdl.push(*outcome);
+            game_ids.push(*game_id);
         }
-        Self { fens, scores, wdl }
+        Self {
+            fens,
+            scores,
+            wdl,
+            game_ids,
+        }
     }
 
     pub fn write<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-        writeln!(writer, "fen,score,wdl")?; // Header
+        writeln!(writer, "fen,score,wdl,game_id")?; // Header
 
         for i in 0..self.fens.len() {
             writeln!(
                 writer,
-                "{},{},{}",
-                self.fens[i], self.scores[i], self.wdl[i]
+                "{},{},{},{}",
+                self.fens[i], self.scores[i], self.wdl[i], self.game_ids[i]
             )?;
         }
 
@@ -62,6 +71,7 @@ impl Samples {
         let mut fens = Vec::new();
         let mut scores = Vec::new();
         let mut wdl = Vec::new();
+        let mut game_ids = Vec::new();
 
         // Skip header line
         let mut header_line = String::new();
@@ -82,6 +92,9 @@ impl Samples {
             let wdl_str = parts
                 .next()
                 .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing wdl field"))?;
+            let game_id_str = parts.next().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "Missing game_id field")
+            })?;
 
             let score: i16 = score_str.trim().parse().map_err(|_| {
                 io::Error::new(io::ErrorKind::InvalidData, "Score is not a valid integer")
@@ -89,13 +102,22 @@ impl Samples {
             let wdl_val: f32 = wdl_str.trim().parse().map_err(|_| {
                 io::Error::new(io::ErrorKind::InvalidData, "WDL is not a valid float")
             })?;
+            let game_id: usize = game_id_str.trim().parse().map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidData, "game_id is not a valid integer")
+            })?;
 
             fens.push(fen_str.trim().to_string().into_boxed_str());
             scores.push(score.clamp(CP_MIN, CP_MAX));
             wdl.push(wdl_val);
+            game_ids.push(game_id);
         }
 
-        Ok(Self { fens, scores, wdl })
+        Ok(Self {
+            fens,
+            scores,
+            wdl,
+            game_ids,
+        })
     }
 
     pub fn to_xy(self, device: &Device) -> Result<(Tensor, Tensor)> {
@@ -155,16 +177,43 @@ impl Samples {
         test_ratio: f64,
         random_seed: Option<u64>,
     ) -> (Vec<usize>, Vec<usize>) {
-        let total_len = self.fens.len();
-        let test_len = (total_len as f64 * test_ratio) as usize;
-        let train_len = total_len - test_len;
-        let mut idx: Vec<usize> = (0..total_len).collect();
+        use std::collections::{HashMap, HashSet};
+
+        // Group positions by game_id
+        let mut game_to_positions: HashMap<usize, Vec<usize>> = HashMap::new();
+        for (i, &game_id) in self.game_ids.iter().enumerate() {
+            game_to_positions.entry(game_id).or_default().push(i);
+        }
+
+        // Get unique game IDs and shuffle them
+        let mut unique_games: Vec<usize> = game_to_positions.keys().copied().collect();
         if let Some(seed) = random_seed {
             let mut rng = StdRng::seed_from_u64(seed);
-            idx.shuffle(&mut rng);
+            unique_games.shuffle(&mut rng);
         }
-        let (train_idx, test_idx) = idx.split_at(train_len);
-        (train_idx.to_vec(), test_idx.to_vec())
+
+        // Split games into train and test
+        let total_games = unique_games.len();
+        let test_games_count = (total_games as f64 * test_ratio).ceil() as usize;
+        let train_games_count = total_games - test_games_count;
+
+        let (train_games, test_games) = unique_games.split_at(train_games_count);
+        let train_game_set: HashSet<usize> = train_games.iter().copied().collect();
+        let test_game_set: HashSet<usize> = test_games.iter().copied().collect();
+
+        // Collect position indices for train and test sets
+        let mut train_idx = Vec::new();
+        let mut test_idx = Vec::new();
+
+        for (game_id, positions) in game_to_positions {
+            if train_game_set.contains(&game_id) {
+                train_idx.extend(positions);
+            } else if test_game_set.contains(&game_id) {
+                test_idx.extend(positions);
+            }
+        }
+
+        (train_idx, test_idx)
     }
 
     pub fn len(&self) -> usize {
@@ -178,21 +227,25 @@ impl Samples {
         let mut new_fens = Vec::with_capacity(self.fens.len());
         let mut new_scores = Vec::with_capacity(self.scores.len());
         let mut new_wdl = Vec::with_capacity(self.wdl.len());
+        let mut new_game_ids = Vec::with_capacity(self.game_ids.len());
         for i in idx {
             new_fens.push(self.fens[i].clone());
             new_scores.push(self.scores[i]);
             new_wdl.push(self.wdl[i]);
+            new_game_ids.push(self.game_ids[i]);
         }
 
         self.fens = new_fens;
         self.scores = new_scores;
         self.wdl = new_wdl;
+        self.game_ids = new_game_ids;
     }
 
     pub fn extend(&mut self, other: Samples) {
         self.fens.extend(other.fens);
         self.scores.extend(other.scores);
         self.wdl.extend(other.wdl);
+        self.game_ids.extend(other.game_ids);
     }
 }
 

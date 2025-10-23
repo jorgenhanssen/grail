@@ -59,7 +59,7 @@ impl Generator {
         Ok(generator)
     }
 
-    pub fn run(&self, duration: u64, depth: u8) -> Vec<(String, i16, f32)> {
+    pub fn run(&self, duration: u64, depth: u8) -> Vec<(String, i16, f32, usize)> {
         let eval_name = match &self.nnue_path {
             Some(path) => path.display().to_string(),
             None => "traditional evaluator".to_string(),
@@ -81,6 +81,7 @@ impl Generator {
         let pb = Arc::new(pb);
 
         let sample_counter = Arc::new(AtomicUsize::new(0));
+        let game_id_counter = Arc::new(AtomicUsize::new(0));
         let opening_book = Arc::new(self.opening_book.clone());
 
         let handles: Vec<_> = (0..self.threads)
@@ -88,6 +89,7 @@ impl Generator {
                 let nnue_path = self.nnue_path.clone();
                 let version = self.version;
                 let sample_counter = Arc::clone(&sample_counter);
+                let game_id_counter = Arc::clone(&game_id_counter);
                 let opening_book = Arc::clone(&opening_book);
                 let pb = Arc::clone(&pb);
 
@@ -104,8 +106,14 @@ impl Generator {
                         None
                     };
 
-                    let mut worker =
-                        SelfPlayWorker::new(tid, sample_counter, depth, nnue, &opening_book);
+                    let mut worker = SelfPlayWorker::new(
+                        tid,
+                        sample_counter,
+                        game_id_counter,
+                        depth,
+                        nnue,
+                        &opening_book,
+                    );
                     worker.play_games(duration, &pb)
                 })
             })
@@ -179,12 +187,14 @@ fn read_random_opening_position(
 struct SelfPlayWorker {
     tid: usize,
     sample_counter: Arc<AtomicUsize>,
+    game_id_counter: Arc<AtomicUsize>,
     engine: NegamaxEngine,
     depth: u8,
     opening_book: (PathBuf, usize), // (path, line_count)
 
     // Game-specific state
     game: Game,
+    game_id: usize,
     position_counts: std::collections::HashMap<u64, usize>,
     current_game_positions: Vec<(String, i16)>,
 }
@@ -193,6 +203,7 @@ impl SelfPlayWorker {
     pub fn new(
         tid: usize,
         sample_counter: Arc<AtomicUsize>,
+        game_id_counter: Arc<AtomicUsize>,
         depth: u8,
         nnue: Option<Box<dyn NNUE>>,
         opening_book: &(PathBuf, usize),
@@ -210,7 +221,9 @@ impl SelfPlayWorker {
         Self {
             tid,
             sample_counter,
+            game_id_counter,
             game: Game::new(),
+            game_id: 0,
             depth,
             engine: NegamaxEngine::new(&config, hce, nnue),
             position_counts: std::collections::HashMap::new(),
@@ -219,7 +232,11 @@ impl SelfPlayWorker {
         }
     }
 
-    pub fn play_games(&mut self, duration: u64, pb: &ProgressBar) -> Vec<(String, i16, f32)> {
+    pub fn play_games(
+        &mut self,
+        duration: u64,
+        pb: &ProgressBar,
+    ) -> Vec<(String, i16, f32, usize)> {
         let start_time = Instant::now();
         let mut evaluations = Vec::new();
 
@@ -419,7 +436,7 @@ impl SelfPlayWorker {
         false
     }
 
-    fn flush_game_to_evaluations(&mut self, evaluations: &mut Vec<(String, i16, f32)>) {
+    fn flush_game_to_evaluations(&mut self, evaluations: &mut Vec<(String, i16, f32, usize)>) {
         // Determine game outcome (WDL from white's perspective)
         let (wdl, is_decisive) = if let Some(result) = self.game.result() {
             use chess::GameResult;
@@ -438,10 +455,11 @@ impl SelfPlayWorker {
         // For decisive games: include all positions
         // For drawn games: only include balanced positions (|eval| < 1000)
         // This prevents labeling clearly winning positions as draws
+        let game_id = self.game_id;
         let num_positions = if is_decisive {
             let count = self.current_game_positions.len();
             for (fen, score) in self.current_game_positions.drain(..) {
-                evaluations.push((fen, score, wdl));
+                evaluations.push((fen, score, wdl, game_id));
             }
             count
         } else {
@@ -449,7 +467,7 @@ impl SelfPlayWorker {
             for (fen, score) in self.current_game_positions.drain(..) {
                 // Only include balanced positions in drawn games
                 if score.abs() < 1000 {
-                    evaluations.push((fen, score, wdl));
+                    evaluations.push((fen, score, wdl, game_id));
                     count += 1;
                 }
             }
@@ -463,6 +481,9 @@ impl SelfPlayWorker {
 
     #[inline]
     fn reset_game(&mut self) {
+        // Get unique game ID
+        self.game_id = self.game_id_counter.fetch_add(1, Ordering::Relaxed);
+
         // Read a random position from opening book
         let (ref path, line_count) = self.opening_book;
         if let Ok(fen) = read_random_opening_position(path, line_count) {
