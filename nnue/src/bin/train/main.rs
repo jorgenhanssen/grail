@@ -6,23 +6,30 @@ use candle_nn::{AdamW, Module, Optimizer, ParamsAdamW, VarBuilder, VarMap};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::LevelFilter;
-use nnue::{network::Network, samples::Samples, version::VersionManager};
+use nnue::{
+    network::Network,
+    samples::{Samples, FV_SCALE},
+    version::VersionManager,
+};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use simplelog::{Config, SimpleLogger};
 use std::{error::Error, fs::File, io::BufReader};
+
+// Huber loss threshold in centipawns
+// Errors below this use MSE (quadratic), above use MAE (linear)
+const HUBER_THRESHOLD_CP: f64 = 400.0;
+const HUBER_DELTA: f64 = HUBER_THRESHOLD_CP / FV_SCALE as f64;
 
 // Huber loss on normalized centipawn targets
 fn eval_loss(pred: &Tensor, eval_target: &Tensor) -> CandleResult<Tensor> {
     let diff = (pred - eval_target)?;
     let abs_diff = diff.abs()?;
 
-    // Huber delta = 1.0 in normalized space (equivalent to TRAINING_SCALE cp)
-    let huber_delta = 1.0;
-    let is_small = abs_diff.lt(huber_delta)?;
+    let is_small = abs_diff.lt(HUBER_DELTA)?;
 
     let quadratic = (diff.sqr()? * 0.5)?;
-    let linear = ((abs_diff - 0.5 * huber_delta)? * huber_delta)?;
+    let linear = ((abs_diff - 0.5 * HUBER_DELTA)? * HUBER_DELTA)?;
 
     let loss = is_small.where_cond(&quadratic, &linear)?;
     loss.mean_all()

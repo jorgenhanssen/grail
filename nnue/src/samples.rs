@@ -14,7 +14,7 @@ use crate::encoding::{encode_board, NUM_FEATURES};
 pub const CP_MAX: i16 = 5000;
 pub const CP_MIN: i16 = -5000;
 
-pub const TRAINING_SCALE: f32 = 400.0;
+pub const FV_SCALE: f32 = 400.0;
 
 #[derive(Clone, Debug)]
 pub struct Samples {
@@ -150,7 +150,7 @@ impl Samples {
                 black_threats,
             );
             feature_data.extend_from_slice(&features);
-            score_data.push((score as f32) / TRAINING_SCALE);
+            score_data.push((score as f32) / FV_SCALE);
         }
 
         let x = Tensor::from_iter(feature_data.into_iter(), device)?
@@ -341,7 +341,7 @@ impl<'a> BatchedSamplesIdx<'a> {
                             black_threats,
                         );
                         feature_data.extend_from_slice(&features);
-                        score_data.push((score as f32) / TRAINING_SCALE);
+                        score_data.push((score as f32) / FV_SCALE);
                         wdl_data.push(wdl_val);
                     }
 

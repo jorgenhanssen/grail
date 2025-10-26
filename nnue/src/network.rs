@@ -3,7 +3,7 @@ use candle_nn::{linear, Linear, Module, VarBuilder};
 use std::simd::prelude::SimdFloat;
 
 use crate::encoding::{NUM_FEATURES, NUM_U64S};
-use crate::samples::{CP_MAX, CP_MIN, TRAINING_SCALE};
+use crate::samples::{CP_MAX, CP_MIN, FV_SCALE};
 
 use std::simd::f32x8;
 const SIMD_WIDTH: usize = 8;
@@ -224,7 +224,7 @@ impl NNUENetwork {
         self.output
             .forward(&activated_embedding, &mut self.output_buffer);
 
-        let cp = self.output_buffer[0] * TRAINING_SCALE;
+        let cp = self.output_buffer[0] * FV_SCALE;
         cp.clamp(CP_MIN as f32, CP_MAX as f32)
     }
 
@@ -270,7 +270,7 @@ impl NNUENetwork {
         self.output
             .forward(&self.hidden_buffer, &mut self.output_buffer);
 
-        let cp = self.output_buffer[0] * TRAINING_SCALE;
+        let cp = self.output_buffer[0] * FV_SCALE;
         cp.clamp(CP_MIN as f32, CP_MAX as f32)
     }
 }
