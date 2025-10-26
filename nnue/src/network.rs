@@ -9,11 +9,12 @@ use std::simd::f32x8;
 const SIMD_WIDTH: usize = 8;
 
 const EMBEDDING_SIZE: usize = 1024;
-const HIDDEN_SIZE: usize = 16;
+const HIDDEN_SIZE: usize = 32;
 
 pub struct Network {
     embedding: Linear,
-    hidden: Linear,
+    hidden1: Linear,
+    hidden2: Linear,
     output: Linear,
 }
 
@@ -21,7 +22,8 @@ impl Network {
     pub fn new(vs: &VarBuilder) -> Result<Self> {
         let network = Self {
             embedding: linear(NUM_FEATURES, EMBEDDING_SIZE, vs.pp("embedding"))?,
-            hidden: linear(EMBEDDING_SIZE, HIDDEN_SIZE, vs.pp("hidden"))?,
+            hidden1: linear(EMBEDDING_SIZE, HIDDEN_SIZE, vs.pp("hidden1"))?,
+            hidden2: linear(HIDDEN_SIZE, HIDDEN_SIZE, vs.pp("hidden2"))?,
             output: linear(HIDDEN_SIZE, 1, vs.pp("output"))?,
         };
 
@@ -33,8 +35,11 @@ impl Module for Network {
     #[inline]
     fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let x = x.apply(&self.embedding)?.relu()?;
-        let x = x.apply(&self.hidden)?.relu()?;
-        let x = x.apply(&self.output)?;
+
+        let h1 = x.apply(&self.hidden1)?.relu()?;
+        let h2 = (h1.apply(&self.hidden2)? + &h1)?.relu()?;
+
+        let x = h2.apply(&self.output)?;
 
         Ok(x)
     }
@@ -82,7 +87,8 @@ impl LinearLayer {
 
 pub struct NNUENetwork {
     embedding: LinearLayer,
-    hidden: LinearLayer,
+    hidden1: LinearLayer,
+    hidden2: LinearLayer,
     output: LinearLayer,
 
     // [feature_idx][embedding_idx]
@@ -90,7 +96,8 @@ pub struct NNUENetwork {
 
     // Accumulated state
     embedding_buffer: [f32; EMBEDDING_SIZE],
-    hidden_buffer: [f32; HIDDEN_SIZE],
+    hidden1_buffer: [f32; HIDDEN_SIZE],
+    hidden2_buffer: [f32; HIDDEN_SIZE],
     output_buffer: [f32; 1],
 
     // Input state for change detection
@@ -101,7 +108,8 @@ pub struct NNUENetwork {
 impl NNUENetwork {
     pub fn from_network(network: &Network) -> Result<Self> {
         let embedding = LinearLayer::from_candle_linear(&network.embedding)?;
-        let hidden = LinearLayer::from_candle_linear(&network.hidden)?;
+        let hidden1 = LinearLayer::from_candle_linear(&network.hidden1)?;
+        let hidden2 = LinearLayer::from_candle_linear(&network.hidden2)?;
         let output = LinearLayer::from_candle_linear(&network.output)?;
 
         // Transposed embedding weights for cache-friendly updates.
@@ -119,7 +127,8 @@ impl NNUENetwork {
         let mut embedding_buffer = [0.0; EMBEDDING_SIZE];
         embedding_buffer.copy_from_slice(&embedding.biases);
 
-        let hidden_buffer = [0.0; HIDDEN_SIZE];
+        let hidden1_buffer = [0.0; HIDDEN_SIZE];
+        let hidden2_buffer = [0.0; HIDDEN_SIZE];
         let output_buffer = [0.0; 1];
 
         let current_input = [0u64; NUM_U64S];
@@ -127,11 +136,13 @@ impl NNUENetwork {
 
         Ok(Self {
             embedding,
-            hidden,
+            hidden1,
+            hidden2,
             output,
             embedding_weights_by_feature,
             embedding_buffer,
-            hidden_buffer,
+            hidden1_buffer,
+            hidden2_buffer,
             output_buffer,
             current_input,
             previous_input,
@@ -221,8 +232,21 @@ impl NNUENetwork {
         activated_embedding.copy_from_slice(&self.embedding_buffer);
         simd_relu(&mut activated_embedding);
 
+        // Hidden layer 1
+        self.hidden1
+            .forward(&activated_embedding, &mut self.hidden1_buffer);
+        simd_relu(&mut self.hidden1_buffer);
+
+        // Hidden layer 2 with skip connection
+        self.hidden2
+            .forward(&self.hidden1_buffer, &mut self.hidden2_buffer);
+        // Add skip connection from hidden1
+        simd_add(&mut self.hidden2_buffer, &self.hidden1_buffer);
+        simd_relu(&mut self.hidden2_buffer);
+
+        // Output layer
         self.output
-            .forward(&activated_embedding, &mut self.output_buffer);
+            .forward(&self.hidden2_buffer, &mut self.output_buffer);
 
         let cp = self.output_buffer[0] * FV_SCALE;
         cp.clamp(CP_MIN as f32, CP_MAX as f32)
@@ -259,16 +283,21 @@ impl NNUENetwork {
         activated_embedding.copy_from_slice(&self.embedding_buffer);
         simd_relu(&mut activated_embedding);
 
-        // Pass through hidden layer
-        self.hidden
-            .forward(&activated_embedding, &mut self.hidden_buffer);
+        // Hidden layer 1
+        self.hidden1
+            .forward(&activated_embedding, &mut self.hidden1_buffer);
+        simd_relu(&mut self.hidden1_buffer);
 
-        // Apply ReLU to hidden
-        simd_relu(&mut self.hidden_buffer);
+        // Hidden layer 2 with skip connection
+        self.hidden2
+            .forward(&self.hidden1_buffer, &mut self.hidden2_buffer);
+        // Add skip connection from hidden1
+        simd_add(&mut self.hidden2_buffer, &self.hidden1_buffer);
+        simd_relu(&mut self.hidden2_buffer);
 
-        // Pass through output layer
+        // Output layer
         self.output
-            .forward(&self.hidden_buffer, &mut self.output_buffer);
+            .forward(&self.hidden2_buffer, &mut self.output_buffer);
 
         let cp = self.output_buffer[0] * FV_SCALE;
         cp.clamp(CP_MIN as f32, CP_MAX as f32)
@@ -308,6 +337,46 @@ fn simd_relu(values: &mut [f32]) {
     // Handle remaining elements
     for j in i..len {
         values[j] = values[j].max(0.0);
+    }
+}
+
+// SIMD add helper function
+#[inline(always)]
+fn simd_add(dest: &mut [f32], src: &[f32]) {
+    let len = dest.len();
+    let mut i = 0;
+
+    const UNROLL: usize = 4;
+    let limit = len - (len % (SIMD_WIDTH * UNROLL));
+
+    // 4 SIMD chunks
+    while i < limit {
+        let dest0 = f32x8::from_slice(&dest[i..i + SIMD_WIDTH]);
+        let dest1 = f32x8::from_slice(&dest[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
+        let dest2 = f32x8::from_slice(&dest[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
+        let dest3 = f32x8::from_slice(&dest[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
+
+        let src0 = f32x8::from_slice(&src[i..i + SIMD_WIDTH]);
+        let src1 = f32x8::from_slice(&src[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
+        let src2 = f32x8::from_slice(&src[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
+        let src3 = f32x8::from_slice(&src[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
+
+        let result0 = dest0 + src0;
+        let result1 = dest1 + src1;
+        let result2 = dest2 + src2;
+        let result3 = dest3 + src3;
+
+        result0.copy_to_slice(&mut dest[i..i + SIMD_WIDTH]);
+        result1.copy_to_slice(&mut dest[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
+        result2.copy_to_slice(&mut dest[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
+        result3.copy_to_slice(&mut dest[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
+
+        i += SIMD_WIDTH * UNROLL;
+    }
+
+    // Handle remaining elements
+    for j in i..len {
+        dest[j] += src[j];
     }
 }
 
