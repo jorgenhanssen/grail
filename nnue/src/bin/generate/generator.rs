@@ -4,8 +4,6 @@ use chess::{Board, ChessMove, Game, MoveGen};
 use evaluation::{hce, NNUE};
 use indicatif::{ProgressBar, ProgressStyle};
 use nnue::version::VersionManager;
-use rand::distributions::WeightedIndex;
-use rand::prelude::Distribution;
 use rand::Rng;
 use search::{Engine, EngineConfig, NegamaxEngine};
 use std::error::Error;
@@ -313,7 +311,9 @@ impl SelfPlayWorker {
             .push((board.to_string(), white_score));
 
         // Apply temperature-based move selection
-        let chosen_move = self.select_move_with_temperature(&board, best_move, num_moves);
+        // Use full turns (ply pairs) so both sides get equal temperature
+        let full_turns = num_moves / 2;
+        let chosen_move = self.select_move_with_temperature(&board, best_move, full_turns);
 
         (chosen_move, engine_score)
     }
@@ -322,19 +322,18 @@ impl SelfPlayWorker {
         &mut self,
         board: &Board,
         best_move: ChessMove,
-        num_moves: usize,
+        full_turns: usize,
     ) -> ChessMove {
         let mut rng = rand::thread_rng();
 
-        // Logarithmic temperature decay: high early, low later
-        // Formula: temp = 3.0 * exp(-num_moves / 15.0)
-        // At move 0: temp ≈ 3.0 (high randomness)
-        // At move 15: temp ≈ 1.1 (moderate randomness)
-        // At move 30: temp ≈ 0.40 (low randomness)
-        // At move 50: temp ≈ 0.10 (nearly optimal)
-        // At move 60+: temp < 0.05 (essentially optimal)
-        let temperature = 3.0 * (-(num_moves as f32) / 15.0).exp();
-        let temperature = temperature.max(0.01);
+        // Turn-based temperature decay (both White and Black get same temp per turn)
+        // Formula: temp = 3.0 * exp(-full_turns / 7.5)
+        // At turn 0: temp ≈ 3.0 (high randomness)
+        // At turn 7-8: temp ≈ 1.1 (moderate randomness)
+        // At turn 15: temp ≈ 0.40 (low randomness)
+        // At turn 25: temp ≈ 0.10 (nearly optimal)
+        // At turn 30+: temp < 0.05 (essentially optimal)
+        let temperature = 3.0 * (-(full_turns as f32) / 7.5).exp();
 
         // With very low temperature, just play the best move
         if temperature < 0.05 {
@@ -347,61 +346,17 @@ impl SelfPlayWorker {
             return legal_moves[0];
         }
 
-        // Evaluate all legal moves with quick depth-1 search
-        let mut move_scores = Vec::with_capacity(legal_moves.len());
-        for &chess_move in &legal_moves {
-            let mut board_copy = *board;
-            board_copy = board_copy.make_move_new(chess_move);
+        // Use random move probability: play random move with probability = temperature / 3.0
+        // This ensures both sides have equal exploration
+        let random_prob = (temperature / 3.0).min(1.0);
 
-            // Quick depth-1 search
-            self.engine.set_position(board_copy);
-            let params = GoParams {
-                depth: Some(1),
-                ..Default::default()
-            };
-
-            let eval = match self.engine.search(&params, None) {
-                Some((_, eval)) => -eval, // Negate because we made the move
-                None => {
-                    // Terminal position
-                    match board_copy.status() {
-                        chess::BoardStatus::Checkmate => -29_000,
-                        chess::BoardStatus::Stalemate => 0,
-                        _ => 0,
-                    }
-                }
-            };
-            move_scores.push(eval);
-        }
-
-        // Apply temperature scaling to create weighted distribution
-        let min_eval = *move_scores.iter().min().unwrap();
-        let shift = if min_eval < 0 { -min_eval + 100 } else { 100 };
-
-        let weights: Vec<f32> = move_scores
-            .iter()
-            .map(|&eval| {
-                let shifted = (eval + shift).max(1) as f32;
-                shifted.powf(1.0 / temperature)
-            })
-            .collect();
-
-        // Convert to u32 for WeightedIndex
-        let weights_u32: Vec<u32> = weights
-            .iter()
-            .map(|&w| (w * 1000.0).max(1.0) as u32)
-            .collect();
-
-        match WeightedIndex::new(&weights_u32) {
-            Ok(dist) => {
-                let index = dist.sample(&mut rng);
-                legal_moves[index]
-            }
-            Err(_) => {
-                // Fallback to random selection
-                let index = rng.gen_range(0..legal_moves.len());
-                legal_moves[index]
-            }
+        if rng.gen::<f32>() < random_prob {
+            // Pick a truly random legal move
+            let index = rng.gen_range(0..legal_moves.len());
+            legal_moves[index]
+        } else {
+            // Play the best move
+            best_move
         }
     }
 
