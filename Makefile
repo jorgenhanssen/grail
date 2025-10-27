@@ -35,7 +35,7 @@ run-grail-nnue:
 build-generate:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin generate
 run-generate:
-	RUSTFLAGS="$(RUSTFLAGS)" cargo run --release --bin generate -- --opening-book ./books/Blitz_Testing_4moves.epd
+	RUSTFLAGS="$(RUSTFLAGS)" cargo run --release --bin generate -- --book ./books/Blitz_Testing_4moves.epd
 
 build-train:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin train
