@@ -1,8 +1,9 @@
+use crate::histogram::{HistogramHandle, ScoreHistogram};
 use candle_core::Device;
 use candle_nn::VarMap;
 use chess::{Board, ChessMove, Game, MoveGen};
 use evaluation::{hce, NNUE};
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::MultiProgress;
 use nnue::version::VersionManager;
 use rand::Rng;
 use search::{Engine, EngineConfig, NegamaxEngine};
@@ -11,9 +12,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::Duration;
 use uci::commands::GoParams;
 
 pub struct Generator {
@@ -57,53 +58,39 @@ impl Generator {
         Ok(generator)
     }
 
-    pub fn run(&self, duration: u64, depth: u8) -> Vec<(String, i16, f32, usize)> {
+    pub fn run(&self, depth: u8, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, f32, usize)> {
         let eval_name = match &self.nnue_path {
             Some(path) => path.display().to_string(),
             None => "traditional evaluator".to_string(),
         };
 
         log::info!(
-            "Generating samples using {} threads ({})",
+            "Generating samples using {} threads ({}) - Press Ctrl+C to stop",
             self.threads,
             eval_name,
         );
-
-        let pb = ProgressBar::new(duration);
-        pb.set_style(
-            ProgressStyle::with_template(
-                " {spinner:.cyan} {wide_bar:.cyan/blue} {eta_precise} | {msg}",
-            )
-            .unwrap(),
-        );
-        let pb = Arc::new(pb);
 
         let sample_counter = Arc::new(AtomicUsize::new(0));
         let game_id_counter = Arc::new(AtomicUsize::new(0));
         let opening_book = Arc::new(self.opening_book.clone());
 
-        let handles: Vec<_> = (0..self.threads)
+        // Create multi-progress display
+        let multi_progress = MultiProgress::new();
+        let histogram = ScoreHistogram::new(&multi_progress);
+
+        // Spawn worker threads
+        let worker_handles: Vec<_> = (0..self.threads)
             .map(|tid| {
                 let nnue_path = self.nnue_path.clone();
                 let version = self.version;
                 let sample_counter = Arc::clone(&sample_counter);
                 let game_id_counter = Arc::clone(&game_id_counter);
                 let opening_book = Arc::clone(&opening_book);
-                let pb = Arc::clone(&pb);
+                let stop_flag = Arc::clone(&stop_flag);
+                let histogram_handle = histogram.clone_handle();
 
                 std::thread::spawn(move || {
-                    let nnue: Option<Box<dyn NNUE>> = if let Some(path) = nnue_path {
-                        let mut varmap = VarMap::new();
-                        let mut nnue = nnue::Evaluator::new(&varmap, &Device::Cpu, version);
-
-                        varmap.load(path).unwrap();
-                        nnue.enable_nnue();
-
-                        Some(Box::new(nnue))
-                    } else {
-                        None
-                    };
-
+                    let nnue = Self::load_nnue(nnue_path, version);
                     let mut worker = SelfPlayWorker::new(
                         tid,
                         sample_counter,
@@ -111,20 +98,54 @@ impl Generator {
                         depth,
                         nnue,
                         &opening_book,
+                        histogram_handle,
                     );
-                    worker.play_games(duration, &pb)
+                    worker.play_games(stop_flag)
                 })
             })
             .collect();
 
-        let evaluations: Vec<_> = handles
+        // Spawn progress update thread
+        let progress_handle =
+            Self::spawn_progress_updater(sample_counter.clone(), histogram, stop_flag.clone());
+
+        // Wait for all workers to complete
+        let evaluations: Vec<_> = worker_handles
             .into_iter()
             .flat_map(|h| h.join().unwrap())
             .collect();
 
-        pb.finish_with_message(format!("Generated {} samples", evaluations.len()));
+        progress_handle.join().unwrap();
 
         evaluations
+    }
+
+    fn load_nnue(nnue_path: Option<PathBuf>, version: u32) -> Option<Box<dyn NNUE>> {
+        nnue_path.map(|path| {
+            let mut varmap = VarMap::new();
+            let mut nnue = nnue::Evaluator::new(&varmap, &Device::Cpu, version);
+            varmap.load(path).unwrap();
+            nnue.enable_nnue();
+            Box::new(nnue) as Box<dyn NNUE>
+        })
+    }
+
+    fn spawn_progress_updater(
+        sample_counter: Arc<AtomicUsize>,
+        histogram: ScoreHistogram,
+        stop_flag: Arc<AtomicBool>,
+    ) -> std::thread::JoinHandle<()> {
+        std::thread::spawn(move || {
+            while !stop_flag.load(Ordering::Relaxed) {
+                let sample_count = sample_counter.load(Ordering::Relaxed);
+                histogram.update_display(sample_count);
+                std::thread::sleep(Duration::from_millis(200));
+            }
+
+            // Final update
+            let final_count = sample_counter.load(Ordering::Relaxed);
+            histogram.finish(final_count);
+        })
     }
 }
 
@@ -183,12 +204,13 @@ fn read_random_opening_position(
 }
 
 struct SelfPlayWorker {
-    tid: usize,
+    _tid: usize,
     sample_counter: Arc<AtomicUsize>,
     game_id_counter: Arc<AtomicUsize>,
     engine: NegamaxEngine,
     depth: u8,
-    opening_book: (PathBuf, usize), // (path, line_count)
+    opening_book: (PathBuf, usize),
+    histogram: HistogramHandle,
 
     // Game-specific state
     game: Game,
@@ -198,13 +220,14 @@ struct SelfPlayWorker {
 }
 
 impl SelfPlayWorker {
-    pub fn new(
+    fn new(
         tid: usize,
         sample_counter: Arc<AtomicUsize>,
         game_id_counter: Arc<AtomicUsize>,
         depth: u8,
         nnue: Option<Box<dyn NNUE>>,
         opening_book: &(PathBuf, usize),
+        histogram: HistogramHandle,
     ) -> Self {
         let mut config = EngineConfig::default();
         // Reduce hash size for data generation (384 MB instead of 1024 MB)
@@ -217,7 +240,7 @@ impl SelfPlayWorker {
         ));
 
         Self {
-            tid,
+            _tid: tid,
             sample_counter,
             game_id_counter,
             game: Game::new(),
@@ -227,41 +250,20 @@ impl SelfPlayWorker {
             position_counts: std::collections::HashMap::new(),
             current_game_positions: Vec::new(),
             opening_book: opening_book.clone(),
+            histogram,
         }
     }
 
-    pub fn play_games(
-        &mut self,
-        duration: u64,
-        pb: &ProgressBar,
-    ) -> Vec<(String, i16, f32, usize)> {
-        let start_time = Instant::now();
+    fn play_games(&mut self, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, f32, usize)> {
         let mut evaluations = Vec::new();
-
         self.reset_game();
 
-        loop {
-            let current_elapsed = start_time.elapsed().as_secs();
-            if current_elapsed >= duration {
-                break;
-            }
-
-            if self.tid == 0 {
-                let sample_count = self.sample_counter.load(Ordering::Relaxed);
-                pb.set_message(format!("{} samples", sample_count));
-                pb.set_position(current_elapsed);
-            }
-
-            let terminal = self.play_single_move();
-
-            if terminal {
-                // Game ended - assign WDL to all positions and flush
+        while !stop_flag.load(Ordering::Relaxed) {
+            if self.play_single_move() {
                 self.flush_game_to_evaluations(&mut evaluations);
                 self.reset_game();
             }
         }
-
-        pb.finish_with_message("waiting...");
 
         evaluations
     }
@@ -392,9 +394,38 @@ impl SelfPlayWorker {
     }
 
     fn flush_game_to_evaluations(&mut self, evaluations: &mut Vec<(String, i16, f32, usize)>) {
-        // Determine game outcome (WDL from white's perspective)
-        let (wdl, is_decisive) = if let Some(result) = self.game.result() {
-            use chess::GameResult;
+        let (wdl, is_decisive) = self.determine_game_outcome();
+        let game_id = self.game_id;
+
+        let (positions, scores): (Vec<_>, Vec<_>) = if is_decisive {
+            // Include all positions in decisive games
+            self.current_game_positions
+                .drain(..)
+                .map(|(fen, score)| ((fen, score, wdl, game_id), score))
+                .unzip()
+        } else {
+            // Only include balanced positions in drawn games to prevent
+            // labeling clearly winning positions as draws
+            self.current_game_positions
+                .drain(..)
+                .filter(|(_, score)| score.abs() < 1000)
+                .map(|(fen, score)| ((fen, score, wdl, game_id), score))
+                .unzip()
+        };
+
+        let num_positions = positions.len();
+        evaluations.extend(positions);
+
+        // Update histogram and sample counter
+        self.histogram.record_scores(&scores);
+        self.sample_counter
+            .fetch_add(num_positions, Ordering::Relaxed);
+    }
+
+    fn determine_game_outcome(&self) -> (f32, bool) {
+        use chess::GameResult;
+
+        if let Some(result) = self.game.result() {
             match result {
                 GameResult::WhiteCheckmates | GameResult::BlackResigns => (1.0, true),
                 GameResult::BlackCheckmates | GameResult::WhiteResigns => (0.0, true),
@@ -403,35 +434,9 @@ impl SelfPlayWorker {
                 }
             }
         } else {
-            // Game aborted due to stable drawish eval (40+ moves with |eval| < 20)
+            // Game aborted due to stable drawish eval
             (0.5, false)
-        };
-
-        // For decisive games: include all positions
-        // For drawn games: only include balanced positions (|eval| < 1000)
-        // This prevents labeling clearly winning positions as draws
-        let game_id = self.game_id;
-        let num_positions = if is_decisive {
-            let count = self.current_game_positions.len();
-            for (fen, score) in self.current_game_positions.drain(..) {
-                evaluations.push((fen, score, wdl, game_id));
-            }
-            count
-        } else {
-            let mut count = 0;
-            for (fen, score) in self.current_game_positions.drain(..) {
-                // Only include balanced positions in drawn games
-                if score.abs() < 1000 {
-                    evaluations.push((fen, score, wdl, game_id));
-                    count += 1;
-                }
-            }
-            count
-        };
-
-        // Update sample counter
-        self.sample_counter
-            .fetch_add(num_positions, Ordering::Relaxed);
+        }
     }
 
     #[inline]

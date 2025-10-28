@@ -11,6 +11,7 @@ utils = { path = "../utils" }
 
 ahash = { workspace = true }
 chess = { workspace = true }
+ctrlc = { workspace = true }
 log = { workspace = true }
 rayon = { workspace = true }
 rand = { workspace = true }
