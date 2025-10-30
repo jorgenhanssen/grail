@@ -22,7 +22,7 @@ const HUBER_THRESHOLD_CP: f64 = 400.0;
 const HUBER_DELTA: f64 = HUBER_THRESHOLD_CP / FV_SCALE as f64;
 
 // Huber loss on normalized centipawn targets
-fn eval_loss(pred: &Tensor, eval_target: &Tensor) -> CandleResult<Tensor> {
+fn huber(pred: &Tensor, eval_target: &Tensor) -> CandleResult<Tensor> {
     let diff = (pred - eval_target)?;
     let abs_diff = diff.abs()?;
 
@@ -205,7 +205,7 @@ impl Trainer {
         _wdl_batch: &Tensor,
     ) -> CandleResult<f32> {
         let preds = net.forward(x_batch)?;
-        let loss = eval_loss(&preds, y_batch)?;
+        let loss = huber(&preds, y_batch)?;
         opt.backward_step(&loss)?;
         f32::try_from(loss)
     }
@@ -224,7 +224,7 @@ impl Trainer {
         for batch_res in batched_iter {
             let (x_val, y_val, _wdl_val) = batch_res?;
             let preds = net.forward(&x_val)?;
-            let loss = eval_loss(&preds, &y_val)?;
+            let loss = huber(&preds, &y_val)?;
             total_loss += f32::try_from(loss)?;
             batch_count += 1;
         }
@@ -279,7 +279,7 @@ fn evaluate(
     for batch_res in batched_iter {
         let (x_batch, y_batch, _wdl_batch) = batch_res?;
         let preds = net.forward(&x_batch)?;
-        let batch_loss = eval_loss(&preds, &y_batch)?;
+        let batch_loss = huber(&preds, &y_batch)?;
         total_loss += f32::try_from(batch_loss)?;
         total_count += 1;
 

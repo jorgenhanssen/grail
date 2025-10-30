@@ -99,6 +99,12 @@ impl Samples {
             let score: i16 = score_str.trim().parse().map_err(|_| {
                 io::Error::new(io::ErrorKind::InvalidData, "Score is not a valid integer")
             })?;
+
+            // Testing showed that not training on mate-in-N positions is better.
+            if score.abs() >= CP_MAX {
+                continue;
+            }
+
             let wdl_val: f32 = wdl_str.trim().parse().map_err(|_| {
                 io::Error::new(io::ErrorKind::InvalidData, "WDL is not a valid float")
             })?;
