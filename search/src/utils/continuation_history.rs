@@ -95,12 +95,17 @@ impl ContinuationHistory {
     }
 
     #[inline(always)]
-    pub fn get_prev_to_squares(&self, move_stack: &[ChessMove]) -> Vec<Option<Square>> {
-        let len = move_stack.len();
+    pub fn get_prev_to_squares(
+        &self,
+        search_stack: &[crate::negamax::search_stack::SearchNode],
+    ) -> Vec<Option<Square>> {
+        let len = search_stack.len();
         let mut vec = vec![None; self.max_moves];
         for i in 0..self.max_moves {
             if i < len {
-                vec[i] = Some(move_stack[len - 1 - i].get_dest());
+                if let Some(mv) = search_stack[len - 1 - i].last_move {
+                    vec[i] = Some(mv.get_dest());
+                }
             }
         }
         vec
