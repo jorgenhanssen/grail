@@ -350,11 +350,11 @@ impl NegamaxEngine {
         }
         self.nodes += 1;
 
-        let hash = self.search_stack.current().hash;
-        if self.search_stack.is_cycle(hash) {
+        if self.search_stack.has_duplicate() {
             return (0, Vec::new()); // repetition = draw
         }
 
+        let hash = self.search_stack.current().hash;
         if mate_distance_prune(&mut alpha, &mut beta, depth) {
             return (alpha, Vec::new());
         }
@@ -735,11 +735,11 @@ impl NegamaxEngine {
         self.nodes += 1;
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
-        let hash = self.search_stack.current().hash;
-        if self.search_stack.is_cycle(hash) {
+        if self.search_stack.has_duplicate() {
             return (0, Vec::new()); // Treat as a draw
         }
 
+        let hash = self.search_stack.current().hash;
         if mate_distance_prune(&mut alpha, &mut beta, depth) {
             return (alpha, Vec::new());
         }

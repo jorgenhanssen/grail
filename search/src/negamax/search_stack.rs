@@ -91,9 +91,10 @@ impl SearchStack {
     }
 
     #[inline(always)]
-    pub fn is_cycle(&self, hash: u64) -> bool {
+    pub fn has_duplicate(&self) -> bool {
+        let current_hash = self.nodes[self.nodes.len() - 1].hash;
         for node in self.nodes.iter().rev().skip(1) {
-            if node.hash == hash {
+            if node.hash == current_hash {
                 return true;
             }
         }
