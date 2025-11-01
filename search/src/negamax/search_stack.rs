@@ -80,15 +80,13 @@ impl SearchStack {
     pub fn is_improving(&self, current_eval: i16) -> bool {
         const IMPROVING_MARGIN: i16 = 20;
 
-        let mut count = 0;
-        for node in self.nodes.iter().rev() {
-            if let Some(prev_eval) = node.static_eval {
-                count += 1;
-                if count == 2 {
-                    return current_eval > prev_eval - IMPROVING_MARGIN;
-                }
+        if self.nodes.len() >= 2 {
+            let prev_eval = self.nodes[self.nodes.len() - 2].static_eval;
+            if let Some(prev) = prev_eval {
+                return current_eval > prev - IMPROVING_MARGIN;
             }
         }
+
         false
     }
 
