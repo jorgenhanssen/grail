@@ -92,7 +92,12 @@ impl SearchStack {
 
     #[inline(always)]
     pub fn is_cycle(&self, hash: u64) -> bool {
-        self.nodes.iter().filter(|n| n.hash == hash).count() > 1
+        for node in self.nodes.iter().rev().skip(1) {
+            if node.hash == hash {
+                return true;
+            }
+        }
+        false
     }
 
     #[inline(always)]
