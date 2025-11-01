@@ -62,21 +62,17 @@ impl SearchStack {
     }
 
     #[inline(always)]
-    pub fn current_hash(&self) -> u64 {
-        self.nodes.last().unwrap().hash
+    pub fn current(&self) -> SearchNode {
+        *self.nodes.last().unwrap()
     }
 
     #[inline(always)]
-    pub fn set_current_eval(&mut self, eval: i16) {
+    pub fn current_mut<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut SearchNode),
+    {
         if let Some(node) = self.nodes.last_mut() {
-            node.static_eval = Some(eval);
-        }
-    }
-
-    #[inline(always)]
-    pub fn clear_current_eval(&mut self) {
-        if let Some(node) = self.nodes.last_mut() {
-            node.static_eval = None;
+            f(node);
         }
     }
 

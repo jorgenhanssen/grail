@@ -350,7 +350,7 @@ impl NegamaxEngine {
         }
         self.nodes += 1;
 
-        let hash = self.search_stack.current_hash();
+        let hash = self.search_stack.current().hash;
         if self.search_stack.is_cycle(hash) {
             return (0, Vec::new()); // repetition = draw
         }
@@ -447,7 +447,8 @@ impl NegamaxEngine {
             maybe_tt_move = Some(m);
         }
 
-        self.search_stack.set_current_eval(static_eval);
+        self.search_stack
+            .current_mut(|node| node.static_eval = Some(static_eval));
         let is_improving = !in_check && self.search_stack.is_improving(static_eval);
 
         if let Some(score) = self.try_reverse_futility_prune(
@@ -572,7 +573,8 @@ impl NegamaxEngine {
             }
         }
 
-        self.search_stack.clear_current_eval();
+        self.search_stack
+            .current_mut(|node| node.static_eval = None);
 
         // Check for terminal position (no legal moves)
         if move_index == -1 {
@@ -733,7 +735,7 @@ impl NegamaxEngine {
         self.nodes += 1;
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
-        let hash = self.search_stack.current_hash();
+        let hash = self.search_stack.current().hash;
         if self.search_stack.is_cycle(hash) {
             return (0, Vec::new()); // Treat as a draw
         }
