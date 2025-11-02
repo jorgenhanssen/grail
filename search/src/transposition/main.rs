@@ -98,7 +98,7 @@ impl TranspositionTable {
 
         unsafe {
             let ptr = self.entries.as_ptr().add(base) as *const u8;
-            crate::utils::memory::prefetch(ptr);
+            utils::memory::prefetch(ptr);
         }
     }
 

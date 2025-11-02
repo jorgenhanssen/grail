@@ -60,7 +60,7 @@ impl QSTable {
 
         unsafe {
             let ptr = self.entries.as_ptr().add(start) as *const u8;
-            crate::utils::memory::prefetch(ptr);
+            utils::memory::prefetch(ptr);
         }
     }
 

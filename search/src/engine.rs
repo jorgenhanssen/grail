@@ -7,7 +7,7 @@ use crate::{
         can_reverse_futility_prune, futility_margin, lmr, mate_distance_prune, null_move_reduction,
         razor_margin, rfp_margin, should_lmp_prune, AspirationWindow, Pass, RAZOR_NEAR_MATE,
     },
-    utils::{convert_centipawn_score, convert_mate_score, game_phase, see::see},
+    utils::{convert_centipawn_score, convert_mate_score, see::see},
 };
 use arrayvec::ArrayVec;
 use chess::{get_rank, BitBoard, Board, BoardStatus, ChessMove, Color, Piece, Rank};
@@ -26,6 +26,7 @@ use uci::{
     commands::{GoParams, Info, Score},
     UciOutput,
 };
+use utils::game_phase;
 
 use crate::{
     stack::{SearchNode, SearchStack},

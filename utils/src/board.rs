@@ -47,4 +47,3 @@ pub fn game_phase(board: &Board) -> f32 {
 pub fn gives_check(board: &Board, mv: ChessMove) -> bool {
     board.make_move_new(mv).checkers().popcnt() > 0
 }
-

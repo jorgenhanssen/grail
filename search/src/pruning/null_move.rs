@@ -1,6 +1,5 @@
 use chess::Board;
-
-use crate::utils::is_zugzwang;
+use utils::is_zugzwang;
 
 // Null Move Pruning
 // Try passing the turn to the opponent. If they still can't beat beta with a free move,
