@@ -1,7 +1,10 @@
-use crate::tt_table::Bound;
 use std::mem::size_of;
 use std::simd::prelude::SimdPartialEq;
 use std::simd::u32x4;
+
+use utils::memory::prefetch;
+
+use super::main::Bound;
 
 const CLUSTER_SIZE: usize = 4;
 const MIN_BUCKETS: usize = 1024;
@@ -60,7 +63,7 @@ impl QSTable {
 
         unsafe {
             let ptr = self.entries.as_ptr().add(start) as *const u8;
-            crate::utils::memory::prefetch(ptr);
+            prefetch(ptr);
         }
     }
 

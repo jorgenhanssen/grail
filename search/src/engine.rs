@@ -1,40 +1,35 @@
-use crate::EngineConfig;
-use crate::{
-    aspiration::{AspirationWindow, Pass},
-    search_utils::{
-        can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
-        can_reverse_futility_prune, futility_margin, lmr, mate_distance_prune, null_move_reduction,
-        razor_margin, rfp_margin, should_lmp_prune, RAZOR_NEAR_MATE,
-    },
-    utils::{
-        convert_centipawn_score, convert_mate_score, game_phase, see, CaptureHistory,
-        ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator, MAX_CAPTURES,
-        MAX_QUIETS,
-    },
-};
-use arrayvec::ArrayVec;
-use chess::{get_rank, BitBoard, Board, BoardStatus, ChessMove, Color, Piece, Rank};
-use evaluation::PieceValues;
-use evaluation::{
-    hce,
-    scores::{MATE_VALUE, NEG_INFINITY},
-    HCE, NNUE,
-};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc::Sender,
     Arc,
 };
+
+use arrayvec::ArrayVec;
+use chess::{get_rank, BitBoard, Board, BoardStatus, ChessMove, Color, Piece, Rank};
+use evaluation::{
+    hce,
+    scores::{MATE_VALUE, NEG_INFINITY},
+    PieceValues, HCE, NNUE,
+};
 use uci::{
     commands::{GoParams, Info, Score},
     UciOutput,
 };
+use utils::{game_phase, Position};
 
 use crate::{
-    controller::SearchController,
-    qs_table::QSTable,
-    search_stack::{SearchNode, SearchStack},
-    tt_table::{Bound, TranspositionTable},
+    history::{CaptureHistory, ContinuationHistory, HistoryHeuristic},
+    move_ordering::{MainMoveGenerator, QMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
+    pruning::{
+        can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
+        can_reverse_futility_prune, futility_margin, lmr, mate_distance_prune, null_move_reduction,
+        razor_margin, rfp_margin, should_lmp_prune, AspirationWindow, Pass, RAZOR_NEAR_MATE,
+    },
+    stack::{SearchNode, SearchStack},
+    time_control::SearchController,
+    transposition::{Bound, QSTable, TranspositionTable},
+    utils::{convert_centipawn_score, convert_mate_score, see::see},
+    EngineConfig,
 };
 
 const MAX_DEPTH: usize = 100;
@@ -229,7 +224,7 @@ impl Engine {
 
 impl Engine {
     #[inline(always)]
-    fn eval(&mut self, position: &utils::Position, phase: f32) -> i16 {
+    fn eval(&mut self, position: &Position, phase: f32) -> i16 {
         let mut score = if let Some(nnue) = &mut self.nnue {
             nnue.evaluate(position.board)
         } else {
@@ -274,7 +269,7 @@ impl Engine {
     ) -> (Option<ChessMove>, i16) {
         let best_move = self.current_pv.first().cloned();
 
-        let position = utils::Position::new(&self.board);
+        let position = Position::new(&self.board);
         let threats = position.threats_for(self.board.side_to_move());
 
         let prev_to = self
@@ -392,7 +387,7 @@ impl Engine {
         let remaining_depth = max_depth - depth;
         let in_check = board.checkers().popcnt() > 0;
 
-        let position = utils::Position::new(board);
+        let position = Position::new(board);
 
         let static_eval = if let Some(tt_se) = tt_static_eval {
             tt_se // Cached in TT
@@ -752,7 +747,7 @@ impl Engine {
         }
 
         let phase = game_phase(board);
-        let position = utils::Position::new(board);
+        let position = Position::new(board);
 
         let eval = self.eval(&position, phase);
         let stand_pat = if board.side_to_move() == Color::White {

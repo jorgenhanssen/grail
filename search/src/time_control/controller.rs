@@ -1,9 +1,11 @@
-use crate::time_budget::{SearchHistory, TimeBudget};
-use chess::Board;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+
+use chess::Board;
 use uci::commands::GoParams;
+
+use crate::time_control::budget::{SearchHistory, TimeBudget};
 
 // To predict the duration of the next iteration based on the previous one.
 // Assumes next iteration takes ~2x longer than the previous.

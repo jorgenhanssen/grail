@@ -1,8 +1,11 @@
-use crate::search_utils::MATE_SCORE_BOUND;
-use chess::{ChessMove, Piece, Square};
 use std::mem::size_of;
 use std::simd::prelude::SimdPartialEq;
 use std::simd::u32x4;
+
+use chess::{ChessMove, Piece, Square};
+use utils::memory::prefetch;
+
+use crate::pruning::MATE_SCORE_BOUND;
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum Bound {
@@ -98,7 +101,7 @@ impl TranspositionTable {
 
         unsafe {
             let ptr = self.entries.as_ptr().add(base) as *const u8;
-            crate::utils::memory::prefetch(ptr);
+            prefetch(ptr);
         }
     }
 

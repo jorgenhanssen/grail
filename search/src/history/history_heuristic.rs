@@ -1,5 +1,6 @@
-use crate::EngineConfig;
 use chess::{BitBoard, Board, ChessMove, Color, Square, EMPTY, NUM_COLORS, NUM_SQUARES};
+
+use crate::EngineConfig;
 
 const MAX_DEPTH: usize = 100;
 // [color][is_threatened][from][to] (similar to Black Marlin)

@@ -1,14 +1,13 @@
 #![feature(portable_simd)]
 
-mod aspiration;
 mod config;
-mod controller;
 mod engine;
-mod qs_table;
-mod search_stack;
-mod search_utils;
-mod time_budget;
-mod tt_table;
+mod history;
+mod move_ordering;
+mod pruning;
+mod stack;
+mod time_control;
+mod transposition;
 mod utils;
 
 pub use config::EngineConfig;
