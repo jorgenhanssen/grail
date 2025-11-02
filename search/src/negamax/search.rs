@@ -410,6 +410,9 @@ impl NegamaxEngine {
             }
         };
 
+        self.search_stack
+            .current_mut(|node| node.static_eval = Some(static_eval));
+
         if let Some(score) =
             self.try_razor_prune(board, remaining_depth, alpha, depth, in_check, static_eval)
         {
@@ -447,9 +450,7 @@ impl NegamaxEngine {
             maybe_tt_move = Some(m);
         }
 
-        self.search_stack
-            .current_mut(|node| node.static_eval = Some(static_eval));
-        let is_improving = !in_check && self.search_stack.is_improving(static_eval);
+        let is_improving = !in_check && self.search_stack.is_improving();
 
         if let Some(score) = self.try_reverse_futility_prune(
             remaining_depth,
@@ -572,9 +573,6 @@ impl NegamaxEngine {
                 }
             }
         }
-
-        self.search_stack
-            .current_mut(|node| node.static_eval = None);
 
         // Check for terminal position (no legal moves)
         if move_index == -1 {

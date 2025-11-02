@@ -77,13 +77,18 @@ impl SearchStack {
     }
 
     #[inline(always)]
-    pub fn is_improving(&self, current_eval: i16) -> bool {
+    pub fn is_improving(&self) -> bool {
         const IMPROVING_MARGIN: i16 = 20;
 
-        if self.nodes.len() >= 2 {
-            let prev_eval = self.nodes[self.nodes.len() - 2].static_eval;
-            if let Some(prev) = prev_eval {
-                return current_eval > prev - IMPROVING_MARGIN;
+        let len = self.nodes.len();
+        if len < 3 {
+            return false;
+        }
+
+        if let Some(current_eval) = self.nodes[len - 1].static_eval {
+            // Compare 2 plies back (same side to move)
+            if let Some(prev_eval) = self.nodes[len - 3].static_eval {
+                return current_eval > prev_eval - IMPROVING_MARGIN;
             }
         }
 
