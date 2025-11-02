@@ -1,20 +1,17 @@
-// Move ordering inspired by Black Marlin
+// Move ordering for main search inspired by Black Marlin
 
 use arrayvec::ArrayVec;
 use chess::{BitBoard, Board, ChessMove, MoveGen, Piece, Square};
 use evaluation::piece_values::PieceValues;
 
-use crate::utils::{gives_check, see, CaptureHistory, ContinuationHistory, HistoryHeuristic};
+use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic};
+use crate::utils::gives_check;
+use crate::utils::see::see;
 
-// Should be enough to handle most positions
+use super::utils::{capture_score, select_highest, ScoredMove};
+
 pub const MAX_CAPTURES: usize = 32;
 pub const MAX_QUIETS: usize = 96;
-pub const MAX_FORCING_MOVES: usize = 32;
-
-struct ScoredMove {
-    mov: ChessMove,
-    score: i16,
-}
 
 #[derive(PartialEq, Eq, Clone)]
 enum Phase {
@@ -235,80 +232,4 @@ impl MainMoveGenerator {
 
         None
     }
-}
-
-pub struct QMoveGenerator {
-    forcing_moves: ArrayVec<ScoredMove, MAX_FORCING_MOVES>,
-}
-
-impl QMoveGenerator {
-    pub fn new(
-        in_check: bool,
-        board: &Board,
-        capture_history: &CaptureHistory,
-        phase: f32,
-        piece_values: PieceValues,
-    ) -> Self {
-        let mut gen = MoveGen::new_legal(board);
-
-        if !in_check {
-            gen.set_iterator_mask(*board.color_combined(!board.side_to_move()));
-
-            let mut forcing_moves = ArrayVec::new();
-
-            for mov in gen.take(MAX_FORCING_MOVES) {
-                forcing_moves.push(ScoredMove {
-                    mov,
-                    score: capture_score(board, mov, capture_history, phase, &piece_values),
-                });
-            }
-
-            Self { forcing_moves }
-        } else {
-            let mut forcing_moves = ArrayVec::new();
-            for mov in gen.take(MAX_FORCING_MOVES) {
-                forcing_moves.push(ScoredMove { mov, score: 0 });
-            }
-            Self { forcing_moves }
-        }
-    }
-
-    pub fn next(&mut self) -> Option<ChessMove> {
-        if let Some(index) = select_highest(&self.forcing_moves) {
-            let scored_move = self.forcing_moves.swap_remove(index);
-            return Some(scored_move.mov);
-        }
-        None
-    }
-}
-
-fn select_highest(array: &[ScoredMove]) -> Option<usize> {
-    if array.is_empty() {
-        return None;
-    }
-    let mut best_score = array[0].score;
-    let mut best_index = 0;
-    for (index, mv) in array.iter().enumerate().skip(1) {
-        if mv.score > best_score {
-            best_score = mv.score;
-            best_index = index;
-        }
-    }
-    Some(best_index)
-}
-
-// Replacement scoring for captures using Capture History.
-#[inline(always)]
-fn capture_score(
-    board: &Board,
-    mv: ChessMove,
-    capture_history: &CaptureHistory,
-    phase: f32,
-    piece_values: &PieceValues,
-) -> i16 {
-    let victim = board.piece_on(mv.get_dest()).unwrap();
-    let attacker = board.piece_on(mv.get_source()).unwrap();
-    let hist = capture_history.get(attacker, mv.get_dest(), victim);
-
-    piece_values.get(victim, phase) + hist
 }

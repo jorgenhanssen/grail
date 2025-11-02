@@ -97,7 +97,7 @@ impl ContinuationHistory {
     #[inline(always)]
     pub fn get_prev_to_squares(
         &self,
-        search_stack: &[crate::search_stack::SearchNode],
+        search_stack: &[crate::stack::SearchNode],
     ) -> Vec<Option<Square>> {
         let len = search_stack.len();
         let mut vec = vec![None; self.max_moves];

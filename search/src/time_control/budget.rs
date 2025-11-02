@@ -1,7 +1,7 @@
 use chess::{Board, Color};
 use uci::commands::GoParams;
 
-use crate::search_utils::only_move;
+use crate::utils::only_move;
 
 // Time management constants
 const MOVE_MARGIN_START: u64 = 20;
