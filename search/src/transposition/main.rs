@@ -3,6 +3,7 @@ use chess::{ChessMove, Piece, Square};
 use std::mem::size_of;
 use std::simd::prelude::SimdPartialEq;
 use std::simd::u32x4;
+use utils::memory::prefetch;
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum Bound {
@@ -98,7 +99,7 @@ impl TranspositionTable {
 
         unsafe {
             let ptr = self.entries.as_ptr().add(base) as *const u8;
-            utils::memory::prefetch(ptr);
+            prefetch(ptr);
         }
     }
 

@@ -26,7 +26,7 @@ use uci::{
     commands::{GoParams, Info, Score},
     UciOutput,
 };
-use utils::game_phase;
+use utils::{game_phase, Position};
 
 use crate::{
     stack::{SearchNode, SearchStack},
@@ -226,7 +226,7 @@ impl Engine {
 
 impl Engine {
     #[inline(always)]
-    fn eval(&mut self, position: &utils::Position, phase: f32) -> i16 {
+    fn eval(&mut self, position: &Position, phase: f32) -> i16 {
         let mut score = if let Some(nnue) = &mut self.nnue {
             nnue.evaluate(position.board)
         } else {
@@ -271,7 +271,7 @@ impl Engine {
     ) -> (Option<ChessMove>, i16) {
         let best_move = self.current_pv.first().cloned();
 
-        let position = utils::Position::new(&self.board);
+        let position = Position::new(&self.board);
         let threats = position.threats_for(self.board.side_to_move());
 
         let prev_to = self
@@ -389,7 +389,7 @@ impl Engine {
         let remaining_depth = max_depth - depth;
         let in_check = board.checkers().popcnt() > 0;
 
-        let position = utils::Position::new(board);
+        let position = Position::new(board);
 
         let static_eval = if let Some(tt_se) = tt_static_eval {
             tt_se // Cached in TT
@@ -749,7 +749,7 @@ impl Engine {
         }
 
         let phase = game_phase(board);
-        let position = utils::Position::new(board);
+        let position = Position::new(board);
 
         let eval = self.eval(&position, phase);
         let stand_pat = if board.side_to_move() == Color::White {

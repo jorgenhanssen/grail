@@ -2,6 +2,7 @@ use super::main::Bound;
 use std::mem::size_of;
 use std::simd::prelude::SimdPartialEq;
 use std::simd::u32x4;
+use utils::memory::prefetch;
 
 const CLUSTER_SIZE: usize = 4;
 const MIN_BUCKETS: usize = 1024;
@@ -60,7 +61,7 @@ impl QSTable {
 
         unsafe {
             let ptr = self.entries.as_ptr().add(start) as *const u8;
-            utils::memory::prefetch(ptr);
+            prefetch(ptr);
         }
     }
 
