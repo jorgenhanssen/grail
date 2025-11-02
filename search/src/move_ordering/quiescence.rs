@@ -1,4 +1,4 @@
-// Move ordering for quiescence search
+// Move ordering for quiescence search inspired by Black Marlin
 
 use arrayvec::ArrayVec;
 use chess::{Board, ChessMove, MoveGen};
