@@ -1,4 +1,4 @@
-use crate::negamax::utils::MATE_SCORE_BOUND;
+use crate::search_utils::MATE_SCORE_BOUND;
 use chess::{ChessMove, Piece, Square};
 use std::mem::size_of;
 use std::simd::prelude::SimdPartialEq;

@@ -5,7 +5,6 @@ mod nnue;
 
 use args::Args;
 use clap::Parser;
-use engine::Engine;
 use log::{debug, LevelFilter};
 use search::EngineConfig;
 use simplelog::{Config, WriteLogger};
@@ -21,14 +20,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // If bench is specified, run benchmark and exit
     if let Some(depth) = args.bench {
-        bench::run(&args, depth);
+        bench::run(depth);
         return Ok(());
     }
 
     let mut uci = UciConnection::new();
 
     let mut config = EngineConfig::default();
-    let mut engine = engine::create(&args, &config);
+    let mut engine = engine::create_engine(&config);
 
     uci.listen(|input, output| {
         match input {

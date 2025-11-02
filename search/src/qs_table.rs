@@ -1,4 +1,4 @@
-use super::tt_table::Bound;
+use crate::tt_table::Bound;
 use std::mem::size_of;
 use std::simd::prelude::SimdPartialEq;
 use std::simd::u32x4;

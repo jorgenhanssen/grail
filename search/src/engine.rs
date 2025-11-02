@@ -1,18 +1,16 @@
 use crate::EngineConfig;
 use crate::{
-    negamax::{
-        aspiration::{AspirationWindow, Pass},
-        utils::{
-            can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
-            can_reverse_futility_prune, futility_margin, razor_margin, rfp_margin,
-        },
+    aspiration::{AspirationWindow, Pass},
+    search_utils::{
+        can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
+        can_reverse_futility_prune, futility_margin, lmr, mate_distance_prune, null_move_reduction,
+        razor_margin, rfp_margin, should_lmp_prune, RAZOR_NEAR_MATE,
     },
     utils::{
         convert_centipawn_score, convert_mate_score, game_phase, see, CaptureHistory,
         ContinuationHistory, HistoryHeuristic, MainMoveGenerator, QMoveGenerator, MAX_CAPTURES,
         MAX_QUIETS,
     },
-    Engine,
 };
 use arrayvec::ArrayVec;
 use chess::{get_rank, BitBoard, Board, BoardStatus, ChessMove, Color, Piece, Rank};
@@ -32,10 +30,7 @@ use uci::{
     UciOutput,
 };
 
-use super::utils::{
-    lmr, mate_distance_prune, null_move_reduction, should_lmp_prune, RAZOR_NEAR_MATE,
-};
-use super::{
+use crate::{
     controller::SearchController,
     qs_table::QSTable,
     search_stack::{SearchNode, SearchStack},
@@ -44,7 +39,7 @@ use super::{
 
 const MAX_DEPTH: usize = 100;
 
-pub struct NegamaxEngine {
+pub struct Engine {
     config: EngineConfig,
     piece_values: PieceValues,
 
@@ -68,8 +63,8 @@ pub struct NegamaxEngine {
     continuation_history: Box<ContinuationHistory>,
 }
 
-impl Engine for NegamaxEngine {
-    fn new(config: &EngineConfig, hce: Box<dyn HCE>, nnue: Option<Box<dyn NNUE>>) -> Self {
+impl Engine {
+    pub fn new(config: &EngineConfig, hce: Box<dyn HCE>, nnue: Option<Box<dyn NNUE>>) -> Self {
         let mut instance = Self {
             config: config.clone(),
             piece_values: config.get_piece_values(),
@@ -99,7 +94,7 @@ impl Engine for NegamaxEngine {
         instance
     }
 
-    fn configure(&mut self, config: &EngineConfig, init: bool) {
+    pub fn configure(&mut self, config: &EngineConfig, init: bool) {
         let old_config = self.config.clone();
         self.config = config.clone();
 
@@ -128,7 +123,7 @@ impl Engine for NegamaxEngine {
         }
     }
 
-    fn name(&self) -> String {
+    pub fn name(&self) -> String {
         if let Some(nnue) = &self.nnue {
             format!("Negamax ({})", nnue.name())
         } else {
@@ -136,19 +131,19 @@ impl Engine for NegamaxEngine {
         }
     }
 
-    fn new_game(&mut self) {
+    pub fn new_game(&mut self) {
         self.init_game();
     }
 
-    fn set_position(&mut self, board: Board) {
+    pub fn set_position(&mut self, board: Board) {
         self.board = board;
     }
 
-    fn stop(&mut self) {
+    pub fn stop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
     }
 
-    fn search(
+    pub fn search(
         &mut self,
         params: &GoParams,
         output: Option<&Sender<UciOutput>>,
@@ -232,7 +227,7 @@ impl Engine for NegamaxEngine {
     }
 }
 
-impl NegamaxEngine {
+impl Engine {
     #[inline(always)]
     fn eval(&mut self, position: &utils::Position, phase: f32) -> i16 {
         let mut score = if let Some(nnue) = &mut self.nnue {
@@ -1233,7 +1228,7 @@ impl NegamaxEngine {
     }
 }
 
-impl NegamaxEngine {
+impl Engine {
     fn configure_transposition_tables(&mut self) {
         let total_size_mb = self.config.hash_size.value;
         let qs_size_mb = total_size_mb / 3;

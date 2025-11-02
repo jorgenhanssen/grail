@@ -1,4 +1,4 @@
-use super::time_budget::{SearchHistory, TimeBudget};
+use crate::time_budget::{SearchHistory, TimeBudget};
 use chess::Board;
 use std::sync::Arc;
 use std::thread;
