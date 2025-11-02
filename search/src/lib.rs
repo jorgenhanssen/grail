@@ -1,7 +1,7 @@
 #![feature(portable_simd)]
 
 mod config;
-mod engine;
+pub mod engine;
 mod history;
 mod move_ordering;
 mod pruning;
