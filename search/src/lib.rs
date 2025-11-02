@@ -1,10 +1,15 @@
 #![feature(portable_simd)]
 
+mod aspiration;
 mod config;
-mod def;
-mod negamax;
+mod controller;
+mod engine;
+mod qs_table;
+mod search_stack;
+mod search_utils;
+mod time_budget;
+mod tt_table;
 mod utils;
 
 pub use config::EngineConfig;
-pub use def::Engine;
-pub use negamax::NegamaxEngine;
+pub use engine::Engine;

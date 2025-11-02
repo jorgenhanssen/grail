@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::Parser;
 
 #[derive(Parser, Debug)]
 #[command(name = "Grail")]
@@ -13,12 +13,4 @@ pub struct Args {
     /// Run a benchmark search from the starting position to the specified depth
     #[arg(long)]
     pub bench: Option<u8>,
-
-    #[command(subcommand)]
-    pub engines: Option<Engines>,
-}
-
-#[derive(Subcommand, Debug)]
-pub enum Engines {
-    Negamax {},
 }

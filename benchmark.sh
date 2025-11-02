@@ -2,7 +2,6 @@
 set -e
 
 ENGINE="./target/release/grail"
-COMMAND="negamax"
 DEPTH=18
 
 # --- Baselines
@@ -47,7 +46,7 @@ for i in "${!FENS[@]}"; do
   b_nps=${baseline_nps[$i]}
 
   LINE=$(printf "position fen %s\ngo depth %s\nquit\n" "$FEN" "$DEPTH" \
-    | "$ENGINE" "$COMMAND" 2>&1 | grep "depth $DEPTH" | tail -1)
+    | "$ENGINE" 2>&1 | grep "depth $DEPTH" | tail -1)
 
   if [[ -z $LINE ]]; then
     echo "| $((i+1)) | -         | -        | -         | -        | -       | -        |"

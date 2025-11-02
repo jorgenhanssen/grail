@@ -10,7 +10,7 @@ use evaluation::{hce, NNUE};
 use indicatif::{ProgressBar, ProgressStyle};
 use nnue::version::VersionManager;
 use rand::Rng;
-use search::{Engine, EngineConfig, NegamaxEngine};
+use search::{Engine, EngineConfig};
 use std::sync::Mutex;
 use uci::commands::GoParams;
 
@@ -103,7 +103,7 @@ impl Generator {
 struct SelfPlayWorker {
     tid: usize,
     global_evaluated: Arc<Mutex<AHashSet<u64>>>,
-    engine: NegamaxEngine,
+    engine: Engine,
     depth: u8,
 
     // Specific to ongoing game
@@ -130,7 +130,7 @@ impl SelfPlayWorker {
             game: Game::new(),
             depth,
 
-            engine: NegamaxEngine::new(&config, hce, nnue),
+            engine: Engine::new(&config, hce, nnue),
             positions_in_current_game: AHashSet::new(),
         }
     }

@@ -1,5 +1,4 @@
-use crate::args::Args;
-use crate::engine::Engine;
+use crate::engine;
 use chess::{Board, ChessMove};
 use search::EngineConfig;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -8,21 +7,21 @@ use std::time::{Duration, Instant};
 use uci::commands::{GoParams, Info, Score};
 use uci::UciOutput;
 
-pub fn run(args: &Args, depth: u8) {
+pub fn run(depth: u8) {
     let config = EngineConfig::default();
-    let engine = crate::engine::create(args, &config);
+    let engine = engine::create_engine(&config);
 
     let benchmark = Benchmark::new(engine, depth);
     benchmark.run();
 }
 
-struct Benchmark<E: Engine> {
+struct Benchmark {
     depth: u8,
-    engine: E,
+    engine: search::Engine,
 }
 
-impl<E: Engine> Benchmark<E> {
-    fn new(engine: E, depth: u8) -> Self {
+impl Benchmark {
+    fn new(engine: search::Engine, depth: u8) -> Self {
         Self { depth, engine }
     }
 
