@@ -1,8 +1,10 @@
-use super::main::Bound;
 use std::mem::size_of;
 use std::simd::prelude::SimdPartialEq;
 use std::simd::u32x4;
+
 use utils::memory::prefetch;
+
+use super::main::Bound;
 
 const CLUSTER_SIZE: usize = 4;
 const MIN_BUCKETS: usize = 1024;

@@ -1,26 +1,15 @@
-use crate::EngineConfig;
-use crate::{
-    history::{CaptureHistory, ContinuationHistory, HistoryHeuristic},
-    move_ordering::{MainMoveGenerator, QMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
-    pruning::{
-        can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
-        can_reverse_futility_prune, futility_margin, lmr, mate_distance_prune, null_move_reduction,
-        razor_margin, rfp_margin, should_lmp_prune, AspirationWindow, Pass, RAZOR_NEAR_MATE,
-    },
-    utils::{convert_centipawn_score, convert_mate_score, see::see},
-};
-use arrayvec::ArrayVec;
-use chess::{get_rank, BitBoard, Board, BoardStatus, ChessMove, Color, Piece, Rank};
-use evaluation::PieceValues;
-use evaluation::{
-    hce,
-    scores::{MATE_VALUE, NEG_INFINITY},
-    HCE, NNUE,
-};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc::Sender,
     Arc,
+};
+
+use arrayvec::ArrayVec;
+use chess::{get_rank, BitBoard, Board, BoardStatus, ChessMove, Color, Piece, Rank};
+use evaluation::{
+    hce,
+    scores::{MATE_VALUE, NEG_INFINITY},
+    PieceValues, HCE, NNUE,
 };
 use uci::{
     commands::{GoParams, Info, Score},
@@ -29,9 +18,18 @@ use uci::{
 use utils::{game_phase, Position};
 
 use crate::{
+    history::{CaptureHistory, ContinuationHistory, HistoryHeuristic},
+    move_ordering::{MainMoveGenerator, QMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
+    pruning::{
+        can_delta_prune, can_futility_prune, can_null_move_prune, can_razor_prune,
+        can_reverse_futility_prune, futility_margin, lmr, mate_distance_prune, null_move_reduction,
+        razor_margin, rfp_margin, should_lmp_prune, AspirationWindow, Pass, RAZOR_NEAR_MATE,
+    },
     stack::{SearchNode, SearchStack},
     time_control::SearchController,
     transposition::{Bound, QSTable, TranspositionTable},
+    utils::{convert_centipawn_score, convert_mate_score, see::see},
+    EngineConfig,
 };
 
 const MAX_DEPTH: usize = 100;

@@ -3,10 +3,10 @@
 use arrayvec::ArrayVec;
 use chess::{BitBoard, Board, ChessMove, MoveGen, Piece, Square};
 use evaluation::piece_values::PieceValues;
+use utils::gives_check;
 
 use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic};
 use crate::utils::see::see;
-use utils::gives_check;
 
 use super::utils::{capture_score, select_highest, ScoredMove};
 
