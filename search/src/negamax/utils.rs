@@ -190,20 +190,6 @@ pub fn only_move(board: &Board) -> bool {
     matches!((g.next(), g.next()), (Some(_), None))
 }
 
-// Small margin to avoid evaluation noise affecting position improvement detection
-const IMPROVING_MARGIN: i16 = 20;
-
-#[inline(always)]
-pub fn improving(eval: i16, eval_stack: &[i16]) -> bool {
-    // Eval comparison with small margin to filter noise: current eval vs eval from 2 plies back
-    if eval_stack.len() < 2 {
-        return false;
-    }
-
-    let prev_move_eval = eval_stack[eval_stack.len() - 2];
-    eval > prev_move_eval - IMPROVING_MARGIN
-}
-
 // Mate distance pruning (MDP)
 //
 // Adjusts alpha-beta bounds based on the maximum possible mate score at current depth.
