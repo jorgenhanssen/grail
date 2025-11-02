@@ -1,5 +1,6 @@
-use evaluation::{hce::HCEConfig, PieceValues};
 use std::str::FromStr;
+
+use evaluation::{hce::HCEConfig, PieceValues};
 use uci::{UciOption, UciOptionType, UciOutput};
 
 fn uci(include: bool, name: &'static str, option_type: UciOptionType) -> Option<UciOption> {

@@ -2,13 +2,12 @@
 set -e
 
 ENGINE="./target/release/grail"
-COMMAND="negamax"
 DEPTH=18
 
 # --- Baselines
-baseline_time=(2725 4785 686 14434 611 579 1129 566 4423 712)
-baseline_nodes=(7001341 11689070 2128642 37460304 1638548 1680486 3003537 1800564 11129915 1985647)
-baseline_nps=(2568527 2442759 3100679 2595132 2678015 2899637 2659844 3178563 2516223 2788027)
+baseline_time=(3623 6494 447 4871 507 579 1177 1063 2625 674)
+baseline_nodes=(10091198 17558002 1571188 13874178 1609044 1880730 3406321 3766459 7035954 2005802)
+baseline_nps=(2785104 2703372 3507433 2847952 3172689 3247810 2891952 3542768 2680281 2974973)
 
 FENS=(
   "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -47,7 +46,7 @@ for i in "${!FENS[@]}"; do
   b_nps=${baseline_nps[$i]}
 
   LINE=$(printf "position fen %s\ngo depth %s\nquit\n" "$FEN" "$DEPTH" \
-    | "$ENGINE" "$COMMAND" 2>&1 | grep "depth $DEPTH" | tail -1)
+    | "$ENGINE" 2>&1 | grep "depth $DEPTH" | tail -1)
 
   if [[ -z $LINE ]]; then
     echo "| $((i+1)) | -         | -        | -         | -        | -       | -        |"

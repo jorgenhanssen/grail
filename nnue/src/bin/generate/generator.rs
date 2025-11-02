@@ -6,7 +6,7 @@ use evaluation::{hce, NNUE};
 use indicatif::MultiProgress;
 use nnue::version::VersionManager;
 use rand::Rng;
-use search::{Engine, EngineConfig, NegamaxEngine};
+use search::{Engine, EngineConfig};
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -207,7 +207,7 @@ struct SelfPlayWorker {
     _tid: usize,
     sample_counter: Arc<AtomicUsize>,
     game_id_counter: Arc<AtomicUsize>,
-    engine: NegamaxEngine,
+    engine: Engine,
     depth: u8,
     opening_book: (PathBuf, usize),
     histogram: HistogramHandle,
@@ -246,7 +246,7 @@ impl SelfPlayWorker {
             game: Game::new(),
             game_id: 0,
             depth,
-            engine: NegamaxEngine::new(&config, hce, nnue),
+            engine: Engine::new(&config, hce, nnue),
             position_counts: std::collections::HashMap::new(),
             current_game_positions: Vec::new(),
             opening_book: opening_book.clone(),
