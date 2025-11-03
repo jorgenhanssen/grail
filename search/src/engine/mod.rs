@@ -4,6 +4,7 @@ use std::sync::{
     Arc,
 };
 
+use ahash::AHashSet;
 use chess::{Board, ChessMove};
 use evaluation::{hce, PieceValues, HCE, NNUE};
 use uci::{commands::Info, UciOutput};
@@ -31,6 +32,7 @@ pub struct Engine {
     nnue: Option<Box<dyn NNUE>>,
 
     board: Board,
+    game_history: AHashSet<u64>,
     nodes: u32,
     killer_moves: [[Option<ChessMove>; 2]; MAX_DEPTH], // 2 per depth
     current_pv: Vec<ChessMove>,
@@ -58,6 +60,7 @@ impl Engine {
             nnue,
 
             board: Board::default(),
+            game_history: AHashSet::new(),
             nodes: 0,
             killer_moves: [[None; 2]; MAX_DEPTH],
             current_pv: Vec::new(),
@@ -119,8 +122,9 @@ impl Engine {
         self.init_game();
     }
 
-    pub fn set_position(&mut self, board: Board) {
+    pub fn set_position(&mut self, board: Board, game_history: AHashSet<u64>) {
         self.board = board;
+        self.game_history = game_history;
     }
 
     pub fn stop(&mut self) {

@@ -234,7 +234,8 @@ impl SelfPlayWorker {
 
     #[inline]
     fn get_engine_move(&mut self, board: &Board) -> (ChessMove, i16) {
-        self.engine.set_position(*board);
+        let history = ahash::AHashSet::new();
+        self.engine.set_position(*board, history);
 
         let params = GoParams {
             depth: Some(self.depth),

@@ -1,3 +1,4 @@
+use ahash::AHashSet;
 use chess::{Board, ChessMove};
 
 #[derive(Debug)]
@@ -6,12 +7,18 @@ pub enum UciInput {
     IsReady,
 
     UciNewGame,
-    Position(Board),
+    Position {
+        board: Board,
+        game_history: AHashSet<u64>,
+    },
     Go(GoParams),
 
     Stop,
     Quit,
-    SetOption { name: String, value: String },
+    SetOption {
+        name: String,
+        value: String,
+    },
     Unknown(String),
     // TODO: Implement
     // PonderHit,
