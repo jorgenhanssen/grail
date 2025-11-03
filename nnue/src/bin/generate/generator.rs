@@ -364,10 +364,14 @@ impl SelfPlayWorker {
 
     #[inline]
     fn get_engine_move(&mut self, board: &Board) -> (ChessMove, i16) {
-        // Pass game history to engine (excluding current position)
-        let mut history = self.positions_in_current_game.clone();
-        history.remove(&board.get_hash());
-        
+        let current_hash = board.get_hash();
+        let history: ahash::AHashSet<u64> = self
+            .position_counts
+            .keys()
+            .copied()
+            .filter(|&hash| hash != current_hash)
+            .collect();
+
         self.engine.set_position(*board, history);
 
         let params = GoParams {
