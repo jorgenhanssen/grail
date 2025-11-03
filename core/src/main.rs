@@ -56,8 +56,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             UciInput::UciNewGame => {
                 engine.new_game();
             }
-            UciInput::Position(board) => {
-                engine.set_position(*board);
+            UciInput::Position { board, game_history } => {
+                engine.set_position(*board, game_history.clone());
             }
             UciInput::Go(params) => {
                 let result = engine.search(params, Some(&output));

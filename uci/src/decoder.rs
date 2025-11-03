@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use ahash::AHashSet;
 use chess::{Board, ChessMove};
 
 use super::commands::{GoParams, UciInput};
@@ -39,22 +40,32 @@ impl Decoder {
             Board::default() // Default to startpos
         };
 
-        // Handle moves if present
+        // Track positions seen in the game (not including the current position)
+        // The current position will be the search root (included in search stack)
+        let mut game_history = AHashSet::new();
+
+        // Parse and apply moves
         if input.contains("moves") {
-            let moves = input
+            let move_strings = input
                 .split("moves")
                 .nth(1)
                 .unwrap()
                 .trim()
                 .split_whitespace();
 
-            for mv in moves {
-                let mv = ChessMove::from_str(mv).unwrap();
-                board = board.make_move_new(mv);
+            for mv_str in move_strings {
+                game_history.insert(board.get_hash());
+
+                if let Ok(mv) = ChessMove::from_str(mv_str) {
+                    board = board.make_move_new(mv);
+                }
             }
         }
 
-        UciInput::Position(board)
+        UciInput::Position {
+            board,
+            game_history,
+        }
     }
 
     fn decode_setoption(&self, input: &str) -> UciInput {

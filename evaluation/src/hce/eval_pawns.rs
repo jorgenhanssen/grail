@@ -2,7 +2,8 @@ use super::HCEConfig;
 use crate::hce::context::EvalContext;
 use arrayvec::ArrayVec;
 use chess::{
-    get_adjacent_files, get_file, get_pawn_attacks, BitBoard, Color, Rank, Square, ALL_FILES, EMPTY,
+    get_adjacent_files, get_file, get_pawn_attacks, BitBoard, Color, File, Rank, Square, ALL_FILES,
+    EMPTY,
 };
 
 #[inline(always)]
@@ -80,6 +81,13 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
                 score -= config.backward_pawn_half_open_penalty;
             }
         }
+    }
+
+    // Center pawn bonus (D and E files) - scaled by phase (more important in opening)
+    let d_file_mask = get_file(File::D);
+    let e_file_mask = get_file(File::E);
+    if (my_pawns & d_file_mask) != EMPTY && (my_pawns & e_file_mask) != EMPTY {
+        score += ((config.center_pawn_bonus as f32) * ctx.phase).round() as i16;
     }
 
     score

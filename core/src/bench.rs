@@ -29,7 +29,8 @@ impl Benchmark {
         self.print_header();
 
         let board = Board::default();
-        self.engine.set_position(board);
+        let history = ahash::AHashSet::new();
+        self.engine.set_position(board, history);
 
         let params = self.create_search_params();
         let (tx, rx) = mpsc::channel();
