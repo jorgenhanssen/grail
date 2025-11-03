@@ -197,8 +197,9 @@ impl Engine {
         }
         self.nodes += 1;
 
-        if self.search_stack.has_duplicate() {
-            return (0, Vec::new()); // repetition = draw
+        // If this position has been seen before, treat it as a draw
+        if self.search_stack.is_repetition(&self.game_history) {
+            return (0, Vec::new());
         }
 
         let hash = self.search_stack.current().hash;

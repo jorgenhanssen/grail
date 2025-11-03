@@ -9,3 +9,4 @@ tuning = []
 [dependencies]
 chess = { workspace = true }
 log = { workspace = true }
+ahash = { workspace = true }

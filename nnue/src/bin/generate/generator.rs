@@ -234,7 +234,11 @@ impl SelfPlayWorker {
 
     #[inline]
     fn get_engine_move(&mut self, board: &Board) -> (ChessMove, i16) {
-        self.engine.set_position(*board);
+        // Pass game history to engine (excluding current position)
+        let mut history = self.positions_in_current_game.clone();
+        history.remove(&board.get_hash());
+        
+        self.engine.set_position(*board, history);
 
         let params = GoParams {
             depth: Some(self.depth),

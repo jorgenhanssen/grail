@@ -96,13 +96,22 @@ impl SearchStack {
     }
 
     #[inline(always)]
-    pub fn has_duplicate(&self) -> bool {
+    pub fn is_repetition(&self, game_history: &ahash::AHashSet<u64>) -> bool {
         let current_hash = self.nodes[self.nodes.len() - 1].hash;
+
+        // Check if this position was seen in the game before we started searching
+        if game_history.contains(&current_hash) {
+            return true;
+        }
+
+        // Check if this position appeared earlier in the current search tree
+        // (skip the last node which is the current position)
         for node in self.nodes.iter().rev().skip(1) {
             if node.hash == current_hash {
                 return true;
             }
         }
+
         false
     }
 
