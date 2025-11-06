@@ -10,4 +10,7 @@ pub struct Args {
 
     #[arg(long)]
     pub book: String,
+
+    #[arg(long, default_value_t = false)]
+    pub nnue: bool,
 }

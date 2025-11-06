@@ -19,4 +19,10 @@ pub struct Args {
 
     #[arg(long, default_value_t = 2)]
     pub early_stop_patience: u64,
+
+    #[arg(long, default_value_t = 0.1)]
+    pub validation_split: f32,
+
+    #[arg(long, default_value_t = 0.01)]
+    pub test_split: f64,
 }

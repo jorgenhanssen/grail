@@ -1,14 +1,14 @@
 use crate::nnue::resolve_nnue;
 use evaluation::hce;
-use search::EngineConfig;
 use search::Engine;
+use search::EngineConfig;
 
 pub fn create_engine(config: &EngineConfig) -> Engine {
     let hce = Box::new(hce::Evaluator::new(
         config.get_piece_values(),
         config.get_hce_config(),
     ));
-    let nnue = resolve_nnue().expect("Failed to resolve NNUE");
+    let nnue = Some(resolve_nnue().expect("Failed to load NNUE model"));
 
     Engine::new(config, hce, nnue)
 }

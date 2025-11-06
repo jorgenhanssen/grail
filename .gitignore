@@ -22,7 +22,9 @@ Cargo.lock
 
 *.log
 
-# nnue models and data
-nnue/versions/
+# nnue data and models
+nnue/data/
+nnue/model.safetensors
+nnue/evaluation.txt
 
 flamegraph.svg

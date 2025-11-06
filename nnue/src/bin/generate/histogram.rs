@@ -47,14 +47,12 @@ impl ScoreHistogram {
         }
     }
 
-    /// Get a handle that can be cloned and passed to worker threads
     pub fn clone_handle(&self) -> HistogramHandle {
         HistogramHandle {
             bins: Arc::clone(&self.bins),
         }
     }
 
-    /// Update all progress bars with current histogram state
     pub fn update_display(&self, total_samples: usize) {
         let bins = self.bins.lock().unwrap();
         let max_count = *bins.iter().max().unwrap_or(&1).max(&1);
@@ -76,7 +74,6 @@ impl ScoreHistogram {
         }
     }
 
-    /// Finish all progress bars
     pub fn finish(&self, total_samples: usize) {
         self.sample_count_bar
             .finish_with_message(format!("Generated {} samples", total_samples));
@@ -86,13 +83,11 @@ impl ScoreHistogram {
     }
 }
 
-/// A handle to update the histogram from worker threads
 pub struct HistogramHandle {
     bins: Arc<Mutex<Vec<usize>>>,
 }
 
 impl HistogramHandle {
-    /// Record a batch of scores into the histogram
     pub fn record_scores(&self, scores: &[i16]) {
         let mut updates = [0usize; NUM_BINS];
 
@@ -109,7 +104,6 @@ impl HistogramHandle {
     }
 }
 
-/// Convert a score to its corresponding bin index
 fn score_to_bin_index(score: i16) -> usize {
     let score_f32 = score as f32;
     let clamped = score_f32.clamp(CP_MIN as f32, CP_MAX as f32);

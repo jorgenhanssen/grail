@@ -12,11 +12,10 @@ use candle_core::{DType, Device};
 pub struct Evaluator {
     nnue_network: NNUENetwork,
     network: Network,
-    version: u32,
 }
 
 impl Evaluator {
-    pub fn new(varmap: &VarMap, device: &Device, version: u32) -> Self {
+    pub fn new(varmap: &VarMap, device: &Device) -> Self {
         let vs = VarBuilder::from_varmap(varmap, DType::F32, device);
         let network = Network::new(&vs).unwrap();
         let nnue_network = NNUENetwork::from_network(&network).unwrap();
@@ -24,7 +23,6 @@ impl Evaluator {
         Self {
             nnue_network,
             network,
-            version,
         }
     }
 
@@ -35,7 +33,7 @@ impl Evaluator {
 
 impl NNUE for Evaluator {
     fn name(&self) -> String {
-        format!("NNUE-{}", self.version)
+        "NNUE".to_string()
     }
 
     #[inline(always)]
