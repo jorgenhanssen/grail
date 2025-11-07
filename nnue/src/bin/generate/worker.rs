@@ -1,5 +1,5 @@
 use crate::book::Book;
-use crate::game::{check_draw, flush_game_to_evaluations, should_abort_game, GameEndReason};
+use crate::game::game_is_terminal;
 use crate::histogram::HistogramHandle;
 use chess::{Board, ChessMove, Game, MoveGen};
 use evaluation::{hce, NNUE};
@@ -15,6 +15,9 @@ const WORKER_HASH_SIZE_MB: i32 = 384;
 const INITIAL_TEMPERATURE: f32 = 3.0;
 const TEMPERATURE_DECAY_RATE: f32 = 7.5;
 const MIN_TEMPERATURE: f32 = 0.05;
+const MATE_THRESHOLD: i16 = 5000;
+const STABLE_DRAW_MOVES: usize = 40;
+const DRAWISH_EVAL: i16 = 20;
 
 pub struct SelfPlayWorker {
     _tid: usize,
@@ -30,7 +33,6 @@ pub struct SelfPlayWorker {
     game_id: usize,
     position_counts: HashMap<u64, usize>,
     current_game_positions: Vec<(String, i16)>,
-    game_end_reason: Option<GameEndReason>,
 }
 
 impl SelfPlayWorker {
@@ -65,72 +67,74 @@ impl SelfPlayWorker {
             current_game_positions: Vec::new(),
             opening_book,
             histogram,
-            game_end_reason: None,
         }
     }
 
     pub fn play_games(&mut self, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, usize)> {
         let mut evaluations = Vec::new();
-        self.reset_game();
 
         while !stop_flag.load(Ordering::Relaxed) {
-            if self.play_single_move() {
-                flush_game_to_evaluations(
-                    self.game_id,
-                    &mut self.current_game_positions,
-                    &mut evaluations,
-                    &self.histogram,
-                    &self.sample_counter,
-                );
-                self.reset_game();
-            }
+            self.play_game(&mut evaluations);
         }
 
         evaluations
     }
 
-    fn play_single_move(&mut self) -> bool {
-        let board = self.game.current_position();
+    fn play_game(&mut self, evaluations: &mut Vec<(String, i16, usize)>) {
+        self.init_game();
 
-        // Check if game should end (consolidated draw detection)
-        if check_draw(
-            &self.game,
-            &board,
-            &mut self.position_counts,
-            &mut self.game_end_reason,
-        ) {
-            return true;
-        }
-
-        // Select move and get evaluation
-        let (chosen_move, score) = self.select_move(board);
-
-        // Check if game should be aborted (stable draw or mate detected)
-        if should_abort_game(
-            &score,
-            &self.current_game_positions,
-            &mut self.game_end_reason,
-        ) {
-            // If we're aborting due to mate score, remove the last position
-            // since it won't be useful for training (will be filtered out anyway)
-            if matches!(self.game_end_reason, Some(GameEndReason::MateScore)) {
-                self.current_game_positions.pop();
+        loop {
+            if self.is_game_over() {
+                break;
             }
-            return true;
+
+            let (best_move, eval) = self.compute_move();
+
+            // Skip near-mate positions
+            // Testing showed this improves strength (by freeing capacity for nuanced positions, I guess)
+            if eval.abs() >= MATE_THRESHOLD {
+                break;
+            }
+            if self.is_stable_draw() {
+                break;
+            }
+
+            self.record_sample(eval);
+
+            // Choose and execute move (with temperature-based exploration)
+            let chosen_move = self.select_move(best_move);
+            self.game.make_move(chosen_move);
         }
 
-        self.game.make_move(chosen_move);
-
-        false
+        self.flush_game(evaluations);
     }
 
-    fn select_move(&mut self, board: chess::Board) -> (ChessMove, i16) {
-        let num_moves = self.current_game_positions.len();
+    // Checks terminal by chess rules / repetition
+    fn is_game_over(&mut self) -> bool {
+        let board = self.game.current_position();
+        game_is_terminal(&self.game, &board, &mut self.position_counts)
+    }
 
-        // Do single deep search to get best move + evaluation
-        let (best_move, engine_score) = self.get_engine_move(&board);
+    // Checks stable draw condition (40+ moves near zero eval)
+    fn is_stable_draw(&self) -> bool {
+        if self.current_game_positions.len() < STABLE_DRAW_MOVES {
+            return false;
+        }
+        let start = self.current_game_positions.len() - STABLE_DRAW_MOVES;
+        self.current_game_positions[start..]
+            .iter()
+            .all(|(_, eval)| eval.abs() < DRAWISH_EVAL)
+    }
 
-        // Store position with evaluation (from white's perspective)
+    // Runs engine to get best move + score
+    fn compute_move(&mut self) -> (ChessMove, i16) {
+        let board = self.game.current_position();
+        self.get_engine_best_move(&board)
+    }
+
+    // Records training sample (position + eval from white's perspective)
+    fn record_sample(&mut self, engine_score: i16) {
+        let board = self.game.current_position();
         let white_score = if board.side_to_move() == chess::Color::White {
             engine_score
         } else {
@@ -138,49 +142,50 @@ impl SelfPlayWorker {
         };
         self.current_game_positions
             .push((board.to_string(), white_score));
-
-        // Apply temperature-based move selection
-        // Use full turns (ply pairs) so both sides get equal temperature
-        let full_turns = num_moves / 2;
-        let chosen_move = self.select_move_with_temperature(&board, best_move, full_turns);
-
-        (chosen_move, engine_score)
     }
 
-    fn select_move_with_temperature(
-        &mut self,
-        board: &Board,
-        best_move: ChessMove,
-        full_turns: usize,
-    ) -> ChessMove {
+    // Flushes completed game to output
+    fn flush_game(&mut self, evaluations: &mut Vec<(String, i16, usize)>) {
+        let (positions, scores): (Vec<_>, Vec<_>) = self
+            .current_game_positions
+            .drain(..)
+            .map(|(fen, score)| ((fen, score, self.game_id), score))
+            .unzip();
+
+        let num_positions = positions.len();
+        evaluations.extend(positions);
+        self.histogram.record_scores(&scores);
+        self.sample_counter
+            .fetch_add(num_positions, Ordering::Relaxed);
+    }
+
+    // Selects move with temperature-based exploration (decays over game turns)
+    fn select_move(&mut self, best_move: ChessMove) -> ChessMove {
         let mut rng = rand::thread_rng();
 
-        // Turn-based temperature decay (both White and Black get same temp per turn)
-        // Formula: temp = INITIAL_TEMPERATURE * exp(-full_turns / TEMPERATURE_DECAY_RATE)
-        // At turn 0: temp ≈ 3.0 (high randomness)
-        // At turn 7-8: temp ≈ 1.1 (moderate randomness)
-        // At turn 15: temp ≈ 0.40 (low randomness)
-        // At turn 25: temp ≈ 0.10 (nearly optimal)
-        // At turn 30+: temp < 0.05 (essentially optimal)
-        let temperature =
-            INITIAL_TEMPERATURE * (-(full_turns as f32) / TEMPERATURE_DECAY_RATE).exp();
+        let current_move = self.current_game_positions.len() / 2;
+
+        // Temperature is used to balance exploration and exploitation
+        // Temperature is higher in the beginning of the game and decays over time.
+        // = More random moves in the beginning of the game => optimal play near the end.
+        // Scaled by move and not turn to ensure both sides have equal exploration (else first player would be more random = worse play)
+        let temp = INITIAL_TEMPERATURE * (-(current_move as f32) / TEMPERATURE_DECAY_RATE).exp();
 
         // With very low temperature, just play the best move
-        if temperature < MIN_TEMPERATURE {
+        if temp < MIN_TEMPERATURE {
             return best_move;
         }
 
-        // Generate all legal moves
-        let legal_moves: Vec<ChessMove> = MoveGen::new_legal(board).collect();
+        let board = self.game.current_position();
+
+        let legal_moves: Vec<ChessMove> = MoveGen::new_legal(&board).collect();
         if legal_moves.len() == 1 {
             return legal_moves[0];
         }
 
-        // Use random move probability: play random move with probability = temperature / INITIAL_TEMPERATURE
-        // This ensures both sides have equal exploration
-        let random_prob = (temperature / INITIAL_TEMPERATURE).min(1.0);
+        let probability_of_random_move = (temp / INITIAL_TEMPERATURE).min(1.0);
 
-        if rng.gen::<f32>() < random_prob {
+        if rng.gen::<f32>() < probability_of_random_move {
             // Pick a truly random legal move
             let index = rng.gen_range(0..legal_moves.len());
             legal_moves[index]
@@ -191,7 +196,7 @@ impl SelfPlayWorker {
     }
 
     #[inline]
-    fn get_engine_move(&mut self, board: &Board) -> (ChessMove, i16) {
+    fn get_engine_best_move(&mut self, board: &Board) -> (ChessMove, i16) {
         let current_hash = board.get_hash();
         let history: ahash::AHashSet<u64> = self
             .position_counts
@@ -210,22 +215,18 @@ impl SelfPlayWorker {
         self.engine.search(&params, None).unwrap()
     }
 
-    #[inline]
-    fn reset_game(&mut self) {
-        // Get unique game ID
+    fn init_game(&mut self) {
         self.game_id = self.game_id_counter.fetch_add(1, Ordering::Relaxed);
 
-        // Get a random position from opening book
         let fen = self.opening_book.random_position();
-        if let Ok(board) = Board::from_str(fen) {
-            self.game = Game::new_with_board(board);
+        self.game = if let Ok(board) = Board::from_str(fen) {
+            Game::new_with_board(board)
         } else {
-            self.game = Game::new();
-        }
+            Game::new()
+        };
 
         self.position_counts.clear();
         self.current_game_positions.clear();
-        self.game_end_reason = None;
         self.engine.new_game();
     }
 }
