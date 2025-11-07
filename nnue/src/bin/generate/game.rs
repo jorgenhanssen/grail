@@ -1,12 +1,11 @@
-use chess::{BitBoard, Board, Color, Game, GameResult, Piece};
+use chess::{Board, Game, GameResult};
 use std::sync::atomic::Ordering;
+use utils::has_insufficient_material;
 
 const MATE_THRESHOLD: i16 = 5000;
 const STABLE_DRAW_MOVES: usize = 40;
 const DRAWISH_EVAL: i16 = 20;
 const BALANCED_POSITION_THRESHOLD: i16 = 1000;
-
-const LIGHT_SQUARES_MASK: u64 = 0x55AA55AA55AA55AA;
 
 pub enum GameEndReason {
     ChessRules,           // Checkmate, stalemate, etc.
@@ -42,64 +41,6 @@ pub fn check_draw(
     if position_counts[&board_hash] >= 2 {
         *game_end_reason = Some(GameEndReason::Repetition);
         return true;
-    }
-
-    false
-}
-
-pub fn has_insufficient_material(board: &Board) -> bool {
-    let pawns = board.pieces(Piece::Pawn);
-    let rooks = board.pieces(Piece::Rook);
-    let queens = board.pieces(Piece::Queen);
-    if (pawns | rooks | queens).popcnt() > 0 {
-        return false;
-    }
-
-    // Only kings and minor pieces remain
-    let white = board.color_combined(Color::White);
-    let black = board.color_combined(Color::Black);
-    let knights = board.pieces(Piece::Knight);
-    let bishops = board.pieces(Piece::Bishop);
-
-    let white_knights = (white & knights).popcnt();
-    let black_knights = (black & knights).popcnt();
-    let white_bishops = (white & bishops).popcnt();
-    let black_bishops = (black & bishops).popcnt();
-
-    let white_minors = white_knights + white_bishops;
-    let black_minors = black_knights + black_bishops;
-
-    // K vs K
-    if white_minors == 0 && black_minors == 0 {
-        return true;
-    }
-
-    // K+N vs K or K vs K+N
-    if white_minors == 1 && white_knights == 1 && black_minors == 0 {
-        return true;
-    }
-    if black_minors == 1 && black_knights == 1 && white_minors == 0 {
-        return true;
-    }
-
-    // K+B vs K or K vs K+B
-    if white_minors == 1 && white_bishops == 1 && black_minors == 0 {
-        return true;
-    }
-    if black_minors == 1 && black_bishops == 1 && white_minors == 0 {
-        return true;
-    }
-
-    // K+B vs K+B with bishops on same color squares
-    if white_bishops == 1 && black_bishops == 1 && white_minors == 1 && black_minors == 1 {
-        let light_squares = BitBoard(LIGHT_SQUARES_MASK);
-        let white_on_light = (white & bishops & light_squares).popcnt() > 0;
-        let black_on_light = (black & bishops & light_squares).popcnt() > 0;
-
-        // Both on light or both on dark = insufficient material
-        if white_on_light == black_on_light {
-            return true;
-        }
     }
 
     false
