@@ -1,11 +1,10 @@
-use chess::{Board, Game, GameResult};
+use chess::{Board, Game};
 use std::sync::atomic::Ordering;
 use utils::has_insufficient_material;
 
 const MATE_THRESHOLD: i16 = 5000;
 const STABLE_DRAW_MOVES: usize = 40;
 const DRAWISH_EVAL: i16 = 20;
-const BALANCED_POSITION_THRESHOLD: i16 = 1000;
 
 pub enum GameEndReason {
     ChessRules,           // Checkmate, stalemate, etc.
@@ -78,61 +77,17 @@ pub fn should_abort_game(
     false
 }
 
-pub fn is_decisive_game(game: &Game, game_end_reason: &Option<GameEndReason>) -> bool {
-    if let Some(result) = game.result() {
-        return match result {
-            GameResult::WhiteCheckmates | GameResult::BlackResigns => true,
-            GameResult::BlackCheckmates | GameResult::WhiteResigns => true,
-            GameResult::Stalemate | GameResult::DrawAccepted | GameResult::DrawDeclared => false,
-        };
-    }
-
-    // Game was aborted early - check why
-    match game_end_reason {
-        Some(GameEndReason::ChessRules) => {
-            // Should have been caught above, but handle it anyway
-            false
-        }
-        Some(GameEndReason::MateScore) => {
-            // Game aborted due to mate score - it's a decisive game
-            true
-        }
-        Some(GameEndReason::InsufficientMaterial)
-        | Some(GameEndReason::Repetition)
-        | Some(GameEndReason::StableDraw)
-        | None => {
-            // Drawn games
-            false
-        }
-    }
-}
-
 pub fn flush_game_to_evaluations(
-    game: &Game,
     game_id: usize,
-    game_end_reason: &Option<GameEndReason>,
     current_game_positions: &mut Vec<(String, i16)>,
     evaluations: &mut Vec<(String, i16, usize)>,
     histogram: &crate::histogram::HistogramHandle,
     sample_counter: &std::sync::Arc<std::sync::atomic::AtomicUsize>,
 ) {
-    let is_decisive = is_decisive_game(game, game_end_reason);
-
-    let (positions, scores): (Vec<_>, Vec<_>) = if is_decisive {
-        // Include all positions in decisive games
-        current_game_positions
-            .drain(..)
-            .map(|(fen, score)| ((fen, score, game_id), score))
-            .unzip()
-    } else {
-        // Only include balanced positions in drawn games to prevent
-        // labeling clearly winning positions as draws
-        current_game_positions
-            .drain(..)
-            .filter(|(_, score)| score.abs() < BALANCED_POSITION_THRESHOLD)
-            .map(|(fen, score)| ((fen, score, game_id), score))
-            .unzip()
-    };
+    let (positions, scores): (Vec<_>, Vec<_>) = current_game_positions
+        .drain(..)
+        .map(|(fen, score)| ((fen, score, game_id), score))
+        .unzip();
 
     let num_positions = positions.len();
     evaluations.extend(positions);

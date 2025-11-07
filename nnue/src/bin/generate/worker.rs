@@ -76,9 +76,7 @@ impl SelfPlayWorker {
         while !stop_flag.load(Ordering::Relaxed) {
             if self.play_single_move() {
                 flush_game_to_evaluations(
-                    &self.game,
                     self.game_id,
-                    &self.game_end_reason,
                     &mut self.current_game_positions,
                     &mut evaluations,
                     &self.histogram,
