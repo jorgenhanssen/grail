@@ -44,8 +44,8 @@ impl SelfPlayWorker {
         histogram: HistogramHandle,
     ) -> Self {
         let mut config = EngineConfig::default();
-        // Reduce hash size for data generation (384 MB instead of 1024 MB)
-        // With 32 threads, this reduces RAM from 32GB to ~12GB
+
+        // Reduced hash size to reduce RAM usage
         config.hash_size.value = WORKER_HASH_SIZE_MB;
 
         let hce = Box::new(hce::Evaluator::new(
