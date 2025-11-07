@@ -1,9 +1,32 @@
-use chess::{Board, ChessMove, MoveGen, Piece};
+use chess::{Board, ChessMove, Color, MoveGen, Piece, EMPTY};
 
 #[inline(always)]
 pub fn only_move(board: &Board) -> bool {
     let mut g = MoveGen::new_legal(board);
     matches!((g.next(), g.next()), (Some(_), None))
+}
+
+#[inline(always)]
+pub fn side_has_insufficient_material(board: &Board, color: Color) -> bool {
+    let color_pieces = board.color_combined(color);
+
+    let pawns = board.pieces(Piece::Pawn) & color_pieces;
+    let rooks = board.pieces(Piece::Rook) & color_pieces;
+    let queens = board.pieces(Piece::Queen) & color_pieces;
+
+    // If this side has pawns, rooks, or queens, they can potentially win
+    if (pawns | rooks | queens) != EMPTY {
+        return false;
+    }
+
+    // Only king and minor pieces remain
+    let knights = board.pieces(Piece::Knight) & color_pieces;
+    let bishops = board.pieces(Piece::Bishop) & color_pieces;
+
+    let minor_count = (knights | bishops).popcnt();
+
+    // King alone, or K+N, or K+B cannot force mate
+    minor_count <= 1
 }
 
 #[inline(always)]
