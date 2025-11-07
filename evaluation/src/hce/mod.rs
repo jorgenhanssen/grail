@@ -18,7 +18,7 @@ use crate::def::HCE;
 use crate::hce::pawn_cache::CachedPawnEvaluation;
 use crate::piece_values::PieceValues;
 use chess::Color;
-use utils::Position;
+use utils::{side_has_insufficient_material, Position};
 
 pub struct Evaluator {
     piece_values: PieceValues,
@@ -90,6 +90,16 @@ impl HCE for Evaluator {
             cp += self.config.tempo_bonus;
         } else {
             cp -= self.config.tempo_bonus;
+        }
+
+        // Cap evaluation based on insufficient material
+        // If a side cannot possibly win, cap eval at draw (0) from their perspective
+        // Because a bishop + king gets higher cp than vs a king, even if it is a draw.
+        if side_has_insufficient_material(board, Color::White) {
+            cp = cp.min(0);
+        }
+        if side_has_insufficient_material(board, Color::Black) {
+            cp = cp.max(0);
         }
 
         cp
