@@ -5,8 +5,9 @@ use std::simd::prelude::SimdFloat;
 use crate::encoding::{NUM_FEATURES, NUM_U64S};
 use crate::samples::{CP_MAX, CP_MIN, FV_SCALE};
 
-use std::simd::f32x8;
-const SIMD_WIDTH: usize = 8;
+use std::simd::f32x16;
+type SIMD = f32x16;
+const SIMD_WIDTH: usize = 16;
 
 const EMBEDDING_SIZE: usize = 1024;
 const HIDDEN_SIZE: usize = 16;
@@ -162,7 +163,7 @@ impl NNUENetwork {
     #[inline(always)]
     fn update_embedding_for_feature(&mut self, feature_idx: usize, is_active: bool) {
         let sign = if is_active { 1.0 } else { -1.0 };
-        let sign_vec = f32x8::splat(sign);
+        let sign_vec = SIMD::splat(sign);
 
         let mut i = 0;
         let weights_row = &self.embedding_weights_by_feature
@@ -170,9 +171,9 @@ impl NNUENetwork {
 
         while i + SIMD_WIDTH <= EMBEDDING_SIZE {
             // Load current embedding values
-            let mut embedding_chunk = f32x8::from_slice(&self.embedding_buffer[i..i + SIMD_WIDTH]);
+            let mut embedding_chunk = SIMD::from_slice(&self.embedding_buffer[i..i + SIMD_WIDTH]);
 
-            let weights_chunk = f32x8::from_slice(&weights_row[i..i + SIMD_WIDTH]);
+            let weights_chunk = SIMD::from_slice(&weights_row[i..i + SIMD_WIDTH]);
 
             // Multiply weights by sign and add to embedding
             embedding_chunk += sign_vec * weights_chunk;
@@ -311,15 +312,15 @@ fn simd_relu(values: &mut [f32]) {
 
     const UNROLL: usize = 4;
 
-    let zeros = f32x8::splat(0.0);
+    let zeros = SIMD::splat(0.0);
     let limit = len - (len % (SIMD_WIDTH * UNROLL));
 
     // 4 SIMD chunks
     while i < limit {
-        let chunk0 = f32x8::from_slice(&values[i..i + SIMD_WIDTH]);
-        let chunk1 = f32x8::from_slice(&values[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
-        let chunk2 = f32x8::from_slice(&values[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
-        let chunk3 = f32x8::from_slice(&values[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
+        let chunk0 = SIMD::from_slice(&values[i..i + SIMD_WIDTH]);
+        let chunk1 = SIMD::from_slice(&values[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
+        let chunk2 = SIMD::from_slice(&values[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
+        let chunk3 = SIMD::from_slice(&values[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
 
         let result0 = chunk0.simd_max(zeros);
         let result1 = chunk1.simd_max(zeros);
@@ -351,15 +352,15 @@ fn simd_add(dest: &mut [f32], src: &[f32]) {
 
     // 4 SIMD chunks
     while i < limit {
-        let dest0 = f32x8::from_slice(&dest[i..i + SIMD_WIDTH]);
-        let dest1 = f32x8::from_slice(&dest[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
-        let dest2 = f32x8::from_slice(&dest[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
-        let dest3 = f32x8::from_slice(&dest[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
+        let dest0 = SIMD::from_slice(&dest[i..i + SIMD_WIDTH]);
+        let dest1 = SIMD::from_slice(&dest[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
+        let dest2 = SIMD::from_slice(&dest[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
+        let dest3 = SIMD::from_slice(&dest[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
 
-        let src0 = f32x8::from_slice(&src[i..i + SIMD_WIDTH]);
-        let src1 = f32x8::from_slice(&src[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
-        let src2 = f32x8::from_slice(&src[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
-        let src3 = f32x8::from_slice(&src[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
+        let src0 = SIMD::from_slice(&src[i..i + SIMD_WIDTH]);
+        let src1 = SIMD::from_slice(&src[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
+        let src2 = SIMD::from_slice(&src[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
+        let src3 = SIMD::from_slice(&src[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
 
         let result0 = dest0 + src0;
         let result1 = dest1 + src1;
@@ -383,10 +384,10 @@ fn simd_add(dest: &mut [f32], src: &[f32]) {
 // SIMD dot product helper function
 #[inline(always)]
 fn simd_dot(a: &[f32], b: &[f32], len: usize) -> f32 {
-    let mut sum_vec0 = f32x8::splat(0.0);
-    let mut sum_vec1 = f32x8::splat(0.0);
-    let mut sum_vec2 = f32x8::splat(0.0);
-    let mut sum_vec3 = f32x8::splat(0.0);
+    let mut sum_vec0 = SIMD::splat(0.0);
+    let mut sum_vec1 = SIMD::splat(0.0);
+    let mut sum_vec2 = SIMD::splat(0.0);
+    let mut sum_vec3 = SIMD::splat(0.0);
 
     const UNROLL: usize = 4;
 
@@ -396,14 +397,14 @@ fn simd_dot(a: &[f32], b: &[f32], len: usize) -> f32 {
     // Process 4 SIMD vectors at once (unrolled loop)
     while i < limit {
         // Correct slice ranges for from_slice
-        let a0 = f32x8::from_slice(&a[i..i + SIMD_WIDTH]);
-        let b0 = f32x8::from_slice(&b[i..i + SIMD_WIDTH]);
-        let a1 = f32x8::from_slice(&a[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
-        let b1 = f32x8::from_slice(&b[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
-        let a2 = f32x8::from_slice(&a[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
-        let b2 = f32x8::from_slice(&b[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
-        let a3 = f32x8::from_slice(&a[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
-        let b3 = f32x8::from_slice(&b[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
+        let a0 = SIMD::from_slice(&a[i..i + SIMD_WIDTH]);
+        let b0 = SIMD::from_slice(&b[i..i + SIMD_WIDTH]);
+        let a1 = SIMD::from_slice(&a[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
+        let b1 = SIMD::from_slice(&b[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
+        let a2 = SIMD::from_slice(&a[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
+        let b2 = SIMD::from_slice(&b[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
+        let a3 = SIMD::from_slice(&a[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
+        let b3 = SIMD::from_slice(&b[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
 
         // Multiply and accumulate
         sum_vec0 += a0 * b0;
