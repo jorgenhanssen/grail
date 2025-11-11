@@ -142,15 +142,24 @@ impl Trainer {
 }
 
 pub fn get_device() -> Result<Device, Box<dyn Error>> {
-    let device = Device::cuda_if_available(0)?;
-
-    if device.is_cuda() {
-        log::info!("CUDA available, using GPU");
-    } else {
-        log::info!("CUDA not available, using CPU");
+    #[cfg(feature = "cuda")]
+    if let Ok(device) = Device::cuda_if_available(0) {
+        if device.is_cuda() {
+            log::info!("Using CUDA device");
+            return Ok(device);
+        }
     }
 
-    Ok(device)
+    #[cfg(feature = "metal")]
+    if let Ok(device) = Device::new_metal(0) {
+        if device.is_metal() {
+            log::info!("Using Metal device");
+            return Ok(device);
+        }
+    }
+
+    log::info!("Using CPU device");
+    Ok(Device::Cpu)
 }
 
 pub fn create_network(device: &Device) -> Result<(Network, VarMap), Box<dyn Error>> {

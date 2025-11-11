@@ -2,12 +2,29 @@ SHELL = /bin/bash
 
 .ONESHELL:
 
-.PHONY: setup build run build-grail run-grail build-generate run-generate build-train run-train build-train-cuda run-train-cuda build-tournament build-all
+.PHONY: setup build run build-grail build-grail-tuning build-generate build-train build-train-cuda build-train-metal build-train-cpu build-all
 
 RUSTFLAGS = -C target-cpu=native
 
-run: build-grail
-	echo -e "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\ngo movetime 10000\nquit\n" | ./target/release/grail
+# "cuda" or "metal" or empty string
+GPU_FEATURES := $(shell [ "$$(uname -s)" = "Darwin" ] && echo metal || (command -v nvcc >/dev/null 2>&1 && echo cuda || true))
+
+grail:
+	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin grail
+
+grail-tuning:
+	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin grail --features tuning
+	
+generate:
+	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin generate
+
+train:
+	@echo "Building with features: $(GPU_FEATURES)"
+	@if [ -n "$(GPU_FEATURES)" ]; then \
+		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p nnue --bin train --features $(GPU_FEATURES); \
+	else \
+		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p nnue --bin train; \
+	fi
 
 setup:
 	sudo apt-get update
@@ -17,30 +34,3 @@ setup:
 	# Append Rust to future shell sessions
 	echo 'source $$HOME/.cargo/env' >> $$HOME/.bashrc
 	# Source it right now for *this* shell (optional if already in shell rc)
-
-build-grail:
-	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin grail
-run-grail:
-	RUSTFLAGS="$(RUSTFLAGS)" cargo run --release --bin grail
-
-build-grail-tuning:
-	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin grail --features tuning
-run-grail-tuning:
-	RUSTFLAGS="$(RUSTFLAGS)" cargo run --release --bin grail --features tuning
-	
-build-generate:
-	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin generate
-run-generate:
-	RUSTFLAGS="$(RUSTFLAGS)" cargo run --release --bin generate -- --book ./books/Blitz_Testing_4moves.epd
-
-build-train:
-	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin train
-run-train:
-	RUSTFLAGS="$(RUSTFLAGS)" cargo run --release --bin train
-
-build-train-cuda:
-	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p nnue --bin train --features cuda
-run-train-cuda:
-	RUSTFLAGS="$(RUSTFLAGS)" cargo run --release -p nnue --bin train --features cuda
-
-build-all: build-grail build-generate build-train
