@@ -10,7 +10,7 @@ use crate::{
 use candle_core::{DType, Device};
 
 pub struct Evaluator {
-    nnue_network: NNUENetwork,
+    nnue_network: Option<NNUENetwork>,
     network: Network,
 }
 
@@ -18,16 +18,15 @@ impl Evaluator {
     pub fn new(varmap: &VarMap, device: &Device) -> Self {
         let vs = VarBuilder::from_varmap(varmap, DType::F32, device);
         let network = Network::new(&vs).unwrap();
-        let nnue_network = NNUENetwork::from_network(&network).unwrap();
 
         Self {
-            nnue_network,
+            nnue_network: None,
             network,
         }
     }
 
     pub fn enable_nnue(&mut self) {
-        self.nnue_network = NNUENetwork::from_network(&self.network).unwrap();
+        self.nnue_network = Some(NNUENetwork::from_network(&self.network).unwrap());
     }
 }
 
@@ -57,6 +56,8 @@ impl NNUE for Evaluator {
             black_threats,
         );
         self.nnue_network
+            .as_mut()
+            .expect("NNUE network not initialized - call enable_nnue() first")
             .forward_bitset(&bitset)
             .clamp(i16::MIN as f32, i16::MAX as f32) as i16
     }

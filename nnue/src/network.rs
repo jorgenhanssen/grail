@@ -11,11 +11,21 @@ type SimdI16 = i16x32;
 const SIMD_WIDTH_F32: usize = 16;
 const SIMD_WIDTH_I16: usize = 32;
 
-// Scale factor balances precision and range for i8 weights
-const QUANTIZATION_SCALE: f32 = 64.0;
-
 const EMBEDDING_SIZE: usize = 1024;
 const HIDDEN_SIZE: usize = 16;
+
+// Quantization scale is computed from this percentile of absolute weights.
+// Lower values clip more outliers but give better precision for typical weights.
+const QUANTIZATION_PERCENTILE: f32 = 0.9998;
+
+// Quantization range limits
+const I8_MIN: f32 = -128.0;
+const I8_MAX: f32 = 127.0;
+const I16_MIN: f32 = -32768.0;
+const I16_MAX: f32 = 32767.0;
+
+// Bitset encoding
+const BITS_PER_U64: usize = 64;
 
 pub struct Network {
     embedding: Linear,
@@ -97,6 +107,8 @@ pub struct NNUENetwork {
     embedding_weights_i8: Box<[i8]>,
     embedding_biases_i16: Box<[i16]>,
     embedding_buffer_i16: [i16; EMBEDDING_SIZE],
+    quantization_scale: f32,
+
     hidden1_buffer: [f32; HIDDEN_SIZE],
     hidden2_buffer: [f32; HIDDEN_SIZE],
     output_buffer: [f32; 1],
@@ -112,34 +124,13 @@ impl NNUENetwork {
         let hidden2 = LinearLayer::from_candle_linear(&network.hidden2)?;
         let output = LinearLayer::from_candle_linear(&network.output)?;
 
-        // Transpose and quantize: [out][in] -> [in][out] layout for incremental updates
-        let mut embedding_weights_i8 = vec![0i8; NUM_FEATURES * EMBEDDING_SIZE].into_boxed_slice();
-        for out_idx in 0..EMBEDDING_SIZE {
-            let src_row_offset = out_idx * NUM_FEATURES;
-            for feature_idx in 0..NUM_FEATURES {
-                let f32_weight = embedding.weights[src_row_offset + feature_idx];
-                let quantized = (f32_weight * QUANTIZATION_SCALE)
-                    .round()
-                    .clamp(-128.0, 127.0) as i8;
-                embedding_weights_i8[feature_idx * EMBEDDING_SIZE + out_idx] = quantized;
-            }
-        }
-
-        let embedding_biases_i16: Box<[i16]> = embedding
-            .biases
-            .iter()
-            .map(|&b| (b * QUANTIZATION_SCALE).round().clamp(-32768.0, 32767.0) as i16)
-            .collect();
+        let quantization_scale = compute_quantization_scale(&embedding.weights);
+        let embedding_weights_i8 =
+            quantize_embedding_weights(&embedding.weights, quantization_scale);
+        let embedding_biases_i16 = quantize_embedding_biases(&embedding.biases, quantization_scale);
 
         let mut embedding_buffer_i16 = [0i16; EMBEDDING_SIZE];
         embedding_buffer_i16.copy_from_slice(&embedding_biases_i16);
-
-        let hidden1_buffer = [0.0; HIDDEN_SIZE];
-        let hidden2_buffer = [0.0; HIDDEN_SIZE];
-        let output_buffer = [0.0; 1];
-
-        let current_input = [0u64; NUM_U64S];
-        let previous_input = [0u64; NUM_U64S];
 
         Ok(Self {
             hidden1,
@@ -148,11 +139,12 @@ impl NNUENetwork {
             embedding_weights_i8,
             embedding_biases_i16,
             embedding_buffer_i16,
-            hidden1_buffer,
-            hidden2_buffer,
-            output_buffer,
-            current_input,
-            previous_input,
+            quantization_scale,
+            hidden1_buffer: [0.0; HIDDEN_SIZE],
+            hidden2_buffer: [0.0; HIDDEN_SIZE],
+            output_buffer: [0.0; 1],
+            current_input: [0u64; NUM_U64S],
+            previous_input: [0u64; NUM_U64S],
         })
     }
 
@@ -219,8 +211,8 @@ impl NNUENetwork {
 
         for (i, &val) in input.iter().enumerate().take(NUM_FEATURES) {
             if val > 0.0 {
-                let word_idx = i / 64;
-                let bit_idx = i % 64;
+                let word_idx = i / BITS_PER_U64;
+                let bit_idx = i % BITS_PER_U64;
                 self.current_input[word_idx] |= 1u64 << bit_idx;
             }
         }
@@ -232,7 +224,7 @@ impl NNUENetwork {
                 let bit_idx = changes.trailing_zeros() as usize;
                 changes &= changes - 1;
 
-                let feature_idx = word_idx * 64 + bit_idx;
+                let feature_idx = word_idx * BITS_PER_U64 + bit_idx;
                 if feature_idx >= NUM_FEATURES {
                     continue;
                 }
@@ -245,7 +237,11 @@ impl NNUENetwork {
         self.previous_input.copy_from_slice(&self.current_input);
 
         let mut activated_embedding = [0.0; EMBEDDING_SIZE];
-        dequantize_and_relu(&self.embedding_buffer_i16, &mut activated_embedding);
+        dequantize_and_relu(
+            &self.embedding_buffer_i16,
+            &mut activated_embedding,
+            self.quantization_scale,
+        );
 
         self.hidden1
             .forward(&activated_embedding, &mut self.hidden1_buffer);
@@ -273,7 +269,7 @@ impl NNUENetwork {
                 let bit_idx = changes.trailing_zeros() as usize;
                 changes &= changes - 1;
 
-                let feature_idx = word_idx * 64 + bit_idx;
+                let feature_idx = word_idx * BITS_PER_U64 + bit_idx;
                 if feature_idx >= NUM_FEATURES {
                     continue;
                 }
@@ -286,7 +282,11 @@ impl NNUENetwork {
         self.previous_input.copy_from_slice(&self.current_input);
 
         let mut activated_embedding = [0.0; EMBEDDING_SIZE];
-        dequantize_and_relu(&self.embedding_buffer_i16, &mut activated_embedding);
+        dequantize_and_relu(
+            &self.embedding_buffer_i16,
+            &mut activated_embedding,
+            self.quantization_scale,
+        );
 
         self.hidden1
             .forward(&activated_embedding, &mut self.hidden1_buffer);
@@ -305,11 +305,62 @@ impl NNUENetwork {
     }
 }
 
+fn compute_quantization_scale(weights: &[f32]) -> f32 {
+    let max_abs_weight = weights.iter().map(|&w| w.abs()).fold(0.0f32, f32::max);
+
+    // Use percentile-based scaling instead of max to optimize precision
+    //
+    // Rationale: Max weights are often outliers. Using percentile-based scaling
+    // gives better precision for the majority of weights at the cost of clipping
+    // rare outliers.
+    let mut abs_weights: Vec<f32> = weights.iter().map(|&w| w.abs()).collect();
+    abs_weights.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    // Compute percentile index (len-1 to get valid array index for 100th percentile)
+    let percentile_idx = ((abs_weights.len() - 1) as f32 * QUANTIZATION_PERCENTILE) as usize;
+    let percentile_weight = abs_weights[percentile_idx];
+
+    if percentile_weight > 0.0 {
+        I8_MAX / percentile_weight
+    } else if max_abs_weight > 0.0 {
+        I8_MAX / max_abs_weight
+    } else {
+        64.0 // Fallback if all weights are zero (should never happen)
+    }
+}
+
+fn quantize_embedding_weights(weights: &[f32], scale: f32) -> Box<[i8]> {
+    let mut quantized = vec![0i8; NUM_FEATURES * EMBEDDING_SIZE].into_boxed_slice();
+
+    // Transpose: [out][in] -> [in][out] layout for efficient incremental updates
+    for out_idx in 0..EMBEDDING_SIZE {
+        let src_row_offset = out_idx * NUM_FEATURES;
+        for feature_idx in 0..NUM_FEATURES {
+            let weight = weights[src_row_offset + feature_idx];
+            let quantized_value = (weight * scale).round().clamp(I8_MIN, I8_MAX) as i8;
+            quantized[feature_idx * EMBEDDING_SIZE + out_idx] = quantized_value;
+        }
+    }
+
+    quantized
+}
+
+fn quantize_embedding_biases(biases: &[f32], scale: f32) -> Box<[i16]> {
+    biases
+        .iter()
+        .map(|&b| (b * scale).round().clamp(I16_MIN, I16_MAX) as i16)
+        .collect()
+}
+
 #[inline(always)]
-fn dequantize_and_relu(input_i16: &[i16; EMBEDDING_SIZE], output_f32: &mut [f32; EMBEDDING_SIZE]) {
-    const DEQUANT_SCALE: f32 = 1.0 / QUANTIZATION_SCALE;
+fn dequantize_and_relu(
+    input_i16: &[i16; EMBEDDING_SIZE],
+    output_f32: &mut [f32; EMBEDDING_SIZE],
+    quantization_scale: f32,
+) {
+    let dequant_scale = 1.0 / quantization_scale;
     let zeros = SimdF32::splat(0.0);
-    let scale_vec = SimdF32::splat(DEQUANT_SCALE);
+    let scale_vec = SimdF32::splat(dequant_scale);
     let mut i = 0;
 
     while i + SIMD_WIDTH_F32 <= EMBEDDING_SIZE {
@@ -325,7 +376,7 @@ fn dequantize_and_relu(input_i16: &[i16; EMBEDDING_SIZE], output_f32: &mut [f32;
     }
 
     while i < EMBEDDING_SIZE {
-        output_f32[i] = (input_i16[i] as f32 * DEQUANT_SCALE).max(0.0);
+        output_f32[i] = (input_i16[i] as f32 * dequant_scale).max(0.0);
         i += 1;
     }
 }
