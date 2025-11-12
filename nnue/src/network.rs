@@ -5,9 +5,14 @@ use std::simd::prelude::SimdFloat;
 use crate::encoding::{NUM_FEATURES, NUM_U64S};
 use crate::samples::{CP_MAX, CP_MIN, FV_SCALE};
 
-use std::simd::f32x16;
-type SIMD = f32x16;
-const SIMD_WIDTH: usize = 16;
+use std::simd::{f32x16, i16x32};
+type SimdF32 = f32x16;
+type SimdI16 = i16x32;
+const SIMD_WIDTH_F32: usize = 16;
+const SIMD_WIDTH_I16: usize = 32;
+
+// Scale factor balances precision and range for i8 weights
+const QUANTIZATION_SCALE: f32 = 64.0;
 
 const EMBEDDING_SIZE: usize = 1024;
 const HIDDEN_SIZE: usize = 16;
@@ -54,7 +59,6 @@ pub struct LinearLayer {
 }
 
 impl LinearLayer {
-    // Create from Candle Linear layer
     fn from_candle_linear(linear: &Linear) -> Result<Self> {
         let weights = linear.weight().flatten_all()?.to_vec1()?.into_boxed_slice();
         let biases = linear.bias().unwrap().to_vec1()?.into_boxed_slice();
@@ -70,10 +74,8 @@ impl LinearLayer {
         })
     }
 
-    // Forward pass
     #[inline(always)]
     fn forward(&self, input: &[f32], output: &mut [f32]) {
-        // Initialize with biases
         output.copy_from_slice(&self.biases);
 
         for i in 0..self.output_size {
@@ -81,27 +83,24 @@ impl LinearLayer {
             let weights_row =
                 &self.weights[weights_row_offset..weights_row_offset + self.input_size];
 
-            output[i] += simd_dot(input, weights_row, self.input_size);
+            output[i] += dot(input, weights_row, self.input_size);
         }
     }
 }
 
 pub struct NNUENetwork {
-    embedding: LinearLayer,
     hidden1: LinearLayer,
     hidden2: LinearLayer,
     output: LinearLayer,
 
-    // [feature_idx][embedding_idx]
-    embedding_weights_by_feature: Box<[f32]>,
-
-    // Accumulated state
-    embedding_buffer: [f32; EMBEDDING_SIZE],
+    // Transposed layout: [feature_idx][embedding_idx]
+    embedding_weights_i8: Box<[i8]>,
+    embedding_biases_i16: Box<[i16]>,
+    embedding_buffer_i16: [i16; EMBEDDING_SIZE],
     hidden1_buffer: [f32; HIDDEN_SIZE],
     hidden2_buffer: [f32; HIDDEN_SIZE],
     output_buffer: [f32; 1],
 
-    // Input state for change detection
     current_input: [u64; NUM_U64S],
     previous_input: [u64; NUM_U64S],
 }
@@ -113,20 +112,27 @@ impl NNUENetwork {
         let hidden2 = LinearLayer::from_candle_linear(&network.hidden2)?;
         let output = LinearLayer::from_candle_linear(&network.output)?;
 
-        // Transposed embedding weights for cache-friendly updates.
-        // [in=NUM_FEATURES][out=EMBEDDING_SIZE].
-        let mut embedding_weights_by_feature =
-            vec![0.0f32; NUM_FEATURES * EMBEDDING_SIZE].into_boxed_slice();
+        // Transpose and quantize: [out][in] -> [in][out] layout for incremental updates
+        let mut embedding_weights_i8 = vec![0i8; NUM_FEATURES * EMBEDDING_SIZE].into_boxed_slice();
         for out_idx in 0..EMBEDDING_SIZE {
             let src_row_offset = out_idx * NUM_FEATURES;
             for feature_idx in 0..NUM_FEATURES {
-                let src = embedding.weights[src_row_offset + feature_idx];
-                embedding_weights_by_feature[feature_idx * EMBEDDING_SIZE + out_idx] = src;
+                let f32_weight = embedding.weights[src_row_offset + feature_idx];
+                let quantized = (f32_weight * QUANTIZATION_SCALE)
+                    .round()
+                    .clamp(-128.0, 127.0) as i8;
+                embedding_weights_i8[feature_idx * EMBEDDING_SIZE + out_idx] = quantized;
             }
         }
 
-        let mut embedding_buffer = [0.0; EMBEDDING_SIZE];
-        embedding_buffer.copy_from_slice(&embedding.biases);
+        let embedding_biases_i16: Box<[i16]> = embedding
+            .biases
+            .iter()
+            .map(|&b| (b * QUANTIZATION_SCALE).round().clamp(-32768.0, 32767.0) as i16)
+            .collect();
+
+        let mut embedding_buffer_i16 = [0i16; EMBEDDING_SIZE];
+        embedding_buffer_i16.copy_from_slice(&embedding_biases_i16);
 
         let hidden1_buffer = [0.0; HIDDEN_SIZE];
         let hidden2_buffer = [0.0; HIDDEN_SIZE];
@@ -136,12 +142,12 @@ impl NNUENetwork {
         let previous_input = [0u64; NUM_U64S];
 
         Ok(Self {
-            embedding,
             hidden1,
             hidden2,
             output,
-            embedding_weights_by_feature,
-            embedding_buffer,
+            embedding_weights_i8,
+            embedding_biases_i16,
+            embedding_buffer_i16,
             hidden1_buffer,
             hidden2_buffer,
             output_buffer,
@@ -150,51 +156,66 @@ impl NNUENetwork {
         })
     }
 
-    // Reset the NNUE state (useful when starting a new position evaluation)
     #[inline(always)]
     pub fn reset(&mut self) {
-        self.embedding_buffer
-            .copy_from_slice(&self.embedding.biases);
+        self.embedding_buffer_i16
+            .copy_from_slice(&self.embedding_biases_i16);
         self.previous_input.fill(0);
         self.current_input.fill(0);
     }
 
-    // Update embedding for a single feature change
     #[inline(always)]
     fn update_embedding_for_feature(&mut self, feature_idx: usize, is_active: bool) {
-        let sign = if is_active { 1.0 } else { -1.0 };
-        let sign_vec = SIMD::splat(sign);
-
-        let mut i = 0;
-        let weights_row = &self.embedding_weights_by_feature
+        let weights_row = &self.embedding_weights_i8
             [feature_idx * EMBEDDING_SIZE..feature_idx * EMBEDDING_SIZE + EMBEDDING_SIZE];
 
-        while i + SIMD_WIDTH <= EMBEDDING_SIZE {
-            // Load current embedding values
-            let mut embedding_chunk = SIMD::from_slice(&self.embedding_buffer[i..i + SIMD_WIDTH]);
+        let mut i = 0;
+        let mut weights_i16_buf = [0i16; SIMD_WIDTH_I16];
 
-            let weights_chunk = SIMD::from_slice(&weights_row[i..i + SIMD_WIDTH]);
+        if is_active {
+            while i + SIMD_WIDTH_I16 <= EMBEDDING_SIZE {
+                let mut acc =
+                    SimdI16::from_slice(&self.embedding_buffer_i16[i..i + SIMD_WIDTH_I16]);
 
-            // Multiply weights by sign and add to embedding
-            embedding_chunk += sign_vec * weights_chunk;
+                for j in 0..SIMD_WIDTH_I16 {
+                    weights_i16_buf[j] = weights_row[i + j] as i16;
+                }
+                let weights_i16 = SimdI16::from_slice(&weights_i16_buf);
 
-            embedding_chunk.copy_to_slice(&mut self.embedding_buffer[i..i + SIMD_WIDTH]);
+                acc += weights_i16;
+                acc.copy_to_slice(&mut self.embedding_buffer_i16[i..i + SIMD_WIDTH_I16]);
+                i += SIMD_WIDTH_I16;
+            }
 
-            i += SIMD_WIDTH;
-        }
+            while i < EMBEDDING_SIZE {
+                self.embedding_buffer_i16[i] += weights_row[i] as i16;
+                i += 1;
+            }
+        } else {
+            while i + SIMD_WIDTH_I16 <= EMBEDDING_SIZE {
+                let mut acc =
+                    SimdI16::from_slice(&self.embedding_buffer_i16[i..i + SIMD_WIDTH_I16]);
 
-        // Handle remaining elements
-        while i < EMBEDDING_SIZE {
-            self.embedding_buffer[i] += sign * weights_row[i];
-            i += 1;
+                for j in 0..SIMD_WIDTH_I16 {
+                    weights_i16_buf[j] = weights_row[i + j] as i16;
+                }
+                let weights_i16 = SimdI16::from_slice(&weights_i16_buf);
+
+                acc -= weights_i16;
+                acc.copy_to_slice(&mut self.embedding_buffer_i16[i..i + SIMD_WIDTH_I16]);
+                i += SIMD_WIDTH_I16;
+            }
+
+            while i < EMBEDDING_SIZE {
+                self.embedding_buffer_i16[i] -= weights_row[i] as i16;
+                i += 1;
+            }
         }
     }
 
-    // Main forward function that handles incremental updates
     #[inline(always)]
     pub fn forward(&mut self, input: &[f32]) -> f32 {
-        // Convert float input to bitset, using the internal buffer
-        self.current_input.fill(0); // Clear the buffer
+        self.current_input.fill(0);
 
         for (i, &val) in input.iter().enumerate().take(NUM_FEATURES) {
             if val > 0.0 {
@@ -204,48 +225,37 @@ impl NNUENetwork {
             }
         }
 
-        // Always do incremental updates by comparing with previous_input
+        // Incremental update: only process changed features
         for word_idx in 0..NUM_U64S {
-            // XOR to find bits that differ
             let mut changes = self.previous_input[word_idx] ^ self.current_input[word_idx];
             while changes != 0 {
                 let bit_idx = changes.trailing_zeros() as usize;
                 changes &= changes - 1;
 
                 let feature_idx = word_idx * 64 + bit_idx;
-                // Guard against stray bits beyond NUM_FEATURES (last partial u64).
                 if feature_idx >= NUM_FEATURES {
                     continue;
                 }
-                // Check if it's now active or inactive
                 let mask = 1u64 << bit_idx;
                 let is_active = (self.current_input[word_idx] & mask) != 0;
                 self.update_embedding_for_feature(feature_idx, is_active);
             }
         }
 
-        // Store current input for next time
         self.previous_input.copy_from_slice(&self.current_input);
 
-        // Create an activated view of the embedding (ReLU), leaving the
-        // pre-activation buffer intact for incremental updates.
         let mut activated_embedding = [0.0; EMBEDDING_SIZE];
-        activated_embedding.copy_from_slice(&self.embedding_buffer);
-        simd_relu(&mut activated_embedding);
+        dequantize_and_relu(&self.embedding_buffer_i16, &mut activated_embedding);
 
-        // Hidden layer 1
         self.hidden1
             .forward(&activated_embedding, &mut self.hidden1_buffer);
-        simd_relu(&mut self.hidden1_buffer);
+        relu(&mut self.hidden1_buffer);
 
-        // Hidden layer 2 with skip connection
         self.hidden2
             .forward(&self.hidden1_buffer, &mut self.hidden2_buffer);
-        // Add skip connection from hidden1
-        simd_add(&mut self.hidden2_buffer, &self.hidden1_buffer);
-        simd_relu(&mut self.hidden2_buffer);
+        add(&mut self.hidden2_buffer, &self.hidden1_buffer);
+        relu(&mut self.hidden2_buffer);
 
-        // Output layer
         self.output
             .forward(&self.hidden2_buffer, &mut self.output_buffer);
 
@@ -253,13 +263,10 @@ impl NNUENetwork {
         cp.clamp(CP_MIN as f32, CP_MAX as f32)
     }
 
-    // Forward pass with a pre-encoded bitset input for incremental updates.
     #[inline(always)]
     pub fn forward_bitset(&mut self, bitset: &[u64; NUM_U64S]) -> f32 {
-        // Copy bitset into current_input buffer
         self.current_input.copy_from_slice(bitset);
 
-        // Apply incremental updates by comparing with previous_input
         for word_idx in 0..NUM_U64S {
             let mut changes = self.previous_input[word_idx] ^ self.current_input[word_idx];
             while changes != 0 {
@@ -276,27 +283,20 @@ impl NNUENetwork {
             }
         }
 
-        // Store current input for next time
         self.previous_input.copy_from_slice(&self.current_input);
 
-        // Apply ReLU to embedding
         let mut activated_embedding = [0.0; EMBEDDING_SIZE];
-        activated_embedding.copy_from_slice(&self.embedding_buffer);
-        simd_relu(&mut activated_embedding);
+        dequantize_and_relu(&self.embedding_buffer_i16, &mut activated_embedding);
 
-        // Hidden layer 1
         self.hidden1
             .forward(&activated_embedding, &mut self.hidden1_buffer);
-        simd_relu(&mut self.hidden1_buffer);
+        relu(&mut self.hidden1_buffer);
 
-        // Hidden layer 2 with skip connection
         self.hidden2
             .forward(&self.hidden1_buffer, &mut self.hidden2_buffer);
-        // Add skip connection from hidden1
-        simd_add(&mut self.hidden2_buffer, &self.hidden1_buffer);
-        simd_relu(&mut self.hidden2_buffer);
+        add(&mut self.hidden2_buffer, &self.hidden1_buffer);
+        relu(&mut self.hidden2_buffer);
 
-        // Output layer
         self.output
             .forward(&self.hidden2_buffer, &mut self.output_buffer);
 
@@ -306,119 +306,134 @@ impl NNUENetwork {
 }
 
 #[inline(always)]
-fn simd_relu(values: &mut [f32]) {
+fn dequantize_and_relu(input_i16: &[i16; EMBEDDING_SIZE], output_f32: &mut [f32; EMBEDDING_SIZE]) {
+    const DEQUANT_SCALE: f32 = 1.0 / QUANTIZATION_SCALE;
+    let zeros = SimdF32::splat(0.0);
+    let scale_vec = SimdF32::splat(DEQUANT_SCALE);
+    let mut i = 0;
+
+    while i + SIMD_WIDTH_F32 <= EMBEDDING_SIZE {
+        let vals_i16 = &input_i16[i..i + SIMD_WIDTH_F32];
+        let vals_f32_array: [f32; SIMD_WIDTH_F32] = std::array::from_fn(|j| vals_i16[j] as f32);
+        let vals_f32 = SimdF32::from_array(vals_f32_array);
+
+        let dequantized = vals_f32 * scale_vec;
+        let activated = dequantized.simd_max(zeros);
+
+        activated.copy_to_slice(&mut output_f32[i..i + SIMD_WIDTH_F32]);
+        i += SIMD_WIDTH_F32;
+    }
+
+    while i < EMBEDDING_SIZE {
+        output_f32[i] = (input_i16[i] as f32 * DEQUANT_SCALE).max(0.0);
+        i += 1;
+    }
+}
+
+#[inline(always)]
+fn relu(values: &mut [f32]) {
     let len = values.len();
     let mut i = 0;
 
     const UNROLL: usize = 4;
 
-    let zeros = SIMD::splat(0.0);
-    let limit = len - (len % (SIMD_WIDTH * UNROLL));
+    let zeros = SimdF32::splat(0.0);
+    let limit = len - (len % (SIMD_WIDTH_F32 * UNROLL));
 
-    // 4 SIMD chunks
     while i < limit {
-        let chunk0 = SIMD::from_slice(&values[i..i + SIMD_WIDTH]);
-        let chunk1 = SIMD::from_slice(&values[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
-        let chunk2 = SIMD::from_slice(&values[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
-        let chunk3 = SIMD::from_slice(&values[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
+        let chunk0 = SimdF32::from_slice(&values[i..i + SIMD_WIDTH_F32]);
+        let chunk1 = SimdF32::from_slice(&values[i + SIMD_WIDTH_F32..i + SIMD_WIDTH_F32 * 2]);
+        let chunk2 = SimdF32::from_slice(&values[i + SIMD_WIDTH_F32 * 2..i + SIMD_WIDTH_F32 * 3]);
+        let chunk3 = SimdF32::from_slice(&values[i + SIMD_WIDTH_F32 * 3..i + SIMD_WIDTH_F32 * 4]);
 
         let result0 = chunk0.simd_max(zeros);
         let result1 = chunk1.simd_max(zeros);
         let result2 = chunk2.simd_max(zeros);
         let result3 = chunk3.simd_max(zeros);
 
-        result0.copy_to_slice(&mut values[i..i + SIMD_WIDTH]);
-        result1.copy_to_slice(&mut values[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
-        result2.copy_to_slice(&mut values[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
-        result3.copy_to_slice(&mut values[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
+        result0.copy_to_slice(&mut values[i..i + SIMD_WIDTH_F32]);
+        result1.copy_to_slice(&mut values[i + SIMD_WIDTH_F32..i + SIMD_WIDTH_F32 * 2]);
+        result2.copy_to_slice(&mut values[i + SIMD_WIDTH_F32 * 2..i + SIMD_WIDTH_F32 * 3]);
+        result3.copy_to_slice(&mut values[i + SIMD_WIDTH_F32 * 3..i + SIMD_WIDTH_F32 * 4]);
 
-        i += SIMD_WIDTH * UNROLL;
+        i += SIMD_WIDTH_F32 * UNROLL;
     }
 
-    // Handle remaining elements
     for j in i..len {
         values[j] = values[j].max(0.0);
     }
 }
 
-// SIMD add helper function
 #[inline(always)]
-fn simd_add(dest: &mut [f32], src: &[f32]) {
+fn add(dest: &mut [f32], src: &[f32]) {
     let len = dest.len();
     let mut i = 0;
 
     const UNROLL: usize = 4;
-    let limit = len - (len % (SIMD_WIDTH * UNROLL));
+    let limit = len - (len % (SIMD_WIDTH_F32 * UNROLL));
 
-    // 4 SIMD chunks
     while i < limit {
-        let dest0 = SIMD::from_slice(&dest[i..i + SIMD_WIDTH]);
-        let dest1 = SIMD::from_slice(&dest[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
-        let dest2 = SIMD::from_slice(&dest[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
-        let dest3 = SIMD::from_slice(&dest[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
+        let dest0 = SimdF32::from_slice(&dest[i..i + SIMD_WIDTH_F32]);
+        let dest1 = SimdF32::from_slice(&dest[i + SIMD_WIDTH_F32..i + SIMD_WIDTH_F32 * 2]);
+        let dest2 = SimdF32::from_slice(&dest[i + SIMD_WIDTH_F32 * 2..i + SIMD_WIDTH_F32 * 3]);
+        let dest3 = SimdF32::from_slice(&dest[i + SIMD_WIDTH_F32 * 3..i + SIMD_WIDTH_F32 * 4]);
 
-        let src0 = SIMD::from_slice(&src[i..i + SIMD_WIDTH]);
-        let src1 = SIMD::from_slice(&src[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
-        let src2 = SIMD::from_slice(&src[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
-        let src3 = SIMD::from_slice(&src[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
+        let src0 = SimdF32::from_slice(&src[i..i + SIMD_WIDTH_F32]);
+        let src1 = SimdF32::from_slice(&src[i + SIMD_WIDTH_F32..i + SIMD_WIDTH_F32 * 2]);
+        let src2 = SimdF32::from_slice(&src[i + SIMD_WIDTH_F32 * 2..i + SIMD_WIDTH_F32 * 3]);
+        let src3 = SimdF32::from_slice(&src[i + SIMD_WIDTH_F32 * 3..i + SIMD_WIDTH_F32 * 4]);
 
         let result0 = dest0 + src0;
         let result1 = dest1 + src1;
         let result2 = dest2 + src2;
         let result3 = dest3 + src3;
 
-        result0.copy_to_slice(&mut dest[i..i + SIMD_WIDTH]);
-        result1.copy_to_slice(&mut dest[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
-        result2.copy_to_slice(&mut dest[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
-        result3.copy_to_slice(&mut dest[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
+        result0.copy_to_slice(&mut dest[i..i + SIMD_WIDTH_F32]);
+        result1.copy_to_slice(&mut dest[i + SIMD_WIDTH_F32..i + SIMD_WIDTH_F32 * 2]);
+        result2.copy_to_slice(&mut dest[i + SIMD_WIDTH_F32 * 2..i + SIMD_WIDTH_F32 * 3]);
+        result3.copy_to_slice(&mut dest[i + SIMD_WIDTH_F32 * 3..i + SIMD_WIDTH_F32 * 4]);
 
-        i += SIMD_WIDTH * UNROLL;
+        i += SIMD_WIDTH_F32 * UNROLL;
     }
 
-    // Handle remaining elements
     for j in i..len {
         dest[j] += src[j];
     }
 }
 
-// SIMD dot product helper function
 #[inline(always)]
-fn simd_dot(a: &[f32], b: &[f32], len: usize) -> f32 {
-    let mut sum_vec0 = SIMD::splat(0.0);
-    let mut sum_vec1 = SIMD::splat(0.0);
-    let mut sum_vec2 = SIMD::splat(0.0);
-    let mut sum_vec3 = SIMD::splat(0.0);
+fn dot(a: &[f32], b: &[f32], len: usize) -> f32 {
+    let mut sum_vec0 = SimdF32::splat(0.0);
+    let mut sum_vec1 = SimdF32::splat(0.0);
+    let mut sum_vec2 = SimdF32::splat(0.0);
+    let mut sum_vec3 = SimdF32::splat(0.0);
 
     const UNROLL: usize = 4;
 
-    let limit = len - (len % (SIMD_WIDTH * UNROLL));
+    let limit = len - (len % (SIMD_WIDTH_F32 * UNROLL));
     let mut i = 0;
 
-    // Process 4 SIMD vectors at once (unrolled loop)
     while i < limit {
-        // Correct slice ranges for from_slice
-        let a0 = SIMD::from_slice(&a[i..i + SIMD_WIDTH]);
-        let b0 = SIMD::from_slice(&b[i..i + SIMD_WIDTH]);
-        let a1 = SIMD::from_slice(&a[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
-        let b1 = SIMD::from_slice(&b[i + SIMD_WIDTH..i + SIMD_WIDTH * 2]);
-        let a2 = SIMD::from_slice(&a[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
-        let b2 = SIMD::from_slice(&b[i + SIMD_WIDTH * 2..i + SIMD_WIDTH * 3]);
-        let a3 = SIMD::from_slice(&a[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
-        let b3 = SIMD::from_slice(&b[i + SIMD_WIDTH * 3..i + SIMD_WIDTH * 4]);
+        let a0 = SimdF32::from_slice(&a[i..i + SIMD_WIDTH_F32]);
+        let b0 = SimdF32::from_slice(&b[i..i + SIMD_WIDTH_F32]);
+        let a1 = SimdF32::from_slice(&a[i + SIMD_WIDTH_F32..i + SIMD_WIDTH_F32 * 2]);
+        let b1 = SimdF32::from_slice(&b[i + SIMD_WIDTH_F32..i + SIMD_WIDTH_F32 * 2]);
+        let a2 = SimdF32::from_slice(&a[i + SIMD_WIDTH_F32 * 2..i + SIMD_WIDTH_F32 * 3]);
+        let b2 = SimdF32::from_slice(&b[i + SIMD_WIDTH_F32 * 2..i + SIMD_WIDTH_F32 * 3]);
+        let a3 = SimdF32::from_slice(&a[i + SIMD_WIDTH_F32 * 3..i + SIMD_WIDTH_F32 * 4]);
+        let b3 = SimdF32::from_slice(&b[i + SIMD_WIDTH_F32 * 3..i + SIMD_WIDTH_F32 * 4]);
 
-        // Multiply and accumulate
         sum_vec0 += a0 * b0;
         sum_vec1 += a1 * b1;
         sum_vec2 += a2 * b2;
         sum_vec3 += a3 * b3;
 
-        i += SIMD_WIDTH * UNROLL;
+        i += SIMD_WIDTH_F32 * UNROLL;
     }
 
     let sum_vec = sum_vec0 + sum_vec1 + sum_vec2 + sum_vec3;
     let sum = sum_vec.as_array().iter().sum::<f32>();
 
-    // Handle remaining
     let mut scalar_sum = 0.0;
     while i < len {
         scalar_sum += a[i] * b[i];
