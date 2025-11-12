@@ -16,7 +16,7 @@ const HIDDEN_SIZE: usize = 16;
 
 // Quantization scale is computed from this percentile of absolute weights.
 // Lower values clip more outliers but give better precision for typical weights.
-const QUANTIZATION_PERCENTILE: f32 = 0.9998;
+const QUANTIZATION_PERCENTILE: f32 = 0.999;
 
 // Quantization range limits
 const I8_MIN: f32 = -128.0;
