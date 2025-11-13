@@ -1,49 +1,71 @@
-use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 use std::str::FromStr;
+use std::sync::Arc;
+use std::thread;
 
 use candle_core::{Device, Result, Tensor};
-use chess::Board;
+use chess::{Board, Color};
 use rand::rngs::ThreadRng;
-use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
+use rand::seq::SliceRandom;
+use utils::board_metrics::BoardMetrics;
 
 use crate::encoding::{encode_board, NUM_FEATURES};
 
 pub const CP_MAX: i16 = 5000;
 pub const CP_MIN: i16 = -5000;
 
+pub const FV_SCALE: f32 = 400.0;
+
 #[derive(Clone, Debug)]
 pub struct Samples {
-    pub samples: HashMap<String, i16>,
+    pub fens: Vec<Box<str>>,
+    pub scores: Vec<i16>,
+    pub game_ids: Vec<usize>,
 }
 
 impl Samples {
     pub fn new() -> Self {
         Self {
-            samples: HashMap::new(),
+            fens: Vec::new(),
+            scores: Vec::new(),
+            game_ids: Vec::new(),
         }
     }
 
-    pub fn from_evaluations(evals: &[(String, i16)]) -> Self {
-        let samples = evals
-            .iter()
-            .map(|(fen, score)| (fen.clone(), (*score).clamp(CP_MIN, CP_MAX)))
-            .collect();
-        Self { samples }
+    pub fn from_evaluations(evals: &[(String, i16, usize)]) -> Self {
+        let mut fens = Vec::with_capacity(evals.len());
+        let mut scores = Vec::with_capacity(evals.len());
+        let mut game_ids = Vec::with_capacity(evals.len());
+        for (fen, score, game_id) in evals.iter() {
+            fens.push(fen.clone().into_boxed_str());
+            scores.push((*score).clamp(CP_MIN, CP_MAX));
+            game_ids.push(*game_id);
+        }
+        Self {
+            fens,
+            scores,
+            game_ids,
+        }
     }
 
     pub fn write<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-        writeln!(writer, "fen,score")?; // Header
+        writeln!(writer, "fen,score,game_id")?; // Header
 
-        for (fen, score) in &self.samples {
-            writeln!(writer, "{},{}", fen, score)?;
+        for i in 0..self.fens.len() {
+            writeln!(
+                writer,
+                "{},{},{}",
+                self.fens[i], self.scores[i], self.game_ids[i]
+            )?;
         }
 
         Ok(())
     }
 
     pub fn read<R: BufRead>(mut reader: R) -> io::Result<Self> {
-        let mut samples = HashMap::new();
+        let mut fens = Vec::new();
+        let mut scores = Vec::new();
+        let mut game_ids = Vec::new();
 
         // Skip header line
         let mut header_line = String::new();
@@ -61,29 +83,66 @@ impl Samples {
             let score_str = parts
                 .next()
                 .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing score field"))?;
+            let game_id_str = parts.next().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "Missing game_id field")
+            })?;
 
             let score: i16 = score_str.trim().parse().map_err(|_| {
                 io::Error::new(io::ErrorKind::InvalidData, "Score is not a valid integer")
             })?;
 
-            samples.insert(fen_str.trim().to_string(), score.clamp(CP_MIN, CP_MAX));
+            // Testing showed that not training on mate-in-N positions is better.
+            if score.abs() >= CP_MAX {
+                continue;
+            }
+
+            let game_id: usize = game_id_str.trim().parse().map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidData, "game_id is not a valid integer")
+            })?;
+
+            fens.push(fen_str.trim().to_string().into_boxed_str());
+            scores.push(score.clamp(CP_MIN, CP_MAX));
+            game_ids.push(game_id);
         }
 
-        Ok(Self { samples })
+        Ok(Self {
+            fens,
+            scores,
+            game_ids,
+        })
     }
 
     pub fn to_xy(self, device: &Device) -> Result<(Tensor, Tensor)> {
-        let num_samples = self.samples.len();
+        let num_samples = self.fens.len();
 
+        // Simple 768 features (single perspective)
         let mut feature_data = Vec::with_capacity(num_samples * NUM_FEATURES);
         let mut score_data: Vec<f32> = Vec::with_capacity(num_samples);
 
-        for (fen, score) in self.samples {
+        for (fen, score) in self.fens.into_iter().zip(self.scores.into_iter()) {
             let board =
                 Board::from_str(&fen).unwrap_or_else(|_| panic!("Invalid FEN in sample: {}", fen));
-            let features = encode_board(&board);
+
+            // Compute tactical features
+            let metrics = BoardMetrics::new(&board);
+            let white_attacks = metrics.attacks[Color::White.to_index()];
+            let black_attacks = metrics.attacks[Color::Black.to_index()];
+            let white_support = metrics.support[Color::White.to_index()];
+            let black_support = metrics.support[Color::Black.to_index()];
+            let white_threats = metrics.threats[Color::White.to_index()];
+            let black_threats = metrics.threats[Color::Black.to_index()];
+
+            let features = encode_board(
+                &board,
+                white_attacks,
+                black_attacks,
+                white_support,
+                black_support,
+                white_threats,
+                black_threats,
+            );
             feature_data.extend_from_slice(&features);
-            score_data.push(score as f32);
+            score_data.push((score as f32) / FV_SCALE);
         }
 
         let x = Tensor::from_iter(feature_data.into_iter(), device)?
@@ -93,126 +152,223 @@ impl Samples {
         Ok((x, y))
     }
 
-    pub fn to_xy_batched<'a>(
+    pub fn to_xy_batched_indices<'a>(
         &'a self,
+        indices: &'a [usize],
         batch_size: usize,
         device: &'a Device,
-    ) -> BatchedSamples<'a> {
-        BatchedSamples {
-            samples: &self.samples,
-            device,
-            batch_size,
-            idx: 0,
-            keys: self.samples.keys().collect(),
-        }
+    ) -> BatchedSamplesIdx<'a> {
+        BatchedSamplesIdx::new(&self.fens, &self.scores, indices, batch_size, device)
     }
 
-    pub fn train_test_split(
-        &self,
-        test_ratio: f64,
-        random_seed: Option<u64>,
-    ) -> (Samples, Samples) {
-        let total_len = self.samples.len();
-        let test_len = (total_len as f64 * test_ratio) as usize;
-        let train_len = total_len - test_len;
+    pub fn train_test_indices(&self, test_ratio: f64) -> (Vec<usize>, Vec<usize>) {
+        use std::collections::{HashMap, HashSet};
 
-        // Get all keys
-        let mut keys: Vec<_> = self.samples.keys().collect();
-
-        // Shuffle the keys
-        if let Some(seed) = random_seed {
-            let mut rng = StdRng::seed_from_u64(seed);
-            keys.shuffle(&mut rng);
+        // Group positions by game_id
+        let mut game_to_positions: HashMap<usize, Vec<usize>> = HashMap::new();
+        for (i, &game_id) in self.game_ids.iter().enumerate() {
+            game_to_positions.entry(game_id).or_default().push(i);
         }
 
-        // Split keys
-        let (train_keys, test_keys) = keys.split_at(train_len);
+        // Get unique game IDs and shuffle them
+        let mut unique_games: Vec<usize> = game_to_positions.keys().copied().collect();
+        unique_games.shuffle(&mut rand::thread_rng());
 
-        // Create new HashMaps
-        let train_samples = train_keys
-            .iter()
-            .map(|k| ((*k).clone(), *self.samples.get(*k).unwrap()))
-            .collect();
-        let test_samples = test_keys
-            .iter()
-            .map(|k| ((*k).clone(), *self.samples.get(*k).unwrap()))
-            .collect();
+        // Split games into train and test
+        let total_games = unique_games.len();
+        let test_games_count = (total_games as f64 * test_ratio).ceil() as usize;
+        let train_games_count = total_games - test_games_count;
 
-        (
-            Samples {
-                samples: train_samples,
-            },
-            Samples {
-                samples: test_samples,
-            },
-        )
+        let (train_games, test_games) = unique_games.split_at(train_games_count);
+        let train_game_set: HashSet<usize> = train_games.iter().copied().collect();
+        let test_game_set: HashSet<usize> = test_games.iter().copied().collect();
+
+        // Collect position indices for train and test sets
+        let mut train_idx = Vec::new();
+        let mut test_idx = Vec::new();
+
+        for (game_id, positions) in game_to_positions {
+            if train_game_set.contains(&game_id) {
+                train_idx.extend(positions);
+            } else if test_game_set.contains(&game_id) {
+                test_idx.extend(positions);
+            }
+        }
+
+        (train_idx, test_idx)
     }
 
     pub fn len(&self) -> usize {
-        self.samples.len()
+        self.fens.len()
     }
 
     pub fn shuffle(&mut self, rng: &mut ThreadRng) {
-        let mut keys: Vec<_> = self.samples.keys().collect();
-        keys.shuffle(rng);
-        self.samples = keys
-            .iter()
-            .map(|k| ((*k).clone(), *self.samples.get(*k).unwrap()))
-            .collect();
+        let mut idx: Vec<usize> = (0..self.fens.len()).collect();
+        idx.shuffle(rng);
+
+        let mut new_fens = Vec::with_capacity(self.fens.len());
+        let mut new_scores = Vec::with_capacity(self.scores.len());
+        let mut new_game_ids = Vec::with_capacity(self.game_ids.len());
+        for i in idx {
+            new_fens.push(self.fens[i].clone());
+            new_scores.push(self.scores[i]);
+            new_game_ids.push(self.game_ids[i]);
+        }
+
+        self.fens = new_fens;
+        self.scores = new_scores;
+        self.game_ids = new_game_ids;
     }
 
     pub fn extend(&mut self, other: Samples) {
-        for (key, value) in other.samples {
-            if !self.samples.contains_key(&key) {
-                self.samples.insert(key, value);
-            }
+        self.fens.extend(other.fens);
+        self.scores.extend(other.scores);
+        self.game_ids.extend(other.game_ids);
+    }
+
+    pub fn offset_game_ids(&mut self, offset: usize) {
+        for game_id in &mut self.game_ids {
+            *game_id += offset;
+        }
+    }
+
+    pub fn max_game_id(&self) -> Option<usize> {
+        self.game_ids.iter().copied().max()
+    }
+}
+
+// Pre-encoded batch data
+type EncodedBatch = (Vec<f32>, Vec<f32>, usize); // (features, scores, batch_size)
+
+pub struct BatchedSamplesIdx<'a> {
+    receiver: std::sync::mpsc::Receiver<Option<EncodedBatch>>,
+    device: &'a Device,
+    _workers: Vec<thread::JoinHandle<()>>,
+}
+
+impl<'a> BatchedSamplesIdx<'a> {
+    fn new(
+        fens: &'a [Box<str>],
+        scores: &'a [i16],
+        indices: &'a [usize],
+        batch_size: usize,
+        device: &'a Device,
+    ) -> Self {
+        const BUFFER_SIZE: usize = 4; // Keep 2 batches prefetched (reduce memory)
+        const NUM_WORKERS: usize = 4; // 4 encoding worker threads
+
+        let (sender, receiver) = std::sync::mpsc::sync_channel(BUFFER_SIZE);
+
+        // Share data across workers using Arc
+        // Note: .to_vec() clones ~50GB of FEN strings, but needed for 'static lifetime
+        let fens = Arc::new(fens.to_vec());
+        let scores = Arc::new(scores.to_vec());
+        let indices = Arc::new(indices.to_vec());
+
+        // Shared atomic counter for work stealing
+        let next_batch = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let total_batches = (indices.len() + batch_size - 1) / batch_size;
+
+        let mut workers = Vec::new();
+
+        for _ in 0..NUM_WORKERS {
+            let sender = sender.clone();
+            let fens = Arc::clone(&fens);
+            let scores = Arc::clone(&scores);
+            let indices = Arc::clone(&indices);
+            let next_batch = Arc::clone(&next_batch);
+
+            let worker = thread::spawn(move || {
+                loop {
+                    // Atomically grab the next batch number
+                    let batch_num = next_batch.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+                    if batch_num >= total_batches {
+                        break; // No more work
+                    }
+
+                    let start_idx = batch_num * batch_size;
+                    let end_idx = (start_idx + batch_size).min(indices.len());
+                    let batch_indices = &indices[start_idx..end_idx];
+
+                    // Encode batch on this worker thread (simple 768 features)
+                    let mut feature_data = Vec::with_capacity(batch_indices.len() * NUM_FEATURES);
+                    let mut score_data = Vec::with_capacity(batch_indices.len());
+
+                    for &i in batch_indices {
+                        let score = scores[i];
+                        let fen = &fens[i];
+                        let board = Board::from_str(fen)
+                            .unwrap_or_else(|_| panic!("Invalid FEN in sample: {}", fen));
+
+                        // Compute tactical features
+                        let metrics = BoardMetrics::new(&board);
+                        let white_attacks = metrics.attacks[Color::White.to_index()];
+                        let black_attacks = metrics.attacks[Color::Black.to_index()];
+                        let white_support = metrics.support[Color::White.to_index()];
+                        let black_support = metrics.support[Color::Black.to_index()];
+                        let white_threats = metrics.threats[Color::White.to_index()];
+                        let black_threats = metrics.threats[Color::Black.to_index()];
+
+                        let features = encode_board(
+                            &board,
+                            white_attacks,
+                            black_attacks,
+                            white_support,
+                            black_support,
+                            white_threats,
+                            black_threats,
+                        );
+                        feature_data.extend_from_slice(&features);
+                        score_data.push((score as f32) / FV_SCALE);
+                    }
+
+                    // Send to channel (will block if channel is full)
+                    if sender
+                        .send(Some((feature_data, score_data, batch_indices.len())))
+                        .is_err()
+                    {
+                        break; // Receiver dropped
+                    }
+                }
+            });
+
+            workers.push(worker);
+        }
+
+        // Drop the original sender so the channel closes when workers finish
+        drop(sender);
+
+        Self {
+            receiver,
+            device,
+            _workers: workers,
         }
     }
 }
 
-pub struct BatchedSamples<'a> {
-    samples: &'a HashMap<String, i16>,
-    device: &'a Device,
-    batch_size: usize,
-    idx: usize,
-    keys: Vec<&'a String>,
-}
-
-impl<'a> Iterator for BatchedSamples<'a> {
+impl<'a> Iterator for BatchedSamplesIdx<'a> {
     type Item = Result<(Tensor, Tensor)>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.idx >= self.keys.len() {
-            return None;
+        // Receive pre-encoded batch from workers
+        match self.receiver.recv() {
+            Ok(Some((feature_data, score_data, batch_len))) => {
+                let x = match Tensor::from_iter(feature_data, self.device) {
+                    Ok(t) => t,
+                    Err(e) => return Some(Err(e)),
+                }
+                .reshape((batch_len, NUM_FEATURES));
+
+                let y = match Tensor::from_iter(score_data, self.device) {
+                    Ok(t) => t,
+                    Err(e) => return Some(Err(e)),
+                }
+                .reshape((batch_len, 1));
+
+                Some(x.and_then(|xv| y.map(|yv| (xv, yv))))
+            }
+            Ok(None) | Err(_) => None,
         }
-        let end = (self.idx + self.batch_size).min(self.keys.len());
-        let batch_keys = &self.keys[self.idx..end];
-        self.idx = end;
-
-        let mut feature_data = Vec::with_capacity(batch_keys.len() * NUM_FEATURES);
-        let mut score_data: Vec<f32> = Vec::with_capacity(batch_keys.len());
-
-        for key in batch_keys {
-            let score = self.samples.get(*key).unwrap();
-            let board =
-                Board::from_str(key).unwrap_or_else(|_| panic!("Invalid FEN in sample: {}", key));
-            let features = encode_board(&board);
-            feature_data.extend_from_slice(&features);
-            score_data.push(*score as f32);
-        }
-
-        let x = match Tensor::from_iter(feature_data.into_iter(), self.device) {
-            Ok(t) => t,
-            Err(e) => return Some(Err(e)),
-        }
-        .reshape((batch_keys.len(), NUM_FEATURES));
-
-        let y = match Tensor::from_iter(score_data.into_iter(), self.device) {
-            Ok(t) => t,
-            Err(e) => return Some(Err(e)),
-        }
-        .reshape((batch_keys.len(), 1));
-
-        Some(x.and_then(|xv| y.map(|yv| (xv, yv))))
     }
 }

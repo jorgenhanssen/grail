@@ -1,51 +1,49 @@
-use chess::{Board, Color, Piece, ALL_SQUARES};
+use chess::{BitBoard, Board, Color, Piece, ALL_SQUARES, NUM_COLORS, NUM_PIECES, NUM_SQUARES};
 
-pub const NUM_FEATURES: usize = 773;
+// Board encoding feature counts
+const NUM_PIECE_PLACEMENT_FEATURES: usize = NUM_SQUARES * NUM_PIECES * NUM_COLORS; // 768
+const NUM_SUPPORT_FEATURES: usize = NUM_SQUARES * 2; // 128 (white + black defended pieces)
+const NUM_SPACE_FEATURES: usize = NUM_SQUARES * 2; // 128 (white + black controlled non-piece squares)
+const NUM_THREAT_FEATURES: usize = NUM_SQUARES * 2; // 128 (white + black threatened pieces)
+const NUM_SIDE_TO_MOVE_FEATURES: usize = 1;
 
-const SIDE_TO_MOVE_IDX: usize = 768;
-const CASTLE_BASE_IDX: usize = 769;
+pub const NUM_FEATURES: usize = NUM_PIECE_PLACEMENT_FEATURES
+    + NUM_SUPPORT_FEATURES
+    + NUM_SPACE_FEATURES
+    + NUM_THREAT_FEATURES
+    + NUM_SIDE_TO_MOVE_FEATURES; // 1153 total
 
-/// Returns a one-hot encoding of the board without en-passant or promotion availability.
-///
-/// Layout (all entries are 0.0 or 1.0):
-///
-///  1) Piece placements [0..768):
-///       For each of the 64 squares, 12 piece channels:
-///         0 = White Pawn
-///         1 = White Knight
-///         2 = White Bishop
-///         3 = White Rook
-///         4 = White Queen
-///         5 = White King
-///         6 = Black Pawn
-///         7 = Black Knight
-///         8 = Black Bishop
-///         9 = Black Rook
-///         10 = Black Queen
-///         11 = Black King
-///       Index = square_index * 12 + piece_channel.
-///       If `square` has `piece`, features[index] = 1.0.
-///
-///  2) Side to move [768]:
-///       1.0 if White to move, else 0.0
-///
-///  3) Castling rights [769..773]:
-///       - 769 = White can castle kingside
-///       - 770 = White can castle queenside
-///       - 771 = Black can castle kingside
-///       - 772 = Black can castle queenside
-///
-///  Total features = 773.  (No en-passant, no promotion bits.)
+pub const NUM_U64S: usize = NUM_FEATURES.div_ceil(64);
+
+const PIECE_FEATURES_END: usize = NUM_PIECE_PLACEMENT_FEATURES;
+const WHITE_SUPPORT_START: usize = PIECE_FEATURES_END;
+const WHITE_SUPPORT_END: usize = WHITE_SUPPORT_START + NUM_SQUARES;
+const BLACK_SUPPORT_START: usize = WHITE_SUPPORT_END;
+const BLACK_SUPPORT_END: usize = BLACK_SUPPORT_START + NUM_SQUARES;
+const WHITE_SPACE_START: usize = BLACK_SUPPORT_END;
+const WHITE_SPACE_END: usize = WHITE_SPACE_START + NUM_SQUARES;
+const BLACK_SPACE_START: usize = WHITE_SPACE_END;
+const BLACK_SPACE_END: usize = BLACK_SPACE_START + NUM_SQUARES;
+const WHITE_THREATS_START: usize = BLACK_SPACE_END;
+const WHITE_THREATS_END: usize = WHITE_THREATS_START + NUM_SQUARES;
+const BLACK_THREATS_START: usize = WHITE_THREATS_END;
+#[allow(dead_code)]
+const BLACK_THREATS_END: usize = BLACK_THREATS_START + NUM_SQUARES;
+const SIDE_TO_MOVE_IDX: usize = NUM_FEATURES - 1;
 
 #[inline(always)]
-pub fn encode_board(board: &Board) -> [f32; NUM_FEATURES] {
-    // 64 squares * 12 piece-types = 768
-    // + 1 (side to move)
-    // + 4 (castling rights)
-    // = 773 total
+pub fn encode_board(
+    board: &Board,
+    white_attacks: BitBoard,
+    black_attacks: BitBoard,
+    white_support: BitBoard,
+    black_support: BitBoard,
+    white_threats: BitBoard,
+    black_threats: BitBoard,
+) -> [f32; NUM_FEATURES] {
     let mut features = [0f32; NUM_FEATURES];
 
-    // 1) Piece placements [0..768)
+    // Piece placements
     for sq in ALL_SQUARES {
         if let Some(piece) = board.piece_on(sq) {
             let color = board.color_on(sq).unwrap();
@@ -54,28 +52,118 @@ pub fn encode_board(board: &Board) -> [f32; NUM_FEATURES] {
         }
     }
 
+    // White support
+    for sq in white_support {
+        features[WHITE_SUPPORT_START + sq.to_index()] = 1.0;
+    }
+
+    // Black support
+    for sq in black_support {
+        features[BLACK_SUPPORT_START + sq.to_index()] = 1.0;
+    }
+
+    // White space (controlled non-piece squares)
+    let white_pieces = board.color_combined(Color::White);
+    let white_space_bb = white_attacks & !*white_pieces;
+    for sq in white_space_bb {
+        features[WHITE_SPACE_START + sq.to_index()] = 1.0;
+    }
+
+    // Black space
+    let black_pieces = board.color_combined(Color::Black);
+    let black_space_bb = black_attacks & !*black_pieces;
+    for sq in black_space_bb {
+        features[BLACK_SPACE_START + sq.to_index()] = 1.0;
+    }
+
+    // White threats
+    for sq in white_threats {
+        features[WHITE_THREATS_START + sq.to_index()] = 1.0;
+    }
+
+    // Black threats
+    for sq in black_threats {
+        features[BLACK_THREATS_START + sq.to_index()] = 1.0;
+    }
+
+    // Side to move
     if board.side_to_move() == Color::White {
         features[SIDE_TO_MOVE_IDX] = 1.0;
     }
 
-    // 3) Castling rights [769..772]
-    let wcr = board.castle_rights(Color::White);
-    let bcr = board.castle_rights(Color::Black);
-
-    if wcr.has_kingside() {
-        features[CASTLE_BASE_IDX] = 1.0;
-    }
-    if wcr.has_queenside() {
-        features[CASTLE_BASE_IDX + 1] = 1.0;
-    }
-    if bcr.has_kingside() {
-        features[CASTLE_BASE_IDX + 2] = 1.0;
-    }
-    if bcr.has_queenside() {
-        features[CASTLE_BASE_IDX + 3] = 1.0;
-    }
-
     features
+}
+
+#[inline(always)]
+pub fn encode_board_bitset(
+    board: &Board,
+    white_attacks: BitBoard,
+    black_attacks: BitBoard,
+    white_support: BitBoard,
+    black_support: BitBoard,
+    white_threats: BitBoard,
+    black_threats: BitBoard,
+) -> [u64; NUM_U64S] {
+    let mut words = [0u64; NUM_U64S];
+
+    // Piece placements
+    for sq in ALL_SQUARES {
+        if let Some(piece) = board.piece_on(sq) {
+            let color = board.color_on(sq).unwrap();
+            let offset = sq.to_index() * 12 + piece_color_to_index(piece, color);
+            let word_idx = offset / 64;
+            let bit_idx = offset % 64;
+            words[word_idx] |= 1u64 << bit_idx;
+        }
+    }
+
+    // White support
+    for sq in white_support {
+        let idx = WHITE_SUPPORT_START + sq.to_index();
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    // Black support
+    for sq in black_support {
+        let idx = BLACK_SUPPORT_START + sq.to_index();
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    // White space (controlled non-piece squares)
+    let white_pieces = board.color_combined(Color::White);
+    let white_space_bb = white_attacks & !*white_pieces;
+    for sq in white_space_bb {
+        let idx = WHITE_SPACE_START + sq.to_index();
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    // Black space
+    let black_pieces = board.color_combined(Color::Black);
+    let black_space_bb = black_attacks & !*black_pieces;
+    for sq in black_space_bb {
+        let idx = BLACK_SPACE_START + sq.to_index();
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    // White threats
+    for sq in white_threats {
+        let idx = WHITE_THREATS_START + sq.to_index();
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    // Black threats
+    for sq in black_threats {
+        let idx = BLACK_THREATS_START + sq.to_index();
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    // Side to move
+    if board.side_to_move() == Color::White {
+        let idx = SIDE_TO_MOVE_IDX;
+        words[idx / 64] |= 1u64 << (idx % 64);
+    }
+
+    words
 }
 
 #[inline(always)]

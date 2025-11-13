@@ -5,9 +5,12 @@ use clap::Parser;
 #[command(author = "Jørgen Hanssen <jorgen@hanssen.io>")]
 #[command(version = "0.1.0")]
 pub struct Args {
-    #[arg(long, default_value_t = 30)]
-    pub duration: u64,
-
-    #[arg(long, default_value_t = 8)]
+    #[arg(long, default_value_t = 10)]
     pub depth: u8,
+
+    #[arg(long)]
+    pub book: String,
+
+    #[arg(long, default_value_t = false)]
+    pub nnue: bool,
 }

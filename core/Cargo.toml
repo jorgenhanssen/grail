@@ -6,7 +6,6 @@ edition = "2021"
 [features]
 default = []
 tuning = ["uci/tuning", "search/tuning"]
-nnue = ["dep:nnue"]
 
 [profile.release]
 lto = "fat"
@@ -14,7 +13,7 @@ opt-level = 3
 
 [dependencies]
 search = { path = "../search" }
-nnue = { path = "../nnue", optional = true }
+nnue = { path = "../nnue" }
 uci = { path = "../uci" }
 evaluation = { path = "../evaluation" }
 

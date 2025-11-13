@@ -1,283 +1,133 @@
-use std::error::Error;
-use std::time::Instant;
-use std::{path::PathBuf, sync::Arc};
-
-use ahash::AHashSet;
+use crate::book::Book;
+use crate::histogram::ScoreHistogram;
+use crate::worker::SelfPlayWorker;
 use candle_core::Device;
 use candle_nn::VarMap;
-use chess::{Board, ChessMove, Game, MoveGen};
-use evaluation::{hce, NNUE};
-use indicatif::{ProgressBar, ProgressStyle};
-use nnue::version::VersionManager;
-use rand::Rng;
-use search::{Engine, EngineConfig};
-use std::sync::Mutex;
-use uci::commands::GoParams;
+use evaluation::NNUE;
+use indicatif::MultiProgress;
+use std::error::Error;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+
+const DEFAULT_NNUE_PATH: &str = "nnue/model.safetensors";
+const PROGRESS_UPDATE_INTERVAL_MS: u64 = 200;
 
 pub struct Generator {
     threads: usize,
     nnue_path: Option<PathBuf>,
-    version: u32,
+    opening_book: Arc<Book>,
 }
 
 impl Generator {
-    pub fn new(threads: usize, manager: &VersionManager) -> Result<Self, Box<dyn Error>> {
-        let version = manager.get_latest_version()?;
+    pub fn new(
+        threads: usize,
+        use_nnue: bool,
+        opening_book_path: String,
+    ) -> Result<Self, Box<dyn Error>> {
+        let opening_book = Arc::new(Book::load(&opening_book_path)?);
 
-        let generator = match version {
-            Some(version) => Self {
-                threads,
-                nnue_path: Some(manager.file_path(version, "model.safetensors")),
-                version,
-            },
-            _ => Self {
-                threads,
-                nnue_path: None,
-                version: 0,
-            },
+        let nnue_path = if use_nnue {
+            let path = PathBuf::from(DEFAULT_NNUE_PATH);
+            if path.exists() {
+                log::info!("Using NNUE ({})", path.display());
+                Some(path)
+            } else {
+                log::warn!("NNUE ({}) not found, falling back to HCE", path.display());
+                None
+            }
+        } else {
+            log::info!("Using HCE");
+            None
         };
 
-        Ok(generator)
+        Ok(Self {
+            threads,
+            nnue_path,
+            opening_book,
+        })
     }
 
-    pub fn run(&self, duration: u64, depth: u8) -> Vec<(String, i16)> {
-        let eval_name = match &self.nnue_path {
-            Some(path) => path.display().to_string(),
-            None => "traditional evaluator".to_string(),
-        };
-
+    pub fn run(&self, depth: u8, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, usize)> {
         log::info!(
-            "Generating samples using {} threads ({})",
+            "Generating samples using {} threads - Press Ctrl+C to stop",
             self.threads,
-            eval_name
         );
 
-        let pb = ProgressBar::new(duration);
-        pb.set_style(
-            ProgressStyle::with_template(
-                " {spinner:.cyan} {wide_bar:.cyan/blue} {eta_precise} | {msg}",
-            )
-            .unwrap(),
-        );
-        let pb = Arc::new(pb);
+        let sample_counter = Arc::new(AtomicUsize::new(0));
+        let game_id_counter = Arc::new(AtomicUsize::new(0));
 
-        let global_evaluated = Arc::new(Mutex::new(AHashSet::new()));
+        // Create multi-progress display
+        let multi_progress = MultiProgress::new();
+        let histogram = ScoreHistogram::new(&multi_progress);
 
-        let handles: Vec<_> = (0..self.threads)
+        // Spawn worker threads
+        let worker_handles: Vec<_> = (0..self.threads)
             .map(|tid| {
                 let nnue_path = self.nnue_path.clone();
-                let version = self.version;
-                let global_evaluated = Arc::clone(&global_evaluated);
-                let pb = Arc::clone(&pb);
+                let sample_counter = Arc::clone(&sample_counter);
+                let game_id_counter = Arc::clone(&game_id_counter);
+                let opening_book = Arc::clone(&self.opening_book);
+                let stop_flag = Arc::clone(&stop_flag);
+                let histogram_handle = histogram.clone_handle();
 
                 std::thread::spawn(move || {
-                    let nnue: Option<Box<dyn NNUE>> = if let Some(path) = nnue_path {
-                        let mut varmap = VarMap::new();
-                        let mut nnue = nnue::Evaluator::new(&varmap, &Device::Cpu, version);
-
-                        varmap.load(path).unwrap();
-                        nnue.enable_nnue();
-
-                        Some(Box::new(nnue))
-                    } else {
-                        None
-                    };
-
-                    let mut worker = SelfPlayWorker::new(tid, global_evaluated, depth, nnue);
-                    worker.play_games(duration, &pb)
+                    let nnue = Self::load_nnue(nnue_path);
+                    let mut worker = SelfPlayWorker::new(
+                        tid,
+                        sample_counter,
+                        game_id_counter,
+                        depth,
+                        nnue,
+                        opening_book,
+                        histogram_handle,
+                    );
+                    worker.play_games(stop_flag)
                 })
             })
             .collect();
 
-        let evaluations: Vec<_> = handles
+        // Spawn progress update thread
+        let progress_handle =
+            Self::spawn_progress_updater(sample_counter.clone(), histogram, stop_flag.clone());
+
+        // Wait for all workers to complete
+        let evaluations: Vec<_> = worker_handles
             .into_iter()
             .flat_map(|h| h.join().unwrap())
             .collect();
 
-        pb.finish_with_message(format!("Evaluated {} positions", evaluations.len()));
-
-        evaluations
-    }
-}
-
-struct SelfPlayWorker {
-    tid: usize,
-    global_evaluated: Arc<Mutex<AHashSet<u64>>>,
-    engine: Engine,
-    depth: u8,
-
-    // Specific to ongoing game
-    game: Game,
-    positions_in_current_game: AHashSet<u64>,
-}
-
-impl SelfPlayWorker {
-    pub fn new(
-        tid: usize,
-        global_evaluated: Arc<Mutex<AHashSet<u64>>>,
-        depth: u8,
-        nnue: Option<Box<dyn NNUE>>,
-    ) -> Self {
-        let config = EngineConfig::default();
-        let hce = Box::new(hce::Evaluator::new(
-            config.get_piece_values(),
-            config.get_hce_config(),
-        ));
-
-        Self {
-            tid,
-            global_evaluated,
-            game: Game::new(),
-            depth,
-
-            engine: Engine::new(&config, hce, nnue),
-            positions_in_current_game: AHashSet::new(),
-        }
-    }
-
-    pub fn play_games(&mut self, duration: u64, pb: &ProgressBar) -> Vec<(String, i16)> {
-        let start_time = Instant::now();
-        let mut evaluations = Vec::new();
-
-        self.reset_game();
-
-        loop {
-            let current_elapsed = start_time.elapsed().as_secs();
-            if current_elapsed >= duration {
-                break;
-            }
-
-            if self.tid == 0 {
-                let global_count = self.global_evaluated.lock().unwrap().len();
-                pb.set_message(format!("{} positions", global_count));
-                pb.set_position(current_elapsed);
-            }
-
-            let terminal = self.play_single_move(&mut evaluations);
-
-            if terminal {
-                self.reset_game();
-            }
-        }
-
-        pb.finish_with_message("waiting...");
+        progress_handle.join().unwrap();
 
         evaluations
     }
 
-    fn play_single_move(&mut self, evaluations: &mut Vec<(String, i16)>) -> bool {
-        if self.game.result().is_some() {
-            return true;
-        }
-
-        let board = self.game.current_position();
-        let board_hash = board.get_hash();
-
-        // If we've seen this position in the *current game*, we have a cycle.
-        if !self.positions_in_current_game.insert(board_hash) {
-            return true;
-        }
-
-        // Select and make a move, possibly storing the board's evaluation.
-        let (chosen_move, score) = self.select_move(board, evaluations);
-
-        if self.should_abort_game(&score) {
-            return true;
-        }
-
-        self.game.make_move(chosen_move);
-
-        false
+    fn load_nnue(nnue_path: Option<PathBuf>) -> Option<Box<dyn NNUE>> {
+        nnue_path.map(|path| {
+            let mut varmap = VarMap::new();
+            let mut nnue = nnue::Evaluator::new(&varmap, &Device::Cpu);
+            varmap.load(path).unwrap();
+            nnue.enable_nnue();
+            Box::new(nnue) as Box<dyn NNUE>
+        })
     }
 
-    fn select_move(
-        &mut self,
-        board: chess::Board,
-        evaluations: &mut Vec<(String, i16)>,
-    ) -> (ChessMove, i16) {
-        let moves: Vec<ChessMove> = MoveGen::new_legal(&board).collect();
+    fn spawn_progress_updater(
+        sample_counter: Arc<AtomicUsize>,
+        histogram: ScoreHistogram,
+        stop_flag: Arc<AtomicBool>,
+    ) -> std::thread::JoinHandle<()> {
+        std::thread::spawn(move || {
+            while !stop_flag.load(Ordering::Relaxed) {
+                let sample_count = sample_counter.load(Ordering::Relaxed);
+                histogram.update_display(sample_count);
+                std::thread::sleep(Duration::from_millis(PROGRESS_UPDATE_INTERVAL_MS));
+            }
 
-        if self.position_has_been_evaluated(&board) {
-            return (random_move(&moves), 0);
-        }
-
-        let (engine_move, engine_score) = self.get_engine_move(&board);
-
-        // Convert to white's perspective and tanh to force mate scores to be in [-1, 1]
-        let white_score = if board.side_to_move() == chess::Color::White {
-            engine_score
-        } else {
-            -engine_score
-        };
-        evaluations.push((board.to_string(), white_score));
-
-        if should_use_engine_move() {
-            (engine_move, engine_score)
-        } else {
-            (random_move(&moves), engine_score)
-        }
+            // Final update
+            let final_count = sample_counter.load(Ordering::Relaxed);
+            histogram.finish(final_count);
+        })
     }
-
-    #[inline]
-    fn position_has_been_evaluated(&mut self, board: &Board) -> bool {
-        let hash = board.get_hash();
-
-        let mut evaluated_positions = self.global_evaluated.lock().unwrap();
-        if evaluated_positions.contains(&hash) {
-            true
-        } else {
-            // Mark it seen from now on
-            evaluated_positions.insert(hash);
-            false
-        }
-    }
-
-    #[inline]
-    fn get_engine_move(&mut self, board: &Board) -> (ChessMove, i16) {
-        // Pass game history to engine (excluding current position)
-        let mut history = self.positions_in_current_game.clone();
-        history.remove(&board.get_hash());
-        
-        self.engine.set_position(*board, history);
-
-        let params = GoParams {
-            depth: Some(self.depth),
-            ..Default::default()
-        };
-
-        self.engine.search(&params, None).unwrap()
-    }
-
-    fn should_abort_game(&self, score: &i16) -> bool {
-        let num_moves: usize = self.positions_in_current_game.len();
-
-        // safety net
-        if num_moves > 500 {
-            return true;
-        }
-
-        // Abort if moderately long and drawish
-        if num_moves > 200 && score.abs() < 20 {
-            return true;
-        }
-
-        false
-    }
-
-    #[inline]
-    fn reset_game(&mut self) {
-        self.game = Game::new();
-        self.positions_in_current_game.clear();
-    }
-}
-
-#[inline]
-fn should_use_engine_move() -> bool {
-    rand::thread_rng().gen::<f32>() < 0.3
-}
-
-#[inline]
-fn random_move(moves: &[ChessMove]) -> ChessMove {
-    let idx = rand::thread_rng().gen_range(0..moves.len());
-    moves[idx]
 }
