@@ -11,7 +11,7 @@ use utils::{game_phase, Position};
 
 use crate::{
     move_ordering::{MainMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
-    pruning::{lmr, mate_distance_prune, should_lmp_prune, AspirationWindow, Pass},
+    pruning::{mate_distance_prune, should_lmp_prune, AspirationWindow, Pass},
     stack::SearchNode,
     time_control::SearchController,
     transposition::Bound,
@@ -482,24 +482,12 @@ impl Engine {
             return None;
         }
 
-        // Late move reduction
         let is_pv_move = move_index == 0;
-        let mut reduction = lmr(
-            remaining_depth,
-            is_tactical,
-            move_index,
-            is_pv_move,
-            is_improving,
-            self.config.lmr_min_depth.value,
-            self.config.lmr_divisor.value as f32 / 100.0,
-            self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
-        );
-
         let alpha_child = alpha;
         let beta_child = if !is_pv_move { alpha + 1 } else { beta };
+        let is_pv_node = beta > alpha + 1;
 
-        // History-leaf pruning / extra reduction on quiet late moves
-        if self.history_heuristic.maybe_reduce_or_prune(
+        let (reduction, should_prune) = self.get_reduction(
             board,
             m,
             depth,
@@ -507,16 +495,24 @@ impl Engine {
             remaining_depth,
             in_check,
             is_tactical,
-            is_pv_move,
             move_index,
+            is_pv_move,
             is_improving,
-            &mut reduction,
             pre_move_threats,
-        ) {
+        );
+
+        // In some cases where history is really really bad, we just prune outright.
+        if should_prune {
             return None;
         }
 
-        let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
+        let extension = self.get_extension(gives_check, is_pv_node);
+
+        let child_max_depth = max_depth
+            .saturating_sub(reduction)
+            .saturating_add(extension)
+            .max(depth + 1);
+
         let mut actual_depth = child_max_depth;
 
         self.search_stack.push_move(child_hash, m, moved_piece);

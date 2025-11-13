@@ -2,9 +2,11 @@
 
 mod config;
 pub mod engine;
+mod extensions;
 mod history;
 mod move_ordering;
 mod pruning;
+mod reductions;
 mod stack;
 mod time_control;
 mod transposition;

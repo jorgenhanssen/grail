@@ -18,8 +18,10 @@ use crate::{
 };
 
 mod eval;
+mod extensions;
 mod pruning;
 mod quiescence;
+mod reductions;
 mod search;
 
 const MAX_DEPTH: usize = 100;
