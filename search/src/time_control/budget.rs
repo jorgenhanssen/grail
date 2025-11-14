@@ -127,7 +127,12 @@ impl TimeBudget {
             });
         }
 
-        let (time_left, increment) = extract_time_params(params, board)?;
+        let side_to_move = board.side_to_move();
+
+        let time_left = get_time_left(params, side_to_move)?;
+        let increment = get_increment(params, side_to_move);
+        let opponent_time = get_time_left(params, !side_to_move);
+
         let moves_left = params.moves_to_go.unwrap_or(move_margin(board));
 
         let reserve = ((time_left as f64) * RESERVE_FRACTION) as u64;
@@ -136,8 +141,14 @@ impl TimeBudget {
             .saturating_sub(reserve)
             .saturating_sub(OVERHEAD_MS);
 
-        // Actual time the engine can afford per move (including increment)
-        let base_time = (available as f64) / (moves_left as f64);
+        let time_advantage = opponent_time
+            .map(|opp| time_left.saturating_sub(opp))
+            .unwrap_or(0);
+
+        let total_available = available.saturating_add(time_advantage);
+
+        // Actual time the engine can afford per move (including increment and advantage)
+        let base_time = (total_available as f64) / (moves_left as f64);
         let increment_bonus = (increment as f64) * INCREMENT_USAGE;
         let hard = ((base_time + increment_bonus) as u64).max(MIN_TIME_PER_MOVE);
 
@@ -201,13 +212,19 @@ impl TimeBudget {
 }
 
 #[inline]
-fn extract_time_params(params: &GoParams, board: &Board) -> Option<(u64, u64)> {
-    let side_to_move = board.side_to_move();
-    let (time_left, increment) = match side_to_move {
-        Color::White => (params.wtime?, params.winc.unwrap_or(0)),
-        Color::Black => (params.btime?, params.binc.unwrap_or(0)),
-    };
-    Some((time_left, increment))
+fn get_time_left(params: &GoParams, color: Color) -> Option<u64> {
+    match color {
+        Color::White => params.wtime,
+        Color::Black => params.btime,
+    }
+}
+
+#[inline]
+fn get_increment(params: &GoParams, color: Color) -> u64 {
+    match color {
+        Color::White => params.winc.unwrap_or(0),
+        Color::Black => params.binc.unwrap_or(0),
+    }
 }
 
 #[inline(always)]
