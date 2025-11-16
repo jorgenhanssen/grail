@@ -80,6 +80,7 @@ define_config!(
 
 
     (quiet_check_bonus: i16, "Quiet Check Bonus", UciOptionType::Spin { min: 0, max: 2000 }, 1000, cfg!(feature = "tuning")),
+    (piece_bonus_divisor: i16, "Piece Bonus Divisor", UciOptionType::Spin { min: 1, max: 100 }, 20, cfg!(feature = "tuning")),
 
 
     (lmr_min_depth: u8, "LMR Min Depth", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")),

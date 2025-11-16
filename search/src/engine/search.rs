@@ -139,6 +139,7 @@ impl Engine {
             game_phase(&self.board),
             self.config.get_piece_values(),
             self.config.quiet_check_bonus.value,
+            self.config.piece_bonus_divisor.value,
             threats,
         );
 
@@ -336,6 +337,7 @@ impl Engine {
             phase,
             self.config.get_piece_values(),
             self.config.quiet_check_bonus.value,
+            self.config.piece_bonus_divisor.value,
             threats,
         );
 

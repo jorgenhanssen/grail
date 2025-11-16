@@ -42,10 +42,12 @@ pub struct MainMoveGenerator {
 
     piece_values: PieceValues,
     quiet_check_bonus: i16,
+    piece_bonus_divisor: i16,
     threats: BitBoard,
 }
 
 impl MainMoveGenerator {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         best_move: Option<ChessMove>,
         killer_moves: [Option<ChessMove>; 2],
@@ -53,6 +55,7 @@ impl MainMoveGenerator {
         game_phase: f32,
         piece_values: PieceValues,
         quiet_check_bonus: i16,
+        piece_bonus_divisor: i16,
         threats: BitBoard,
     ) -> Self {
         Self {
@@ -71,6 +74,7 @@ impl MainMoveGenerator {
 
             piece_values,
             quiet_check_bonus,
+            piece_bonus_divisor,
             threats,
         }
     }
@@ -187,18 +191,17 @@ impl MainMoveGenerator {
                     Some(Piece::Queen) => i16::MAX,
                     Some(_) => i16::MIN,
                     None => {
-                        let hist = history_heuristic.get(
-                            board.side_to_move(),
-                            mov.get_source(),
-                            mov.get_dest(),
-                            self.threats,
-                        );
+                        let source = mov.get_source();
+                        let dest = mov.get_dest();
+
+                        let hist =
+                            history_heuristic.get(board.side_to_move(), source, dest, self.threats);
 
                         let cont = continuation_history.get(
                             board.side_to_move(),
                             &self.prev_to,
-                            mov.get_source(),
-                            mov.get_dest(),
+                            source,
+                            dest,
                         );
 
                         let check_bonus = if gives_check(board, mov) {
@@ -207,7 +210,13 @@ impl MainMoveGenerator {
                             0
                         };
 
-                        hist + cont + check_bonus
+                        // Have a look at more valuable pieces first
+                        let piece_bonus = self
+                            .piece_values
+                            .get(board.piece_on(source).unwrap(), self.game_phase)
+                            / self.piece_bonus_divisor;
+
+                        hist + cont + check_bonus + piece_bonus
                     }
                 };
 
