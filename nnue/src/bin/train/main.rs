@@ -1,4 +1,5 @@
 mod args;
+mod checkpoint;
 mod data;
 mod loss;
 mod training;
@@ -25,9 +26,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (net, varmap) = training::create_network(&device)?;
     let mut opt = training::create_optimizer(&varmap, args.learning_rate)?;
 
-    train_model(&net, &samples, &train_idx, &mut opt, &device, &args)?;
+    train_model(
+        &net, &samples, &train_idx, &mut opt, &device, &args, &varmap,
+    )?;
     test_model(&net, &samples, &test_idx, &device, args.batch_size)?;
-    save_model(&varmap)?;
+    save_model(&varmap, "nnue/model.safetensors")?;
+    checkpoint::delete(args.epochs)?;
 
     Ok(())
 }
@@ -45,6 +49,7 @@ fn train_model(
     opt: &mut AdamW,
     device: &Device,
     args: &Args,
+    varmap: &VarMap,
 ) -> Result<(), Box<dyn Error>> {
     log::info!("Starting training...");
     let trainer = training::Trainer::new(args.batch_size, args.epochs, args.lr_decay);
@@ -56,6 +61,7 @@ fn train_model(
         device,
         args.validation_split,
         args.early_stop_patience,
+        varmap,
     )?;
     Ok(())
 }
@@ -87,9 +93,8 @@ fn test_model(
     Ok(())
 }
 
-fn save_model(varmap: &VarMap) -> Result<(), Box<dyn Error>> {
-    log::info!("Saving model");
-    let model_path = PathBuf::from("nnue/model.safetensors");
+fn save_model(varmap: &VarMap, path: &str) -> Result<(), Box<dyn Error>> {
+    let model_path = PathBuf::from(path);
     varmap.save(&model_path)?;
     log::info!("Model saved to {}", model_path.display());
     Ok(())

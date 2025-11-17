@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use crate::loss::huber;
+use crate::{checkpoint, loss::huber};
 use candle_core::{DType, Device, Result as CandleResult};
 use candle_nn::{AdamW, Module, Optimizer, ParamsAdamW, VarBuilder, VarMap};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -32,6 +32,7 @@ impl Trainer {
         device: &Device,
         validation_split: f32,
         early_stop_patience: u64,
+        varmap: &VarMap,
     ) -> CandleResult<()> {
         let split = (validation_split as f64).clamp(0.0, 0.9);
         let val_len = (train_idx.len() as f64 * split) as usize;
@@ -65,6 +66,10 @@ impl Trainer {
 
             progress_bar.set_message(format!("val: {:.5}, loss: {:.5}", val_loss, train_loss));
             progress_bar.finish();
+
+            if let Err(e) = self.save_checkpoint(varmap, epoch) {
+                log::warn!("Failed to save checkpoint for epoch {}: {}", epoch, e);
+            }
 
             // Learning rate decay
             if self.lr_decay < 1.0 {
@@ -138,6 +143,16 @@ impl Trainer {
         }
 
         Ok(total_loss / (batch_count.max(1) as f32))
+    }
+
+    fn save_checkpoint(&self, varmap: &VarMap, epoch: usize) -> Result<(), Box<dyn Error>> {
+        checkpoint::save(varmap, epoch)?;
+
+        if epoch > 1 {
+            checkpoint::delete(epoch - 1)?;
+        }
+
+        Ok(())
     }
 }
 
