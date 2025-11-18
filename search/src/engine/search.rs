@@ -467,7 +467,6 @@ impl Engine {
         let new_board = board.make_move_new(m);
         let child_hash = new_board.get_hash();
 
-        // Prefetch TT entry for child position to hide memory latency
         self.tt.prefetch(child_hash);
 
         let gives_check = new_board.checkers().popcnt() > 0;
@@ -476,9 +475,13 @@ impl Engine {
         let is_capture = board.piece_on(m.get_dest()).is_some();
         let is_promotion = m.get_promotion() == Some(Piece::Queen);
         let is_tactical = in_check || gives_check || is_capture || is_promotion;
+        let is_pv_node = beta > alpha + 1;
 
-        // Futility prune
         if self.try_futility_prune(remaining_depth, in_check, is_tactical, alpha, static_eval) {
+            return None;
+        }
+
+        if self.try_see_prune(board, m, moved_piece, remaining_depth, in_check, is_pv_node) {
             return None;
         }
 

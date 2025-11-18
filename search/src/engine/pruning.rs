@@ -1,4 +1,5 @@
-use chess::{Board, ChessMove};
+use chess::{Board, ChessMove, Piece};
+use utils::game_phase;
 
 use crate::{
     pruning::{
@@ -6,6 +7,7 @@ use crate::{
         futility_margin, null_move_reduction, razor_margin, rfp_margin, RAZOR_NEAR_MATE,
     },
     stack::SearchNode,
+    utils::see::see,
 };
 
 use super::Engine;
@@ -65,6 +67,55 @@ impl Engine {
         } else {
             None
         }
+    }
+
+    #[inline(always)]
+    pub(super) fn try_see_prune(
+        &self,
+        board: &Board,
+        m: ChessMove,
+        moved_piece: Piece,
+        remaining_depth: u8,
+        in_check: bool,
+        is_pv_node: bool,
+    ) -> bool {
+        if in_check
+            || is_pv_node
+            || remaining_depth < self.config.see_prune_min_remaining_depth.value
+        {
+            return false;
+        }
+
+        let captured_piece = match board.piece_on(m.get_dest()) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        // Promotion capture is likely good
+        if m.get_promotion().is_some() {
+            return false;
+        }
+
+        let phase = game_phase(board);
+        let captured_value = self.config.get_piece_values().get(captured_piece, phase);
+        let attacker_value = self.config.get_piece_values().get(moved_piece, phase);
+
+        // Only run SEE on questionable captures (expensive):
+        // Skip if: victim >= attacker (looks good) OR attacker is "worthless" (no need to spend see on losing pawns)
+        if captured_value < attacker_value
+            && attacker_value >= self.config.see_prune_min_attacker_value.value
+        {
+            let see_value = see(board, m, phase, &self.config.get_piece_values());
+
+            // Prune captures that lose too much material
+            let see_threshold =
+                -self.config.see_prune_depth_margin.value * (remaining_depth as i16);
+            if see_value < see_threshold {
+                return true;
+            }
+        }
+
+        false
     }
 
     #[allow(clippy::too_many_arguments)]

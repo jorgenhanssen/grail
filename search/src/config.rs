@@ -121,6 +121,11 @@ define_config!(
 
     (iid_reduction: u8, "IID Reduction", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")),
 
+    // SEE Pruning
+    (see_prune_min_remaining_depth: u8, "SEE Prune Min Remaining Depth", UciOptionType::Spin { min: 0, max: 10 }, 1, cfg!(feature = "tuning")),
+    (see_prune_depth_margin: i16, "SEE Prune Depth Margin", UciOptionType::Spin { min: 10, max: 150 }, 50, cfg!(feature = "tuning")),
+    (see_prune_min_attacker_value: i16, "SEE Prune Min Attacker Value", UciOptionType::Spin { min: 0, max: 500 }, 200, cfg!(feature = "tuning")),
+
 
     (piece_value_pawn_mg: f32, "Piece Value Pawn MG", UciOptionType::Spin { min: 50, max: 150 }, 98.0, cfg!(feature = "tuning")),
     (piece_value_pawn_eg: f32, "Piece Value Pawn EG", UciOptionType::Spin { min: 50, max: 150 }, 113.0, cfg!(feature = "tuning")),
