@@ -101,21 +101,19 @@ impl Engine {
         let attacker_value = self.config.get_piece_values().get(moved_piece, phase);
 
         // Only run SEE on questionable captures (expensive):
-        // Skip if: victim >= attacker (looks good) OR attacker is "worthless" (no need to spend see on losing pawns)
-        if captured_value < attacker_value
-            && attacker_value >= self.config.see_prune_min_attacker_value.value
-        {
-            let see_value = see(board, m, phase, &self.config.get_piece_values());
-
-            // Prune captures that lose too much material
-            let see_threshold =
-                -self.config.see_prune_depth_margin.value * (remaining_depth as i16);
-            if see_value < see_threshold {
-                return true;
-            }
+        // Skip if: victim >= attacker (looks good)
+        if captured_value >= attacker_value {
+            return false;
+        }
+        // OR if attacker is not worth checking SEE for
+        if attacker_value < self.config.see_prune_min_attacker_value.value {
+            return false;
         }
 
-        false
+        let see_value = see(board, m, phase, &self.config.get_piece_values());
+
+        // Prune captures that lose too much material
+        see_value < -self.config.see_prune_depth_margin.value * (remaining_depth as i16)
     }
 
     #[allow(clippy::too_many_arguments)]
