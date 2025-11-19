@@ -509,7 +509,7 @@ impl Engine {
         );
 
         let alpha_child = alpha;
-        let beta_child = if !is_pv_move { alpha + 1 } else { beta };
+        let beta_child = if is_pv_move { beta } else { alpha + 1 };
 
         // History-leaf pruning / extra reduction on quiet late moves
         if self.history_heuristic.maybe_reduce_or_prune(
@@ -532,6 +532,7 @@ impl Engine {
         let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
         let mut actual_depth = child_max_depth;
 
+        // Initial search (reduced if LMR, null window if not first move)
         self.search_stack.push_move(child_hash, m, moved_piece);
         let (child_value, pv_line) = self.search_subtree(
             &new_board,
@@ -546,6 +547,7 @@ impl Engine {
         let mut value = -child_value;
         let mut line = pv_line;
 
+        // Re-search at full depth (if LMR was used and value > alpha)
         if reduction > 0 && value > alpha {
             self.search_stack
                 .push(SearchNode::with_move(child_hash, m, moved_piece));
@@ -553,7 +555,7 @@ impl Engine {
                 &new_board,
                 depth + 1,
                 max_depth,
-                -beta_child,
+                -beta_child, // Use beta_child (full window for PV, null for others)
                 -alpha_child,
                 true,
                 true,
@@ -564,7 +566,8 @@ impl Engine {
             actual_depth = max_depth;
         }
 
-        if !is_pv_move && value > alpha {
+        // Re-search with full window (if null window failed high in a PV node)
+        if value > alpha && value < beta && !is_pv_move && is_pv_node {
             self.search_stack
                 .push(SearchNode::with_move(child_hash, m, moved_piece));
             let (full_child_value, full_line) =
