@@ -1,4 +1,5 @@
-use chess::{Board, ChessMove};
+use chess::{Board, ChessMove, Piece};
+use utils::game_phase;
 
 use crate::{
     pruning::{
@@ -6,6 +7,7 @@ use crate::{
         futility_margin, null_move_reduction, razor_margin, rfp_margin, RAZOR_NEAR_MATE,
     },
     stack::SearchNode,
+    utils::see::see,
 };
 
 use super::Engine;
@@ -65,6 +67,64 @@ impl Engine {
         } else {
             None
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
+    pub(super) fn try_see_prune(
+        &self,
+        board: &Board,
+        m: ChessMove,
+        moved_piece: Piece,
+        remaining_depth: u8,
+        in_check: bool,
+        is_pv_node: bool,
+        is_pv_move: bool,
+        alpha: i16,
+        static_eval: i16,
+    ) -> bool {
+        if in_check
+            || is_pv_node
+            || is_pv_move
+            || remaining_depth < self.config.see_prune_min_remaining_depth.value
+            || remaining_depth > self.config.see_prune_max_depth.value
+        {
+            return false;
+        }
+
+        let captured_piece = match board.piece_on(m.get_dest()) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        // Promotion capture is likely good
+        if m.get_promotion().is_some() {
+            return false;
+        }
+
+        let phase = game_phase(board);
+        let captured_value = self.config.get_piece_values().get(captured_piece, phase);
+        let attacker_value = self.config.get_piece_values().get(moved_piece, phase);
+
+        // Only run SEE on questionable captures (expensive):
+        // Skip if: victim >= attacker (looks good)
+        if captured_value >= attacker_value {
+            return false;
+        }
+        // OR if attacker is not worth checking SEE for
+        if attacker_value < self.config.see_prune_min_attacker_value.value {
+            return false;
+        }
+
+        let see_value = see(board, m, phase, &self.config.get_piece_values());
+
+        // Calculate how much material this capture can afford to lose
+        // If we're close to alpha, we can tolerate losing more (threshold more negative)
+        let eval_gap = alpha - static_eval;
+        let depth_margin = self.config.see_prune_depth_margin.value * (remaining_depth as i16);
+        let see_threshold = -(eval_gap.max(0) + depth_margin);
+
+        see_value < see_threshold
     }
 
     #[allow(clippy::too_many_arguments)]
