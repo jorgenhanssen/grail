@@ -476,17 +476,27 @@ impl Engine {
         let is_promotion = m.get_promotion() == Some(Piece::Queen);
         let is_tactical = in_check || gives_check || is_capture || is_promotion;
         let is_pv_node = beta > alpha + 1;
+        let is_pv_move = move_index == 0;
 
         if self.try_futility_prune(remaining_depth, in_check, is_tactical, alpha, static_eval) {
             return None;
         }
 
-        if self.try_see_prune(board, m, moved_piece, remaining_depth, in_check, is_pv_node) {
+        if self.try_see_prune(
+            board,
+            m,
+            moved_piece,
+            remaining_depth,
+            in_check,
+            is_pv_node,
+            is_pv_move,
+            alpha,
+            static_eval,
+        ) {
             return None;
         }
 
         // Late move reduction
-        let is_pv_move = move_index == 0;
         let mut reduction = lmr(
             remaining_depth,
             is_tactical,

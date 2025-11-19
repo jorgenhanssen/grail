@@ -69,6 +69,7 @@ impl Engine {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     pub(super) fn try_see_prune(
         &self,
@@ -78,10 +79,15 @@ impl Engine {
         remaining_depth: u8,
         in_check: bool,
         is_pv_node: bool,
+        is_pv_move: bool,
+        alpha: i16,
+        static_eval: i16,
     ) -> bool {
         if in_check
             || is_pv_node
+            || is_pv_move
             || remaining_depth < self.config.see_prune_min_remaining_depth.value
+            || remaining_depth > self.config.see_prune_max_depth.value
         {
             return false;
         }
@@ -112,8 +118,13 @@ impl Engine {
 
         let see_value = see(board, m, phase, &self.config.get_piece_values());
 
-        // Prune captures that lose too much material
-        see_value < -self.config.see_prune_depth_margin.value * (remaining_depth as i16)
+        // Calculate how much material this capture can afford to lose
+        // If we're close to alpha, we can tolerate losing more (threshold more negative)
+        let eval_gap = alpha - static_eval;
+        let depth_margin = self.config.see_prune_depth_margin.value * (remaining_depth as i16);
+        let see_threshold = -(eval_gap.max(0) + depth_margin);
+
+        see_value < see_threshold
     }
 
     #[allow(clippy::too_many_arguments)]
