@@ -22,12 +22,6 @@ pub const FV_SCALE: f32 = 400.0;
 // Lower values clip more outliers but give better precision for typical weights.
 const QUANTIZATION_PERCENTILE: f32 = 0.999;
 
-// Quantization range limits
-const I8_MIN: f32 = -128.0;
-const I8_MAX: f32 = 127.0;
-const I16_MIN: f32 = -32768.0;
-const I16_MAX: f32 = 32767.0;
-
 // Bitset encoding
 const BITS_PER_U64: usize = 64;
 
@@ -325,9 +319,9 @@ fn compute_quantization_scale(weights: &[f32]) -> f32 {
     let percentile_weight = abs_weights[percentile_idx];
 
     if percentile_weight > 0.0 {
-        I8_MAX / percentile_weight
+        (i8::MAX as f32) / percentile_weight
     } else if max_abs_weight > 0.0 {
-        I8_MAX / max_abs_weight
+        (i8::MAX as f32) / max_abs_weight
     } else {
         64.0 // Fallback if all weights are zero (should never happen)
     }
@@ -341,7 +335,9 @@ fn quantize_embedding_weights(weights: &[f32], scale: f32) -> Box<[i8]> {
         let src_row_offset = out_idx * NUM_FEATURES;
         for feature_idx in 0..NUM_FEATURES {
             let weight = weights[src_row_offset + feature_idx];
-            let quantized_value = (weight * scale).round().clamp(I8_MIN, I8_MAX) as i8;
+            let quantized_value = (weight * scale)
+                .round()
+                .clamp(i8::MIN as f32, i8::MAX as f32) as i8;
             quantized[feature_idx * EMBEDDING_SIZE + out_idx] = quantized_value;
         }
     }
@@ -352,7 +348,7 @@ fn quantize_embedding_weights(weights: &[f32], scale: f32) -> Box<[i8]> {
 fn quantize_embedding_biases(biases: &[f32], scale: f32) -> Box<[i16]> {
     biases
         .iter()
-        .map(|&b| (b * scale).round().clamp(I16_MIN, I16_MAX) as i16)
+        .map(|&b| (b * scale).round().clamp(i16::MIN as f32, i16::MAX as f32) as i16)
         .collect()
 }
 
