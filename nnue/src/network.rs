@@ -3,7 +3,6 @@ use candle_nn::{linear, Linear, Module, VarBuilder};
 use std::simd::prelude::SimdFloat;
 
 use crate::encoding::{NUM_FEATURES, NUM_U64S};
-use crate::samples::{CP_MAX, CP_MIN, FV_SCALE};
 
 use std::simd::{f32x16, i16x32};
 type SimdF32 = f32x16;
@@ -13,6 +12,11 @@ const SIMD_WIDTH_I16: usize = 32;
 
 const EMBEDDING_SIZE: usize = 1024;
 const HIDDEN_SIZE: usize = 16;
+
+// Neural network evaluation scaling constants
+pub const CP_MAX: i16 = 5000;
+pub const CP_MIN: i16 = -5000;
+pub const FV_SCALE: f32 = 400.0;
 
 // Quantization scale is computed from this percentile of absolute weights.
 // Lower values clip more outliers but give better precision for typical weights.

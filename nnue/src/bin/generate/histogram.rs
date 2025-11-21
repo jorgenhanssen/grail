@@ -1,5 +1,5 @@
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use nnue::samples::{CP_MAX, CP_MIN};
+use nnue::network::{CP_MAX, CP_MIN};
 use std::sync::{Arc, Mutex};
 
 const BIN_SIZE: f32 = 1000.0;

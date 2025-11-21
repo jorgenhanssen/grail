@@ -3,6 +3,7 @@ mod book;
 mod game;
 mod generator;
 mod histogram;
+mod samples;
 mod worker;
 
 use args::Args;
@@ -10,7 +11,7 @@ use chrono::Local;
 use clap::Parser;
 use generator::Generator;
 use log::LevelFilter;
-use nnue::samples::Samples;
+use samples::Samples;
 use simplelog::{Config, SimpleLogger};
 use std::{
     error::Error,
