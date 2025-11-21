@@ -1,10 +1,11 @@
 use candle_core::{Result, Tensor};
 use candle_nn::{linear, Linear, Module, VarBuilder};
+use std::simd::num::SimdInt;
 use std::simd::prelude::SimdFloat;
 
 use crate::encoding::{NUM_FEATURES, NUM_U64S};
 
-use std::simd::{f32x16, i16x32};
+use std::simd::{f32x16, i16x32, i8x32};
 type SimdF32 = f32x16;
 type SimdI16 = i16x32;
 const SIMD_WIDTH_F32: usize = 16;
@@ -160,17 +161,14 @@ impl NNUENetwork {
             [feature_idx * EMBEDDING_SIZE..feature_idx * EMBEDDING_SIZE + EMBEDDING_SIZE];
 
         let mut i = 0;
-        let mut weights_i16_buf = [0i16; SIMD_WIDTH_I16];
 
         if is_active {
             while i + SIMD_WIDTH_I16 <= EMBEDDING_SIZE {
                 let mut acc =
                     SimdI16::from_slice(&self.embedding_buffer_i16[i..i + SIMD_WIDTH_I16]);
 
-                for j in 0..SIMD_WIDTH_I16 {
-                    weights_i16_buf[j] = weights_row[i + j] as i16;
-                }
-                let weights_i16 = SimdI16::from_slice(&weights_i16_buf);
+                let weights_i8 = i8x32::from_slice(&weights_row[i..i + SIMD_WIDTH_I16]);
+                let weights_i16: SimdI16 = weights_i8.cast();
 
                 acc += weights_i16;
                 acc.copy_to_slice(&mut self.embedding_buffer_i16[i..i + SIMD_WIDTH_I16]);
@@ -186,10 +184,8 @@ impl NNUENetwork {
                 let mut acc =
                     SimdI16::from_slice(&self.embedding_buffer_i16[i..i + SIMD_WIDTH_I16]);
 
-                for j in 0..SIMD_WIDTH_I16 {
-                    weights_i16_buf[j] = weights_row[i + j] as i16;
-                }
-                let weights_i16 = SimdI16::from_slice(&weights_i16_buf);
+                let weights_i8 = i8x32::from_slice(&weights_row[i..i + SIMD_WIDTH_I16]);
+                let weights_i16: SimdI16 = weights_i8.cast();
 
                 acc -= weights_i16;
                 acc.copy_to_slice(&mut self.embedding_buffer_i16[i..i + SIMD_WIDTH_I16]);
