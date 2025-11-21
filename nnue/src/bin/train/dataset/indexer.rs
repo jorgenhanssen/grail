@@ -13,14 +13,13 @@ pub const MAX_FEN_LEN: usize = 255;
 
 const PROGRESS_UPDATE_INTERVAL: usize = 100_000;
 
-/// Lightweight index pointing to a sample's location in a file + score and game ID
-/// TODO: Consider only storing file location and calculating score and game ID on the fly
+/// Reference to a sample with its location and metadata for efficient access
 #[derive(Debug, Clone, Copy)]
-pub struct SampleIndex {
-    pub byte_offset: u64,
+pub struct SampleRef {
+    pub file_id: u8,
+    pub byte_start: u64,
     pub game_id: u32,
     pub score: i16,
-    pub file_id: u8,
     pub fen_len: u8,
 }
 
@@ -39,7 +38,7 @@ impl IndexStats {
 
         log::info!(
             "Index size: {:.0} MB",
-            (self.total_samples * std::mem::size_of::<SampleIndex>()) as f64 / BYTES_PER_MB
+            (self.total_samples * std::mem::size_of::<SampleRef>()) as f64 / BYTES_PER_MB
         );
 
         log::info!("Total positions: {}", self.total_samples);
@@ -54,7 +53,7 @@ impl IndexStats {
     }
 }
 
-pub fn build_index(files: &[PathBuf]) -> io::Result<(Vec<SampleIndex>, IndexStats)> {
+pub fn build_index(files: &[PathBuf]) -> io::Result<(Vec<SampleRef>, IndexStats)> {
     let progress = IndexProgressBar::new(files);
 
     let results: Vec<io::Result<FileIndex>> = files
@@ -67,14 +66,14 @@ pub fn build_index(files: &[PathBuf]) -> io::Result<(Vec<SampleIndex>, IndexStat
 
     log::info!("Finalizing index...");
 
-    let (indices, stats) = merge_file_indicies(results)?;
+    let (samples, stats) = merge_file_indicies(results)?;
 
-    Ok((indices, stats))
+    Ok((samples, stats))
 }
 
 struct FileIndex {
-    indices: Vec<SampleIndex>,
-    unique_hashes: AHashSet<u64>,
+    samples: Vec<SampleRef>,
+    unique_fens: AHashSet<u64>,
     max_game_id: u32,
 }
 
@@ -85,13 +84,14 @@ impl FileIndex {
         let mut line = String::new();
         let mut byte_offset: u64 = 0;
 
-        let mut indices = Vec::new();
-        let mut unique_hashes = AHashSet::new();
+        let mut samples = Vec::new();
+        let mut unique_fens = AHashSet::new();
         let mut max_game_id: u32 = 0;
+
         let mut bytes_since_update: u64 = 0;
         let mut samples_since_update: usize = 0;
 
-        // Read header
+        // Header
         if reader.read_line(&mut line)? > 0 {
             byte_offset += line.len() as u64;
             bytes_since_update += line.len() as u64;
@@ -102,12 +102,12 @@ impl FileIndex {
             let line_len = line.len() as u64;
             let trim_line = line.trim_end();
 
-            if let Some((fen_str, score, game_id)) = parse_csv_line(trim_line) {
-                let fen_len = fen_str.len();
+            if let Some((fen, score, game_id)) = parse_csv_line(trim_line) {
+                let fen_len = fen.len();
                 if fen_len <= MAX_FEN_LEN {
-                    indices.push(SampleIndex {
+                    samples.push(SampleRef {
                         file_id: file_id as u8,
-                        byte_offset,
+                        byte_start: byte_offset,
                         fen_len: fen_len as u8,
                         score,
                         game_id,
@@ -115,8 +115,9 @@ impl FileIndex {
 
                     // Convert to u64 hash
                     let mut hasher = AHasher::default();
-                    fen_str.hash(&mut hasher);
-                    unique_hashes.insert(hasher.finish());
+                    fen.hash(&mut hasher);
+                    unique_fens.insert(hasher.finish());
+
                     max_game_id = max_game_id.max(game_id);
                     samples_since_update += 1;
                 }
@@ -137,33 +138,28 @@ impl FileIndex {
         progress.update(bytes_since_update, samples_since_update);
 
         Ok(Self {
-            indices,
-            unique_hashes,
+            samples,
+            unique_fens,
             max_game_id,
         })
     }
 }
 
 fn parse_csv_line(line: &str) -> Option<(&str, i16, u32)> {
-    let comma_idx = line.find(',')?;
-    let fen_str = &line[..comma_idx];
-    let rest = &line[comma_idx + 1..];
+    let mut parts = line.split(',');
 
-    let second_comma = rest.find(',')?;
-    let score_str = &rest[..second_comma];
-    let game_id_str = &rest[second_comma + 1..];
+    let fen = parts.next()?;
+    let score = parts.next()?.parse().ok()?;
+    let game_id = parts.next()?.parse().ok()?;
 
-    let score = score_str.parse::<i16>().ok()?;
-    let game_id = game_id_str.parse::<u32>().ok()?;
-
-    Some((fen_str, score, game_id))
+    Some((fen, score, game_id))
 }
 
 fn merge_file_indicies(
     results: Vec<io::Result<FileIndex>>,
-) -> io::Result<(Vec<SampleIndex>, IndexStats)> {
-    let mut all_indices = Vec::new();
-    let mut all_unique_hashes = AHashSet::new();
+) -> io::Result<(Vec<SampleRef>, IndexStats)> {
+    let mut all_samples = Vec::new();
+    let mut all_unique_fen_hashes = AHashSet::new();
     let mut all_game_ids = AHashSet::new();
     let mut game_id_offset: u32 = 0;
 
@@ -172,49 +168,49 @@ fn merge_file_indicies(
 
     for res in results {
         let FileIndex {
-            mut indices,
-            unique_hashes,
+            mut samples,
+            unique_fens,
             max_game_id,
         } = res?;
 
         // Track max byte_offset in this file
-        if let Some(idx) = indices.iter().max_by_key(|idx| idx.byte_offset) {
-            max_offset = max_offset.max(idx.byte_offset);
+        if let Some(sample) = samples.iter().max_by_key(|r| r.byte_start) {
+            max_offset = max_offset.max(sample.byte_start);
         }
 
-        // Offset all game IDs in this file's indices
-        for idx in &mut indices {
-            idx.game_id += game_id_offset;
-            all_game_ids.insert(idx.game_id);
-            max_final_game_id = max_final_game_id.max(idx.game_id);
+        // Offset all game IDs in this file's sample refs
+        for sample in &mut samples {
+            sample.game_id += game_id_offset;
+            all_game_ids.insert(sample.game_id);
+            max_final_game_id = max_final_game_id.max(sample.game_id);
         }
 
-        all_indices.extend(indices);
-        all_unique_hashes.extend(unique_hashes);
+        all_samples.extend(samples);
+        all_unique_fen_hashes.extend(unique_fens);
 
         // Update offset for next file (add 1 to avoid overlap)
         game_id_offset += max_game_id + 1;
     }
 
-    let is_contiguous = check_contiguity(&all_indices);
+    let is_contiguous = check_contiguity(&all_samples);
 
     let stats = IndexStats {
-        total_samples: all_indices.len(),
-        unique_fens: all_unique_hashes.len(),
+        total_samples: all_samples.len(),
+        unique_fens: all_unique_fen_hashes.len(),
         total_games: all_game_ids.len(),
         is_contiguous,
     };
 
-    Ok((all_indices, stats))
+    Ok((all_samples, stats))
 }
 
-fn check_contiguity(indices: &[SampleIndex]) -> bool {
+fn check_contiguity(samples: &[SampleRef]) -> bool {
     // ensure each game_id appears in a single contiguous sequence
 
     let mut current_game_id = None;
     let mut seen_games = AHashSet::new();
 
-    for sample in indices {
+    for sample in samples {
         if Some(sample.game_id) != current_game_id {
             if seen_games.contains(&sample.game_id) {
                 return false;
@@ -226,14 +222,14 @@ fn check_contiguity(indices: &[SampleIndex]) -> bool {
 
     true
 }
-pub fn split_indices(
-    indices: Vec<SampleIndex>,
+pub fn split_index(
+    index: Vec<SampleRef>,
     test_ratio: f64,
     val_ratio: f64,
-) -> (Vec<SampleIndex>, Vec<SampleIndex>, Vec<SampleIndex>) {
-    let mut game_map: AHashMap<u32, Vec<SampleIndex>> = AHashMap::new();
-    for idx in indices {
-        game_map.entry(idx.game_id).or_default().push(idx);
+) -> (Vec<SampleRef>, Vec<SampleRef>, Vec<SampleRef>) {
+    let mut game_map: AHashMap<u32, Vec<SampleRef>> = AHashMap::new();
+    for sample in index {
+        game_map.entry(sample.game_id).or_default().push(sample);
     }
 
     let mut games: Vec<u32> = game_map.keys().copied().collect();
@@ -250,19 +246,19 @@ pub fn split_indices(
     let test_set: AHashSet<u32> = test_games.iter().copied().collect();
     let val_set: AHashSet<u32> = val_games.iter().copied().collect();
 
-    let mut train_indices = Vec::new();
-    let mut val_indices = Vec::new();
-    let mut test_indices = Vec::new();
+    let mut train = Vec::new();
+    let mut val = Vec::new();
+    let mut test = Vec::new();
 
     for (gid, samples) in game_map {
         if test_set.contains(&gid) {
-            test_indices.extend(samples);
+            test.extend(samples);
         } else if val_set.contains(&gid) {
-            val_indices.extend(samples);
+            val.extend(samples);
         } else {
-            train_indices.extend(samples);
+            train.extend(samples);
         }
     }
 
-    (train_indices, val_indices, test_indices)
+    (train, val, test)
 }

@@ -11,7 +11,7 @@ use chess::{Board, Color};
 use nnue::encoding::{encode_board, NUM_FEATURES};
 use utils::board_metrics::BoardMetrics;
 
-use super::indexer::SampleIndex;
+use super::indexer::SampleRef;
 
 pub const FV_SCALE: f32 = 400.0;
 
@@ -28,7 +28,7 @@ pub struct DataLoader {
 
 impl DataLoader {
     pub fn new(
-        indices: &[SampleIndex],
+        samples: &[SampleRef],
         files: &[PathBuf],
         batch_size: usize,
         num_workers: usize,
@@ -36,17 +36,17 @@ impl DataLoader {
         let (sender, receiver) = mpsc::sync_channel(num_workers * CHANNEL_BUFFER_MULTIPLIER);
 
         let files = Arc::new(files.to_vec());
-        let shared_indices = Arc::new(indices.to_vec());
+        let shared_samples = Arc::new(samples.to_vec());
 
         let (work_sender, work_receiver) =
-            mpsc::sync_channel::<Vec<SampleIndex>>(num_workers * CHANNEL_BUFFER_MULTIPLIER);
+            mpsc::sync_channel::<Vec<SampleRef>>(num_workers * CHANNEL_BUFFER_MULTIPLIER);
         let work_receiver = Arc::new(std::sync::Mutex::new(work_receiver));
 
         let workers = Self::spawn_workers(num_workers, work_receiver, sender.clone(), files);
 
         // Distribute batches to workers
         thread::spawn(move || {
-            for chunk in shared_indices.chunks(batch_size) {
+            for chunk in shared_samples.chunks(batch_size) {
                 if work_sender.send(chunk.to_vec()).is_err() {
                     break;
                 }
@@ -56,7 +56,7 @@ impl DataLoader {
         Self {
             receiver,
             workers,
-            num_samples: indices.len(),
+            num_samples: samples.len(),
         }
     }
 
@@ -66,7 +66,7 @@ impl DataLoader {
 
     fn spawn_workers(
         num_workers: usize,
-        work_receiver: Arc<std::sync::Mutex<mpsc::Receiver<Vec<SampleIndex>>>>,
+        work_receiver: Arc<std::sync::Mutex<mpsc::Receiver<Vec<SampleRef>>>>,
         sender: mpsc::SyncSender<BatchData>,
         files: Arc<Vec<PathBuf>>,
     ) -> Vec<thread::JoinHandle<()>> {
@@ -80,21 +80,21 @@ impl DataLoader {
                     let mut file_cache: AHashMap<u8, File> = AHashMap::new();
 
                     loop {
-                        let batch_indices: Vec<SampleIndex> = {
+                        let batch_samples: Vec<SampleRef> = {
                             match rx.lock().unwrap().recv() {
                                 Ok(b) => b,
                                 Err(_) => break,
                             }
                         };
 
-                        let batch_size = batch_indices.len();
+                        let batch_size = batch_samples.len();
 
                         let mut features = Vec::with_capacity(batch_size * NUM_FEATURES);
                         let mut scores = Vec::with_capacity(batch_size);
 
-                        for sample in batch_indices {
+                        for sample_ref in batch_samples {
                             if let Err(e) = Self::process_sample(
-                                sample,
+                                sample_ref,
                                 &mut file_cache,
                                 &paths,
                                 &mut features,
@@ -114,28 +114,28 @@ impl DataLoader {
     }
 
     fn process_sample(
-        sample: SampleIndex,
+        sample_ref: SampleRef,
         file_cache: &mut AHashMap<u8, File>,
         paths: &[PathBuf],
         features: &mut Vec<f32>,
         scores: &mut Vec<f32>,
     ) -> Result<(), String> {
         // Get or open file
-        let file = match file_cache.entry(sample.file_id) {
+        let file = match file_cache.entry(sample_ref.file_id) {
             Entry::Occupied(e) => e.into_mut(),
             Entry::Vacant(e) => {
                 let path = paths
-                    .get(sample.file_id as usize)
-                    .ok_or_else(|| format!("Invalid file_id: {}", sample.file_id))?;
+                    .get(sample_ref.file_id as usize)
+                    .ok_or_else(|| format!("Invalid file_id: {}", sample_ref.file_id))?;
                 let f = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
                 e.insert(f)
             }
         };
 
-        file.seek(SeekFrom::Start(sample.byte_offset))
+        file.seek(SeekFrom::Start(sample_ref.byte_start))
             .map_err(|e| format!("Failed to seek: {}", e))?;
 
-        let mut fen_bytes = vec![0u8; sample.fen_len as usize];
+        let mut fen_bytes = vec![0u8; sample_ref.fen_len as usize];
 
         file.read_exact(&mut fen_bytes)
             .map_err(|e| format!("Failed to read FEN: {}", e))?;
@@ -157,7 +157,7 @@ impl DataLoader {
         );
 
         features.extend_from_slice(&encoded_features);
-        scores.push(sample.score as f32 / FV_SCALE);
+        scores.push(sample_ref.score as f32 / FV_SCALE);
 
         Ok(())
     }

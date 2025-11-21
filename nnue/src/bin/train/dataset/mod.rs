@@ -2,7 +2,7 @@ mod indexer;
 mod loader;
 mod progress;
 
-pub use indexer::{build_index, split_indices, SampleIndex};
+pub use indexer::{build_index, split_index, SampleRef};
 pub use loader::DataLoader;
 
 use rand::seq::SliceRandom;
@@ -13,9 +13,9 @@ use std::{fs, io};
 use crate::args::Args;
 
 pub struct Dataset {
-    train_indices: Vec<SampleIndex>,
-    val_indices: Vec<SampleIndex>,
-    test_indices: Vec<SampleIndex>,
+    train_samples: Vec<SampleRef>,
+    val_samples: Vec<SampleRef>,
+    test_samples: Vec<SampleRef>,
     files: Arc<Vec<PathBuf>>,
 }
 
@@ -25,32 +25,32 @@ impl Dataset {
 
         let files = get_files(Path::new(data_dir))?;
 
-        let (indices, stats) = build_index(&files)?;
+        let (index, stats) = build_index(&files)?;
 
         stats.log();
 
-        let (train_indices, val_indices, test_indices) =
-            split_indices(indices, args.test_ratio, args.val_ratio);
+        let (train_samples, val_samples, test_samples) =
+            split_index(index, args.test_ratio, args.val_ratio);
 
         Ok(Self {
-            train_indices,
-            val_indices,
-            test_indices,
+            train_samples,
+            val_samples,
+            test_samples,
             files: Arc::new(files),
         })
     }
 
     pub fn train_loader(&mut self, batch_size: usize, workers: usize) -> DataLoader {
-        self.train_indices.shuffle(&mut rand::thread_rng());
-        DataLoader::new(&self.train_indices, &self.files, batch_size, workers)
+        self.train_samples.shuffle(&mut rand::thread_rng());
+        DataLoader::new(&self.train_samples, &self.files, batch_size, workers)
     }
 
     pub fn val_loader(&self, batch_size: usize, workers: usize) -> DataLoader {
-        DataLoader::new(&self.val_indices, &self.files, batch_size, workers)
+        DataLoader::new(&self.val_samples, &self.files, batch_size, workers)
     }
 
     pub fn test_loader(&self, batch_size: usize, workers: usize) -> DataLoader {
-        DataLoader::new(&self.test_indices, &self.files, batch_size, workers)
+        DataLoader::new(&self.test_samples, &self.files, batch_size, workers)
     }
 }
 
