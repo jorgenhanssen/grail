@@ -31,6 +31,9 @@ const BLACK_THREATS_START: usize = WHITE_THREATS_END;
 const BLACK_THREATS_END: usize = BLACK_THREATS_START + NUM_SQUARES;
 const SIDE_TO_MOVE_IDX: usize = NUM_FEATURES - 1;
 
+// Bitset encoding
+pub const BITS_PER_U64: usize = 64;
+
 #[inline(always)]
 pub fn encode_board(
     board: &Board,
