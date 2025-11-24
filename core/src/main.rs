@@ -13,6 +13,7 @@ use std::fs::File;
 use uci::{UciConnection, UciInput, UciOutput};
 
 const ENGINE_NAME: &str = "Grail";
+const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
 const ENGINE_AUTHOR: &str = "Jørgen Hanssen";
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -26,13 +27,21 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut uci = UciConnection::new();
 
+    uci.send(UciOutput::Raw(format!(
+        "{} {} by {}",
+        ENGINE_NAME, ENGINE_VERSION, ENGINE_AUTHOR
+    )))?;
+
     let mut config = EngineConfig::default();
     let mut engine = engine::create_engine(&config);
 
     uci.listen(|input, output| {
         match input {
             UciInput::Uci => {
-                output.send(UciOutput::IdName(ENGINE_NAME.to_string()))?;
+                output.send(UciOutput::IdName(format!(
+                    "{} {}",
+                    ENGINE_NAME, ENGINE_VERSION
+                )))?;
                 output.send(UciOutput::IdAuthor(ENGINE_AUTHOR.to_string()))?;
 
                 config.to_uci(&output)?;

@@ -36,6 +36,7 @@ pub enum UciOutput {
     },
     Info(Info),
     Option(String),
+    Raw(String),
 }
 
 #[derive(Debug)]

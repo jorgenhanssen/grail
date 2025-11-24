@@ -21,6 +21,11 @@ impl UciConnection {
         Self { output_tx }
     }
 
+    pub fn send(&self, output: UciOutput) -> Result<(), Box<dyn Error>> {
+        self.output_tx.send(output)?;
+        Ok(())
+    }
+
     // Takes a callback function that handles commands and returns a sender for responses
     pub fn listen<F>(&mut self, mut callback: F) -> io::Result<()>
     where
