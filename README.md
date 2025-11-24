@@ -1,6 +1,6 @@
 # Grail Chess Engine
 
-Grail is a UCI-compliant chess engine written in Rust, featuring both Neural Network (NNUE) and Hand-Crafted (HCE) evaluation. It implements modern search techniques including Principal Variation Search, advanced pruning, and sophisticated move ordering.
+Grail is a UCI-compliant hobby chess engine written in Rust, featuring both Neural Network (NNUE) and Hand-Crafted (HCE) evaluation. It implements modern search techniques including Principal Variation Search, advanced pruning, and sophisticated move ordering.
 
 ## Download & Installation
 
@@ -51,48 +51,6 @@ The project includes a `Makefile` for convenience:
 - **`make generate`**: Builds the data generation tool for NNUE training.
 - **`make train`**: Builds the NNUE trainer (auto-detects CUDA/Metal).
 - **`make clean`**: Cleans the build directory.
-
-### Features & Architecture
-
-#### Search
-
-- **Framework**: Negamax search with Alpha-Beta pruning and Principal Variation Search (PVS).
-- **Iterative Deepening**: Progressively deeper searches to improve move ordering.
-- **Transposition Table**: Stores search results to avoid re-searching positions.
-- **Aspiration Windows**: Narrows the search window around the previous score for efficiency.
-- **Internal Iterative Deepening (IID)**: Performs a shallower search to get a best move when the Transposition Table misses.
-
-#### Pruning Techniques
-
-- **Reverse Futility Pruning (RFP)**: Prunes nodes where the static evaluation is significantly above beta.
-- **Null Move Pruning (NMP)**: Assumes the opponent moves twice; if the position is still too good, the branch is pruned.
-- **Late Move Pruning (LMP)**: Prunes quiet moves late in the move list at low depths.
-- **Futility Pruning**: Prunes moves that are unlikely to raise alpha.
-- **Razoring**: Prunes nodes at low depth if the static evaluation is far below alpha.
-- **SEE Pruning**: Prunes moves with negative Static Exchange Evaluation scores at low depths.
-- **Mate Distance Pruning**: Prunes paths that cannot lead to a faster mate than one already found.
-- **Delta Pruning**: Used in Quiescence Search to prune captures that cannot improve the position.
-
-#### Reductions
-
-- **Late Move Reductions (LMR)**: Reduces the search depth for quiet moves later in the ordering, assuming better moves were found earlier.
-
-#### Move Ordering
-
-Efficient move ordering is critical for alpha-beta performance. Grail uses:
-
-1.  **Transposition Table Move**: The best move from a previous search.
-2.  **Killer Heuristic**: Quiet moves that caused a beta cutoff at the same ply in sibling nodes.
-3.  **History Heuristics**:
-    - **History Heuristic**: Prioritizes quiet moves that have frequently been good elsewhere in the tree.
-    - **Capture History**: Orders captures based on historical success.
-    - **Continuation History**: Heuristics based on previous moves (counter moves/follow-up moves).
-4.  **Winning Captures**: Ordered by MVV-LVA (Most Valuable Victim - Least Valuable Attacker) logic.
-
-#### Evaluation
-
-- **NNUE**: The default evaluation. Uses a small, efficiently updatable neural network trained on engine self-play data.
-- **HCE**: A fallback hand-crafted evaluation function considering material, piece-square tables, pawn structure, king safety, and mobility.
 
 ### NNUE Data Generation & Training
 
