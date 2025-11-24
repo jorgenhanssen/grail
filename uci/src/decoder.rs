@@ -97,7 +97,6 @@ impl Decoder {
 
             // TODO: Consider error handling
             depth: extract_numeric_param(input, "depth").map(|d| d as u8),
-            nodes: extract_numeric_param(input, "nodes"),
             move_time: extract_numeric_param(input, "movetime"),
         })
     }

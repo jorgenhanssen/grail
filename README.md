@@ -2,24 +2,24 @@
 
 Grail is a UCI-compliant hobby chess engine written in Rust, featuring both Neural Network (NNUE) and Hand-Crafted (HCE) evaluation. It implements modern search techniques including Principal Variation Search, advanced pruning, and sophisticated move ordering.
 
-## Download & Installation
+## Usage
 
-Grail is a command-line engine and requires a chess GUI to play.
+Grail is a command-line engine designed for **Standard Chess**. It requires a UCI-compatible chess GUI (such as Arena, BanksiaGUI, or Cutechess) to play.
+
+### Getting Started
 
 1.  **Download**: Get the latest executable from the [Releases](../../releases) page for your operating system (Windows, macOS, or Linux).
-2.  **Install GUI**: Download a UCI-compatible chess GUI (such as Arena or BanksiaGUI).
-3.  **Setup**:
-    - Open the GUI.
-    - Add a new engine.
-    - Select the `grail` executable.
-    - Start a game!
+2.  **Install**: Open your GUI of choice and add a new engine pointing to the `grail` executable.
+3.  **Play**: Start a game or analysis session!
 
-### UCI Options
+### Configuration
 
-Configure Grail through the GUI settings:
+Once added to your GUI, you can configure the engine via the UCI options:
 
-- **Hash**: Size of the transposition table in MB (default: 1024).
-- **Use NNUE**: Toggle between NNUE and HCE evaluation (default: true).
+- **Hash**: Size of the transposition table in MB (Default: 1024).
+- **Use NNUE**: Toggle between Neural Network (NNUE) and Hand-Crafted (HCE) evaluation (Default: true).
+
+The engine supports standard time controls (increment, sudden death, moves to go) and analysis modes (fixed depth, infinite).
 
 ## Play Against Grail Online
 

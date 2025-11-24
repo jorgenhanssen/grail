@@ -91,9 +91,6 @@ pub struct GoParams {
     // Search depth ply only.
     pub depth: Option<u8>,
 
-    // Search so many nodes only.
-    pub nodes: Option<u64>,
-
     // Search exactly movetime milliseconds.
     pub move_time: Option<u64>,
 }
