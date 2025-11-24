@@ -1,15 +1,15 @@
 [package]
 name = "grail"
-version = "0.1.0"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = { workspace = true }
+repository = { workspace = true }
 
 [features]
 default = []
 tuning = ["uci/tuning", "search/tuning"]
-
-[profile.release]
-lto = "fat"
-opt-level = 3
 
 [dependencies]
 search = { path = "../search" }

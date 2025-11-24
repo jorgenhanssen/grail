@@ -1,4 +1,5 @@
 [workspace]
+resolver = "2"
 members = [
   "core",
   "evaluation",
@@ -7,6 +8,14 @@ members = [
   "uci", 
   "utils",
 ]
+
+[workspace.package]
+version = "1.0.0"
+authors = ["Jørgen Hanssen"]
+edition = "2021"
+license = "GPL-3.0"
+description = "A UCI chess engine written in Rust"
+repository = "https://github.com/jorgenhanssen/grail"
 
 [workspace.dependencies]
 ahash = "0.8.11"

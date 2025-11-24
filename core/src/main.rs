@@ -35,7 +35,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 output.send(UciOutput::IdName(ENGINE_NAME.to_string()))?;
                 output.send(UciOutput::IdAuthor(ENGINE_AUTHOR.to_string()))?;
 
-                // TODO: consider a more consistent way to do this (output.send)
                 config.to_uci(&output)?;
 
                 output.send(UciOutput::UciOk)?;
@@ -49,14 +48,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                     debug!("Option setting failed: {}", e);
                 } else {
                     debug!("Set option '{}' to '{}'", name, value);
-
                     engine.configure(&config, false);
                 }
             }
             UciInput::UciNewGame => {
                 engine.new_game();
             }
-            UciInput::Position { board, game_history } => {
+            UciInput::Position {
+                board,
+                game_history,
+            } => {
                 engine.set_position(*board, game_history.clone());
             }
             UciInput::Go(params) => {

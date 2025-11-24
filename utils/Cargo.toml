@@ -1,8 +1,11 @@
 [package]
 name = "utils"
-version = "0.1.0"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 chess = { workspace = true }
-
