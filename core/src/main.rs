@@ -73,10 +73,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let result = engine.search(params, Some(&output));
 
                 if let Some((best_move, _)) = result {
-                    output.send(UciOutput::BestMove {
-                        best_move,
-                        ponder: None,
-                    })?;
+                    output.send(UciOutput::BestMove { best_move })?;
                 }
             }
             UciInput::Stop => {

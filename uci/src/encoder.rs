@@ -11,14 +11,8 @@ impl Encoder {
             UciOutput::UciOk => "uciok".to_string(),
             UciOutput::ReadyOk => "readyok".to_string(),
 
-            UciOutput::BestMove { best_move, ponder } => {
-                format!(
-                    "bestmove {}{}",
-                    best_move,
-                    ponder
-                        .as_ref()
-                        .map_or(String::new(), |m| format!(" ponder {}", m))
-                )
+            UciOutput::BestMove { best_move } => {
+                format!("bestmove {}", best_move)
             }
             UciOutput::Info(info) => {
                 format!(

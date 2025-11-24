@@ -20,8 +20,6 @@ pub enum UciInput {
         value: String,
     },
     Unknown(String),
-    // TODO: Implement
-    // PonderHit,
 }
 
 #[derive(Debug)]
@@ -30,10 +28,7 @@ pub enum UciOutput {
     IdAuthor(String),
     UciOk,
     ReadyOk,
-    BestMove {
-        best_move: ChessMove,
-        ponder: Option<ChessMove>,
-    },
+    BestMove { best_move: ChessMove },
     Info(Info),
     Option(String),
     Raw(String),
@@ -72,9 +67,6 @@ pub enum Score {
 
 #[derive(Debug, Default)]
 pub struct GoParams {
-    // Bool to enable pondering mode. The engine will not stop pondering in the background until a stop command is received.
-    pub ponder: bool,
-
     // Search in the background until a stop command is received.
     pub infinite: bool,
 

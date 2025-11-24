@@ -87,7 +87,6 @@ impl Decoder {
 
     fn decode_go(&self, input: &str) -> UciInput {
         UciInput::Go(GoParams {
-            ponder: input.contains("ponder"),
             infinite: input.contains("infinite"),
             search_moves: None, // We'll implement this later
             wtime: extract_numeric_param(input, "wtime"),
