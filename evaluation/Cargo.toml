@@ -9,5 +9,5 @@ repository = { workspace = true }
 
 [dependencies]
 arrayvec = { workspace = true }
-chess = { workspace = true }
+cozy-chess = { workspace = true }
 utils = { path = "../utils" }

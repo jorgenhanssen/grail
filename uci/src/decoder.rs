@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use ahash::AHashSet;
-use chess::{Board, ChessMove};
+use cozy_chess::{util::parse_uci_move, Board};
 
 use super::commands::{GoParams, UciInput};
 
@@ -54,10 +54,11 @@ impl Decoder {
                 .split_whitespace();
 
             for mv_str in move_strings {
-                game_history.insert(board.get_hash());
+                game_history.insert(board.hash());
 
-                if let Ok(mv) = ChessMove::from_str(mv_str) {
-                    board = board.make_move_new(mv);
+                // Cozy chess supports 960, so we need to use this utility function
+                if let Ok(mv) = parse_uci_move(&board, mv_str) {
+                    board.play(mv);
                 }
             }
         }

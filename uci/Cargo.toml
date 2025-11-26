@@ -11,6 +11,6 @@ repository = { workspace = true }
 tuning = []
 
 [dependencies]
-chess = { workspace = true }
+cozy-chess = { workspace = true }
 log = { workspace = true }
 ahash = { workspace = true }

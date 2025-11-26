@@ -8,4 +8,4 @@ description = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-chess = { workspace = true }
+cozy-chess = { workspace = true }

@@ -1,5 +1,5 @@
 use ahash::AHashSet;
-use chess::{Board, ChessMove};
+use cozy_chess::Board;
 
 #[derive(Debug)]
 pub enum UciInput {
@@ -28,41 +28,33 @@ pub enum UciOutput {
     IdAuthor(String),
     UciOk,
     ReadyOk,
-    BestMove { best_move: ChessMove },
+    BestMove(String),
     Info(Info),
     Option(String),
     Raw(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Info {
     pub depth: u8,
     pub sel_depth: u8,
     pub nodes: u32,
     pub nodes_per_second: u32,
     pub time: u32,
-    pub pv: Vec<ChessMove>,
+    pub pv: Vec<String>,
     pub score: Score,
-}
-
-impl Default for Info {
-    fn default() -> Self {
-        Self {
-            depth: 0,
-            sel_depth: 0,
-            nodes: 0,
-            nodes_per_second: 0,
-            time: 0,
-            pv: Vec::new(),
-            score: Score::Centipawns(0),
-        }
-    }
 }
 
 #[derive(Debug)]
 pub enum Score {
     Centipawns(i16), // centipawns
     Mate(i16),       // Positive for mate-in-n, negative for mated-in-n
+}
+
+impl Default for Score {
+    fn default() -> Self {
+        Score::Centipawns(0)
+    }
 }
 
 #[derive(Debug, Default)]

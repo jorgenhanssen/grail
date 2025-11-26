@@ -1,9 +1,9 @@
-use chess::{ChessMove, Piece};
+use cozy_chess::{Move, Piece};
 
 #[derive(Clone, Copy)]
 pub struct SearchNode {
     pub hash: u64,
-    pub last_move: Option<ChessMove>,
+    pub last_move: Option<Move>,
     pub piece: Option<Piece>,
     pub static_eval: Option<i16>,
 }
@@ -20,7 +20,7 @@ impl SearchNode {
     }
 
     #[inline(always)]
-    pub fn with_move(hash: u64, mv: ChessMove, piece: Piece) -> Self {
+    pub fn with_move(hash: u64, mv: Move, piece: Piece) -> Self {
         Self {
             hash,
             last_move: Some(mv),
@@ -52,7 +52,7 @@ impl SearchStack {
         self.nodes.push(node);
     }
     #[inline(always)]
-    pub fn push_move(&mut self, hash: u64, mv: ChessMove, piece: Piece) {
+    pub fn push_move(&mut self, hash: u64, mv: Move, piece: Piece) {
         self.push(SearchNode::with_move(hash, mv, piece));
     }
 

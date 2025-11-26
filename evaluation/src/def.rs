@@ -1,4 +1,4 @@
-use chess::Board;
+use cozy_chess::Board;
 use utils::Position;
 
 pub trait HCE {

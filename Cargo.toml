@@ -20,7 +20,7 @@ repository = "https://github.com/jorgenhanssen/grail"
 [workspace.dependencies]
 ahash = "0.8.11"
 arrayvec = "0.7"
-chess = "3.2.0"
+cozy-chess = "0.3.4"
 chrono = "0.4"
 clap = { version = "4.5.23", features = ["derive"] }
 ctrlc = "3.4.5"

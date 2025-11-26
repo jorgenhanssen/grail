@@ -1,4 +1,4 @@
-use chess::{Board, Color};
+use cozy_chess::{Board, Color};
 use uci::commands::GoParams;
 
 use utils::only_move;
@@ -37,7 +37,7 @@ pub enum TimeBudget {
 pub struct SearchHistory {
     pub scores: Vec<i16>,
     pub depths: Vec<u8>,
-    pub best_moves: Vec<Option<chess::ChessMove>>,
+    pub best_moves: Vec<Option<cozy_chess::Move>>,
     pub aspiration_failures: u32,
 }
 
@@ -53,7 +53,7 @@ impl SearchHistory {
     }
 
     #[inline(always)]
-    pub fn add_iteration(&mut self, depth: u8, score: i16, best_move: Option<chess::ChessMove>) {
+    pub fn add_iteration(&mut self, depth: u8, score: i16, best_move: Option<cozy_chess::Move>) {
         self.depths.push(depth);
         self.scores.push(score);
         self.best_moves.push(best_move);
@@ -231,7 +231,7 @@ fn get_increment(params: &GoParams, color: Color) -> u64 {
 fn move_margin(board: &Board) -> u64 {
     const TOTAL_PIECES: f32 = 32.0;
 
-    let num_pieces = board.combined().popcnt() as f32;
+    let num_pieces = board.occupied().len() as f32;
     let phase = num_pieces / TOTAL_PIECES;
 
     (phase * MOVE_MARGIN_START as f32 + (1.0 - phase) * MOVE_MARGIN_END as f32) as u64

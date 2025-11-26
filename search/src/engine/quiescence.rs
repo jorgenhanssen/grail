@@ -1,8 +1,8 @@
 use std::sync::atomic::Ordering;
 
-use chess::{get_rank, Board, ChessMove, Color, Piece, Rank};
+use cozy_chess::{Board, Color, Move, Piece, Rank};
 use evaluation::scores::{MATE_VALUE, NEG_INFINITY};
-use utils::{game_phase, Position};
+use utils::{game_phase, make_move, Position};
 
 use crate::{
     move_ordering::QMoveGenerator,
@@ -21,7 +21,7 @@ impl Engine {
         mut alpha: i16,
         mut beta: i16,
         depth: u8,
-    ) -> (i16, Vec<ChessMove>) {
+    ) -> (i16, Vec<Move>) {
         // Check if we should stop searching
         if self.stop.load(Ordering::Relaxed) {
             return (0, Vec::new());
@@ -40,7 +40,7 @@ impl Engine {
             return (alpha, Vec::new());
         }
 
-        let in_check = board.checkers().popcnt() > 0;
+        let in_check = !board.checkers().is_empty();
 
         let original_alpha = alpha;
         let original_beta = beta;
@@ -86,11 +86,10 @@ impl Engine {
                 } else {
                     Rank::Second
                 };
-                let pawns = board.pieces(Piece::Pawn) & board.color_combined(board.side_to_move());
-                let rank_mask = get_rank(promotion_rank);
-                let promoting_pawns = pawns & rank_mask;
+                let pawns = board.colored_pieces(board.side_to_move(), Piece::Pawn);
+                let promoting_pawns = pawns & promotion_rank.bitboard();
 
-                if promoting_pawns != chess::EMPTY {
+                if !promoting_pawns.is_empty() {
                     big_delta += self.piece_values.get(Piece::Queen, phase)
                         - self.piece_values.get(Piece::Pawn, phase);
                 }
@@ -123,11 +122,11 @@ impl Engine {
                 self.config.qs_delta_material_threshold.value,
                 self.piece_values.total_material(board, phase),
             ) {
-                let captured = board.piece_on(mv.get_dest());
+                let captured = board.piece_on(mv.to);
                 if let Some(piece) = captured {
                     let mut delta =
                         self.piece_values.get(piece, phase) + self.config.qs_delta_margin.value;
-                    if let Some(promotion) = mv.get_promotion() {
+                    if let Some(promotion) = mv.promotion {
                         delta += self.piece_values.get(promotion, phase)
                             - self.piece_values.get(Piece::Pawn, phase);
                         // promotion bonus
@@ -143,8 +142,8 @@ impl Engine {
 
             // Use MVV-LVA for quick pruning before expensive SEE
             if !in_check {
-                if let Some(victim) = board.piece_on(mv.get_dest()) {
-                    if let Some(attacker) = board.piece_on(mv.get_source()) {
+                if let Some(victim) = board.piece_on(mv.to) {
+                    if let Some(attacker) = board.piece_on(mv.from) {
                         let victim_value = self.piece_values.get(victim, phase);
                         let attacker_value = self.piece_values.get(attacker, phase);
                         // Only run expensive SEE if capture seems questionable (equal/lower value)
@@ -157,8 +156,8 @@ impl Engine {
                 }
             }
 
-            let new_board = board.make_move_new(mv);
-            let child_hash = new_board.get_hash();
+            let new_board = make_move(board, mv);
+            let child_hash = new_board.hash();
 
             // Prefetch QS TT entry to hide memory latency
             self.qs_tt.prefetch(child_hash);

@@ -1,5 +1,5 @@
-use chess::{Board, ChessMove, Piece};
-use utils::game_phase;
+use cozy_chess::{Board, Move, Piece};
+use utils::{game_phase, is_capture};
 
 use crate::{
     pruning::{
@@ -74,7 +74,7 @@ impl Engine {
     pub(super) fn try_see_prune(
         &self,
         board: &Board,
-        m: ChessMove,
+        m: Move,
         moved_piece: Piece,
         remaining_depth: u8,
         in_check: bool,
@@ -92,13 +92,15 @@ impl Engine {
             return false;
         }
 
-        let captured_piece = match board.piece_on(m.get_dest()) {
-            Some(p) => p,
-            None => return false,
-        };
+        // Not a capture (or castling) - skip SEE pruning
+        if !is_capture(board, m) {
+            return false;
+        }
+
+        let captured_piece = board.piece_on(m.to).unwrap();
 
         // Promotion capture is likely good
-        if m.get_promotion().is_some() {
+        if m.promotion.is_some() {
             return false;
         }
 
@@ -169,7 +171,7 @@ impl Engine {
         );
 
         // Do a reduced depth null search to check if our position is still good enough
-        self.search_stack.push(SearchNode::new(nm_board.get_hash()));
+        self.search_stack.push(SearchNode::new(nm_board.hash()));
         let (score, _) = self.search_subtree(
             &nm_board,
             depth + 1,
@@ -187,7 +189,7 @@ impl Engine {
             // However, in Zugzwang positions, passing is better than any legal move
             // so we need to verify that the position is still good enough
             if base_remaining <= 6 {
-                self.search_stack.push(SearchNode::new(nm_board.get_hash()));
+                self.search_stack.push(SearchNode::new(nm_board.hash()));
                 let verify_depth = max_depth - r.saturating_sub(1);
                 let (v_score, _) = self.search_subtree(
                     &nm_board,
@@ -275,7 +277,7 @@ impl Engine {
         need_iid: bool,
         remaining_depth: u8,
         in_check: bool,
-    ) -> Option<ChessMove> {
+    ) -> Option<Move> {
         // Gate
         if !(allow_iid && need_iid && remaining_depth >= 4 && !in_check) {
             return None;

@@ -1,19 +1,19 @@
 use super::HCEConfig;
 use crate::hce::context::EvalContext;
-use chess::{Color, Piece, EMPTY};
+use cozy_chess::{Color, Piece};
 
 #[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let board = ctx.position.board;
-    let bishops = board.pieces(Piece::Bishop) & board.color_combined(color);
-    if bishops == EMPTY {
+    let bishops = board.colored_pieces(color, Piece::Bishop);
+    if bishops.is_empty() {
         return 0;
     }
 
     let mut cp = 0i16;
 
     // Bishop pair bonus
-    if bishops.popcnt() >= 2 {
+    if bishops.len() >= 2 {
         cp += config.bishop_pair_bonus;
     }
 

@@ -1,4 +1,4 @@
-use chess::{Board, Piece, ALL_PIECES};
+use cozy_chess::{Board, Piece};
 
 #[derive(Debug, Clone, Copy)]
 pub struct PieceValues {
@@ -29,8 +29,8 @@ impl PieceValues {
 
     pub fn total_material(&self, board: &Board, phase: f32) -> i16 {
         let mut material = 0;
-        for piece in ALL_PIECES {
-            material += self.get(piece, phase) * (board.pieces(piece).popcnt() as i16);
+        for piece in Piece::ALL {
+            material += self.get(piece, phase) * (board.pieces(piece).len() as i16);
         }
         material
     }

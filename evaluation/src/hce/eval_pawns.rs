@@ -1,27 +1,23 @@
 use super::HCEConfig;
 use crate::hce::context::EvalContext;
 use arrayvec::ArrayVec;
-use chess::{
-    get_adjacent_files, get_file, get_pawn_attacks, BitBoard, Color, File, Rank, Square, ALL_FILES,
-    EMPTY,
-};
+use cozy_chess::{get_pawn_attacks, BitBoard, Color, File, Piece, Rank, Square};
 
 #[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let board = ctx.position.board;
-    let pawns = board.pieces(chess::Piece::Pawn);
-    let my_pawns = pawns & board.color_combined(color);
-    if my_pawns == EMPTY {
+    let my_pawns = board.colored_pieces(color, Piece::Pawn);
+    if my_pawns.is_empty() {
         return 0;
     }
 
-    let enemy_pawns = pawns & board.color_combined(!color);
+    let enemy_pawns = board.colored_pieces(!color, Piece::Pawn);
     let mut score = 0i16;
 
     // doubled / tripled / isolated penalties
-    for file_idx in ALL_FILES {
-        let pawns_in_file = my_pawns & get_file(file_idx);
-        let cnt = pawns_in_file.popcnt();
+    for file in File::ALL {
+        let pawns_in_file = my_pawns & file.bitboard();
+        let cnt = pawns_in_file.len();
         if cnt == 0 {
             continue;
         }
@@ -34,7 +30,7 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
         };
 
         // Isolated penalty
-        if (my_pawns & get_adjacent_files(file_idx)).popcnt() == 0 {
+        if (my_pawns & file.adjacent()).is_empty() {
             score -= config.isolated_pawn_penalty;
         }
     }
@@ -43,13 +39,13 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
     let mut passed_pawn_bonuses = ArrayVec::<i16, 8>::new();
     for sq in my_pawns {
         // Passed pawn bonus
-        let blockers = PASSED_PAWN_MASKS[color as usize][sq.to_index()];
-        if (enemy_pawns & blockers).popcnt() == 0 {
+        let blockers = PASSED_PAWN_MASKS[color as usize][sq as usize];
+        if (enemy_pawns & blockers).is_empty() {
             // convert to white's perspective: rank 0..7
             let rank_from_white = if color == Color::White {
-                sq.get_rank() as i16
+                sq.rank() as i16
             } else {
-                7 - sq.get_rank() as i16
+                7 - sq.rank() as i16
             };
             // Formula: bonus = linear * (rank-1) + quadratic * (rank-1)^2
             let effective_rank = rank_from_white - 1; // 0-6 range
@@ -76,17 +72,14 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
             score -= config.backward_pawn_penalty;
 
             // Extra penalty if on a half-open file (no enemy pawns to block it)
-            let file_mask = get_file(sq.get_file());
-            if (enemy_pawns & file_mask).popcnt() == 0 {
+            if (enemy_pawns & sq.file().bitboard()).is_empty() {
                 score -= config.backward_pawn_half_open_penalty;
             }
         }
     }
 
     // Center pawn bonus (D and E files) - scaled by phase (more important in opening)
-    let d_file_mask = get_file(File::D);
-    let e_file_mask = get_file(File::E);
-    if (my_pawns & d_file_mask) != EMPTY && (my_pawns & e_file_mask) != EMPTY {
+    if !(my_pawns & File::D.bitboard()).is_empty() && !(my_pawns & File::E.bitboard()).is_empty() {
         score += ((config.center_pawn_bonus as f32) * ctx.phase).round() as i16;
     }
 
@@ -100,22 +93,22 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
 // 2. Stop square (one square ahead) is unsafe to push to
 #[inline(always)]
 fn is_backward_pawn(sq: Square, color: Color, my_pawns: BitBoard, enemy_pawns: BitBoard) -> bool {
-    let file = sq.get_file();
-    let rank = sq.get_rank();
+    let file = sq.file();
+    let rank = sq.rank();
 
-    let friendly_adjacent_pawns = my_pawns & get_adjacent_files(file);
+    let friendly_adjacent_pawns = my_pawns & file.adjacent();
 
-    if friendly_adjacent_pawns == EMPTY {
+    if friendly_adjacent_pawns.is_empty() {
         // No pawns on adjacent files - not backward, just isolated
         return false;
     }
 
     // Check if any adjacent pawn is behind or level with this pawn
     for adjacent_pawn in friendly_adjacent_pawns {
-        let adjacent_rank = adjacent_pawn.get_rank();
+        let adjacent_rank = adjacent_pawn.rank();
         let is_behind_or_level = match color {
-            Color::White => adjacent_rank.to_index() <= rank.to_index(),
-            Color::Black => adjacent_rank.to_index() >= rank.to_index(),
+            Color::White => adjacent_rank as usize <= rank as usize,
+            Color::Black => adjacent_rank as usize >= rank as usize,
         };
 
         if is_behind_or_level {
@@ -126,15 +119,18 @@ fn is_backward_pawn(sq: Square, color: Color, my_pawns: BitBoard, enemy_pawns: B
 
     // Check if stop square is safely pushable
     let stop_rank = match color {
-        Color::White if rank.to_index() < 7 => Rank::from_index(rank.to_index() + 1),
-        Color::Black if rank.to_index() > 0 => Rank::from_index(rank.to_index() - 1),
+        Color::White if (rank as usize) < 7 => Rank::index(rank as usize + 1),
+        Color::Black if (rank as usize) > 0 => Rank::index(rank as usize - 1),
         _ => return false, // Can't move forward
     };
+
+    let stop_square = Square::new(file, stop_rank);
 
     // We use `color` here because we want the forward-diagonal attack squares
     // from the stop square relative to our pawn. Those are exactly the squares
     // enemy pawns must occupy to attack that stop square.
-    if get_pawn_attacks(Square::make_square(stop_rank, file), color, enemy_pawns) != EMPTY {
+    let pawn_attacks = get_pawn_attacks(stop_square, color);
+    if !(pawn_attacks & enemy_pawns).is_empty() {
         // Enemy pawns control the stop square - definitely backward
         return true;
     }
@@ -146,7 +142,7 @@ fn is_backward_pawn(sq: Square, color: Color, my_pawns: BitBoard, enemy_pawns: B
 
 /// Pre-computed passed-pawn masks: [color][square].
 pub const PASSED_PAWN_MASKS: [[BitBoard; 64]; 2] = {
-    let mut table = [[BitBoard(0); 64]; 2];
+    let mut table = [[BitBoard::EMPTY; 64]; 2];
     let mut square_idx = 0;
     while square_idx < 64 {
         let file_idx = (square_idx % 8) as i8;

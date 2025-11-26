@@ -1,9 +1,9 @@
 // Move ordering for main search inspired by Black Marlin
 
 use arrayvec::ArrayVec;
-use chess::{BitBoard, Board, ChessMove, MoveGen, Piece, Square};
+use cozy_chess::{BitBoard, Board, Move, Piece, Square};
 use evaluation::piece_values::PieceValues;
-use utils::gives_check;
+use utils::{gives_check, is_capture};
 
 use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic};
 use crate::utils::see::see;
@@ -28,12 +28,12 @@ pub struct MainMoveGenerator {
     gen_phase: Phase,
     game_phase: f32,
 
-    best_move: Option<ChessMove>,
+    best_move: Option<Move>,
 
     // Continuation history context
     prev_to: Vec<Option<Square>>,
 
-    killer_moves: [Option<ChessMove>; 2],
+    killer_moves: [Option<Move>; 2],
     killer_index: usize,
 
     good_captures: ArrayVec<ScoredMove, MAX_CAPTURES>,
@@ -47,8 +47,8 @@ pub struct MainMoveGenerator {
 
 impl MainMoveGenerator {
     pub fn new(
-        best_move: Option<ChessMove>,
-        killer_moves: [Option<ChessMove>; 2],
+        best_move: Option<Move>,
+        killer_moves: [Option<Move>; 2],
         prev_to: &[Option<Square>],
         game_phase: f32,
         piece_values: PieceValues,
@@ -81,11 +81,11 @@ impl MainMoveGenerator {
         history_heuristic: &HistoryHeuristic,
         capture_history: &CaptureHistory,
         continuation_history: &ContinuationHistory,
-    ) -> Option<ChessMove> {
+    ) -> Option<Move> {
         if self.gen_phase == Phase::BestMove {
             self.gen_phase = Phase::GenCaptures;
             if let Some(best_move) = self.best_move {
-                if board.legal(best_move) {
+                if board.is_legal(best_move) {
                     return Some(best_move);
                 }
             }
@@ -94,26 +94,33 @@ impl MainMoveGenerator {
         if self.gen_phase == Phase::GenCaptures {
             self.gen_phase = Phase::GoodCaptures;
 
-            let mut gen = MoveGen::new_legal(board);
-            let capture_mask = board.color_combined(!board.side_to_move());
-            gen.set_iterator_mask(*capture_mask);
+            let capture_mask = board.colors(!board.side_to_move());
 
-            for mov in gen.take(MAX_CAPTURES) {
-                if Some(mov) == self.best_move {
-                    continue;
-                }
+            board.generate_moves(|moves| {
+                for mov in moves {
+                    if !capture_mask.has(mov.to) {
+                        continue;
+                    }
+                    if Some(mov) == self.best_move {
+                        continue;
+                    }
+                    if self.good_captures.len() >= MAX_CAPTURES {
+                        return true;
+                    }
 
-                self.good_captures.push(ScoredMove {
-                    mov,
-                    score: capture_score(
-                        board,
+                    self.good_captures.push(ScoredMove {
                         mov,
-                        capture_history,
-                        self.game_phase,
-                        &self.piece_values,
-                    ),
-                });
-            }
+                        score: capture_score(
+                            board,
+                            mov,
+                            capture_history,
+                            self.game_phase,
+                            &self.piece_values,
+                        ),
+                    });
+                }
+                false
+            });
         }
 
         if self.gen_phase == Phase::GoodCaptures {
@@ -126,8 +133,8 @@ impl MainMoveGenerator {
                 }
 
                 // Use MVV-LVA for quick filtering before expensive SEE
-                let victim = board.piece_on(scored_move.mov.get_dest()).unwrap();
-                let attacker = board.piece_on(scored_move.mov.get_source()).unwrap();
+                let victim = board.piece_on(scored_move.mov.to).unwrap();
+                let attacker = board.piece_on(scored_move.mov.from).unwrap();
                 let victim_value = self.piece_values.get(victim, self.game_phase);
                 let attacker_value = self.piece_values.get(attacker, self.game_phase);
 
@@ -156,11 +163,11 @@ impl MainMoveGenerator {
                     if Some(killer) == self.best_move {
                         continue;
                     }
-                    if !board.legal(killer) {
+                    if !board.is_legal(killer) {
                         continue;
                     }
                     // Skip if it's a capture (already searched in capture phases)
-                    if board.piece_on(killer.get_dest()).is_some() {
+                    if is_capture(board, killer) {
                         continue;
                     }
                     return Some(killer);
@@ -172,47 +179,58 @@ impl MainMoveGenerator {
         if self.gen_phase == Phase::GenQuiets {
             self.gen_phase = Phase::Quiets;
 
-            let mut gen = MoveGen::new_legal(board);
-            gen.set_iterator_mask(!board.combined());
+            let empty_squares = !board.occupied();
+            let our_pieces = board.colors(board.side_to_move());
 
-            for mov in gen.take(MAX_QUIETS) {
-                if Some(mov) == self.best_move {
-                    continue;
-                }
-                if self.killer_moves.contains(&Some(mov)) {
-                    continue;
-                }
-
-                let score = match mov.get_promotion() {
-                    Some(Piece::Queen) => i16::MAX,
-                    Some(_) => i16::MIN,
-                    None => {
-                        let hist = history_heuristic.get(
-                            board.side_to_move(),
-                            mov.get_source(),
-                            mov.get_dest(),
-                            self.threats,
-                        );
-
-                        let cont = continuation_history.get(
-                            board.side_to_move(),
-                            &self.prev_to,
-                            mov.get_source(),
-                            mov.get_dest(),
-                        );
-
-                        let check_bonus = if gives_check(board, mov) {
-                            self.quiet_check_bonus
-                        } else {
-                            0
-                        };
-
-                        hist + cont + check_bonus
+            board.generate_moves(|moves| {
+                for mov in moves {
+                    // Allow moves to empty squares OR castling (king captures own rook in cozy-chess)
+                    let is_castling = our_pieces.has(mov.to);
+                    if !empty_squares.has(mov.to) && !is_castling {
+                        continue;
                     }
-                };
+                    if Some(mov) == self.best_move {
+                        continue;
+                    }
+                    if self.killer_moves.contains(&Some(mov)) {
+                        continue;
+                    }
+                    if self.quiets.len() >= MAX_QUIETS {
+                        return true;
+                    }
 
-                self.quiets.push(ScoredMove { mov, score });
-            }
+                    let score = match mov.promotion {
+                        Some(Piece::Queen) => i16::MAX,
+                        Some(_) => i16::MIN,
+                        None => {
+                            let hist = history_heuristic.get(
+                                board.side_to_move(),
+                                mov.from,
+                                mov.to,
+                                self.threats,
+                            );
+
+                            let cont = continuation_history.get(
+                                board.side_to_move(),
+                                &self.prev_to,
+                                mov.from,
+                                mov.to,
+                            );
+
+                            let check_bonus = if gives_check(board, mov) {
+                                self.quiet_check_bonus
+                            } else {
+                                0
+                            };
+
+                            hist + cont + check_bonus
+                        }
+                    };
+
+                    self.quiets.push(ScoredMove { mov, score });
+                }
+                false
+            });
         }
 
         if self.gen_phase == Phase::Quiets {
@@ -231,5 +249,64 @@ impl MainMoveGenerator {
         }
 
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use cozy_chess::Board;
+    use utils::is_capture;
+
+    #[test]
+    fn test_castling_is_not_a_capture() {
+        // Position where white can castle kingside
+        let board: Board = "r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1"
+            .parse()
+            .unwrap();
+
+        let mut castle_move = None;
+        board.generate_moves(|moves| {
+            for mv in moves {
+                // Find kingside castle (cozy-chess uses e1h1 internally)
+                if mv.from == cozy_chess::Square::E1 && mv.to == cozy_chess::Square::H1 {
+                    castle_move = Some(mv);
+                    return true;
+                }
+            }
+            false
+        });
+
+        let castle = castle_move.expect("Should find castling move");
+
+        // Verify: castling should NOT be considered a capture
+        assert!(
+            !is_capture(&board, castle),
+            "Castling should not be treated as a capture"
+        );
+
+        // Verify: a real capture IS considered a capture
+        // Set up a position with an actual capture
+        let board2: Board = "r3k2r/pppppppp/8/8/4n3/8/PPPPPPPP/R3K2R w KQkq - 0 1"
+            .parse()
+            .unwrap();
+
+        let mut capture_move = None;
+        board2.generate_moves(|moves| {
+            for mv in moves {
+                // Find a pawn capturing the knight on e4
+                if mv.to == cozy_chess::Square::E4 && board2.piece_on(mv.to).is_some() {
+                    capture_move = Some(mv);
+                    return true;
+                }
+            }
+            false
+        });
+
+        if let Some(cap) = capture_move {
+            assert!(
+                is_capture(&board2, cap),
+                "Capturing an enemy piece should be treated as a capture"
+            );
+        }
     }
 }

@@ -4,16 +4,14 @@ pub struct Encoder {}
 
 impl Encoder {
     pub fn encode(&self, response: &UciOutput) -> String {
-        let output = match response {
+        match response {
             UciOutput::IdName(name) => format!("id name {}", name),
             UciOutput::IdAuthor(author) => format!("id author {}", author),
 
             UciOutput::UciOk => "uciok".to_string(),
             UciOutput::ReadyOk => "readyok".to_string(),
 
-            UciOutput::BestMove { best_move } => {
-                format!("bestmove {}", best_move)
-            }
+            UciOutput::BestMove(best_move) => format!("bestmove {}", best_move),
             UciOutput::Info(info) => {
                 format!(
                     "info depth {} seldepth {} multipv 1 score {} nodes {} nps {} time {} pv {}",
@@ -26,17 +24,11 @@ impl Encoder {
                     info.nodes,
                     info.nodes_per_second,
                     info.time,
-                    info.pv
-                        .iter()
-                        .map(|m| m.to_string())
-                        .collect::<Vec<String>>()
-                        .join(" ")
+                    info.pv.join(" ")
                 )
             }
             UciOutput::Option(option_str) => option_str.clone(),
             UciOutput::Raw(message) => message.clone(),
-        };
-
-        output
+        }
     }
 }
