@@ -1,0 +1,121 @@
+name: Build executables
+
+on:
+  push:
+    branches: [refactor/migration-to-cozy-chess]
+
+env:
+  VERSION: "1.0.0"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          # Linux builds
+          - os: ubuntu-latest
+            name: linux
+            rust_target: x86_64-unknown-linux-gnu
+            cpu: x86-64-v4
+            binary_name: grail-x86-64-v4
+          - os: ubuntu-latest
+            name: linux
+            rust_target: x86_64-unknown-linux-gnu
+            cpu: x86-64-v3
+            binary_name: grail-x86-64-v3
+
+          # Windows builds
+          - os: windows-latest
+            name: windows
+            rust_target: x86_64-pc-windows-msvc
+            cpu: x86-64-v4
+            binary_name: grail-x86-64-v4
+          - os: windows-latest
+            name: windows
+            rust_target: x86_64-pc-windows-msvc
+            cpu: x86-64-v3
+            binary_name: grail-x86-64-v3
+
+          # macOS Apple Silicon
+          - os: macos-latest
+            name: macos
+            rust_target: aarch64-apple-darwin
+            cpu: native
+            binary_name: grail-arm64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup default nightly
+      - run: rustup target add ${{ matrix.rust_target }}
+      - run: cargo build --release --target ${{ matrix.rust_target }}
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: "-C target-cpu=${{ matrix.cpu }}"
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: "-C target-cpu=${{ matrix.cpu }}"
+          CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS: "-C target-cpu=${{ matrix.cpu }}"
+
+      # Rename binary to include CPU info
+      - name: Rename binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mv target/${{ matrix.rust_target }}/release/grail target/${{ matrix.rust_target }}/release/${{ matrix.binary_name }}
+
+      - name: Rename binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mv target/${{ matrix.rust_target }}/release/grail.exe target/${{ matrix.rust_target }}/release/${{ matrix.binary_name }}.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-${{ matrix.binary_name }}
+          path: target/${{ matrix.rust_target }}/release/${{ matrix.binary_name }}*
+
+  package:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package Linux
+        run: |
+          mkdir -p grail-v${{ env.VERSION }}-linux
+          cp artifacts/linux-grail-x86-64-v3/grail-x86-64-v3 grail-v${{ env.VERSION }}-linux/
+          cp artifacts/linux-grail-x86-64-v4/grail-x86-64-v4 grail-v${{ env.VERSION }}-linux/
+          chmod +x grail-v${{ env.VERSION }}-linux/*
+          zip -r grail-v${{ env.VERSION }}-linux.zip grail-v${{ env.VERSION }}-linux
+
+      - name: Package Windows
+        run: |
+          mkdir -p grail-v${{ env.VERSION }}-windows
+          cp artifacts/windows-grail-x86-64-v3/grail-x86-64-v3.exe grail-v${{ env.VERSION }}-windows/
+          cp artifacts/windows-grail-x86-64-v4/grail-x86-64-v4.exe grail-v${{ env.VERSION }}-windows/
+          zip -r grail-v${{ env.VERSION }}-windows.zip grail-v${{ env.VERSION }}-windows
+
+      - name: Package macOS
+        run: |
+          mkdir -p grail-v${{ env.VERSION }}-macos
+          cp artifacts/macos-grail-arm64/grail-arm64 grail-v${{ env.VERSION }}-macos/
+          chmod +x grail-v${{ env.VERSION }}-macos/*
+          zip -r grail-v${{ env.VERSION }}-macos.zip grail-v${{ env.VERSION }}-macos
+
+      - name: Upload Linux package
+        uses: actions/upload-artifact@v4
+        with:
+          name: grail-v${{ env.VERSION }}-linux
+          path: grail-v${{ env.VERSION }}-linux.zip
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: grail-v${{ env.VERSION }}-windows
+          path: grail-v${{ env.VERSION }}-windows.zip
+
+      - name: Upload macOS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: grail-v${{ env.VERSION }}-macos
+          path: grail-v${{ env.VERSION }}-macos.zip
