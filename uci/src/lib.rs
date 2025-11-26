@@ -1,12 +1,12 @@
 mod connection;
 mod decoder;
 mod encoder;
-mod helpers;
 mod options;
+mod utils;
 
 pub mod commands;
 
 pub use commands::{UciInput, UciOutput};
 pub use connection::UciConnection;
-pub use helpers::{move_to_uci, pv_to_uci};
 pub use options::{UciOption, UciOptionType};
+pub use utils::{move_to_uci, pv_to_uci};

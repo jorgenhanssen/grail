@@ -92,7 +92,6 @@ impl Engine {
             return false;
         }
 
-        // Not a capture (or castling) - skip SEE pruning
         if !is_capture(board, m) {
             return false;
         }

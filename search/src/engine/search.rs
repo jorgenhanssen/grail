@@ -7,7 +7,7 @@ use uci::{
     commands::{GoParams, Info, Score},
     UciOutput,
 };
-use utils::{game_phase, is_capture, make_move, Position};
+use utils::{game_phase, has_legal_moves, is_capture, make_move, Position};
 
 use crate::{
     move_ordering::{MainMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
@@ -27,13 +27,8 @@ impl Engine {
     ) -> Option<(Move, i16)> {
         // Check for checkmate (no legal moves when in check)
         let in_check = !self.board.checkers().is_empty();
-        let mut has_legal_moves = false;
-        self.board.generate_moves(|moves| {
-            has_legal_moves = !moves.is_empty();
-            true // stop after first batch
-        });
 
-        if !has_legal_moves && in_check {
+        if !has_legal_moves(&self.board) && in_check {
             if let Some(output) = output {
                 output
                     .send(UciOutput::Info(Info {
@@ -585,7 +580,7 @@ impl Engine {
             actual_depth = max_depth;
         }
 
-        let is_quiet = !is_cap && !is_promotion;
+        let is_quiet = !is_capture && !is_promotion;
         Some((value, line, is_quiet, actual_depth))
     }
 

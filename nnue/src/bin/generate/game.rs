@@ -4,7 +4,7 @@ use search::Engine;
 use std::collections::HashMap;
 use std::str::FromStr;
 use uci::commands::GoParams;
-use utils::has_insufficient_material;
+use utils::{has_insufficient_material, has_legal_moves};
 
 const INITIAL_TEMPERATURE: f32 = 3.0;
 const TEMPERATURE_DECAY_RATE: f32 = 7.5;
@@ -68,12 +68,7 @@ impl SelfPlayGame {
 
     fn is_terminal(&mut self) -> bool {
         // 1. Check for no legal moves (checkmate or stalemate)
-        let mut has_legal_moves = false;
-        self.board.generate_moves(|moves| {
-            has_legal_moves = !moves.is_empty();
-            true // stop after first batch
-        });
-        if !has_legal_moves {
+        if !has_legal_moves(&self.board) {
             return true;
         }
 

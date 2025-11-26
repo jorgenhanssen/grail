@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use cozy_chess::Board;
+use cozy_chess::{Board, Move};
 use uci::commands::GoParams;
 
 use crate::time_control::budget::{SearchHistory, TimeBudget};
@@ -131,12 +131,7 @@ impl SearchController {
         self.current_iteration_start_ms = Some(now_ms);
     }
 
-    pub fn on_iteration_complete(
-        &mut self,
-        depth: u8,
-        score: i16,
-        best_move: Option<cozy_chess::Move>,
-    ) {
+    pub fn on_iteration_complete(&mut self, depth: u8, score: i16, best_move: Option<Move>) {
         self.search_history.add_iteration(depth, score, best_move);
 
         if let Some(ref mut budget) = self.time_budget {

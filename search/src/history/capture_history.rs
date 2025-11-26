@@ -2,6 +2,7 @@ use cozy_chess::{Board, Move, Piece, Square};
 
 use crate::EngineConfig;
 
+const MAX_DEPTH: usize = 100;
 const CAPTURE_HISTORY_SIZE: usize = Piece::NUM * Square::NUM * Piece::NUM;
 
 #[derive(Clone)]
@@ -73,11 +74,13 @@ impl CaptureHistory {
 
     #[inline(always)]
     pub fn get_bonus(&self, remaining_depth: u8) -> i32 {
-        self.bonus_multiplier * remaining_depth as i32
+        let depth = remaining_depth.min(MAX_DEPTH as u8) as i32;
+        self.bonus_multiplier * depth
     }
 
     #[inline(always)]
     pub fn get_malus(&self, remaining_depth: u8) -> i32 {
-        -self.malus_multiplier * remaining_depth as i32
+        let depth = remaining_depth.min(MAX_DEPTH as u8) as i32;
+        -self.malus_multiplier * depth
     }
 }

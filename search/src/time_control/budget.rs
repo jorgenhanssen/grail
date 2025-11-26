@@ -1,4 +1,4 @@
-use cozy_chess::{Board, Color};
+use cozy_chess::{Board, Color, Move};
 use uci::commands::GoParams;
 
 use utils::only_move;
@@ -37,7 +37,7 @@ pub enum TimeBudget {
 pub struct SearchHistory {
     pub scores: Vec<i16>,
     pub depths: Vec<u8>,
-    pub best_moves: Vec<Option<cozy_chess::Move>>,
+    pub best_moves: Vec<Option<Move>>,
     pub aspiration_failures: u32,
 }
 
@@ -53,7 +53,7 @@ impl SearchHistory {
     }
 
     #[inline(always)]
-    pub fn add_iteration(&mut self, depth: u8, score: i16, best_move: Option<cozy_chess::Move>) {
+    pub fn add_iteration(&mut self, depth: u8, score: i16, best_move: Option<Move>) {
         self.depths.push(depth);
         self.scores.push(score);
         self.best_moves.push(best_move);

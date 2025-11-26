@@ -94,13 +94,13 @@ impl MainMoveGenerator {
         if self.gen_phase == Phase::GenCaptures {
             self.gen_phase = Phase::GoodCaptures;
 
-            let capture_mask = board.colors(!board.side_to_move());
+            let enemy_pieces = board.colors(!board.side_to_move());
 
             board.generate_moves(|moves| {
-                for mov in moves {
-                    if !capture_mask.has(mov.to) {
-                        continue;
-                    }
+                let mut captures = moves;
+                captures.to &= enemy_pieces;
+
+                for mov in captures {
                     if Some(mov) == self.best_move {
                         continue;
                     }

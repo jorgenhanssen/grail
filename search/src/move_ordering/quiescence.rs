@@ -25,13 +25,13 @@ impl QMoveGenerator {
         let mut forcing_moves = ArrayVec::new();
 
         if !in_check {
-            let capture_mask = board.colors(!board.side_to_move());
+            let enemy_pieces = board.colors(!board.side_to_move());
 
             board.generate_moves(|moves| {
-                for mov in moves {
-                    if !capture_mask.has(mov.to) {
-                        continue;
-                    }
+                let mut captures = moves;
+                captures.to &= enemy_pieces;
+
+                for mov in captures {
                     if forcing_moves.len() >= MAX_FORCING_MOVES {
                         return true;
                     }

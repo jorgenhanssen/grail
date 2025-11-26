@@ -73,7 +73,7 @@ impl Engine {
 
             history_heuristic: HistoryHeuristic::new(1, 1, 1, 1, 1, 1),
             capture_history: CaptureHistory::new(1, 1, 1),
-            continuation_history: Box::new(ContinuationHistory::new(1, 1, 1)),
+            continuation_history: Box::new(ContinuationHistory::new(1, 1, 1, 1)),
         };
 
         instance.configure(config, true);

@@ -29,6 +29,15 @@ pub fn make_move(board: &Board, mv: Move) -> Board {
     new_board
 }
 
+/// Check if there are any legal moves in the position.
+/// Returns true immediately upon finding the first legal move.
+#[inline(always)]
+pub fn has_legal_moves(board: &Board) -> bool {
+    board.generate_moves(|_| true)
+}
+
+/// Check if there is exactly one legal move in the position.
+/// Stops early once more than one move is found.
 #[inline(always)]
 pub fn only_move(board: &Board) -> bool {
     let mut count = 0;
