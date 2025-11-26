@@ -52,7 +52,7 @@ macro_rules! define_config {
 
 define_config!(
     (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 2048 }, 1024, true),
-    (use_nnue: bool, "Use NNUE", UciOptionType::Check, true, true),
+    (nnue: bool, "NNUE", UciOptionType::Check, true, true),
 
     (aspiration_window_size: i16, "Aspiration Window Size", UciOptionType::Spin { min: 10, max: 100 }, 40, cfg!(feature = "tuning")),
     (aspiration_window_widen: i16, "Aspiration Window Widening", UciOptionType::Spin { min: 2, max: 4 }, 2, cfg!(feature = "tuning")),

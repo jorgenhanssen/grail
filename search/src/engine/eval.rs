@@ -5,7 +5,7 @@ use super::Engine;
 impl Engine {
     #[inline(always)]
     pub(super) fn eval(&mut self, position: &Position, phase: f32) -> i16 {
-        let mut score = if self.config.use_nnue.value && self.nnue.is_some() {
+        let mut score = if self.config.nnue.value && self.nnue.is_some() {
             self.nnue.as_mut().unwrap().evaluate(position.board)
         } else {
             self.hce.evaluate(position, phase)

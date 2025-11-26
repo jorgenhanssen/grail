@@ -17,7 +17,7 @@ Grail is a command-line engine designed for **Standard Chess**. It requires a UC
 Once added to your GUI, you can configure the engine via the UCI options:
 
 - **Hash**: Size of the transposition table in MB (Default: 1024).
-- **Use NNUE**: Toggle between Neural Network (NNUE) and Hand-Crafted (HCE) evaluation (Default: true).
+- **NNUE**: Toggle between Neural Network (NNUE) and Hand-Crafted (HCE) evaluation (Default: true).
 
 The engine supports standard time controls (increment, sudden death, moves to go) and analysis modes (fixed depth, infinite).
 
