@@ -46,6 +46,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
       - run: rustup default nightly
       - run: rustup target add ${{ matrix.rust_target }}
       - run: cargo build --release --target ${{ matrix.rust_target }}
