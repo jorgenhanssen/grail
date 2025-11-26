@@ -65,7 +65,6 @@ impl Benchmark {
         println!("\n=== Benchmark Summary ===");
 
         if let Some((best_move, score)) = &search_result.result {
-            // move_to_uci needed since cozy-chess uses "king captures rook" notation internally
             let uci_move = move_to_uci(self.engine.board(), *best_move);
             println!("Best move: {}", uci_move);
             println!("Score: {}", score);

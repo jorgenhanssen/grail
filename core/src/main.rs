@@ -73,7 +73,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let result = engine.search(params, Some(&output));
 
                 if let Some((best_move, _)) = result {
-                    // move_to_uci needed since cozy-chess uses "king captures rook" notation internally
                     let uci_move = move_to_uci(engine.board(), best_move);
                     output.send(UciOutput::BestMove(uci_move))?;
                 }

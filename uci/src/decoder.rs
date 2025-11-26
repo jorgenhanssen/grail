@@ -56,7 +56,6 @@ impl Decoder {
             for mv_str in move_strings {
                 game_history.insert(board.hash());
 
-                // parse_uci_move needed since cozy-chess uses "king captures rook" notation internally
                 if let Ok(mv) = parse_uci_move(&board, mv_str) {
                     board.play(mv);
                 }
