@@ -82,40 +82,37 @@ jobs:
 
       - name: Package Linux
         run: |
-          mkdir -p grail-v${{ env.VERSION }}-linux
-          cp artifacts/linux-grail-x86-64-v3/grail-x86-64-v3 grail-v${{ env.VERSION }}-linux/
-          cp artifacts/linux-grail-x86-64-v4/grail-x86-64-v4 grail-v${{ env.VERSION }}-linux/
-          chmod +x grail-v${{ env.VERSION }}-linux/*
-          zip -r grail-v${{ env.VERSION }}-linux.zip grail-v${{ env.VERSION }}-linux
+          mkdir -p package-linux
+          cp artifacts/linux-grail-x86-64-v3/grail-x86-64-v3 package-linux/
+          cp artifacts/linux-grail-x86-64-v4/grail-x86-64-v4 package-linux/
+          chmod +x package-linux/*
 
       - name: Package Windows
         run: |
-          mkdir -p grail-v${{ env.VERSION }}-windows
-          cp artifacts/windows-grail-x86-64-v3/grail-x86-64-v3.exe grail-v${{ env.VERSION }}-windows/
-          cp artifacts/windows-grail-x86-64-v4/grail-x86-64-v4.exe grail-v${{ env.VERSION }}-windows/
-          zip -r grail-v${{ env.VERSION }}-windows.zip grail-v${{ env.VERSION }}-windows
+          mkdir -p package-windows
+          cp artifacts/windows-grail-x86-64-v3/grail-x86-64-v3.exe package-windows/
+          cp artifacts/windows-grail-x86-64-v4/grail-x86-64-v4.exe package-windows/
 
       - name: Package macOS
         run: |
-          mkdir -p grail-v${{ env.VERSION }}-macos
-          cp artifacts/macos-grail-arm64/grail-arm64 grail-v${{ env.VERSION }}-macos/
-          chmod +x grail-v${{ env.VERSION }}-macos/*
-          zip -r grail-v${{ env.VERSION }}-macos.zip grail-v${{ env.VERSION }}-macos
+          mkdir -p package-macos
+          cp artifacts/macos-grail-arm64/grail-arm64 package-macos/
+          chmod +x package-macos/*
 
       - name: Upload Linux package
         uses: actions/upload-artifact@v4
         with:
           name: grail-v${{ env.VERSION }}-linux
-          path: grail-v${{ env.VERSION }}-linux.zip
+          path: package-linux/*
 
       - name: Upload Windows package
         uses: actions/upload-artifact@v4
         with:
           name: grail-v${{ env.VERSION }}-windows
-          path: grail-v${{ env.VERSION }}-windows.zip
+          path: package-windows/*
 
       - name: Upload macOS package
         uses: actions/upload-artifact@v4
         with:
           name: grail-v${{ env.VERSION }}-macos
-          path: grail-v${{ env.VERSION }}-macos.zip
+          path: package-macos/*
