@@ -10,7 +10,7 @@ use search::EngineConfig;
 use simplelog::{Config, WriteLogger};
 use std::error::Error;
 use std::fs::File;
-use uci::{UciConnection, UciInput, UciOutput};
+use uci::{move_to_uci, UciConnection, UciInput, UciOutput};
 
 const ENGINE_NAME: &str = "Grail";
 const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -67,13 +67,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                 board,
                 game_history,
             } => {
-                engine.set_position(*board, game_history.clone());
+                engine.set_position(board.clone(), game_history.clone());
             }
             UciInput::Go(params) => {
                 let result = engine.search(params, Some(&output));
 
                 if let Some((best_move, _)) = result {
-                    output.send(UciOutput::BestMove { best_move })?;
+                    let uci_move = move_to_uci(engine.board(), best_move);
+                    output.send(UciOutput::BestMove(uci_move))?;
                 }
             }
             UciInput::Stop => {

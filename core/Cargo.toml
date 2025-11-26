@@ -18,7 +18,7 @@ uci = { path = "../uci" }
 evaluation = { path = "../evaluation" }
 
 ahash = { workspace = true }
-chess = { workspace = true }
+cozy-chess = { workspace = true }
 clap = { workspace = true }
 log = { workspace = true }
 rand = { workspace = true }

@@ -1,4 +1,4 @@
-use chess::{BitBoard, Board, Color};
+use cozy_chess::{BitBoard, Board, Color};
 use std::cell::OnceCell;
 
 use crate::board_metrics::BoardMetrics;
@@ -25,21 +25,21 @@ impl<'a> Position<'a> {
 
     #[inline(always)]
     pub fn space_for(&self, color: Color) -> i16 {
-        self.metrics().space[color.to_index()]
+        self.metrics().space[color as usize]
     }
 
     #[inline(always)]
     pub fn attacks_for(&self, color: Color) -> BitBoard {
-        self.metrics().attacks[color.to_index()]
+        self.metrics().attacks[color as usize]
     }
 
     #[inline(always)]
     pub fn threats_for(&self, color: Color) -> BitBoard {
-        self.metrics().threats[color.to_index()]
+        self.metrics().threats[color as usize]
     }
 
     #[inline(always)]
     pub fn support_for(&self, color: Color) -> BitBoard {
-        self.metrics().support[color.to_index()]
+        self.metrics().support[color as usize]
     }
 }

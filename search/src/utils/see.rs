@@ -1,9 +1,11 @@
-use chess::{Board, ChessMove, Piece};
+use cozy_chess::{Board, Move, Piece};
 use evaluation::piece_values::PieceValues;
+use utils::make_move;
 
 #[inline]
-pub fn see(board: &Board, mv: ChessMove, phase: f32, piece_values: &PieceValues) -> i16 {
-    let target = mv.get_dest();
+pub fn see(board: &Board, mv: Move, phase: f32, piece_values: &PieceValues) -> i16 {
+    let target = mv.to;
+    let target_bb = target.bitboard();
 
     let mut initial_gain: i16 = if let Some(victim) = board.piece_on(target) {
         piece_values.get(victim, phase)
@@ -12,7 +14,7 @@ pub fn see(board: &Board, mv: ChessMove, phase: f32, piece_values: &PieceValues)
     };
 
     // Account for promotion delta
-    if let Some(promo) = mv.get_promotion() {
+    if let Some(promo) = mv.promotion {
         initial_gain += piece_values.get(promo, phase) - piece_values.get(Piece::Pawn, phase);
     }
 
@@ -23,26 +25,29 @@ pub fn see(board: &Board, mv: ChessMove, phase: f32, piece_values: &PieceValues)
     gains[0] = initial_gain;
 
     // Simulate alternating recaptures choosing the least valuable attacker each time
-    let mut current_board = board.make_move_new(mv);
+    let mut current_board = make_move(board, mv);
 
     // Alternate sides capturing on target until no legal recapture exists
     loop {
-        // Generate capture moves for this square
-        let mut recaptures = chess::MoveGen::new_legal(&current_board);
-        recaptures.set_iterator_mask(chess::BitBoard::from_square(target));
-
         // Choose the least valuable attacker among recaptures
-        let mut best_recapture = None;
+        let mut best_recapture: Option<Move> = None;
         let mut best_value = i16::MAX;
-        for mov in recaptures {
-            if let Some(attacker) = current_board.piece_on(mov.get_source()) {
-                let val = piece_values.get(attacker, phase);
-                if val < best_value {
-                    best_value = val;
-                    best_recapture = Some(mov);
+
+        current_board.generate_moves(|moves| {
+            for mov in moves {
+                if !target_bb.has(mov.to) {
+                    continue;
+                }
+                if let Some(attacker) = current_board.piece_on(mov.from) {
+                    let val = piece_values.get(attacker, phase);
+                    if val < best_value {
+                        best_value = val;
+                        best_recapture = Some(mov);
+                    }
                 }
             }
-        }
+            false
+        });
 
         match best_recapture {
             Some(best) => {
@@ -55,7 +60,7 @@ pub fn see(board: &Board, mv: ChessMove, phase: f32, piece_values: &PieceValues)
 
                 gains[gains_length] = captured_value - prev;
                 gains_length += 1;
-                current_board = current_board.make_move_new(best);
+                current_board.play_unchecked(best);
             }
             None => break,
         }

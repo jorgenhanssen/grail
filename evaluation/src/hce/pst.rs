@@ -1,4 +1,4 @@
-use chess::{BitBoard, Color};
+use cozy_chess::{BitBoard, Color};
 
 #[derive(Clone, Copy)]
 pub struct PST<'a> {
@@ -76,7 +76,7 @@ const PST_TABLE: [PSTRefs; 2] = [
 pub fn sum_pst(bitboard: BitBoard, pst: &PST, phase: f32, inv_phase: f32) -> i16 {
     let mut total = 0.0;
     for sq in bitboard {
-        let idx = sq.to_index();
+        let idx = sq as usize;
         total += pst.mg[idx] * phase + pst.eg[idx] * inv_phase;
     }
     total.round() as i16

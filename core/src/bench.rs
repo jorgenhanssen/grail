@@ -1,11 +1,11 @@
 use crate::engine;
-use chess::{Board, ChessMove};
+use cozy_chess::{Board, Move};
 use search::EngineConfig;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use uci::commands::{GoParams, Info, Score};
-use uci::UciOutput;
+use uci::{move_to_uci, UciOutput};
 
 pub fn run(depth: u8) {
     let config = EngineConfig::default();
@@ -64,8 +64,9 @@ impl Benchmark {
     fn print_summary(&self, search_result: &SearchResult, last_info: Option<Info>) {
         println!("\n=== Benchmark Summary ===");
 
-        if let Some((best_move, score)) = search_result.result {
-            println!("Best move: {}", best_move);
+        if let Some((best_move, score)) = &search_result.result {
+            let uci_move = move_to_uci(self.engine.board(), *best_move);
+            println!("Best move: {}", uci_move);
             println!("Score: {}", score);
         } else {
             println!("Benchmark failed to complete");
@@ -83,7 +84,7 @@ impl Benchmark {
 }
 
 struct SearchResult {
-    result: Option<(ChessMove, i16)>,
+    result: Option<(Move, i16)>,
     elapsed: Duration,
 }
 
@@ -132,7 +133,7 @@ impl InfoPrinter {
         }
     }
 
-    fn print_pv(pv: &[ChessMove]) {
+    fn print_pv(pv: &[String]) {
         if pv.is_empty() {
             return;
         }

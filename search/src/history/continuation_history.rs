@@ -1,12 +1,14 @@
-use chess::{Board, ChessMove, Color, Square, NUM_COLORS, NUM_SQUARES};
+use cozy_chess::{Board, Color, Move, Square};
 
+use crate::stack::SearchNode;
 use crate::EngineConfig;
 
 const MAX_DEPTH: usize = 100;
 
 #[derive(Clone)]
 pub struct ContinuationHistory {
-    // Flattened: [ply][color][prev_to][curr_from][curr_to]
+    // Flattened: [continuation_index][color][prev_to][curr_from][curr_to]
+    // continuation_index 0 = opponent's last move, 1 = our previous move, etc.
     continuations: Vec<i16>,
 
     max_moves: usize,
@@ -22,7 +24,7 @@ impl ContinuationHistory {
         bonus_multiplier: i32,
         malus_multiplier: i32,
     ) -> Self {
-        let size = max_moves * NUM_COLORS * NUM_SQUARES * NUM_SQUARES * NUM_SQUARES;
+        let size = max_moves * Color::NUM * Square::NUM * Square::NUM * Square::NUM;
         Self {
             continuations: vec![0; size],
             max_moves,
@@ -50,34 +52,34 @@ impl ContinuationHistory {
 
     #[inline(always)]
     pub fn reset(&mut self) {
-        let size = self.max_moves * NUM_COLORS * NUM_SQUARES * NUM_SQUARES * NUM_SQUARES;
+        let size = self.max_moves * Color::NUM * Square::NUM * Square::NUM * Square::NUM;
         self.continuations = vec![0; size];
     }
 
     #[inline(always)]
-    pub fn get_ply(
+    fn get_continuation(
         &self,
-        ply: usize,
+        continuation_index: usize,
         color: Color,
         prev_to: Option<Square>,
-        src: Square,
-        dst: Square,
+        from: Square,
+        to: Square,
     ) -> i16 {
-        if ply >= self.max_moves {
+        if continuation_index >= self.max_moves {
             return 0;
         }
         if let Some(p_to) = prev_to {
-            self.continuations[self.index(ply, color, p_to, src, dst)]
+            self.continuations[self.index(continuation_index, color, p_to, from, to)]
         } else {
             0
         }
     }
 
     #[inline(always)]
-    pub fn get(&self, color: Color, prev_to: &[Option<Square>], src: Square, dst: Square) -> i16 {
+    pub fn get(&self, color: Color, prev_to: &[Option<Square>], from: Square, to: Square) -> i16 {
         let mut score = 0;
-        for (ply, p_to) in prev_to.iter().enumerate().take(self.max_moves) {
-            score += self.get_ply(ply, color, *p_to, src, dst);
+        for (continuation_index, p_to) in prev_to.iter().enumerate().take(self.max_moves) {
+            score += self.get_continuation(continuation_index, color, *p_to, from, to);
         }
         score
     }
@@ -95,16 +97,13 @@ impl ContinuationHistory {
     }
 
     #[inline(always)]
-    pub fn get_prev_to_squares(
-        &self,
-        search_stack: &[crate::stack::SearchNode],
-    ) -> Vec<Option<Square>> {
+    pub fn get_prev_to_squares(&self, search_stack: &[SearchNode]) -> Vec<Option<Square>> {
         let len = search_stack.len();
         let mut vec = vec![None; self.max_moves];
         for i in 0..self.max_moves {
             if i < len {
                 if let Some(mv) = search_stack[len - 1 - i].last_move {
-                    vec[i] = Some(mv.get_dest());
+                    vec[i] = Some(mv.to);
                 }
             }
         }
@@ -124,13 +123,13 @@ impl ContinuationHistory {
         &mut self,
         color: Color,
         prev_to: &[Option<Square>],
-        src: Square,
-        dst: Square,
+        from: Square,
+        to: Square,
         delta: i32,
     ) {
-        for (ply, p_to_opt) in prev_to.iter().enumerate().take(self.max_moves) {
+        for (continuation_index, p_to_opt) in prev_to.iter().enumerate().take(self.max_moves) {
             if let Some(p_to) = *p_to_opt {
-                let idx = self.index(ply, color, p_to, src, dst);
+                let idx = self.index(continuation_index, color, p_to, from, to);
                 let entry = &mut self.continuations[idx];
                 Self::update_entry(entry, delta, self.max_history);
             }
@@ -142,32 +141,36 @@ impl ContinuationHistory {
         &mut self,
         board: &Board,
         prev_to: &[Option<Square>],
-        mv: ChessMove,
+        mv: Move,
         delta: i32,
     ) {
         let color = board.side_to_move();
-        self.update_continuations(color, prev_to, mv.get_source(), mv.get_dest(), delta);
+        self.update_continuations(color, prev_to, mv.from, mv.to, delta);
     }
-}
 
-impl ContinuationHistory {
     #[inline(always)]
-    fn index(&self, ply: usize, color: Color, prev_to: Square, src: Square, dst: Square) -> usize {
-        let ply_idx = ply;
-        let color_idx = color.to_index();
-        let prev_to_idx = prev_to.to_index();
-        let src_idx = src.to_index();
-        let dst_idx = dst.to_index();
+    fn index(
+        &self,
+        continuation_index: usize,
+        color: Color,
+        prev_to: Square,
+        from: Square,
+        to: Square,
+    ) -> usize {
+        let color_idx = color as usize;
+        let prev_to_idx = prev_to as usize;
+        let from_idx = from as usize;
+        let to_idx = to as usize;
 
-        let ply_stride = NUM_COLORS * NUM_SQUARES * NUM_SQUARES * NUM_SQUARES;
-        let color_stride = NUM_SQUARES * NUM_SQUARES * NUM_SQUARES;
-        let prev_to_stride = NUM_SQUARES * NUM_SQUARES;
-        let src_stride = NUM_SQUARES;
+        let continuation_stride = Color::NUM * Square::NUM * Square::NUM * Square::NUM;
+        let color_stride = Square::NUM * Square::NUM * Square::NUM;
+        let prev_to_stride = Square::NUM * Square::NUM;
+        let from_stride = Square::NUM;
 
-        ply_idx * ply_stride
+        continuation_index * continuation_stride
             + color_idx * color_stride
             + prev_to_idx * prev_to_stride
-            + src_idx * src_stride
-            + dst_idx
+            + from_idx * from_stride
+            + to_idx
     }
 }

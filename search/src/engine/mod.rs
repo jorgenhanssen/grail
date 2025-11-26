@@ -5,9 +5,9 @@ use std::sync::{
 };
 
 use ahash::AHashSet;
-use chess::{Board, ChessMove};
+use cozy_chess::{Board, Move};
 use evaluation::{hce, PieceValues, HCE, NNUE};
-use uci::{commands::Info, UciOutput};
+use uci::{commands::Info, pv_to_uci, UciOutput};
 
 use crate::{
     history::{CaptureHistory, ContinuationHistory, HistoryHeuristic},
@@ -34,8 +34,8 @@ pub struct Engine {
     board: Board,
     game_history: AHashSet<u64>,
     nodes: u32,
-    killer_moves: [[Option<ChessMove>; 2]; MAX_DEPTH], // 2 per depth
-    current_pv: Vec<ChessMove>,
+    killer_moves: [[Option<Move>; 2]; MAX_DEPTH], // 2 per depth
+    current_pv: Vec<Move>,
     max_depth_reached: u8,
     stop: Arc<AtomicBool>,
 
@@ -127,6 +127,10 @@ impl Engine {
         self.game_history = game_history;
     }
 
+    pub fn board(&self) -> &Board {
+        &self.board
+    }
+
     pub fn stop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
     }
@@ -163,7 +167,7 @@ impl Engine {
                 } else {
                     convert_centipawn_score(best_score)
                 },
-                pv: self.current_pv.clone(),
+                pv: pv_to_uci(&self.board, &self.current_pv),
             }))
             .unwrap();
     }

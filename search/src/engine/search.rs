@@ -1,13 +1,13 @@
 use std::sync::{atomic::Ordering, mpsc::Sender, Arc};
 
 use arrayvec::ArrayVec;
-use chess::{BitBoard, Board, BoardStatus, ChessMove, Color, Piece};
+use cozy_chess::{BitBoard, Board, Color, Move, Piece};
 use evaluation::scores::{MATE_VALUE, NEG_INFINITY};
 use uci::{
     commands::{GoParams, Info, Score},
     UciOutput,
 };
-use utils::{game_phase, Position};
+use utils::{game_phase, has_legal_moves, is_capture, make_move, Position};
 
 use crate::{
     move_ordering::{MainMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
@@ -24,8 +24,11 @@ impl Engine {
         &mut self,
         params: &GoParams,
         output: Option<&Sender<UciOutput>>,
-    ) -> Option<(ChessMove, i16)> {
-        if self.board.status() == BoardStatus::Checkmate {
+    ) -> Option<(Move, i16)> {
+        // Check for checkmate (no legal moves when in check)
+        let in_check = !self.board.checkers().is_empty();
+
+        if !has_legal_moves(&self.board) && in_check {
             if let Some(output) = output {
                 output
                     .send(UciOutput::Info(Info {
@@ -112,8 +115,7 @@ impl Engine {
         self.current_pv.clear();
 
         self.search_stack.clear();
-        self.search_stack
-            .push(SearchNode::new(self.board.get_hash()));
+        self.search_stack.push(SearchNode::new(self.board.hash()));
 
         self.tt.age();
     }
@@ -123,7 +125,7 @@ impl Engine {
         depth: u8,
         mut alpha: i16,
         beta: i16,
-    ) -> (Option<ChessMove>, i16) {
+    ) -> (Option<Move>, i16) {
         let best_move = self.current_pv.first().cloned();
 
         let position = Position::new(&self.board);
@@ -152,11 +154,11 @@ impl Engine {
             &self.capture_history,
             &self.continuation_history,
         ) {
-            let moved_piece = self.board.piece_on(m.get_source()).unwrap();
-            let new_board = self.board.make_move_new(m);
+            let moved_piece = self.board.piece_on(m.from).unwrap();
+            let new_board = make_move(&self.board, m);
 
             self.search_stack
-                .push_move(new_board.get_hash(), m, moved_piece);
+                .push_move(new_board.hash(), m, moved_piece);
             let (child_value, mut pv) =
                 self.search_subtree(&new_board, 1, depth, -beta, -alpha, true, true);
             let score = -child_value;
@@ -191,7 +193,7 @@ impl Engine {
         mut beta: i16,
         try_null_move: bool,
         allow_iid: bool,
-    ) -> (i16, Vec<ChessMove>) {
+    ) -> (i16, Vec<Move>) {
         if self.stop.load(Ordering::Relaxed) {
             return (0, Vec::new());
         }
@@ -243,7 +245,7 @@ impl Engine {
 
         let phase = game_phase(board);
         let remaining_depth = max_depth - depth;
-        let in_check = board.checkers().popcnt() > 0;
+        let in_check = !board.checkers().is_empty();
 
         let position = Position::new(board);
 
@@ -340,8 +342,8 @@ impl Engine {
         );
 
         // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff
-        let mut quiets_searched: ArrayVec<ChessMove, { MAX_QUIETS }> = ArrayVec::new();
-        let mut captures_searched: ArrayVec<ChessMove, { MAX_CAPTURES }> = ArrayVec::new();
+        let mut quiets_searched: ArrayVec<Move, { MAX_QUIETS }> = ArrayVec::new();
+        let mut captures_searched: ArrayVec<Move, { MAX_CAPTURES }> = ArrayVec::new();
 
         let mut move_index = -1;
         while let Some(m) = movegen.next(
@@ -457,24 +459,24 @@ impl Engine {
         beta: i16,
         in_check: bool,
         remaining_depth: u8,
-        m: ChessMove,
+        m: Move,
         move_index: i32,
         is_improving: bool,
         static_eval: i16,
         pre_move_threats: BitBoard,
-    ) -> Option<(i16, Vec<ChessMove>, bool, u8)> {
-        let moved_piece = board.piece_on(m.get_source()).unwrap();
-        let new_board = board.make_move_new(m);
-        let child_hash = new_board.get_hash();
+    ) -> Option<(i16, Vec<Move>, bool, u8)> {
+        let moved_piece = board.piece_on(m.from).unwrap();
+        let new_board = make_move(board, m);
+        let child_hash = new_board.hash();
 
         self.tt.prefetch(child_hash);
 
-        let gives_check = new_board.checkers().popcnt() > 0;
+        let gives_check = !new_board.checkers().is_empty();
 
         // Consider move tactical if it's check, capture, or promotion
-        let is_capture = board.piece_on(m.get_dest()).is_some();
-        let is_promotion = m.get_promotion() == Some(Piece::Queen);
-        let is_tactical = in_check || gives_check || is_capture || is_promotion;
+        let is_cap = is_capture(board, m);
+        let is_promotion = m.promotion == Some(Piece::Queen);
+        let is_tactical = in_check || gives_check || is_cap || is_promotion;
         let is_pv_node = beta > alpha + 1;
         let is_pv_move = move_index == 0;
 
@@ -578,7 +580,7 @@ impl Engine {
             actual_depth = max_depth;
         }
 
-        let is_quiet = !is_capture && !is_promotion;
+        let is_quiet = !is_cap && !is_promotion;
         Some((value, line, is_quiet, actual_depth))
     }
 
@@ -587,12 +589,12 @@ impl Engine {
     pub(super) fn on_fail_high(
         &mut self,
         board: &Board,
-        mv: ChessMove,
+        mv: Move,
         remaining_depth: u8,
         depth: usize,
         is_quiet: bool,
-        quiets_searched: &[ChessMove],
-        captures_searched: &[ChessMove],
+        quiets_searched: &[Move],
+        captures_searched: &[Move],
         threats: BitBoard,
     ) {
         let prev_to = self

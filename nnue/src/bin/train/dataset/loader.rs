@@ -7,7 +7,7 @@ use std::str::FromStr;
 use std::sync::{mpsc, Arc};
 use std::thread;
 
-use chess::{Board, Color};
+use cozy_chess::{Board, Color};
 use nnue::encoding::{encode_board, NUM_FEATURES};
 use utils::board_metrics::BoardMetrics;
 
@@ -148,12 +148,12 @@ impl DataLoader {
         let metrics = BoardMetrics::new(&board);
         let encoded_features = encode_board(
             &board,
-            metrics.attacks[Color::White.to_index()],
-            metrics.attacks[Color::Black.to_index()],
-            metrics.support[Color::White.to_index()],
-            metrics.support[Color::Black.to_index()],
-            metrics.threats[Color::White.to_index()],
-            metrics.threats[Color::Black.to_index()],
+            metrics.attacks[Color::White as usize],
+            metrics.attacks[Color::Black as usize],
+            metrics.support[Color::White as usize],
+            metrics.support[Color::Black as usize],
+            metrics.threats[Color::White as usize],
+            metrics.threats[Color::Black as usize],
         );
 
         features.extend_from_slice(&encoded_features);

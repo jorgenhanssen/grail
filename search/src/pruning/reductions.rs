@@ -1,4 +1,5 @@
-use chess::{Board, ChessMove, Piece};
+use cozy_chess::{Board, Move, Piece};
+use utils::is_capture;
 
 // Late Move Reduction (LMR)
 // Reduces search depth for moves that are likely to be bad (searched late in move ordering)
@@ -44,7 +45,7 @@ pub fn lmp_move_limit(depth: u8, base_moves: i32, depth_multiplier: i32) -> i32 
 #[inline(always)]
 pub fn should_lmp_prune(
     board: &Board,
-    mv: ChessMove,
+    mv: Move,
     in_check: bool,
     is_pv_node: bool,
     remaining_depth: u8,
@@ -55,10 +56,10 @@ pub fn should_lmp_prune(
     depth_multiplier: i32,
     improving_reduction: i32,
 ) -> bool {
-    let is_capture = board.piece_on(mv.get_dest()).is_some();
-    let is_promotion = mv.get_promotion() == Some(Piece::Queen);
+    let is_cap = is_capture(board, mv);
+    let is_promotion = mv.promotion == Some(Piece::Queen);
 
-    if in_check || is_pv_node || is_capture || is_promotion || remaining_depth > max_depth {
+    if in_check || is_pv_node || is_cap || is_promotion || remaining_depth > max_depth {
         return false;
     }
 
@@ -71,4 +72,3 @@ pub fn should_lmp_prune(
 
     move_index > limit
 }
-

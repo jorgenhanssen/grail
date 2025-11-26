@@ -1,5 +1,5 @@
 use super::context::EvalContext;
-use chess::{BitBoard, Color, Piece};
+use cozy_chess::{BitBoard, Color, Piece};
 
 #[derive(Debug, Clone, Copy)]
 pub struct CachedPawnEvaluation {
@@ -18,8 +18,8 @@ pub struct PawnCache {
 impl PawnCache {
     pub fn new() -> Self {
         Self {
-            white_pawns: BitBoard(0),
-            black_pawns: BitBoard(0),
+            white_pawns: BitBoard::EMPTY,
+            black_pawns: BitBoard::EMPTY,
             evaluation: CachedPawnEvaluation { white: 0, black: 0 },
         }
     }
@@ -27,9 +27,8 @@ impl PawnCache {
     #[inline(always)]
     pub fn get(&self, ctx: &EvalContext) -> Option<CachedPawnEvaluation> {
         let board = ctx.position.board;
-        let pawns = board.pieces(Piece::Pawn);
-        let white_pawns = pawns & board.color_combined(Color::White);
-        let black_pawns = pawns & board.color_combined(Color::Black);
+        let white_pawns = board.colored_pieces(Color::White, Piece::Pawn);
+        let black_pawns = board.colored_pieces(Color::Black, Piece::Pawn);
 
         if white_pawns == self.white_pawns && black_pawns == self.black_pawns {
             Some(self.evaluation)
@@ -41,9 +40,8 @@ impl PawnCache {
     #[inline(always)]
     pub fn set(&mut self, ctx: &EvalContext, cache_entry: CachedPawnEvaluation) {
         let board = ctx.position.board;
-        let pawns = board.pieces(Piece::Pawn);
-        self.white_pawns = pawns & board.color_combined(Color::White);
-        self.black_pawns = pawns & board.color_combined(Color::Black);
+        self.white_pawns = board.colored_pieces(Color::White, Piece::Pawn);
+        self.black_pawns = board.colored_pieces(Color::Black, Piece::Pawn);
         self.evaluation = cache_entry;
     }
 }

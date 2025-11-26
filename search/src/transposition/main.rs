@@ -2,7 +2,7 @@ use std::mem::size_of;
 use std::simd::prelude::SimdPartialEq;
 use std::simd::u32x4;
 
-use chess::{ChessMove, Piece, Square};
+use cozy_chess::{Move, Piece, Square};
 use utils::memory::prefetch;
 
 use crate::pruning::MATE_SCORE_BOUND;
@@ -111,7 +111,7 @@ impl TranspositionTable {
         hash: u64,
         depth: u8,
         max_depth: u8,
-    ) -> Option<(i16, Bound, Option<ChessMove>, Option<i16>)> {
+    ) -> Option<(i16, Bound, Option<Move>, Option<i16>)> {
         let needed_depth = max_depth - depth;
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
@@ -158,7 +158,7 @@ impl TranspositionTable {
     }
 
     #[inline(always)]
-    pub fn probe_hint(&self, hash: u64) -> Option<(Option<ChessMove>, Option<i16>)> {
+    pub fn probe_hint(&self, hash: u64) -> Option<(Option<Move>, Option<i16>)> {
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
         let key32 = hash as u32;
@@ -209,7 +209,7 @@ impl TranspositionTable {
         static_eval: Option<i16>,
         alpha: i16,
         beta: i16,
-        best_move: Option<ChessMove>,
+        best_move: Option<Move>,
     ) {
         let stored_depth = max_depth - depth;
         let best_move_packed = pack_move(best_move);
@@ -322,12 +322,12 @@ impl TranspositionTable {
 }
 
 #[inline(always)]
-fn pack_move(mv: Option<ChessMove>) -> u16 {
+fn pack_move(mv: Option<Move>) -> u16 {
     // Layout: [15..12]=promo (0=None,1=N,2=B,3=R,4=Q), [11..6]=to, [5..0]=from
     if let Some(m) = mv {
-        let from = m.get_source().to_index() as u16; // 0..63
-        let to = m.get_dest().to_index() as u16; // 0..63
-        let promo = match m.get_promotion() {
+        let from = m.from as u16; // 0..63
+        let to = m.to as u16; // 0..63
+        let promo = match m.promotion {
             Some(Piece::Knight) => 1u16,
             Some(Piece::Bishop) => 2u16,
             Some(Piece::Rook) => 3u16,
@@ -341,21 +341,21 @@ fn pack_move(mv: Option<ChessMove>) -> u16 {
 }
 
 #[inline(always)]
-fn unpack_move(code: u16) -> Option<ChessMove> {
+fn unpack_move(code: u16) -> Option<Move> {
     if code == 0 {
         return None;
     }
-    let from_idx = (code & 0x3F) as u8;
-    let to_idx = ((code >> 6) & 0x3F) as u8;
+    let from_idx = (code & 0x3F) as usize;
+    let to_idx = ((code >> 6) & 0x3F) as usize;
     let promo_code = ((code >> 12) & 0x0F) as u8;
-    let from = unsafe { Square::new(from_idx) };
-    let to = unsafe { Square::new(to_idx) };
-    let promo = match promo_code {
+    let from = Square::index(from_idx);
+    let to = Square::index(to_idx);
+    let promotion = match promo_code {
         1 => Some(Piece::Knight),
         2 => Some(Piece::Bishop),
         3 => Some(Piece::Rook),
         4 => Some(Piece::Queen),
         _ => None,
     };
-    Some(ChessMove::new(from, to, promo))
+    Some(Move { from, to, promotion })
 }

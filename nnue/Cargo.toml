@@ -14,7 +14,7 @@ uci = { path = "../uci" }
 utils = { path = "../utils" }
 
 ahash = { workspace = true }
-chess = { workspace = true }
+cozy-chess = { workspace = true }
 chrono = { workspace = true }
 ctrlc = { workspace = true }
 log = { workspace = true }

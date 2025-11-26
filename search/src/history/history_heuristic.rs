@@ -1,10 +1,10 @@
-use chess::{BitBoard, Board, ChessMove, Color, Square, EMPTY, NUM_COLORS, NUM_SQUARES};
+use cozy_chess::{BitBoard, Board, Color, Move, Square};
 
 use crate::EngineConfig;
 
 const MAX_DEPTH: usize = 100;
 // [color][is_threatened][from][to] (similar to Black Marlin)
-const HISTORY_SIZE: usize = NUM_COLORS * 2 * NUM_SQUARES * NUM_SQUARES;
+const HISTORY_SIZE: usize = Color::NUM * 2 * Square::NUM * Square::NUM;
 
 #[derive(Clone)]
 pub struct HistoryHeuristic {
@@ -69,7 +69,7 @@ impl HistoryHeuristic {
 
     #[inline(always)]
     pub fn get(&self, color: Color, source: Square, dest: Square, threats: BitBoard) -> i16 {
-        let is_threatened = threats & BitBoard::from_square(source) != EMPTY;
+        let is_threatened = threats.has(source);
         self.history[Self::index(color, is_threatened, source, dest)]
     }
 
@@ -95,24 +95,24 @@ impl HistoryHeuristic {
     }
 
     #[inline(always)]
-    pub fn update(&mut self, board: &Board, mv: ChessMove, delta: i32, threats: BitBoard) {
+    pub fn update(&mut self, board: &Board, mv: Move, delta: i32, threats: BitBoard) {
         let color = board.side_to_move();
-        let source = mv.get_source();
-        let dest = mv.get_dest();
-        let is_threatened = threats & BitBoard::from_square(source) != EMPTY;
+        let source = mv.from;
+        let dest = mv.to;
+        let is_threatened = threats.has(source);
         self.update_move(color, is_threatened, source, dest, delta);
     }
 
     #[inline(always)]
     fn index(color: Color, is_threatened: bool, source: Square, dest: Square) -> usize {
-        let color_idx = color.to_index();
+        let color_idx = color as usize;
         let threat_idx = is_threatened as usize;
-        let source_idx = source.to_index();
-        let dest_idx = dest.to_index();
+        let source_idx = source as usize;
+        let dest_idx = dest as usize;
 
-        let color_stride = 2 * NUM_SQUARES * NUM_SQUARES;
-        let threat_stride = NUM_SQUARES * NUM_SQUARES;
-        let source_stride = NUM_SQUARES;
+        let color_stride = 2 * Square::NUM * Square::NUM;
+        let threat_stride = Square::NUM * Square::NUM;
+        let source_stride = Square::NUM;
 
         color_idx * color_stride
             + threat_idx * threat_stride
@@ -125,7 +125,7 @@ impl HistoryHeuristic {
     pub fn maybe_reduce_or_prune(
         &self,
         board: &Board,
-        mv: ChessMove,
+        mv: Move,
         depth: u8,
         max_depth: u8,
         remaining_depth: u8,
@@ -147,8 +147,8 @@ impl HistoryHeuristic {
         }
 
         let color = board.side_to_move();
-        let source = mv.get_source();
-        let dest = mv.get_dest();
+        let source = mv.from;
+        let dest = mv.to;
         let hist_score = self.get(color, source, dest, threats);
 
         if hist_score < self.reduction_threshold {

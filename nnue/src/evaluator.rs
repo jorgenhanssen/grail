@@ -1,5 +1,5 @@
 use candle_nn::{VarBuilder, VarMap};
-use chess::{Board, Color};
+use cozy_chess::{Board, Color};
 use evaluation::NNUE;
 use utils::board_metrics::BoardMetrics;
 
@@ -39,12 +39,12 @@ impl NNUE for Evaluator {
     fn evaluate(&mut self, board: &Board) -> i16 {
         // Compute tactical features
         let metrics = BoardMetrics::new(board);
-        let white_attacks = metrics.attacks[Color::White.to_index()];
-        let black_attacks = metrics.attacks[Color::Black.to_index()];
-        let white_support = metrics.support[Color::White.to_index()];
-        let black_support = metrics.support[Color::Black.to_index()];
-        let white_threats = metrics.threats[Color::White.to_index()];
-        let black_threats = metrics.threats[Color::Black.to_index()];
+        let white_attacks = metrics.attacks[Color::White as usize];
+        let black_attacks = metrics.attacks[Color::Black as usize];
+        let white_support = metrics.support[Color::White as usize];
+        let black_support = metrics.support[Color::Black as usize];
+        let white_threats = metrics.threats[Color::White as usize];
+        let black_threats = metrics.threats[Color::Black as usize];
 
         let bitset = encode_board_bitset(
             board,

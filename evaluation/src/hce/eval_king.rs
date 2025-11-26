@@ -1,6 +1,8 @@
 use super::HCEConfig;
 use crate::hce::context::EvalContext;
-use chess::{get_adjacent_files, get_file, get_rank, BitBoard, Color, Piece, Rank, EMPTY};
+use cozy_chess::{
+    get_bishop_moves, get_knight_moves, get_rook_moves, BitBoard, Color, File, Piece, Rank, Square,
+};
 
 // Sum the king-safety bits: shield, files, ring pressure, center, activity.
 // Middlegame terms matter more; king activity matters more in the endgame.
@@ -21,16 +23,16 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
 fn pawn_shield_phase_bonus(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let board = ctx.position.board;
     let pawns = board.pieces(Piece::Pawn);
-    let my_pawns = pawns & board.color_combined(color);
-    let king_sq = board.king_square(color);
-    let files_window = king_files_window(king_sq);
+    let my_pawns = pawns & board.colors(color);
+    let king_sq = board.king(color);
+    let files_window = king_files_window(king_sq.file());
     let (front_rank_1, front_rank_2) = if color == Color::White {
         (Rank::Second, Rank::Third)
     } else {
         (Rank::Seventh, Rank::Sixth)
     };
-    let shield_r1 = (my_pawns & files_window & get_rank(front_rank_1)).popcnt() as i16;
-    let shield_r2 = (my_pawns & files_window & get_rank(front_rank_2)).popcnt() as i16;
+    let shield_r1 = (my_pawns & files_window & front_rank_1.bitboard()).len() as i16;
+    let shield_r2 = (my_pawns & files_window & front_rank_2.bitboard()).len() as i16;
     let shield_score =
         shield_r1 * config.king_shield_r1_bonus + shield_r2 * config.king_shield_r2_bonus;
     ((shield_score as f32) * ctx.phase).round() as i16
@@ -41,13 +43,13 @@ fn pawn_shield_phase_bonus(ctx: &EvalContext, color: Color, config: &HCEConfig) 
 #[inline(always)]
 fn king_file_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let board = ctx.position.board;
-    let king_sq = board.king_square(color);
-    let files_window = king_files_window(king_sq);
+    let king_sq = board.king(color);
+    let files_window = king_files_window(king_sq.file());
     let pawns = board.pieces(Piece::Pawn);
-    let my_pawns = pawns & board.color_combined(color);
-    let their_pawns = pawns & board.color_combined(!color);
-    let our_file_pawns = (my_pawns & files_window).popcnt();
-    let their_file_pawns = (their_pawns & files_window).popcnt();
+    let my_pawns = pawns & board.colors(color);
+    let their_pawns = pawns & board.colors(!color);
+    let our_file_pawns = (my_pawns & files_window).len();
+    let their_file_pawns = (their_pawns & files_window).len();
     let mut file_penalty = 0i16;
     if our_file_pawns == 0 {
         if their_file_pawns == 0 {
@@ -67,52 +69,51 @@ fn king_file_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfig) 
 fn king_ring_phase_pressure(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let enemy = !color;
     let board = ctx.position.board;
-    let king_sq = board.king_square(color);
-    let king_zone = KING_ZONES[king_sq.to_index()];
+    let king_sq = board.king(color);
+    let king_zone = KING_ZONES[king_sq as usize];
     let mut pressure = 0i16;
 
-    let all_pieces = board.combined();
-    let enemy_pieces = board.color_combined(enemy);
+    let all_pieces = board.occupied();
+    let enemy_pieces = board.colors(enemy);
 
     // Knights
     let knights = board.pieces(Piece::Knight) & enemy_pieces;
     for sq in knights {
-        let attacks = chess::get_knight_moves(sq) & king_zone;
-        if attacks != EMPTY {
-            pressure += config.king_pressure_knight * (attacks.popcnt() as i16);
+        let attacks = get_knight_moves(sq) & king_zone;
+        if !attacks.is_empty() {
+            pressure += config.king_pressure_knight * (attacks.len() as i16);
         }
     }
     // Bishops
     let bishops = board.pieces(Piece::Bishop) & enemy_pieces;
     for sq in bishops {
-        let attacks = chess::get_bishop_moves(sq, *all_pieces) & king_zone;
-        if attacks != EMPTY {
-            pressure += config.king_pressure_bishop * (attacks.popcnt() as i16);
+        let attacks = get_bishop_moves(sq, all_pieces) & king_zone;
+        if !attacks.is_empty() {
+            pressure += config.king_pressure_bishop * (attacks.len() as i16);
         }
     }
     // Rooks
     let rooks = board.pieces(Piece::Rook) & enemy_pieces;
     for sq in rooks {
-        let attacks = chess::get_rook_moves(sq, *all_pieces) & king_zone;
-        if attacks != EMPTY {
-            pressure += config.king_pressure_rook * (attacks.popcnt() as i16);
+        let attacks = get_rook_moves(sq, all_pieces) & king_zone;
+        if !attacks.is_empty() {
+            pressure += config.king_pressure_rook * (attacks.len() as i16);
         }
     }
     // Queens
     let queens = board.pieces(Piece::Queen) & enemy_pieces;
     for sq in queens {
-        let attacks = (chess::get_bishop_moves(sq, *all_pieces)
-            | chess::get_rook_moves(sq, *all_pieces))
-            & king_zone;
-        if attacks != EMPTY {
-            pressure += config.king_pressure_queen * (attacks.popcnt() as i16);
+        let attacks =
+            (get_bishop_moves(sq, all_pieces) | get_rook_moves(sq, all_pieces)) & king_zone;
+        if !attacks.is_empty() {
+            pressure += config.king_pressure_queen * (attacks.len() as i16);
         }
     }
     // Pawns
     let pawns = board.pieces(Piece::Pawn) & enemy_pieces;
     for sq in pawns {
-        let f = sq.get_file() as i8;
-        let r = sq.get_rank() as i8;
+        let f = sq.file() as i8;
+        let r = sq.rank() as i8;
         let deltas: &[(i8, i8)] = if enemy == Color::White {
             &[(1, 1), (-1, 1)]
         } else {
@@ -123,9 +124,9 @@ fn king_ring_phase_pressure(ctx: &EvalContext, color: Color, config: &HCEConfig)
             let nf = f + df;
             let nr = r + dr;
             if (0i8..=7i8).contains(&nf) && (0i8..=7i8).contains(&nr) {
-                let idx = (nr as u64) * 8 + (nf as u64);
-                let bb = BitBoard(1u64 << idx);
-                if (bb & king_zone) != EMPTY {
+                let idx = (nr as usize) * 8 + (nf as usize);
+                let attack_sq = Square::index(idx);
+                if king_zone.has(attack_sq) {
                     count_in_zone += 1;
                 }
             }
@@ -146,10 +147,10 @@ fn central_king_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfi
         return 0;
     }
 
-    let sq = ctx.position.board.king_square(color);
+    let sq = ctx.position.board.king(color);
 
-    let file_idx = sq.get_file() as i32;
-    let rank_idx = sq.get_rank() as i32;
+    let file_idx = sq.file() as i32;
+    let rank_idx = sq.rank() as i32;
     let is_central_file = (2..=5).contains(&file_idx); // c,d,e,f
     let is_back_two = if color == Color::White {
         rank_idx <= 1
@@ -171,10 +172,10 @@ fn endgame_king_activity(ctx: &EvalContext, color: Color, config: &HCEConfig) ->
         return 0;
     }
 
-    let king_sq = ctx.position.board.king_square(color);
+    let king_sq = ctx.position.board.king(color);
 
-    let file = king_sq.get_file() as i32;
-    let rank = king_sq.get_rank() as i32;
+    let file = king_sq.file() as i32;
+    let rank = king_sq.rank() as i32;
     let d = ((file - 3).abs() + (rank - 3).abs())
         .min((file - 4).abs() + (rank - 3).abs())
         .min((file - 3).abs() + (rank - 4).abs())
@@ -184,20 +185,19 @@ fn endgame_king_activity(ctx: &EvalContext, color: Color, config: &HCEConfig) ->
 
 // 3-file mask around the king: the king's file plus its neighbors.
 #[inline(always)]
-fn king_files_window(sq: chess::Square) -> BitBoard {
-    let f = sq.get_file();
-    get_file(f) | get_adjacent_files(f)
+fn king_files_window(file: File) -> BitBoard {
+    file.bitboard() | file.adjacent()
 }
 
 const KING_ZONE_RADIUS: i8 = 2;
-const KING_ZONES: [BitBoard; 64] = {
-    let mut zones = [EMPTY; 64];
+const KING_ZONES: [BitBoard; Square::NUM] = {
+    let mut zones = [BitBoard::EMPTY; Square::NUM];
     let mut i = 0;
-    while i < 64 {
+    while i < Square::NUM {
         let king_file = (i % 8) as i8;
         let king_rank = (i / 8) as i8;
 
-        let mut zone = EMPTY;
+        let mut zone_bits = 0u64;
         let mut rank_offset = -KING_ZONE_RADIUS;
         while rank_offset <= KING_ZONE_RADIUS {
             let mut file_offset = -KING_ZONE_RADIUS;
@@ -206,13 +206,13 @@ const KING_ZONES: [BitBoard; 64] = {
                 let new_rank = king_rank + rank_offset;
 
                 if new_file >= 0 && new_file < 8 && new_rank >= 0 && new_rank < 8 {
-                    zone = BitBoard(zone.0 | (1u64 << (new_rank * 8 + new_file) as u64));
+                    zone_bits |= 1u64 << (new_rank * 8 + new_file) as u64;
                 }
                 file_offset += 1;
             }
             rank_offset += 1;
         }
-        zones[i] = zone;
+        zones[i] = BitBoard(zone_bits);
         i += 1;
     }
     zones
