@@ -580,7 +580,7 @@ impl Engine {
             actual_depth = max_depth;
         }
 
-        let is_quiet = !is_capture && !is_promotion;
+        let is_quiet = !is_cap && !is_promotion;
         Some((value, line, is_quiet, actual_depth))
     }
 
