@@ -21,7 +21,7 @@ pub struct SelfPlayGame {
 
 impl SelfPlayGame {
     pub fn new(game_id: usize, opening_fen: &str) -> Self {
-        let board = Board::from_str(opening_fen).unwrap_or_default();
+        let board = Board::from_str(opening_fen).unwrap();
 
         Self {
             board,
@@ -67,17 +67,15 @@ impl SelfPlayGame {
     }
 
     fn is_terminal(&mut self) -> bool {
-        // 1. Check for no legal moves (checkmate or stalemate)
         if !has_legal_moves(&self.board) {
             return true;
         }
 
-        // 2. Check insufficient material (K vs K, K+B vs K, K+N vs K, etc.)
         if has_insufficient_material(&self.board) {
             return true;
         }
 
-        // 3. Check position repetition (abort on first repetition)
+        // Check position repetition (abort on first repetition)
         // For training data, we don't need official three-fold rule -
         // any repetition means the game is cycling and won't produce useful data
         let board_hash = self.board.hash();
