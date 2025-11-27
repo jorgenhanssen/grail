@@ -1,3 +1,6 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
+
 pub mod bitset;
 pub mod board_metrics;
 mod eval;

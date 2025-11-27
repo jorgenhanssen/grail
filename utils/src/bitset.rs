@@ -1,7 +1,28 @@
+/// A packed bit array that holds `BITS` bits.
+///
+/// The bits are stored in an array of `u64` values, automatically sized
+/// to fit the requested number of bits.
+///
+/// # Example
+/// ```
+/// use utils::bitset::Bitset;
+///
+/// let mut bits: Bitset<128> = Bitset::default();
+/// bits.set(0);
+/// bits.set(127);
+/// assert!(bits.get(0));
+/// assert!(bits.get(127));
+/// assert!(!bits.get(1));
+/// ```
 #[derive(Clone, Copy)]
-pub struct Bitset<const N: usize>([u64; N]);
+pub struct Bitset<const BITS: usize>([u64; BITS.div_ceil(64)])
+where
+    [(); BITS.div_ceil(64)]:;
 
-impl<const N: usize> Bitset<N> {
+impl<const BITS: usize> Bitset<BITS>
+where
+    [(); BITS.div_ceil(64)]:,
+{
     /// Set a bit at the given index.
     #[inline(always)]
     pub fn set(&mut self, idx: usize) {
@@ -26,15 +47,37 @@ impl<const N: usize> Bitset<N> {
         self.0[idx / 64] ^= 1u64 << (idx % 64);
     }
 
-    /// Get the underlying array.
+    /// Get the underlying `u64` array.
     #[inline(always)]
-    pub fn as_array(&self) -> &[u64; N] {
+    pub fn as_array(&self) -> &[u64; BITS.div_ceil(64)] {
         &self.0
+    }
+
+    /// Call a function for each index where bits differ between self and other.
+    #[inline(always)]
+    pub fn for_each_diff<F>(&self, other: &Self, mut f: F)
+    where
+        F: FnMut(usize),
+    {
+        for (word_idx, (&self_word, &other_word)) in self.0.iter().zip(other.0.iter()).enumerate() {
+            let mut changes = self_word ^ other_word;
+            while changes != 0 {
+                let bit_idx = changes.trailing_zeros() as usize;
+                changes &= changes - 1;
+                let idx = word_idx * 64 + bit_idx;
+                if idx < BITS {
+                    f(idx);
+                }
+            }
+        }
     }
 }
 
-impl<const N: usize> Default for Bitset<N> {
+impl<const BITS: usize> Default for Bitset<BITS>
+where
+    [(); BITS.div_ceil(64)]:,
+{
     fn default() -> Self {
-        Self([0; N])
+        Self([0; BITS.div_ceil(64)])
     }
 }

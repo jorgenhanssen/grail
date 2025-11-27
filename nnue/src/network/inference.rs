@@ -1,7 +1,7 @@
 use candle_core::Result;
 use utils::bitset::Bitset;
 
-use crate::encoding::NUM_U64S;
+use crate::encoding::NUM_FEATURES;
 
 use super::accumulator::Accumulator;
 use super::linear::LinearLayer;
@@ -47,8 +47,8 @@ impl NNUENetwork {
 
     // Forward pass with incremental updates from a bitset.
     #[inline(always)]
-    pub fn forward(&mut self, bitset: &Bitset<NUM_U64S>) -> f32 {
-        self.accumulator.update(bitset.as_array());
+    pub fn forward(&mut self, bitset: &Bitset<NUM_FEATURES>) -> f32 {
+        self.accumulator.update(bitset);
 
         let mut embedding_output = [0.0; EMBEDDING_SIZE];
         self.accumulator.dequantize_and_relu(&mut embedding_output);

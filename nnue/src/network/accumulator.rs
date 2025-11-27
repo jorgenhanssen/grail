@@ -2,7 +2,9 @@ use std::simd::i8x32;
 use std::simd::num::SimdInt;
 use std::simd::prelude::SimdFloat;
 
-use crate::encoding::{BITS_PER_U64, NUM_FEATURES, NUM_U64S};
+use utils::bitset::Bitset;
+
+use crate::encoding::NUM_FEATURES;
 
 use super::simd::{SimdF32, SimdI16, SIMD_WIDTH_F32, SIMD_WIDTH_I16};
 use super::{EMBEDDING_SIZE, QUANTIZATION_PERCENTILE};
@@ -18,7 +20,7 @@ pub struct Accumulator {
     buffer: [i16; EMBEDDING_SIZE],
 
     // To know which inputs have changed since the last update
-    previous_input: [u64; NUM_U64S],
+    previous_input: Bitset<NUM_FEATURES>,
 
     // Scale factor to dequantize back to f32
     scale: f32,
@@ -37,7 +39,7 @@ impl Accumulator {
             weights: weights_i8,
             biases: biases_i16,
             buffer,
-            previous_input: [0u64; NUM_U64S],
+            previous_input: Bitset::default(),
             scale,
         }
     }
@@ -45,31 +47,19 @@ impl Accumulator {
     #[inline(always)]
     pub fn reset(&mut self) {
         self.buffer.copy_from_slice(&self.biases);
-        self.previous_input.fill(0);
+        self.previous_input = Bitset::default();
     }
 
-    // Updates the accumulator based on the difference between previous and current inputs.
+    /// Updates the accumulator based on the difference between previous and current inputs.
     #[inline(always)]
-    pub fn update(&mut self, new_input: &[u64; NUM_U64S]) {
-        for (word_idx, &new_word) in new_input.iter().enumerate().take(NUM_U64S) {
-            // XOR => 1 for bits that are different between previous and current input
-            let mut changes = self.previous_input[word_idx] ^ new_word;
+    pub fn update(&mut self, new_input: &Bitset<NUM_FEATURES>) {
+        // TODO: Look into if we can avoid cloning this.
+        self.previous_input.clone().for_each_diff(new_input, |idx| {
+            let is_active = new_input.get(idx);
+            self.apply_feature_change(idx, is_active);
+        });
 
-            while changes != 0 {
-                let bit_idx = changes.trailing_zeros() as usize;
-                changes &= changes - 1; // Clear the lowest set bit
-
-                let feature_idx = word_idx * BITS_PER_U64 + bit_idx;
-                if feature_idx >= NUM_FEATURES {
-                    continue;
-                }
-
-                let is_active = (new_word & (1u64 << bit_idx)) != 0;
-                self.apply_feature_change(feature_idx, is_active);
-            }
-        }
-
-        self.previous_input.copy_from_slice(new_input);
+        self.previous_input = *new_input;
     }
 
     #[inline(always)]

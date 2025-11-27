@@ -1,4 +1,12 @@
-// Prefetch a memory address into CPU cache
+/// Prefetch a memory address into CPU cache.
+///
+/// This is a hint to the CPU that we'll be accessing this memory soon,
+/// allowing it to speculatively load the data into cache. This can
+/// significantly reduce latency when accessing transposition table entries.
+///
+/// # Safety
+/// The pointer must be valid for reading (though it doesn't need to point
+/// to initialized memory, since we're only prefetching, not reading).
 #[inline(always)]
 pub unsafe fn prefetch(ptr: *const u8) {
     #[cfg(target_arch = "x86_64")]
@@ -10,7 +18,6 @@ pub unsafe fn prefetch(ptr: *const u8) {
     #[cfg(target_arch = "aarch64")]
     {
         // ARM: PRFM (prefetch memory) instruction - prefetch for read into L1 cache
-        // https://developer.arm.com/documentation/ddi0596/2021-06/Base-Instructions/PRFM--immediate---Prefetch-Memory--immediate--
         std::arch::asm!(
             "prfm pldl1keep, [{ptr}]",
             ptr = in(reg) ptr,
@@ -18,5 +25,5 @@ pub unsafe fn prefetch(ptr: *const u8) {
         );
     }
 
-    // Noop on other architectures
+    // No-op on other architectures
 }

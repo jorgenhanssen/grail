@@ -29,7 +29,7 @@ You can challenge the latest version of Grail on Lichess at [lichess.org/@/grail
 
 ### Building from Source
 
-**Prerequisites:** Rust nightly toolchain (Grail uses `portable_simd`).
+**Prerequisites:** Rust nightly toolchain (Grail uses `portable_simd` and `generic_const_exprs`).
 
 **Quick Start:**
 

@@ -1,7 +1,10 @@
 use cozy_chess::{Board, Move};
 
-/// Check if a move is a real capture (enemy piece on destination).
-/// Correctly handles castling, which cozy-chess represents as "king captures rook".
+/// Check if a move is a capture (enemy piece on destination).
+///
+/// Handles castling correctly: cozy-chess represents castling as
+/// "king captures rook", but this function only returns true for
+/// actual captures of enemy pieces.
 #[inline(always)]
 pub fn is_capture(board: &Board, mv: Move) -> bool {
     board.colors(!board.side_to_move()).has(mv.to)

@@ -14,8 +14,6 @@ pub const NUM_FEATURES: usize = NUM_PIECE_PLACEMENT_FEATURES
     + NUM_THREAT_FEATURES
     + NUM_SIDE_TO_MOVE_FEATURES; // 1153 total
 
-pub const NUM_U64S: usize = NUM_FEATURES.div_ceil(64);
-
 const PIECE_FEATURES_END: usize = NUM_PIECE_PLACEMENT_FEATURES;
 const WHITE_SUPPORT_START: usize = PIECE_FEATURES_END;
 const WHITE_SUPPORT_END: usize = WHITE_SUPPORT_START + Square::NUM;
@@ -107,7 +105,7 @@ pub fn encode_board_bitset(
     black_support: BitBoard,
     white_threats: BitBoard,
     black_threats: BitBoard,
-) -> Bitset<NUM_U64S> {
+) -> Bitset<NUM_FEATURES> {
     let mut bitset = Bitset::default();
 
     // Piece placements

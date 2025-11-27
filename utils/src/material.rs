@@ -14,8 +14,7 @@ pub fn majors(board: &Board, color: Color) -> BitBoard {
     board.colored_pieces(color, Piece::Rook) | board.colored_pieces(color, Piece::Queen)
 }
 
-/// Checks if a specific color has insufficient material to force checkmate.
-/// Returns true for: K alone, K+N, K+B.
+/// Check if a specific color has insufficient material to force checkmate.
 #[inline(always)]
 pub fn side_has_insufficient_material(board: &Board, color: Color) -> bool {
     let color_pieces = board.colors(color);
@@ -35,8 +34,9 @@ pub fn side_has_insufficient_material(board: &Board, color: Color) -> bool {
     minor_count <= 1
 }
 
-/// Checks if the position has insufficient material for either side to force checkmate.
-/// Returns true for dead drawn positions like:
+/// Check if the position has insufficient material for either side.
+///
+/// Returns true for dead drawn positions:
 /// - K vs K
 /// - K+N vs K (either side)
 /// - K+B vs K (either side)
@@ -99,7 +99,10 @@ pub fn has_insufficient_material(board: &Board) -> bool {
     false
 }
 
-/// Compute game phase (1.0 = opening, 0.0 = endgame).
+/// Compute game phase from piece counts.
+///
+/// Returns a value from 0.0 (endgame) to 1.0 (opening/middlegame).
+/// Uses piece weights: N=1, B=1, R=2, Q=4, with max score of 24.
 #[inline(always)]
 pub fn game_phase(board: &Board) -> f32 {
     let knights = board.pieces(Piece::Knight);
@@ -112,7 +115,11 @@ pub fn game_phase(board: &Board) -> f32 {
     (score.min(24) as f32) / 24.0
 }
 
-/// Check if position is prone to zugzwang (null-move unsafe).
+/// Check if position is prone to zugzwang (null-move pruning unsafe).
+///
+/// Returns true when:
+/// - Side to move has only king and pawns
+/// - Side to move has no pawns, no majors, and at most one minor piece
 #[inline(always)]
 pub fn is_zugzwang(board: &Board) -> bool {
     let side_bits = board.colors(board.side_to_move());
