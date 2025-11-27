@@ -1,5 +1,5 @@
 use candle_core::Result;
-use utils::bits::set_bit;
+use utils::bitset::Bitset;
 
 use crate::encoding::{NUM_FEATURES, NUM_U64S};
 
@@ -47,21 +47,21 @@ impl NNUENetwork {
 
     #[inline(always)]
     pub fn forward(&mut self, input: &[f32]) -> f32 {
-        let mut current_input = [0u64; NUM_U64S];
+        let mut bitset = Bitset::<NUM_U64S>::default();
 
         for (i, &val) in input.iter().enumerate().take(NUM_FEATURES) {
             if val > 0.0 {
-                set_bit(&mut current_input, i);
+                bitset.set(i);
             }
         }
 
-        self.forward_bitset(&current_input)
+        self.forward_bitset(&bitset)
     }
 
     // Forward pass with incremental updates from a bitset.
     #[inline(always)]
-    pub fn forward_bitset(&mut self, bitset: &[u64; NUM_U64S]) -> f32 {
-        self.accumulator.update(bitset);
+    pub fn forward_bitset(&mut self, bitset: &Bitset<NUM_U64S>) -> f32 {
+        self.accumulator.update(bitset.as_array());
 
         let mut embedding_output = [0.0; EMBEDDING_SIZE];
         self.accumulator.dequantize_and_relu(&mut embedding_output);

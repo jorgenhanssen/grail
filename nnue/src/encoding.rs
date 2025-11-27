@@ -1,5 +1,5 @@
 use cozy_chess::{BitBoard, Board, Color, Piece, Square};
-use utils::bits::set_bit;
+use utils::bitset::Bitset;
 
 // Board encoding feature counts
 const NUM_PIECE_PLACEMENT_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM; // 768
@@ -107,58 +107,58 @@ pub fn encode_board_bitset(
     black_support: BitBoard,
     white_threats: BitBoard,
     black_threats: BitBoard,
-) -> [u64; NUM_U64S] {
-    let mut bits = [0u64; NUM_U64S];
+) -> Bitset<NUM_U64S> {
+    let mut bitset = Bitset::default();
 
     // Piece placements
     for sq in Square::ALL {
         if let Some(piece) = board.piece_on(sq) {
             let color = board.color_on(sq).unwrap();
             let idx = sq as usize * 12 + piece_color_to_index(piece, color);
-            set_bit(&mut bits, idx);
+            bitset.set(idx);
         }
     }
 
     // White support
     for sq in white_support {
-        set_bit(&mut bits, WHITE_SUPPORT_START + sq as usize);
+        bitset.set(WHITE_SUPPORT_START + sq as usize);
     }
 
     // Black support
     for sq in black_support {
-        set_bit(&mut bits, BLACK_SUPPORT_START + sq as usize);
+        bitset.set(BLACK_SUPPORT_START + sq as usize);
     }
 
     // White space (controlled non-piece squares)
     let white_pieces = board.colors(Color::White);
     let white_space_bb = white_attacks & !white_pieces;
     for sq in white_space_bb {
-        set_bit(&mut bits, WHITE_SPACE_START + sq as usize);
+        bitset.set(WHITE_SPACE_START + sq as usize);
     }
 
     // Black space
     let black_pieces = board.colors(Color::Black);
     let black_space_bb = black_attacks & !black_pieces;
     for sq in black_space_bb {
-        set_bit(&mut bits, BLACK_SPACE_START + sq as usize);
+        bitset.set(BLACK_SPACE_START + sq as usize);
     }
 
     // White threats
     for sq in white_threats {
-        set_bit(&mut bits, WHITE_THREATS_START + sq as usize);
+        bitset.set(WHITE_THREATS_START + sq as usize);
     }
 
     // Black threats
     for sq in black_threats {
-        set_bit(&mut bits, BLACK_THREATS_START + sq as usize);
+        bitset.set(BLACK_THREATS_START + sq as usize);
     }
 
     // Side to move
     if board.side_to_move() == Color::White {
-        set_bit(&mut bits, SIDE_TO_MOVE_IDX);
+        bitset.set(SIDE_TO_MOVE_IDX);
     }
 
-    bits
+    bitset
 }
 
 #[inline(always)]

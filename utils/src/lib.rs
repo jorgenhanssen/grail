@@ -1,4 +1,4 @@
-pub mod bits;
+pub mod bitset;
 pub mod board_metrics;
 mod eval;
 mod material;
