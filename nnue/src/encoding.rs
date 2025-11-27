@@ -174,3 +174,56 @@ fn piece_color_to_index(piece: Piece, color: Color) -> usize {
         (Color::Black, Piece::King) => 11,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use utils::board_metrics::BoardMetrics;
+
+    const TEST_POSITIONS: &[&str] = &[
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", // Starting
+        "r1bqkbnr/pppppppp/2n5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2", // After 1.e4 Nc6
+        "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4", // Italian
+        "rnbqkb1r/pp1p1ppp/4pn2/2p5/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 4", // Sicilian
+        "8/8/8/8/8/5k2/8/4K2R w - - 0 1",                           // Endgame
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", // Kiwipete
+    ];
+
+    #[test]
+    fn test_encode_board_and_bitset_are_consistent() {
+        for fen in TEST_POSITIONS {
+            let board: Board = fen.parse().unwrap();
+            let metrics = BoardMetrics::new(&board);
+
+            let features = encode_board(
+                &board,
+                metrics.attacks[Color::White as usize],
+                metrics.attacks[Color::Black as usize],
+                metrics.support[Color::White as usize],
+                metrics.support[Color::Black as usize],
+                metrics.threats[Color::White as usize],
+                metrics.threats[Color::Black as usize],
+            );
+
+            let bitset = encode_board_bitset(
+                &board,
+                metrics.attacks[Color::White as usize],
+                metrics.attacks[Color::Black as usize],
+                metrics.support[Color::White as usize],
+                metrics.support[Color::Black as usize],
+                metrics.threats[Color::White as usize],
+                metrics.threats[Color::Black as usize],
+            );
+
+            for (i, &f) in features.iter().enumerate() {
+                assert_eq!(
+                    f == 1.0,
+                    bitset.get(i),
+                    "Mismatch at feature {} for FEN: {}",
+                    i,
+                    fen
+                );
+            }
+        }
+    }
+}

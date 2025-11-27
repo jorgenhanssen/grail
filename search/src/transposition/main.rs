@@ -353,3 +353,38 @@ fn unpack_move(code: u16) -> Option<Move> {
         promotion,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pack_unpack_roundtrip() {
+        let test_moves: &[(&str, &str, Option<Piece>)] = &[
+            ("e2", "e4", None),                // Simple pawn push
+            ("a1", "h8", None),                // Corner to corner
+            ("g1", "f3", None),                // Knight move
+            ("e7", "e8", Some(Piece::Queen)),  // Queen promotion
+            ("a7", "a8", Some(Piece::Knight)), // Knight promotion
+            ("h7", "h8", Some(Piece::Rook)),   // Rook promotion
+            ("b7", "b8", Some(Piece::Bishop)), // Bishop promotion
+        ];
+
+        for &(from, to, promo) in test_moves {
+            let mv = Move {
+                from: from.parse().unwrap(),
+                to: to.parse().unwrap(),
+                promotion: promo,
+            };
+            let packed = pack_move(Some(mv));
+            let unpacked = unpack_move(packed);
+            assert_eq!(unpacked, Some(mv), "Failed for move {}{}", from, to);
+        }
+    }
+
+    #[test]
+    fn test_pack_unpack_none() {
+        assert_eq!(pack_move(None), 0);
+        assert_eq!(unpack_move(0), None);
+    }
+}

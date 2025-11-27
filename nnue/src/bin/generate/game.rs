@@ -91,7 +91,7 @@ impl SelfPlayGame {
 
     fn record_eval(&mut self, engine_score: i16) {
         // Engine score is from STM perspective; flip to white's perspective for training
-        let white_score = flip_eval_perspective(&self.board, engine_score);
+        let white_score = flip_eval_perspective(self.board.side_to_move(), engine_score);
 
         self.current_game_samples
             .push((format!("{}", self.board), white_score));

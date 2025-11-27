@@ -46,12 +46,7 @@ impl Decoder {
 
         // Parse and apply moves
         if input.contains("moves") {
-            let move_strings = input
-                .split("moves")
-                .nth(1)
-                .unwrap()
-                .trim()
-                .split_whitespace();
+            let move_strings = input.split("moves").nth(1).unwrap().split_whitespace();
 
             for mv_str in move_strings {
                 game_history.insert(board.hash());

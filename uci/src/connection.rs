@@ -10,6 +10,12 @@ pub struct UciConnection {
     output_tx: Sender<UciOutput>,
 }
 
+impl Default for UciConnection {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UciConnection {
     pub fn new() -> Self {
         // Create a channel for UCI outputs
