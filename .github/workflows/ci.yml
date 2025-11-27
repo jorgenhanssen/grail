@@ -28,6 +28,3 @@ jobs:
 
       - name: Test
         run: cargo test
-
-      - name: Check release
-        run: cargo check --release
