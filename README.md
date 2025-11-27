@@ -1,5 +1,9 @@
 # Grail Chess Engine
 
+[![CI](https://github.com/jorgenhanssen/grail/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jorgenhanssen/grail/actions/workflows/ci.yml)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-nightly-orange.svg)](https://www.rust-lang.org/)
+
 Grail is a UCI-compliant hobby chess engine written in Rust, featuring both Neural Network (NNUE) and Hand-Crafted (HCE) evaluation. It implements modern search techniques including Principal Variation Search, advanced pruning, and sophisticated move ordering.
 
 ## Usage
