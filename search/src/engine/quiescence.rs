@@ -59,7 +59,7 @@ impl Engine {
         let position = Position::new(board);
 
         let eval = self.eval(&position, phase);
-        let stand_pat = flip_eval_perspective(board, eval);
+        let stand_pat = flip_eval_perspective(board.side_to_move(), eval);
 
         // Do a "stand-pat" evaluation if not in check
         if !in_check {

@@ -137,3 +137,89 @@ pub fn is_zugzwang(board: &Board) -> bool {
 
     !has_pawns && !has_major && minor_count <= 1
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_insufficient_material_k_vs_k() {
+        let board: Board = "k7/8/8/8/8/8/8/K7 w - - 0 1".parse().unwrap();
+        assert!(has_insufficient_material(&board));
+    }
+
+    #[test]
+    fn test_insufficient_material_kn_vs_k() {
+        let board: Board = "k7/8/8/8/8/8/8/KN6 w - - 0 1".parse().unwrap();
+        assert!(has_insufficient_material(&board));
+
+        // Other side
+        let board: Board = "kn6/8/8/8/8/8/8/K7 w - - 0 1".parse().unwrap();
+        assert!(has_insufficient_material(&board));
+    }
+
+    #[test]
+    fn test_insufficient_material_kb_vs_k() {
+        let board: Board = "k7/8/8/8/8/8/8/KB6 w - - 0 1".parse().unwrap();
+        assert!(has_insufficient_material(&board));
+    }
+
+    #[test]
+    fn test_sufficient_material_two_knights() {
+        // Two knights can theoretically mate (though hard)
+        let board: Board = "k7/8/8/8/8/8/8/KNN5 w - - 0 1".parse().unwrap();
+        assert!(!has_insufficient_material(&board));
+    }
+
+    #[test]
+    fn test_sufficient_material_with_pawn() {
+        let board: Board = "k7/p7/8/8/8/8/8/K7 w - - 0 1".parse().unwrap();
+        assert!(!has_insufficient_material(&board));
+    }
+
+    #[test]
+    fn test_sufficient_material_with_rook() {
+        let board: Board = "k7/8/8/8/8/8/8/KR6 w - - 0 1".parse().unwrap();
+        assert!(!has_insufficient_material(&board));
+    }
+
+    #[test]
+    fn test_game_phase_starting_position() {
+        // Full material = 1.0
+        assert!((game_phase(&Board::default()) - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_game_phase_endgame() {
+        // Just kings and a rook
+        let board: Board = "k7/8/8/8/8/8/8/KR6 w - - 0 1".parse().unwrap();
+        let phase = game_phase(&board);
+        // Rook = 2, so 2/24 ≈ 0.083
+        assert!(phase < 0.2);
+    }
+
+    #[test]
+    fn test_zugzwang_king_and_pawns() {
+        // White has only king and pawns
+        let board: Board = "k7/8/8/8/8/8/P7/K7 w - - 0 1".parse().unwrap();
+        assert!(is_zugzwang(&board));
+    }
+
+    #[test]
+    fn test_zugzwang_lone_king() {
+        let board: Board = "k7/8/8/8/8/8/8/K7 w - - 0 1".parse().unwrap();
+        assert!(is_zugzwang(&board));
+    }
+
+    #[test]
+    fn test_not_zugzwang_with_major() {
+        let board: Board = "k7/8/8/8/8/8/8/KR6 w - - 0 1".parse().unwrap();
+        assert!(!is_zugzwang(&board));
+    }
+
+    #[test]
+    fn test_not_zugzwang_with_queen() {
+        let board: Board = "k7/8/8/8/8/8/8/KQ6 w - - 0 1".parse().unwrap();
+        assert!(!is_zugzwang(&board));
+    }
+}

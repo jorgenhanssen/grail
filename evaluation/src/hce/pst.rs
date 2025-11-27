@@ -1,5 +1,7 @@
 use cozy_chess::{BitBoard, Color};
 
+/// Piece-Square Table
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Copy)]
 pub struct PST<'a> {
     pub mg: &'a [f32; 64],

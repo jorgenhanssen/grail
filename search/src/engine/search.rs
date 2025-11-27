@@ -252,7 +252,7 @@ impl Engine {
             tt_se // Cached in TT
         } else {
             let eval = self.eval(&position, phase);
-            flip_eval_perspective(board, eval)
+            flip_eval_perspective(board.side_to_move(), eval)
         };
 
         self.search_stack
