@@ -1,8 +1,8 @@
 use cozy_chess::{Board, Move, Piece, Square};
 
-use crate::EngineConfig;
+use super::utils::apply_gravity;
+use crate::{EngineConfig, MAX_DEPTH};
 
-const MAX_DEPTH: usize = 100;
 const CAPTURE_HISTORY_SIZE: usize = Piece::NUM * Square::NUM * Piece::NUM;
 
 #[derive(Clone)]
@@ -57,11 +57,7 @@ impl CaptureHistory {
         };
 
         let idx = Self::index(attacker, mv.to, victim);
-        let entry = &mut self.history[idx];
-        let h = *entry as i32;
-        let b = delta.clamp(-self.max_value, self.max_value);
-        let new = h + b - ((h * b.abs()) / self.max_value);
-        *entry = new.clamp(-self.max_value, self.max_value) as i16;
+        apply_gravity(&mut self.history[idx], delta, self.max_value);
     }
 
     #[inline(always)]
@@ -74,13 +70,11 @@ impl CaptureHistory {
 
     #[inline(always)]
     pub fn get_bonus(&self, remaining_depth: u8) -> i32 {
-        let depth = remaining_depth.min(MAX_DEPTH as u8) as i32;
-        self.bonus_multiplier * depth
+        self.bonus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
     }
 
     #[inline(always)]
     pub fn get_malus(&self, remaining_depth: u8) -> i32 {
-        let depth = remaining_depth.min(MAX_DEPTH as u8) as i32;
-        -self.malus_multiplier * depth
+        -self.malus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
     }
 }

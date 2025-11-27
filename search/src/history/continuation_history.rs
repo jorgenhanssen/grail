@@ -1,9 +1,8 @@
 use cozy_chess::{Board, Color, Move, Square};
 
+use super::utils::apply_gravity;
 use crate::stack::SearchNode;
-use crate::EngineConfig;
-
-const MAX_DEPTH: usize = 100;
+use crate::{EngineConfig, MAX_DEPTH};
 
 #[derive(Clone)]
 pub struct ContinuationHistory {
@@ -86,14 +85,12 @@ impl ContinuationHistory {
 
     #[inline(always)]
     pub fn get_bonus(&self, remaining_depth: u8) -> i32 {
-        let depth = remaining_depth.min(MAX_DEPTH as u8) as i32;
-        self.bonus_multiplier * depth
+        self.bonus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
     }
 
     #[inline(always)]
     pub fn get_malus(&self, remaining_depth: u8) -> i32 {
-        let depth = remaining_depth.min(MAX_DEPTH as u8) as i32;
-        -self.malus_multiplier * depth
+        -self.malus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
     }
 
     #[inline(always)]
@@ -111,14 +108,6 @@ impl ContinuationHistory {
     }
 
     #[inline(always)]
-    fn update_entry(entry: &mut i16, delta: i32, max_history: i32) {
-        let h = *entry as i32;
-        let b = delta.clamp(-max_history, max_history);
-        let new = h + b - ((h * b.abs()) / max_history);
-        *entry = new.clamp(-max_history, max_history) as i16;
-    }
-
-    #[inline(always)]
     fn update_continuations(
         &mut self,
         color: Color,
@@ -130,8 +119,7 @@ impl ContinuationHistory {
         for (continuation_index, p_to_opt) in prev_to.iter().enumerate().take(self.max_moves) {
             if let Some(p_to) = *p_to_opt {
                 let idx = self.index(continuation_index, color, p_to, from, to);
-                let entry = &mut self.continuations[idx];
-                Self::update_entry(entry, delta, self.max_history);
+                apply_gravity(&mut self.continuations[idx], delta, self.max_history);
             }
         }
     }

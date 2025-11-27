@@ -10,5 +10,8 @@ mod time_control;
 mod transposition;
 mod utils;
 
+/// Maximum search depth supported by the engine.
+pub const MAX_DEPTH: usize = 100;
+
 pub use config::EngineConfig;
 pub use engine::Engine;

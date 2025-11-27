@@ -2,7 +2,8 @@ use std::sync::atomic::Ordering;
 
 use cozy_chess::{Board, Color, Move, Piece, Rank};
 use evaluation::scores::{MATE_VALUE, NEG_INFINITY};
-use utils::{game_phase, make_move, Position};
+use utils::flip_eval_perspective;
+use utils::{game_phase, has_check, make_move, Position};
 
 use crate::{
     move_ordering::QMoveGenerator,
@@ -40,7 +41,7 @@ impl Engine {
             return (alpha, Vec::new());
         }
 
-        let in_check = !board.checkers().is_empty();
+        let in_check = has_check(board);
 
         let original_alpha = alpha;
         let original_beta = beta;
@@ -58,11 +59,7 @@ impl Engine {
         let position = Position::new(board);
 
         let eval = self.eval(&position, phase);
-        let stand_pat = if board.side_to_move() == Color::White {
-            eval
-        } else {
-            -eval
-        };
+        let stand_pat = flip_eval_perspective(board, eval);
 
         // Do a "stand-pat" evaluation if not in check
         if !in_check {

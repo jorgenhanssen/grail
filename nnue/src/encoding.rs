@@ -1,4 +1,5 @@
 use cozy_chess::{BitBoard, Board, Color, Piece, Square};
+use utils::bitset::Bitset;
 
 // Board encoding feature counts
 const NUM_PIECE_PLACEMENT_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM; // 768
@@ -106,67 +107,58 @@ pub fn encode_board_bitset(
     black_support: BitBoard,
     white_threats: BitBoard,
     black_threats: BitBoard,
-) -> [u64; NUM_U64S] {
-    let mut words = [0u64; NUM_U64S];
+) -> Bitset<NUM_U64S> {
+    let mut bitset = Bitset::default();
 
     // Piece placements
     for sq in Square::ALL {
         if let Some(piece) = board.piece_on(sq) {
             let color = board.color_on(sq).unwrap();
-            let offset = sq as usize * 12 + piece_color_to_index(piece, color);
-            let word_idx = offset / 64;
-            let bit_idx = offset % 64;
-            words[word_idx] |= 1u64 << bit_idx;
+            let idx = sq as usize * 12 + piece_color_to_index(piece, color);
+            bitset.set(idx);
         }
     }
 
     // White support
     for sq in white_support {
-        let idx = WHITE_SUPPORT_START + sq as usize;
-        words[idx / 64] |= 1u64 << (idx % 64);
+        bitset.set(WHITE_SUPPORT_START + sq as usize);
     }
 
     // Black support
     for sq in black_support {
-        let idx = BLACK_SUPPORT_START + sq as usize;
-        words[idx / 64] |= 1u64 << (idx % 64);
+        bitset.set(BLACK_SUPPORT_START + sq as usize);
     }
 
     // White space (controlled non-piece squares)
     let white_pieces = board.colors(Color::White);
     let white_space_bb = white_attacks & !white_pieces;
     for sq in white_space_bb {
-        let idx = WHITE_SPACE_START + sq as usize;
-        words[idx / 64] |= 1u64 << (idx % 64);
+        bitset.set(WHITE_SPACE_START + sq as usize);
     }
 
     // Black space
     let black_pieces = board.colors(Color::Black);
     let black_space_bb = black_attacks & !black_pieces;
     for sq in black_space_bb {
-        let idx = BLACK_SPACE_START + sq as usize;
-        words[idx / 64] |= 1u64 << (idx % 64);
+        bitset.set(BLACK_SPACE_START + sq as usize);
     }
 
     // White threats
     for sq in white_threats {
-        let idx = WHITE_THREATS_START + sq as usize;
-        words[idx / 64] |= 1u64 << (idx % 64);
+        bitset.set(WHITE_THREATS_START + sq as usize);
     }
 
     // Black threats
     for sq in black_threats {
-        let idx = BLACK_THREATS_START + sq as usize;
-        words[idx / 64] |= 1u64 << (idx % 64);
+        bitset.set(BLACK_THREATS_START + sq as usize);
     }
 
     // Side to move
     if board.side_to_move() == Color::White {
-        let idx = SIDE_TO_MOVE_IDX;
-        words[idx / 64] |= 1u64 << (idx % 64);
+        bitset.set(SIDE_TO_MOVE_IDX);
     }
 
-    words
+    bitset
 }
 
 #[inline(always)]

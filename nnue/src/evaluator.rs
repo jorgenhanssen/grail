@@ -58,7 +58,7 @@ impl NNUE for Evaluator {
         self.nnue_network
             .as_mut()
             .expect("NNUE network not initialized - call enable_nnue() first")
-            .forward_bitset(&bitset)
+            .forward(&bitset)
             .clamp(i16::MIN as f32, i16::MAX as f32) as i16
     }
 }
