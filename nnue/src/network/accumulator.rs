@@ -44,14 +44,12 @@ impl Accumulator {
         }
     }
 
-    #[inline(always)]
     pub fn reset(&mut self) {
         self.buffer.copy_from_slice(&self.biases);
         self.previous_input = Bitset::default();
     }
 
     /// Updates the accumulator based on the difference between previous and current inputs.
-    #[inline(always)]
     pub fn update(&mut self, new_input: &Bitset<NUM_FEATURES>) {
         // TODO: Look into if we can avoid cloning this.
         self.previous_input.clone().for_each_diff(new_input, |idx| {
@@ -62,7 +60,6 @@ impl Accumulator {
         self.previous_input = *new_input;
     }
 
-    #[inline(always)]
     fn apply_feature_change(&mut self, feature_idx: usize, add: bool) {
         let offset: usize = feature_idx * EMBEDDING_SIZE;
         let weights_row = &self.weights[offset..offset + EMBEDDING_SIZE];
@@ -100,7 +97,6 @@ impl Accumulator {
     }
 
     // Converts the accumulated i16 buffer into f32 activations with ReLU applied.
-    #[inline(always)]
     pub fn dequantize_and_relu(&self, output: &mut [f32; EMBEDDING_SIZE]) {
         let scale = 1.0 / self.scale;
         let scale_vec = SimdF32::splat(scale);

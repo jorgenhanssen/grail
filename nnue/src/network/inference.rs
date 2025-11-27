@@ -40,13 +40,11 @@ impl NNUENetwork {
         })
     }
 
-    #[inline(always)]
     pub fn reset(&mut self) {
         self.accumulator.reset();
     }
 
     // Forward pass with incremental updates from a bitset.
-    #[inline(always)]
     pub fn forward(&mut self, bitset: &Bitset<NUM_FEATURES>) -> f32 {
         self.accumulator.update(bitset);
 

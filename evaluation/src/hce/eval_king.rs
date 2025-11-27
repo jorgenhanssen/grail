@@ -6,7 +6,6 @@ use cozy_chess::{
 
 // Sum the king-safety bits: shield, files, ring pressure, center, activity.
 // Middlegame terms matter more; king activity matters more in the endgame.
-#[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let mut cp = 0i16;
     cp += pawn_shield_phase_bonus(ctx, color, config);
@@ -19,7 +18,6 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
 
 // Pawns in front act as a shield. Count our pawns in the 3-file window on ranks 2/3 (7/6),
 // weight the closer ones more. Most relevant in the opening/middlegame.
-#[inline(always)]
 fn pawn_shield_phase_bonus(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let board = ctx.position.board;
     let pawns = board.pieces(Piece::Pawn);
@@ -40,7 +38,6 @@ fn pawn_shield_phase_bonus(ctx: &EvalContext, color: Color, config: &HCEConfig) 
 
 // Open/semi-open files next to the king increase exposure.
 // Penalize no own pawns (fully open worse) and thin cover. Mostly an opening/middlegame concern.
-#[inline(always)]
 fn king_file_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let board = ctx.position.board;
     let king_sq = board.king(color);
@@ -65,7 +62,6 @@ fn king_file_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfig) 
 
 // Attack density around the king correlates with danger.
 // Count enemy attacks into a 2-square ring; weight by piece and pawn diagonals. Stronger in the middlegame.
-#[inline(always)]
 fn king_ring_phase_pressure(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let enemy = !color;
     let board = ctx.position.board;
@@ -141,7 +137,6 @@ fn king_ring_phase_pressure(ctx: &EvalContext, color: Color, config: &HCEConfig)
 
 // Central back-rank kings are unsafe in the middlegame.
 // If the king sits on c–f files on the home two ranks during the middlegame, ramp a penalty.
-#[inline(always)]
 fn central_king_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     if ctx.phase <= 0.5 {
         return 0;
@@ -166,7 +161,6 @@ fn central_king_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfi
 
 // Active kings decide endgames. Reward closeness to d4/e4/d5/e5 by Manhattan distance.
 // Matters more as the game simplifies toward the endgame.
-#[inline(always)]
 fn endgame_king_activity(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     if ctx.phase >= 0.4 {
         return 0;
@@ -184,7 +178,6 @@ fn endgame_king_activity(ctx: &EvalContext, color: Color, config: &HCEConfig) ->
 }
 
 // 3-file mask around the king: the king's file plus its neighbors.
-#[inline(always)]
 fn king_files_window(file: File) -> BitBoard {
     file.bitboard() | file.adjacent()
 }

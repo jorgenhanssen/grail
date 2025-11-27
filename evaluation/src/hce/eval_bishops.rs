@@ -2,7 +2,6 @@ use super::HCEConfig;
 use crate::hce::context::EvalContext;
 use cozy_chess::{Color, Piece};
 
-#[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let board = ctx.position.board;
     let bishops = board.colored_pieces(color, Piece::Bishop);

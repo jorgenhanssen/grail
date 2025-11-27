@@ -7,7 +7,6 @@
 /// # Safety
 /// The pointer must be valid for reading (though it doesn't need to point
 /// to initialized memory, since we're only prefetching, not reading).
-#[inline(always)]
 pub unsafe fn prefetch(ptr: *const u8) {
     #[cfg(target_arch = "x86_64")]
     {

@@ -106,7 +106,6 @@ impl Engine {
         best_move.map(|mv| (mv, best_score))
     }
 
-    #[inline(always)]
     fn init_search(&mut self) {
         self.stop.store(false, Ordering::Relaxed);
 
@@ -445,7 +444,6 @@ impl Engine {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[inline(always)]
     pub(super) fn search_move(
         &mut self,
         board: &Board,
@@ -581,7 +579,6 @@ impl Engine {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[inline(always)]
     pub(super) fn on_fail_high(
         &mut self,
         board: &Board,

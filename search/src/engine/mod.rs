@@ -135,7 +135,6 @@ impl Engine {
         self.stop.store(true, Ordering::Relaxed);
     }
 
-    #[inline(always)]
     pub(super) fn init_game(&mut self) {
         self.tt.clear();
         self.qs_tt.clear();

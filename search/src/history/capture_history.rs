@@ -36,19 +36,16 @@ impl CaptureHistory {
             && self.malus_multiplier == config.capture_history_malus_multiplier.value
     }
 
-    #[inline(always)]
     pub fn reset(&mut self) {
         self.history.fill(0);
     }
 
-    #[inline(always)]
     pub fn get(&self, board: &Board, mv: Move) -> i16 {
         let attacker = board.piece_on(mv.from).unwrap();
         let victim = board.piece_on(mv.to).unwrap();
         self.history[Self::index(attacker, mv.to, victim)]
     }
 
-    #[inline(always)]
     pub fn update_capture(&mut self, board: &Board, mv: Move, delta: i32) {
         let attacker = board.piece_on(mv.from).unwrap();
         let victim = match board.piece_on(mv.to) {
@@ -60,7 +57,6 @@ impl CaptureHistory {
         apply_gravity(&mut self.history[idx], delta, self.max_value);
     }
 
-    #[inline(always)]
     fn index(attacker: Piece, to: Square, victim: Piece) -> usize {
         let attacker_idx = attacker as usize;
         let to_idx = to as usize;
@@ -68,12 +64,10 @@ impl CaptureHistory {
         attacker_idx * Square::NUM * Piece::NUM + to_idx * Piece::NUM + victim_idx
     }
 
-    #[inline(always)]
     pub fn get_bonus(&self, remaining_depth: u8) -> i32 {
         self.bonus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
     }
 
-    #[inline(always)]
     pub fn get_malus(&self, remaining_depth: u8) -> i32 {
         -self.malus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
     }

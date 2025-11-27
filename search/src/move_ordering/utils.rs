@@ -23,7 +23,6 @@ pub(super) fn select_highest(array: &[ScoredMove]) -> Option<usize> {
     Some(best_index)
 }
 
-#[inline(always)]
 pub(super) fn capture_score(
     board: &Board,
     mv: Move,

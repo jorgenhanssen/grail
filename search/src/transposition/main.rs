@@ -29,7 +29,6 @@ pub struct TTEntry {
 }
 
 impl TTEntry {
-    #[inline(always)]
     #[allow(clippy::too_many_arguments)]
     pub fn set(
         &mut self,
@@ -61,7 +60,6 @@ pub struct TranspositionTable {
 }
 
 impl TranspositionTable {
-    #[inline(always)]
     pub fn new(mb: usize) -> Self {
         let bytes = mb.saturating_mul(1024 * 1024);
         let entry_size = size_of::<TTEntry>().max(1);
@@ -77,7 +75,6 @@ impl TranspositionTable {
         }
     }
 
-    #[inline(always)]
     pub fn clear(&mut self) {
         // Clear TT entries
         unsafe {
@@ -88,13 +85,11 @@ impl TranspositionTable {
         self.generation = 0;
     }
 
-    #[inline(always)]
     pub fn age(&mut self) {
         self.generation = self.generation.wrapping_add(1);
     }
 
     // Prefetch TT entry into cache
-    #[inline(always)]
     pub fn prefetch(&self, hash: u64) {
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
@@ -105,7 +100,6 @@ impl TranspositionTable {
         }
     }
 
-    #[inline(always)]
     pub fn probe(
         &self,
         hash: u64,
@@ -157,7 +151,6 @@ impl TranspositionTable {
         None
     }
 
-    #[inline(always)]
     pub fn probe_hint(&self, hash: u64) -> Option<(Option<Move>, Option<i16>)> {
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
@@ -199,7 +192,6 @@ impl TranspositionTable {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[inline(always)]
     pub fn store(
         &mut self,
         hash: u64,
@@ -321,7 +313,6 @@ impl TranspositionTable {
     }
 }
 
-#[inline(always)]
 fn pack_move(mv: Option<Move>) -> u16 {
     // Layout: [15..12]=promo (0=None,1=N,2=B,3=R,4=Q), [11..6]=to, [5..0]=from
     if let Some(m) = mv {
@@ -340,7 +331,6 @@ fn pack_move(mv: Option<Move>) -> u16 {
     }
 }
 
-#[inline(always)]
 fn unpack_move(code: u16) -> Option<Move> {
     if code == 0 {
         return None;
@@ -357,5 +347,9 @@ fn unpack_move(code: u16) -> Option<Move> {
         4 => Some(Piece::Queen),
         _ => None,
     };
-    Some(Move { from, to, promotion })
+    Some(Move {
+        from,
+        to,
+        promotion,
+    })
 }

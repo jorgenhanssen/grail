@@ -42,7 +42,6 @@ pub struct SearchHistory {
 }
 
 impl SearchHistory {
-    #[inline(always)]
     pub fn new() -> Self {
         Self {
             scores: Vec::new(),
@@ -52,24 +51,20 @@ impl SearchHistory {
         }
     }
 
-    #[inline(always)]
     pub fn add_iteration(&mut self, depth: u8, score: i16, best_move: Option<Move>) {
         self.depths.push(depth);
         self.scores.push(score);
         self.best_moves.push(best_move);
     }
 
-    #[inline(always)]
     pub fn add_aspiration_failure(&mut self) {
         self.aspiration_failures += 1;
     }
 
-    #[inline(always)]
     fn current_depth(&self) -> u8 {
         self.depths.last().copied().unwrap_or(0)
     }
 
-    #[inline(always)]
     fn best_move_is_stable(&self) -> bool {
         if self.best_moves.len() < 4 {
             return false;
@@ -87,7 +82,6 @@ impl SearchHistory {
         (same_move_count as f64) / (recent_moves.len() as f64) >= EASY_MOVE_THRESHOLD
     }
 
-    #[inline(always)]
     fn best_move_changed_recently(&self) -> bool {
         if self.best_moves.len() < 2 {
             return false;
@@ -97,7 +91,6 @@ impl SearchHistory {
         last_two[0] != last_two[1] && last_two[0].is_some() && last_two[1].is_some()
     }
 
-    #[inline(always)]
     fn has_score_drop(&self) -> bool {
         if self.scores.len() < 2 {
             return false;
@@ -157,7 +150,6 @@ impl TimeBudget {
         Some(Self::Managed { target, hard })
     }
 
-    #[inline(always)]
     pub fn hard_limit(&self) -> u64 {
         match *self {
             TimeBudget::Exact { millis } => millis,
@@ -165,7 +157,6 @@ impl TimeBudget {
         }
     }
 
-    #[inline(always)]
     pub fn target_limit(&self) -> u64 {
         match *self {
             TimeBudget::Exact { millis } => millis,
@@ -227,7 +218,6 @@ fn get_increment(params: &GoParams, color: Color) -> u64 {
     }
 }
 
-#[inline(always)]
 fn move_margin(board: &Board) -> u64 {
     const TOTAL_PIECES: f32 = 32.0;
 

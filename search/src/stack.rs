@@ -9,7 +9,6 @@ pub struct SearchNode {
 }
 
 impl SearchNode {
-    #[inline(always)]
     pub fn new(hash: u64) -> Self {
         Self {
             hash,
@@ -19,7 +18,6 @@ impl SearchNode {
         }
     }
 
-    #[inline(always)]
     pub fn with_move(hash: u64, mv: Move, piece: Piece) -> Self {
         Self {
             hash,
@@ -35,38 +33,31 @@ pub struct SearchStack {
 }
 
 impl SearchStack {
-    #[inline(always)]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             nodes: Vec::with_capacity(capacity),
         }
     }
 
-    #[inline(always)]
     pub fn clear(&mut self) {
         self.nodes.clear();
     }
 
-    #[inline(always)]
     pub fn push(&mut self, node: SearchNode) {
         self.nodes.push(node);
     }
-    #[inline(always)]
     pub fn push_move(&mut self, hash: u64, mv: Move, piece: Piece) {
         self.push(SearchNode::with_move(hash, mv, piece));
     }
 
-    #[inline(always)]
     pub fn pop(&mut self) -> Option<SearchNode> {
         self.nodes.pop()
     }
 
-    #[inline(always)]
     pub fn current(&self) -> SearchNode {
         *self.nodes.last().unwrap()
     }
 
-    #[inline(always)]
     pub fn current_mut<F>(&mut self, f: F)
     where
         F: FnOnce(&mut SearchNode),
@@ -76,7 +67,6 @@ impl SearchStack {
         }
     }
 
-    #[inline(always)]
     pub fn is_improving(&self) -> bool {
         const IMPROVING_MARGIN: i16 = 20;
 
@@ -95,7 +85,6 @@ impl SearchStack {
         false
     }
 
-    #[inline(always)]
     pub fn is_repetition(&self, game_history: &ahash::AHashSet<u64>) -> bool {
         let current_hash = self.nodes[self.nodes.len() - 1].hash;
 
@@ -115,12 +104,10 @@ impl SearchStack {
         false
     }
 
-    #[inline(always)]
     pub fn as_slice(&self) -> &[SearchNode] {
         &self.nodes
     }
 
-    #[inline(always)]
     pub fn piece_repetition_penalty(&self, base_penalty: i16) -> i16 {
         let stack_len = self.nodes.len();
         if stack_len < 2 {

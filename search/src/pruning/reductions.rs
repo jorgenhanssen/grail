@@ -4,7 +4,6 @@ use utils::is_capture;
 // Late Move Reduction (LMR)
 // Reduces search depth for moves that are likely to be bad (searched late in move ordering)
 #[allow(clippy::too_many_arguments)]
-#[inline(always)]
 pub fn lmr(
     remaining_depth: u8,
     tactical: bool,
@@ -35,14 +34,12 @@ pub fn lmr(
 // Late Move Pruning (LMP)
 // Conservative triangular limits per remaining depth for how many quiet moves
 // are searched before pruning subsequent quiets in non-PV, non-check nodes.
-#[inline(always)]
 pub fn lmp_move_limit(depth: u8, base_moves: i32, depth_multiplier: i32) -> i32 {
     // Triangular number pattern: base + depth * (depth + multiplier) / 2
     base_moves + (depth as i32 * (depth as i32 + depth_multiplier)) / 2
 }
 
 #[allow(clippy::too_many_arguments)]
-#[inline(always)]
 pub fn should_lmp_prune(
     board: &Board,
     mv: Move,

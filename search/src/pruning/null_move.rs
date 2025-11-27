@@ -4,7 +4,6 @@ use utils::is_zugzwang;
 // Null Move Pruning
 // Try passing the turn to the opponent. If they still can't beat beta with a free move,
 // the position is likely so good we can prune this branch.
-#[inline(always)]
 pub fn can_null_move_prune(
     board: &Board,
     remaining_depth: u8,
@@ -14,7 +13,6 @@ pub fn can_null_move_prune(
     remaining_depth >= min_depth && !in_check && !is_zugzwang(board)
 }
 
-#[inline(always)]
 pub fn null_move_reduction(
     base_remaining: u8,
     static_eval: Option<i16>,
@@ -43,4 +41,3 @@ pub fn null_move_reduction(
 
     r
 }
-

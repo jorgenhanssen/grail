@@ -35,7 +35,6 @@ impl NNUE for Evaluator {
         "NNUE".to_string()
     }
 
-    #[inline(always)]
     fn evaluate(&mut self, board: &Board) -> i16 {
         // Compute tactical features
         let metrics = BoardMetrics::new(board);

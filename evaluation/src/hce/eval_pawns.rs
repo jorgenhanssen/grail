@@ -3,7 +3,6 @@ use crate::hce::context::EvalContext;
 use arrayvec::ArrayVec;
 use cozy_chess::{get_pawn_attacks, BitBoard, Color, File, Piece, Rank, Square};
 
-#[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let board = ctx.position.board;
     let my_pawns = board.colored_pieces(color, Piece::Pawn);
@@ -91,7 +90,6 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
 // A backward pawn is a positional weakness defined by:
 // 1. Behind ALL friendly pawns on adjacent files (no pawn can defend it)
 // 2. Stop square (one square ahead) is unsafe to push to
-#[inline(always)]
 fn is_backward_pawn(sq: Square, color: Color, my_pawns: BitBoard, enemy_pawns: BitBoard) -> bool {
     let file = sq.file();
     let rank = sq.rank();

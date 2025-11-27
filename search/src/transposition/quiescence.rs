@@ -24,7 +24,6 @@ pub struct QSTable {
 }
 
 impl QSTable {
-    #[inline(always)]
     pub fn new(mb: usize) -> Self {
         let bytes = mb.saturating_mul(1024 * 1024);
         let entry_size = size_of::<QSEntry>().max(1);
@@ -39,7 +38,6 @@ impl QSTable {
         }
     }
 
-    #[inline(always)]
     pub fn clear(&mut self) {
         unsafe {
             let ptr = self.entries.as_mut_ptr() as *mut u8;
@@ -48,14 +46,12 @@ impl QSTable {
         }
     }
 
-    #[inline(always)]
     fn cluster_start(&self, mixed_key: u32) -> usize {
         let idx = (mixed_key as usize) % self.buckets;
         idx * CLUSTER_SIZE
     }
 
     // Prefetch QS entry into cache
-    #[inline(always)]
     pub fn prefetch(&self, hash: u64) {
         // Most cases is not check, so this is a reasonable guesstimate
         let mixed = mix_key(hash, false);
@@ -67,7 +63,6 @@ impl QSTable {
         }
     }
 
-    #[inline(always)]
     pub fn probe(&self, hash: u64, in_check: bool) -> Option<(i16, Bound)> {
         let mixed = mix_key(hash, in_check);
         let start = self.cluster_start(mixed);
@@ -92,7 +87,6 @@ impl QSTable {
         None
     }
 
-    #[inline(always)]
     pub fn store(&mut self, hash: u64, value: i16, alpha: i16, beta: i16, in_check: bool) {
         let bound = if value <= alpha {
             Bound::Upper
@@ -143,7 +137,6 @@ impl QSTable {
     }
 }
 
-#[inline(always)]
 fn mix_key(hash: u64, in_check: bool) -> u32 {
     let key32 = hash as u32;
     if in_check {

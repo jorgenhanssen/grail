@@ -13,7 +13,6 @@ use crate::{
 use super::Engine;
 
 impl Engine {
-    #[inline(always)]
     pub(super) fn try_futility_prune(
         &self,
         remaining_depth: u8,
@@ -38,7 +37,6 @@ impl Engine {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[inline(always)]
     pub(super) fn try_razor_prune(
         &mut self,
         board: &Board,
@@ -70,7 +68,6 @@ impl Engine {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[inline(always)]
     pub(super) fn try_see_prune(
         &self,
         board: &Board,
@@ -129,7 +126,6 @@ impl Engine {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[inline(always)]
     pub(super) fn try_null_move_prune(
         &mut self,
         board: &Board,
@@ -215,7 +211,6 @@ impl Engine {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[inline(always)]
     pub(super) fn try_reverse_futility_prune(
         &mut self,
         remaining_depth: u8,
@@ -263,7 +258,6 @@ impl Engine {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[inline(always)]
     pub(super) fn try_iid(
         &mut self,
         board: &Board,

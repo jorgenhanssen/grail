@@ -40,7 +40,6 @@ impl AspirationWindow {
         self.beta = prev_score.saturating_add(half);
     }
 
-    #[inline(always)]
     pub fn bounds(&self) -> (i16, i16) {
         (self.alpha, self.beta)
     }

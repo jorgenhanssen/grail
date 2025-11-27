@@ -3,7 +3,6 @@ use utils::Position;
 use super::Engine;
 
 impl Engine {
-    #[inline(always)]
     pub(super) fn eval(&mut self, position: &Position, phase: f32) -> i16 {
         let mut score = if self.config.nnue.value && self.nnue.is_some() {
             self.nnue.as_mut().unwrap().evaluate(position.board)
@@ -16,7 +15,6 @@ impl Engine {
         score
     }
 
-    #[inline(always)]
     fn apply_penalties(&self, score: i16, phase: f32) -> i16 {
         let mut adjusted_score = score;
 
@@ -31,7 +29,6 @@ impl Engine {
         adjusted_score
     }
 
-    #[inline(always)]
     fn piece_repetition_penalty(&self) -> i16 {
         let base_penalty = self.config.piece_repetition_base_penalty.value;
         self.search_stack.piece_repetition_penalty(base_penalty)

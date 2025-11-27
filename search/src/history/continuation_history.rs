@@ -49,13 +49,11 @@ impl ContinuationHistory {
             && self.malus_multiplier == config.continuation_malus_multiplier.value
     }
 
-    #[inline(always)]
     pub fn reset(&mut self) {
         let size = self.max_moves * Color::NUM * Square::NUM * Square::NUM * Square::NUM;
         self.continuations = vec![0; size];
     }
 
-    #[inline(always)]
     fn get_continuation(
         &self,
         continuation_index: usize,
@@ -74,7 +72,6 @@ impl ContinuationHistory {
         }
     }
 
-    #[inline(always)]
     pub fn get(&self, color: Color, prev_to: &[Option<Square>], from: Square, to: Square) -> i16 {
         let mut score = 0;
         for (continuation_index, p_to) in prev_to.iter().enumerate().take(self.max_moves) {
@@ -83,17 +80,14 @@ impl ContinuationHistory {
         score
     }
 
-    #[inline(always)]
     pub fn get_bonus(&self, remaining_depth: u8) -> i32 {
         self.bonus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
     }
 
-    #[inline(always)]
     pub fn get_malus(&self, remaining_depth: u8) -> i32 {
         -self.malus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
     }
 
-    #[inline(always)]
     pub fn get_prev_to_squares(&self, search_stack: &[SearchNode]) -> Vec<Option<Square>> {
         let len = search_stack.len();
         let mut vec = vec![None; self.max_moves];
@@ -107,7 +101,6 @@ impl ContinuationHistory {
         vec
     }
 
-    #[inline(always)]
     fn update_continuations(
         &mut self,
         color: Color,
@@ -124,7 +117,6 @@ impl ContinuationHistory {
         }
     }
 
-    #[inline(always)]
     pub fn update_quiet_all(
         &mut self,
         board: &Board,
@@ -136,7 +128,6 @@ impl ContinuationHistory {
         self.update_continuations(color, prev_to, mv.from, mv.to, delta);
     }
 
-    #[inline(always)]
     fn index(
         &self,
         continuation_index: usize,

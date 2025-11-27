@@ -62,18 +62,15 @@ impl HistoryHeuristic {
             && self.malus_multiplier == config.history_malus_multiplier.value
     }
 
-    #[inline(always)]
     pub fn reset(&mut self) {
         self.history.fill(0);
     }
 
-    #[inline(always)]
     pub fn get(&self, color: Color, source: Square, dest: Square, threats: BitBoard) -> i16 {
         let is_threatened = threats.has(source);
         self.history[Self::index(color, is_threatened, source, dest)]
     }
 
-    #[inline(always)]
     fn update_move(
         &mut self,
         c: Color,
@@ -86,7 +83,6 @@ impl HistoryHeuristic {
         apply_gravity(&mut self.history[idx], bonus, self.max_history);
     }
 
-    #[inline(always)]
     pub fn update(&mut self, board: &Board, mv: Move, delta: i32, threats: BitBoard) {
         let color = board.side_to_move();
         let source = mv.from;
@@ -95,7 +91,6 @@ impl HistoryHeuristic {
         self.update_move(color, is_threatened, source, dest, delta);
     }
 
-    #[inline(always)]
     fn index(color: Color, is_threatened: bool, source: Square, dest: Square) -> usize {
         let color_idx = color as usize;
         let threat_idx = is_threatened as usize;
@@ -113,7 +108,6 @@ impl HistoryHeuristic {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[inline(always)]
     pub fn maybe_reduce_or_prune(
         &self,
         board: &Board,
@@ -161,12 +155,10 @@ impl HistoryHeuristic {
         false
     }
 
-    #[inline(always)]
     pub fn get_bonus(&self, remaining_depth: u8) -> i32 {
         self.bonus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
     }
 
-    #[inline(always)]
     pub fn get_malus(&self, remaining_depth: u8) -> i32 {
         -self.malus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
     }

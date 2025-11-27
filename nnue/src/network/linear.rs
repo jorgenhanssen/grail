@@ -21,7 +21,6 @@ impl LinearLayer {
         })
     }
 
-    #[inline(always)]
     pub fn forward(&self, input: &[f32], output: &mut [f32]) {
         output.copy_from_slice(&self.biases);
 

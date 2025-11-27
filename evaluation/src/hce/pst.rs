@@ -72,7 +72,6 @@ const PST_TABLE: [PSTRefs; 2] = [
     },
 ];
 
-#[inline(always)]
 pub fn sum_pst(bitboard: BitBoard, pst: &PST, phase: f32, inv_phase: f32) -> i16 {
     let mut total = 0.0;
     for sq in bitboard {
@@ -82,7 +81,6 @@ pub fn sum_pst(bitboard: BitBoard, pst: &PST, phase: f32, inv_phase: f32) -> i16
     total.round() as i16
 }
 
-#[inline(always)]
 pub fn get_pst(color: Color) -> &'static PSTRefs<'static> {
     match color {
         Color::White => &PST_TABLE[0],

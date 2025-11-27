@@ -8,7 +8,6 @@ pub struct EvalContext<'a> {
 }
 
 impl<'a> EvalContext<'a> {
-    #[inline(always)]
     pub fn new(position: &'a Position<'a>, phase: f32) -> Self {
         Self {
             position,

@@ -33,7 +33,6 @@ const SIDE_TO_MOVE_IDX: usize = NUM_FEATURES - 1;
 // Bitset encoding
 pub const BITS_PER_U64: usize = 64;
 
-#[inline(always)]
 pub fn encode_board(
     board: &Board,
     white_attacks: BitBoard,
@@ -96,7 +95,6 @@ pub fn encode_board(
     features
 }
 
-#[inline(always)]
 pub fn encode_board_bitset(
     board: &Board,
     white_attacks: BitBoard,
@@ -159,7 +157,6 @@ pub fn encode_board_bitset(
     bitset
 }
 
-#[inline(always)]
 fn piece_color_to_index(piece: Piece, color: Color) -> usize {
     match (color, piece) {
         (Color::White, Piece::Pawn) => 0,

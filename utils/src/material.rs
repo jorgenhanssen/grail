@@ -3,19 +3,16 @@ use cozy_chess::{BitBoard, Board, Color, Piece};
 const LIGHT_SQUARES_MASK: u64 = 0x55AA55AA55AA55AA;
 
 /// Get minor pieces (knights and bishops) for a color.
-#[inline(always)]
 pub fn minors(board: &Board, color: Color) -> BitBoard {
     board.colored_pieces(color, Piece::Knight) | board.colored_pieces(color, Piece::Bishop)
 }
 
 /// Get major pieces (rooks and queens) for a color.
-#[inline(always)]
 pub fn majors(board: &Board, color: Color) -> BitBoard {
     board.colored_pieces(color, Piece::Rook) | board.colored_pieces(color, Piece::Queen)
 }
 
 /// Check if a specific color has insufficient material to force checkmate.
-#[inline(always)]
 pub fn side_has_insufficient_material(board: &Board, color: Color) -> bool {
     let color_pieces = board.colors(color);
 
@@ -41,7 +38,6 @@ pub fn side_has_insufficient_material(board: &Board, color: Color) -> bool {
 /// - K+N vs K (either side)
 /// - K+B vs K (either side)
 /// - K+B vs K+B with same-colored bishops
-#[inline(always)]
 pub fn has_insufficient_material(board: &Board) -> bool {
     let pawns = board.pieces(Piece::Pawn);
     let rooks = board.pieces(Piece::Rook);
@@ -103,7 +99,6 @@ pub fn has_insufficient_material(board: &Board) -> bool {
 ///
 /// Returns a value from 0.0 (endgame) to 1.0 (opening/middlegame).
 /// Uses piece weights: N=1, B=1, R=2, Q=4, with max score of 24.
-#[inline(always)]
 pub fn game_phase(board: &Board) -> f32 {
     let knights = board.pieces(Piece::Knight);
     let bishops = board.pieces(Piece::Bishop);
@@ -120,7 +115,6 @@ pub fn game_phase(board: &Board) -> f32 {
 /// Returns true when:
 /// - Side to move has only king and pawns
 /// - Side to move has no pawns, no majors, and at most one minor piece
-#[inline(always)]
 pub fn is_zugzwang(board: &Board) -> bool {
     let side_bits = board.colors(board.side_to_move());
     let pawn_bits = board.pieces(Piece::Pawn) & side_bits;

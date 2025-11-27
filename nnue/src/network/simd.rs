@@ -7,7 +7,6 @@ pub type SimdI16 = i16x32;
 pub const SIMD_WIDTH_F32: usize = 16;
 pub const SIMD_WIDTH_I16: usize = 32;
 
-#[inline(always)]
 pub fn simd_relu(values: &mut [f32]) {
     let len = values.len();
     let mut i = 0;
@@ -26,7 +25,6 @@ pub fn simd_relu(values: &mut [f32]) {
     }
 }
 
-#[inline(always)]
 pub fn simd_add(dest: &mut [f32], src: &[f32]) {
     let len = dest.len();
     let mut i = 0;
@@ -43,7 +41,6 @@ pub fn simd_add(dest: &mut [f32], src: &[f32]) {
     }
 }
 
-#[inline(always)]
 pub fn dot_product(a: &[f32], b: &[f32], len: usize) -> f32 {
     let mut sum_vec = SimdF32::splat(0.0);
     let mut i = 0;

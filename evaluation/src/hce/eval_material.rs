@@ -4,7 +4,6 @@ use crate::hce::context::EvalContext;
 use crate::hce::pst::{get_pst, sum_pst};
 use crate::piece_values::PieceValues;
 
-#[inline(always)]
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, piece_values: &PieceValues) -> i16 {
     let board = ctx.position.board;
 
