@@ -1,8 +1,8 @@
 use cozy_chess::{BitBoard, Board, Color, Move, Square};
 
-use crate::EngineConfig;
+use super::utils::apply_gravity;
+use crate::{EngineConfig, MAX_DEPTH};
 
-const MAX_DEPTH: usize = 100;
 // [color][is_threatened][from][to] (similar to Black Marlin)
 const HISTORY_SIZE: usize = Color::NUM * 2 * Square::NUM * Square::NUM;
 
@@ -83,15 +83,7 @@ impl HistoryHeuristic {
         bonus: i32,
     ) {
         let idx = Self::index(c, is_threatened, source, dest);
-        let entry = &mut self.history[idx];
-
-        let h = *entry as i32;
-        let b = bonus.clamp(-(self.max_history), self.max_history);
-
-        // History gravity formula
-        let new = h + b - ((h * b.abs()) / self.max_history);
-
-        *entry = new.clamp(-(self.max_history), self.max_history) as i16;
+        apply_gravity(&mut self.history[idx], bonus, self.max_history);
     }
 
     #[inline(always)]

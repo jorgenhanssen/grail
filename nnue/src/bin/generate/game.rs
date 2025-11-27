@@ -1,10 +1,12 @@
-use cozy_chess::{Board, Color, Move};
+use cozy_chess::{Board, Move};
 use rand::Rng;
 use search::Engine;
 use std::collections::HashMap;
 use std::str::FromStr;
 use uci::commands::GoParams;
-use utils::{has_insufficient_material, has_legal_moves};
+use utils::{
+    collect_legal_moves, flip_eval_perspective, has_insufficient_material, has_legal_moves,
+};
 
 const INITIAL_TEMPERATURE: f32 = 3.0;
 const TEMPERATURE_DECAY_RATE: f32 = 7.5;
@@ -88,11 +90,8 @@ impl SelfPlayGame {
     }
 
     fn record_eval(&mut self, engine_score: i16) {
-        let white_score = if self.board.side_to_move() == Color::White {
-            engine_score
-        } else {
-            -engine_score
-        };
+        // Engine score is from STM perspective; flip to white's perspective for training
+        let white_score = flip_eval_perspective(&self.board, engine_score);
 
         self.current_game_samples
             .push((format!("{}", self.board), white_score));
@@ -110,11 +109,7 @@ impl SelfPlayGame {
             return best_move;
         }
 
-        let mut legal_moves = Vec::new();
-        self.board.generate_moves(|moves| {
-            legal_moves.extend(moves);
-            false
-        });
+        let legal_moves = collect_legal_moves(&self.board);
 
         if legal_moves.len() == 1 {
             return legal_moves[0];

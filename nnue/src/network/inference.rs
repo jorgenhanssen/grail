@@ -1,6 +1,7 @@
 use candle_core::Result;
+use utils::bits::set_bit;
 
-use crate::encoding::{BITS_PER_U64, NUM_FEATURES, NUM_U64S};
+use crate::encoding::{NUM_FEATURES, NUM_U64S};
 
 use super::accumulator::Accumulator;
 use super::linear::LinearLayer;
@@ -50,9 +51,7 @@ impl NNUENetwork {
 
         for (i, &val) in input.iter().enumerate().take(NUM_FEATURES) {
             if val > 0.0 {
-                let word_idx = i / BITS_PER_U64;
-                let bit_idx = i % BITS_PER_U64;
-                current_input[word_idx] |= 1u64 << bit_idx;
+                set_bit(&mut current_input, i);
             }
         }
 

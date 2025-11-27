@@ -22,7 +22,7 @@ mod pruning;
 mod quiescence;
 mod search;
 
-const MAX_DEPTH: usize = 100;
+use crate::MAX_DEPTH;
 
 pub struct Engine {
     config: EngineConfig,

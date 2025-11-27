@@ -1,13 +1,15 @@
 use std::sync::{atomic::Ordering, mpsc::Sender, Arc};
 
 use arrayvec::ArrayVec;
-use cozy_chess::{BitBoard, Board, Color, Move, Piece};
+use cozy_chess::{BitBoard, Board, Move, Piece};
 use evaluation::scores::{MATE_VALUE, NEG_INFINITY};
 use uci::{
     commands::{GoParams, Info, Score},
     UciOutput,
 };
-use utils::{game_phase, has_legal_moves, is_capture, make_move, Position};
+use utils::{
+    flip_eval_perspective, game_phase, has_check, has_legal_moves, is_capture, make_move, Position,
+};
 
 use crate::{
     move_ordering::{MainMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
@@ -26,9 +28,7 @@ impl Engine {
         output: Option<&Sender<UciOutput>>,
     ) -> Option<(Move, i16)> {
         // Check for checkmate (no legal moves when in check)
-        let in_check = !self.board.checkers().is_empty();
-
-        if !has_legal_moves(&self.board) && in_check {
+        if !has_legal_moves(&self.board) && has_check(&self.board) {
             if let Some(output) = output {
                 output
                     .send(UciOutput::Info(Info {
@@ -245,7 +245,7 @@ impl Engine {
 
         let phase = game_phase(board);
         let remaining_depth = max_depth - depth;
-        let in_check = !board.checkers().is_empty();
+        let in_check = has_check(board);
 
         let position = Position::new(board);
 
@@ -253,11 +253,7 @@ impl Engine {
             tt_se // Cached in TT
         } else {
             let eval = self.eval(&position, phase);
-            if board.side_to_move() == Color::White {
-                eval
-            } else {
-                -eval
-            }
+            flip_eval_perspective(board, eval)
         };
 
         self.search_stack
