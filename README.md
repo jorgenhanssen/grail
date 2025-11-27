@@ -4,7 +4,7 @@
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-nightly-orange.svg)](https://www.rust-lang.org/)
 
-Grail is a UCI-compliant hobby chess engine written in Rust, featuring both Neural Network (NNUE) and Hand-Crafted (HCE) evaluation. It implements modern search techniques including Principal Variation Search, advanced pruning, and sophisticated move ordering.
+Grail is a hobby chess engine written in Rust, featuring both Neural Network (NNUE) and Hand-Crafted (HCE) evaluation. It implements modern search techniques including Principal Variation Search, advanced pruning, and sophisticated move ordering.
 
 ## Usage
 
@@ -43,7 +43,7 @@ The engine supports standard time controls (increment, sudden death, moves to go
 
 ## Play Against Grail Online
 
-You can challenge the latest version of Grail on Lichess at [lichess.org/@/grail-bot](https://lichess.org/@/grail-bot), running on a 1 vCPU Northflank instance with 1024 MB hash.
+You can challenge the latest version of Grail on [Lichess](https://lichess.org/@/grail-bot), running on a 1 vCPU Northflank instance with 1024 MB hash.
 
 ## For Developers
 
