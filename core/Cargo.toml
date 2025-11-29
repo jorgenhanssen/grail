@@ -14,6 +14,7 @@ tuning = ["uci/tuning", "search/tuning"]
 [dependencies]
 search = { path = "../search" }
 nnue = { path = "../nnue" }
+hce = { path = "../hce" }
 uci = { path = "../uci" }
 evaluation = { path = "../evaluation" }
 

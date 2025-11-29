@@ -1,7 +1,7 @@
 use crate::book::Book;
 use crate::game::SelfPlayGame;
 use crate::histogram::HistogramHandle;
-use evaluation::{hce, NNUE};
+use evaluation::NNUE;
 use search::{Engine, EngineConfig};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;

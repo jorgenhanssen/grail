@@ -1,5 +1,5 @@
 use super::HCEConfig;
-use crate::hce::context::EvalContext;
+use crate::context::EvalContext;
 use cozy_chess::{
     get_bishop_moves, get_knight_moves, get_rook_moves, BitBoard, Color, File, Piece, Rank, Square,
 };

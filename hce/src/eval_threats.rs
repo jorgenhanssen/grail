@@ -1,5 +1,5 @@
 use super::HCEConfig;
-use crate::hce::context::EvalContext;
+use crate::context::EvalContext;
 use cozy_chess::Color;
 
 /// Evaluate space advantage based on space controlled

@@ -1,5 +1,5 @@
 [package]
-name = "search"
+name = "hce"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
@@ -7,19 +7,8 @@ license = { workspace = true }
 description = { workspace = true }
 repository = { workspace = true }
 
-[features]
-tuning = []
-
 [dependencies]
 evaluation = { path = "../evaluation" }
-hce = { path = "../hce" }
-uci = { path = "../uci" }
 utils = { path = "../utils" }
-
 arrayvec = { workspace = true }
 cozy-chess = { workspace = true }
-ahash = { workspace = true }
-log = { workspace = true }
-
-[lib]
-name = "search"

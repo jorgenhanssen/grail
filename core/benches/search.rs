@@ -24,7 +24,7 @@ fn create_engine() -> Engine {
     let config = EngineConfig::default();
     let stop = Arc::new(AtomicBool::new(false));
 
-    let hce = Box::new(evaluation::hce::Evaluator::new(
+    let hce = Box::new(hce::Evaluator::new(
         config.get_piece_values(),
         config.get_hce_config(),
     ));

@@ -14,10 +14,9 @@ pub use config::HCEConfig;
 use context::EvalContext;
 use pawn_cache::PawnCache;
 
-use crate::def::HCE;
-use crate::hce::pawn_cache::CachedPawnEvaluation;
-use crate::piece_values::PieceValues;
+use crate::pawn_cache::CachedPawnEvaluation;
 use cozy_chess::Color;
+use evaluation::{PieceValues, HCE};
 use utils::{side_has_insufficient_material, Position};
 
 /// Hand-Crafted Evaluation: tunable metrics based on human knowledge and chess concepts.

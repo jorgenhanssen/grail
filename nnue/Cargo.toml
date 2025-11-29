@@ -10,6 +10,7 @@ repository = { workspace = true }
 [dependencies]
 search = { path = "../search" }
 evaluation = { path = "../evaluation" }
+hce = { path = "../hce" }
 uci = { path = "../uci" }
 utils = { path = "../utils" }
 
