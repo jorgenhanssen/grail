@@ -2,7 +2,7 @@ use std::sync::{atomic::Ordering, mpsc::Sender, Arc};
 
 use arrayvec::ArrayVec;
 use cozy_chess::{BitBoard, Board, Move, Piece};
-use evaluation::scores::{MATE_VALUE, NEG_INFINITY};
+use evaluation::scores::{MATE_VALUE, SCORE_INF};
 use uci::{
     commands::{GoParams, Info, Score},
     UciOutput,
@@ -149,7 +149,7 @@ impl Engine {
             threats,
         );
 
-        let mut best_score = NEG_INFINITY;
+        let mut best_score = -SCORE_INF;
         let mut current_best_move = None;
 
         // Negamax at root: call search_subtree with flipped window, then negate result
@@ -327,7 +327,7 @@ impl Engine {
 
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
-        let mut best_value = NEG_INFINITY;
+        let mut best_value = -SCORE_INF;
         let mut best_move = None;
         let mut best_line = Vec::new();
 
@@ -379,7 +379,7 @@ impl Engine {
                 continue;
             }
 
-            if let Some((value, mut line, is_quiet, child_depth)) = self.search_move(
+            if let Some((value, mut line, is_quiet, searched_depth)) = self.search_move(
                 board,
                 depth,
                 max_depth,
@@ -402,7 +402,7 @@ impl Engine {
                     best_move = Some(m);
                     line.insert(0, m);
                     best_line = line;
-                    best_move_depth = child_depth;
+                    best_move_depth = searched_depth;
                 }
 
                 alpha = alpha.max(best_value);
@@ -545,16 +545,15 @@ impl Engine {
             return None;
         }
 
-        // TODO: Clean up names or refactor se we don't get depth1, child_depth, actual_depth, etc...
-        let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
-        let mut actual_depth = child_max_depth;
+        let reduced_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
+        let mut searched_depth = reduced_max_depth;
 
         // Initial search (reduced if LMR, null window if not first move)
         self.search_stack.push_move(child_hash, m, moved_piece);
         let (child_value, pv_line) = self.search_subtree(
             &new_board,
             depth + 1,
-            child_max_depth,
+            reduced_max_depth,
             -beta_child,
             -alpha_child,
             true,
@@ -580,7 +579,7 @@ impl Engine {
             self.search_stack.pop();
             value = -re_child_value;
             line = re_line;
-            actual_depth = max_depth;
+            searched_depth = max_depth;
         }
 
         // Re-search with full window (if null window failed high in a PV node)
@@ -592,11 +591,11 @@ impl Engine {
             self.search_stack.pop();
             value = -full_child_value;
             line = full_line;
-            actual_depth = max_depth;
+            searched_depth = max_depth;
         }
 
         let is_quiet = !is_cap && !is_promotion;
-        Some((value, line, is_quiet, actual_depth))
+        Some((value, line, is_quiet, searched_depth))
     }
 
     /// Handler called if a search fails high - updates history tables, killers, etc.

@@ -4,8 +4,8 @@ use search::EngineConfig;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use uci::commands::{GoParams, Info, Score};
-use uci::{move_to_uci, UciOutput};
+use uci::commands::{GoParams, Info};
+use uci::{move_to_uci, Encoder, UciOutput};
 
 pub fn run(depth: u8) {
     let config = EngineConfig::default();
@@ -96,11 +96,12 @@ struct InfoPrinter {
 impl InfoPrinter {
     fn spawn(rx: Receiver<UciOutput>) -> Self {
         let handle = thread::spawn(move || {
+            let encoder = Encoder {};
             let mut last_info = None;
 
             for output in rx {
                 if let UciOutput::Info(info) = output {
-                    Self::print_info(&info);
+                    println!("{}", encoder.encode(&UciOutput::Info(info.clone())));
                     last_info = Some(info);
                 }
             }
@@ -113,37 +114,5 @@ impl InfoPrinter {
 
     fn join(self) -> Option<Info> {
         self.handle.join().expect("Info printer thread panicked")
-    }
-
-    fn print_info(info: &Info) {
-        // TODO: Use UCI encoder instead
-        print!(
-            "info depth {} seldepth {} nodes {} nps {} time {} ",
-            info.depth, info.sel_depth, info.nodes, info.nodes_per_second, info.time
-        );
-
-        Self::print_score(&info.score);
-        Self::print_pv(&info.pv);
-
-        println!();
-    }
-
-    fn print_score(score: &Score) {
-        // TODO: Use UCI encoder instead
-        match score {
-            Score::Centipawns(cp) => print!("score cp {} ", cp),
-            Score::Mate(m) => print!("score mate {} ", m),
-        }
-    }
-
-    fn print_pv(pv: &[String]) {
-        if pv.is_empty() {
-            return;
-        }
-
-        print!("pv");
-        for mv in pv {
-            print!(" {}", mv);
-        }
     }
 }

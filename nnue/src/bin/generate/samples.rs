@@ -1,4 +1,4 @@
-use nnue::network::{CP_MAX, CP_MIN};
+use nnue::network::CP_BOUND;
 use std::io::{self, Write};
 
 #[derive(Clone, Debug)]
@@ -15,7 +15,7 @@ impl Samples {
         let mut game_ids = Vec::with_capacity(evals.len());
         for (fen, score, game_id) in evals.iter() {
             fens.push(fen.clone().into_boxed_str());
-            scores.push((*score).clamp(CP_MIN, CP_MAX));
+            scores.push((*score).clamp(-CP_BOUND, CP_BOUND));
             game_ids.push(*game_id);
         }
         Self {
