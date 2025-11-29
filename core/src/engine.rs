@@ -1,7 +1,6 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use crate::nnue::resolve_nnue;
-use evaluation::hce;
 use search::Engine;
 use search::EngineConfig;
 

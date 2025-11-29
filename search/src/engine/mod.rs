@@ -6,7 +6,7 @@ use std::sync::{
 
 use ahash::AHashSet;
 use cozy_chess::{Board, Move};
-use evaluation::{hce, PieceValues, HCE, NNUE};
+use evaluation::{PieceValues, HCE, NNUE};
 use uci::{commands::Info, pv_to_uci, UciOutput};
 
 use crate::{

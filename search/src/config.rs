@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
-use evaluation::{hce::HCEConfig, PieceValues};
+use evaluation::PieceValues;
+use hce::HCEConfig;
 use uci::{UciOption, UciOptionType, UciOutput};
 
 /// Helper to conditionally create UCI option metadata.
