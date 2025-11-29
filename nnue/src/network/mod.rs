@@ -14,10 +14,8 @@ pub const EMBEDDING_SIZE: usize = 1024;
 /// Size of the hidden layers after the embedding.
 pub const HIDDEN_SIZE: usize = 16;
 
-// Evaluation clipping bounds (centipawns)
-// TODO: Consider only using a single value, since they are the same.
-pub const CP_MAX: i16 = 5000;
-pub const CP_MIN: i16 = -5000;
+/// Evaluation clipping bound (centipawns). Output is clamped to [-CP_BOUND, CP_BOUND].
+pub const CP_BOUND: i16 = 5000;
 
 /// Scale factor for network I/O.
 /// Training targets are divided by this, inference output is multiplied back.

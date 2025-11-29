@@ -1,7 +1,7 @@
 use std::sync::atomic::Ordering;
 
 use cozy_chess::{Board, Color, Move, Piece, Rank};
-use evaluation::scores::{MATE_VALUE, NEG_INFINITY};
+use evaluation::scores::{MATE_VALUE, SCORE_INF};
 use utils::flip_eval_perspective;
 use utils::{game_phase, has_check, make_move, Position};
 
@@ -106,7 +106,7 @@ impl Engine {
         }
 
         let mut best_line = Vec::new();
-        let mut best_eval = if in_check { NEG_INFINITY } else { stand_pat };
+        let mut best_eval = if in_check { -SCORE_INF } else { stand_pat };
 
         let mut moves = QMoveGenerator::new(
             in_check,
@@ -188,7 +188,7 @@ impl Engine {
         }
 
         // If in check and no legal moves improved the position, it's checkmate
-        if in_check && best_eval == NEG_INFINITY {
+        if in_check && best_eval == -SCORE_INF {
             return (-(MATE_VALUE - depth as i16), Vec::new());
         }
 

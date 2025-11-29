@@ -9,14 +9,10 @@ use std::thread;
 
 use cozy_chess::{Board, Color};
 use nnue::encoding::{encode_board, NUM_FEATURES};
+use nnue::network::FV_SCALE;
 use utils::board_metrics::BoardMetrics;
 
 use super::indexer::SampleRef;
-
-/// Score scaling factor. Maps centipawn scores to a more neural-network-friendly range.
-/// 400cp → 1.0, typical advantage scores stay in [-1, 1] range.
-/// TODO: Use the one from network.rs
-pub const FV_SCALE: f32 = 400.0;
 
 // Holds x items in the channel per worker
 const CHANNEL_BUFFER_MULTIPLIER: usize = 2;

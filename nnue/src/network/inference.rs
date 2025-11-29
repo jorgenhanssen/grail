@@ -7,7 +7,7 @@ use super::accumulator::Accumulator;
 use super::linear::LinearLayer;
 use super::model::Network;
 use super::simd::{simd_add, simd_relu};
-use super::{CP_MAX, CP_MIN, EMBEDDING_SIZE, FV_SCALE, HIDDEN_SIZE};
+use super::{CP_BOUND, EMBEDDING_SIZE, FV_SCALE, HIDDEN_SIZE};
 
 /// Main NNUE inference engine with quantized weights for fast evaluation.
 /// Uses an incremental accumulator for the embedding layer.
@@ -66,6 +66,6 @@ impl NNUENetwork {
             .forward(&self.hidden2_buffer, &mut self.output_buffer);
 
         // Scale to CP range
-        (self.output_buffer[0] * FV_SCALE).clamp(CP_MIN as f32, CP_MAX as f32)
+        (self.output_buffer[0] * FV_SCALE).clamp(-CP_BOUND as f32, CP_BOUND as f32)
     }
 }

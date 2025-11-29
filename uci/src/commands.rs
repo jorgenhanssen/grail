@@ -39,7 +39,7 @@ pub enum UciOutput {
 /// Search information sent to the GUI during analysis.
 ///
 /// Example: `info depth 4 seldepth 7 nodes 3274 nps 922805 time 3 score cp 10 pv e2e4 d7d5 e4d5 d8d5`
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Info {
     pub depth: u8,
     pub sel_depth: u8,
@@ -51,7 +51,7 @@ pub struct Info {
 }
 
 /// Evaluation score in UCI format.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Score {
     /// Score in centipawns.
     Centipawns(i16),
