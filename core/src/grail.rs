@@ -1,5 +1,3 @@
-//! UCI application - handles the UCI protocol and coordinates the engine worker.
-
 use std::io::BufRead;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -20,6 +18,9 @@ const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
 const ENGINE_AUTHOR: &str = "Jørgen Hanssen";
 
 /// The main UCI application.
+///
+/// Handles the UCI protocol on the main thread and coordinates
+/// the engine worker thread via channels.
 pub struct Grail {
     config: EngineConfig,
     stop: Arc<AtomicBool>,

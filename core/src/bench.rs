@@ -1,5 +1,3 @@
-//! Benchmark mode - runs a fixed-depth search for performance profiling.
-
 use std::sync::{
     atomic::AtomicBool,
     mpsc::{self, Receiver},
@@ -16,6 +14,9 @@ use uci::{move_to_uci, Encoder, UciOutput};
 use crate::engine::create_engine;
 
 /// Benchmark runner for performance profiling.
+///
+/// Runs a fixed-depth search from the starting position
+/// and prints node count, NPS, and timing statistics.
 pub struct Bench {
     depth: u8,
     engine: search::Engine,

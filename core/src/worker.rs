@@ -1,8 +1,3 @@
-//! Engine worker thread for processing UCI commands.
-//!
-//! The worker runs on a dedicated thread and owns the search engine.
-//! Commands are received via channel from the main UCI thread.
-
 use std::sync::mpsc::{Receiver, Sender};
 
 use ahash::AHashSet;
@@ -28,6 +23,9 @@ pub enum EngineCommand {
 }
 
 /// Engine worker that processes commands on a dedicated thread.
+///
+/// Owns the search engine and receives commands via channel from
+/// the main UCI thread. Runs searches and sends results back.
 pub struct EngineWorker {
     engine: Engine,
     rx: Receiver<EngineCommand>,
