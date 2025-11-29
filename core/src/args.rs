@@ -10,8 +10,4 @@ pub struct Args {
     /// Log UCI communication to a file for debugging.
     #[arg(short, long)]
     pub log_file: Option<PathBuf>,
-
-    /// Run a benchmark search to the specified depth, then exit.
-    #[arg(long)]
-    pub bench: Option<u8>,
 }
