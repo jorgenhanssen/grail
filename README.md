@@ -27,7 +27,8 @@ Each release includes builds optimized for different CPU architectures:
 | **Linux / Windows** | `x86-64-v3` | Intel Haswell+ (2013+), AMD Zen 2+ (2019+)            |
 | **macOS**           | `arm64`     | Apple Silicon (M1/M2/M3/M4)                           |
 
-> [!TIP] > **Not sure?** On Windows/Linux, try `x86-64-v4` first for best performance. If the engine crashes on startup, use `x86-64-v3` instead - it has wider compatibility.
+> [!TIP]
+> **Not sure?** On Windows/Linux, try `x86-64-v4` first for best performance. If the engine crashes on startup, use `x86-64-v3` instead - it has wider compatibility.
 >
 > For technical details, see [x86-64 Microarchitecture Levels](https://en.wikipedia.org/wiki/X86-64#Microarchitecture_levels).
 
