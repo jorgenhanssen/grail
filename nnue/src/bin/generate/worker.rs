@@ -41,12 +41,15 @@ impl SelfPlayWorker {
             config.get_hce_config(),
         ));
 
+        // Engine stop flag (not used in data generation, but required by Engine)
+        let stop = Arc::new(AtomicBool::new(false));
+
         Self {
             _tid: tid,
             sample_counter,
             game_id_counter,
             depth,
-            engine: Engine::new(&config, hce, nnue),
+            engine: Engine::new(&config, hce, nnue, stop),
             opening_book,
             histogram,
         }

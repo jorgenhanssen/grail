@@ -1,96 +1,29 @@
 mod args;
 mod bench;
 mod engine;
+mod grail;
 mod nnue;
+mod worker;
 
-use args::Args;
-use clap::Parser;
-use log::{debug, LevelFilter};
-use search::EngineConfig;
-use simplelog::{Config, WriteLogger};
 use std::error::Error;
 use std::fs::File;
-use uci::{move_to_uci, UciConnection, UciInput, UciOutput};
 
-const ENGINE_NAME: &str = "Grail";
-const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
-const ENGINE_AUTHOR: &str = "Jørgen Hanssen";
+use args::Args;
+use bench::Bench;
+use clap::Parser;
+use grail::Grail;
+use log::LevelFilter;
+use simplelog::{Config, WriteLogger};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = init()?;
 
-    // If bench is specified, run benchmark and exit
     if let Some(depth) = args.bench {
-        bench::run(depth);
+        Bench::new(depth).run();
         return Ok(());
     }
 
-    let mut uci = UciConnection::new();
-
-    uci.send(UciOutput::Raw(format!(
-        "{} {} by {}",
-        ENGINE_NAME, ENGINE_VERSION, ENGINE_AUTHOR
-    )))?;
-
-    let mut config = EngineConfig::default();
-    let mut engine = engine::create_engine(&config);
-
-    uci.listen(|input, output| {
-        match input {
-            UciInput::Uci => {
-                output.send(UciOutput::IdName(format!(
-                    "{} {}",
-                    ENGINE_NAME, ENGINE_VERSION
-                )))?;
-                output.send(UciOutput::IdAuthor(ENGINE_AUTHOR.to_string()))?;
-
-                config.to_uci(&output)?;
-
-                output.send(UciOutput::UciOk)?;
-            }
-            UciInput::IsReady => {
-                output.send(UciOutput::ReadyOk)?;
-            }
-            UciInput::SetOption { name, value } => {
-                if let Err(e) = config.update_from_uci(name, value) {
-                    // TODO: Consider sending info back to the GUI
-                    debug!("Option setting failed: {}", e);
-                } else {
-                    debug!("Set option '{}' to '{}'", name, value);
-                    engine.configure(&config, false);
-                }
-            }
-            UciInput::UciNewGame => {
-                engine.new_game();
-            }
-            UciInput::Position {
-                board,
-                game_history,
-            } => {
-                engine.set_position(board.clone(), game_history.clone());
-            }
-            UciInput::Go(params) => {
-                let result = engine.search(params, Some(&output));
-
-                if let Some((best_move, _)) = result {
-                    let uci_move = move_to_uci(engine.board(), best_move);
-                    output.send(UciOutput::BestMove(uci_move))?;
-                }
-            }
-            UciInput::Stop => {
-                engine.stop();
-            }
-            UciInput::Quit => {
-                engine.stop();
-            }
-            UciInput::Unknown(line) => {
-                debug!("Unknown command: {}", line);
-            }
-        }
-        Ok(())
-    })?;
-
-    Ok(())
+    Grail::new().run()
 }
 
 fn init() -> Result<Args, Box<dyn Error>> {

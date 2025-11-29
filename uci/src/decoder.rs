@@ -5,9 +5,19 @@ use cozy_chess::{util::parse_uci_move, Board};
 
 use super::commands::{GoParams, UciInput};
 
-pub struct Decoder {}
+pub struct Decoder;
+
+impl Default for Decoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl Decoder {
+    pub fn new() -> Self {
+        Self
+    }
+
     pub fn decode(&self, input: &str) -> UciInput {
         match input {
             "uci" => UciInput::Uci,
