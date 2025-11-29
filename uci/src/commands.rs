@@ -70,8 +70,6 @@ impl Default for Score {
 pub struct GoParams {
     /// Search until "stop" is received.
     pub infinite: bool,
-    /// Restrict search to these moves only. TODO: not yet implemented.
-    pub search_moves: Option<Vec<String>>,
     /// White's remaining time in milliseconds.
     pub wtime: Option<u64>,
     /// Black's remaining time in milliseconds.
