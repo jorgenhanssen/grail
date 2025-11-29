@@ -21,14 +21,13 @@ Grail is a command-line engine designed for **Standard Chess**. It requires a UC
 
 Each release includes builds optimized for different CPU architectures:
 
-| OS | Binary | Supported CPUs |
-|---|---|---|
+| OS                  | Binary      | Supported CPUs                                        |
+| ------------------- | ----------- | ----------------------------------------------------- |
 | **Linux / Windows** | `x86-64-v4` | Intel Skylake-X/Ice Lake+ (2017+), AMD Zen 4+ (2022+) |
-| **Linux / Windows** | `x86-64-v3` | Intel Haswell+ (2013+), AMD Zen 2+ (2019+) |
-| **macOS** | `arm64` | Apple Silicon (M1/M2/M3/M4) |
+| **Linux / Windows** | `x86-64-v3` | Intel Haswell+ (2013+), AMD Zen 2+ (2019+)            |
+| **macOS**           | `arm64`     | Apple Silicon (M1/M2/M3/M4)                           |
 
-> [!TIP]
-> **Not sure?** On Windows/Linux, try `x86-64-v4` first for best performance. If the engine crashes on startup, use `x86-64-v3` instead - it has wider compatibility.
+> [!TIP] > **Not sure?** On Windows/Linux, try `x86-64-v4` first for best performance. If the engine crashes on startup, use `x86-64-v3` instead - it has wider compatibility.
 >
 > For technical details, see [x86-64 Microarchitecture Levels](https://en.wikipedia.org/wiki/X86-64#Microarchitecture_levels).
 
@@ -71,6 +70,20 @@ The project includes a `Makefile` for convenience:
 - **`make generate`**: Builds the data generation tool for NNUE training.
 - **`make train`**: Builds the NNUE trainer (auto-detects CUDA/Metal).
 - **`make clean`**: Cleans the build directory.
+
+### Benchmarking
+
+Runs depth-15 searches on standard perft positions:
+
+```bash
+cargo bench --bench search
+```
+
+For profiling with flamegraph:
+
+```bash
+CARGO_PROFILE_BENCH_DEBUG=true cargo flamegraph --bench search -- --bench
+```
 
 ### NNUE Data Generation & Training
 

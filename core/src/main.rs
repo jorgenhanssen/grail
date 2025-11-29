@@ -1,5 +1,4 @@
 mod args;
-mod bench;
 mod engine;
 mod grail;
 mod nnue;
@@ -9,20 +8,13 @@ use std::error::Error;
 use std::fs::File;
 
 use args::Args;
-use bench::Bench;
 use clap::Parser;
 use grail::Grail;
 use log::LevelFilter;
 use simplelog::{Config, WriteLogger};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let args = init()?;
-
-    if let Some(depth) = args.bench {
-        Bench::new(depth).run();
-        return Ok(());
-    }
-
+    init()?;
     Grail::new().run()
 }
 

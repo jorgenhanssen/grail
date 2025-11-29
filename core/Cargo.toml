@@ -26,3 +26,10 @@ rayon = { workspace = true }
 simplelog = { workspace = true }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "search"
+harness = false
