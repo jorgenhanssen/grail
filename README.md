@@ -27,6 +27,7 @@ Each release includes builds optimized for different CPU architectures:
 | **Linux / Windows** | `x86-64-v3` | Intel Haswell+ (2013+), AMD Zen 2+ (2019+)            |
 | **macOS**           | `arm64`     | Apple Silicon (M1/M2/M3/M4)                           |
 
+<!-- prettier-ignore -->
 > [!TIP]
 > **Not sure?** On Windows/Linux, try `x86-64-v4` first for best performance. If the engine crashes on startup, use `x86-64-v3` instead - it has wider compatibility.
 >
@@ -128,3 +129,8 @@ The trainer loads all CSV files from `nnue/data/` and saves the best model to `n
 - `--test-ratio`: Fraction of data to use for testing (default: 0.01).
 - `--lr-decay`: Learning rate decay factor (default: 0.95).
 - `--patience`: Epochs to wait for improvement before stopping (default: 2).
+
+## Acknowledgements
+
+- [Chess Programming Wiki](https://www.chessprogramming.org/) – An invaluable resource for chess programming concepts and techniques.
+- Opening books in `/books` sourced from the computer chess community via [TalkChess](https://talkchess.com/viewtopic.php?t=50619).
