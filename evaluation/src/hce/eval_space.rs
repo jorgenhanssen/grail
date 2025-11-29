@@ -12,6 +12,7 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
 
 /// Evaluate piece coordination - bonuses for defended pieces
 /// Defended pieces are more stable and can be more aggressive
+/// TODO: Consider moving support to own file
 pub(super) fn evaluate_support(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let board = ctx.position.board;
     let support = ctx.position.support_for(color);

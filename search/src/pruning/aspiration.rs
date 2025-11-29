@@ -1,4 +1,3 @@
-// aspiration.rs
 use evaluation::scores::{NEG_INFINITY, POS_INFINITY};
 
 #[derive(PartialEq, Debug)]
@@ -8,6 +7,10 @@ pub enum Pass {
     FailHigh,
 }
 
+/// Manages aspiration window bounds across search iterations.
+/// Starts with a narrow window around the previous score, widens on fail-low/fail-high.
+///
+/// <https://www.chessprogramming.org/Aspiration_Windows>
 #[derive(Copy, Clone)]
 pub struct AspirationWindow {
     alpha: i16,
@@ -28,6 +31,7 @@ impl AspirationWindow {
         }
     }
 
+    /// Sets up window for new depth based on previous score.
     pub fn begin_depth(&mut self, depth: u8, prev_score: i16) {
         if depth < self.enabled_from {
             self.alpha = NEG_INFINITY;
@@ -44,6 +48,7 @@ impl AspirationWindow {
         (self.alpha, self.beta)
     }
 
+    /// Checks score against bounds; widens window on failure.
     pub fn analyse_pass(&mut self, score: i16) -> Pass {
         if score > self.alpha && score < self.beta {
             return Pass::Hit(score);
@@ -61,6 +66,7 @@ impl AspirationWindow {
         }
     }
 
+    /// Fully opens the window after too many failures.
     pub fn fully_extend(&mut self) {
         self.alpha = NEG_INFINITY;
         self.beta = POS_INFINITY;

@@ -7,10 +7,11 @@ use clap::Parser;
 #[command(author = "Jørgen Hanssen <jorgen@hanssen.io>")]
 #[command(version = "0.1.0")]
 pub struct Args {
+    /// Log UCI communication to a file for debugging.
     #[arg(short, long)]
     pub log_file: Option<PathBuf>,
 
-    /// Run a benchmark search from the starting position to the specified depth
+    /// Run a benchmark search to the specified depth, then exit.
     #[arg(long)]
     pub bench: Option<u8>,
 }

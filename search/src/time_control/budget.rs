@@ -128,6 +128,7 @@ impl TimeBudget {
 
         let moves_left = params.moves_to_go.unwrap_or(move_margin(board));
 
+        // TODO: skip reserve when moves_to_go is set (time control refills after those moves)
         let reserve = ((time_left as f64) * RESERVE_FRACTION) as u64;
         let reserve = reserve.max(MIN_RESERVE_MS);
         let available = time_left

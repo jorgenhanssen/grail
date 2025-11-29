@@ -2,6 +2,12 @@ use cozy_chess::{Board, Move, Piece};
 use evaluation::piece_values::PieceValues;
 use utils::make_move;
 
+/// Evaluates material gain/loss from an exhaustive capture sequence on a square.
+///
+/// Builds a swaplist of alternating recaptures (least valuable attacker first),
+/// then works backward letting each side choose: recapture or stop.
+///
+/// <https://www.chessprogramming.org/Static_Exchange_Evaluation>
 #[inline]
 pub fn see(board: &Board, mv: Move, phase: f32, piece_values: &PieceValues) -> i16 {
     let target = mv.to;
@@ -66,7 +72,8 @@ pub fn see(board: &Board, mv: Move, phase: f32, piece_values: &PieceValues) -> i
         }
     }
 
-    // Backward induction (CPW): gains[i-1] = -max(-gains[i-1], gains[i])
+    // Backward induction: each side chooses max(current gain, -opponent's best).
+    // Must evaluate from the end since earlier decisions depend on later outcomes.
     let mut i = gains_length;
     while i > 1 {
         let next = gains[i - 1];

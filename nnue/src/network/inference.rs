@@ -9,14 +9,16 @@ use super::model::Network;
 use super::simd::{simd_add, simd_relu};
 use super::{CP_MAX, CP_MIN, EMBEDDING_SIZE, FV_SCALE, HIDDEN_SIZE};
 
-/// Main NNUE inference engine.
+/// Main NNUE inference engine with quantized weights for fast evaluation.
+/// Uses an incremental accumulator for the embedding layer.
 pub struct NNUENetwork {
     accumulator: Accumulator,
     hidden1: LinearLayer,
     hidden2: LinearLayer,
     output: LinearLayer,
 
-    // Scratch buffers to avoid allocation during forward pass
+    // Scratch buffers to avoid allocation during forward pass.
+    // TODO: Move these into LinearLayer for consistency with Accumulator.
     hidden1_buffer: [f32; HIDDEN_SIZE],
     hidden2_buffer: [f32; HIDDEN_SIZE],
     output_buffer: [f32; 1],

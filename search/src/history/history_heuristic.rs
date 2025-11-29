@@ -3,9 +3,12 @@ use cozy_chess::{BitBoard, Board, Color, Move, Square};
 use super::utils::apply_gravity;
 use crate::{EngineConfig, MAX_DEPTH};
 
-// [color][is_threatened][from][to] (similar to Black Marlin)
 const HISTORY_SIZE: usize = Color::NUM * 2 * Square::NUM * Square::NUM;
 
+/// Scores quiet moves based on search success. Indexed by [color][is_threatened][from][to].
+/// Moves causing beta cutoffs get bonuses; moves searched before a cutoff get malus.
+///
+/// <https://www.chessprogramming.org/History_Heuristic>
 #[derive(Clone)]
 pub struct HistoryHeuristic {
     history: Vec<i16>,
@@ -107,6 +110,8 @@ impl HistoryHeuristic {
             + dest_idx
     }
 
+    /// Applies extra reduction or pruning based on history score.
+    /// Low-history moves get reduced more; very low scores may be pruned.
     #[allow(clippy::too_many_arguments)]
     pub fn maybe_reduce_or_prune(
         &self,

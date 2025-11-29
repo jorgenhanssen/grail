@@ -1,11 +1,16 @@
 use cozy_chess::{BitBoard, Board, Color, Piece, Square};
 use utils::bitset::Bitset;
 
-// Board encoding feature counts
-const NUM_PIECE_PLACEMENT_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM; // 768
-const NUM_SUPPORT_FEATURES: usize = Square::NUM * 2; // 128 (white + black defended pieces)
-const NUM_SPACE_FEATURES: usize = Square::NUM * 2; // 128 (white + black controlled non-piece squares)
-const NUM_THREAT_FEATURES: usize = Square::NUM * 2; // 128 (white + black threatened pieces)
+// Feature layout (total 1153 features):
+// - Piece placements: 64 squares × 6 pieces × 2 colors = 768 features
+// - Support: squares where each color defends own pieces = 128 features (64 per color)
+// - Space: squares each color controls (non-piece squares) = 128 features
+// - Threats: squares where each color threatens enemy pieces = 128 features
+// - Side to move: 1 feature (1 if White to move)
+const NUM_PIECE_PLACEMENT_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM;
+const NUM_SUPPORT_FEATURES: usize = Square::NUM * 2;
+const NUM_SPACE_FEATURES: usize = Square::NUM * 2;
+const NUM_THREAT_FEATURES: usize = Square::NUM * 2;
 const NUM_SIDE_TO_MOVE_FEATURES: usize = 1;
 
 pub const NUM_FEATURES: usize = NUM_PIECE_PLACEMENT_FEATURES
@@ -30,9 +35,8 @@ const BLACK_THREATS_START: usize = WHITE_THREATS_END;
 const BLACK_THREATS_END: usize = BLACK_THREATS_START + Square::NUM;
 const SIDE_TO_MOVE_IDX: usize = NUM_FEATURES - 1;
 
-// Bitset encoding
-pub const BITS_PER_U64: usize = 64;
-
+/// Encodes a board position into a dense f32 feature array.
+/// Used during training where f32 tensors are required.
 pub fn encode_board(
     board: &Board,
     white_attacks: BitBoard,
@@ -95,6 +99,11 @@ pub fn encode_board(
     features
 }
 
+/// Encodes a board position into a packed bitset for inference.
+///
+/// Bitset is faster than f32 for inference: XOR finds changed features instantly,
+/// and storage is 64x denser (64 bits per u64 vs one f32 per feature).
+/// Training still uses the f32 version above since tensors require floats.
 pub fn encode_board_bitset(
     board: &Board,
     white_attacks: BitBoard,

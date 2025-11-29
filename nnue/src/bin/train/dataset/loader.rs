@@ -13,13 +13,21 @@ use utils::board_metrics::BoardMetrics;
 
 use super::indexer::SampleRef;
 
+/// Score scaling factor. Maps centipawn scores to a more neural-network-friendly range.
+/// 400cp → 1.0, typical advantage scores stay in [-1, 1] range.
+/// TODO: Use the one from network.rs
 pub const FV_SCALE: f32 = 400.0;
 
 // Holds x items in the channel per worker
 const CHANNEL_BUFFER_MULTIPLIER: usize = 2;
 
-type BatchData = (Vec<f32>, Vec<f32>); // (x, y) - (features, scores)
+type BatchData = (Vec<f32>, Vec<f32>); // (features, scores)
 
+/// Multi-threaded data loader that reads samples from disk on-demand.
+///
+/// Workers read FENs from disk using SampleRef indices, encode them to features,
+/// and send batches through a channel. Each worker caches open file handles to
+/// avoid repeated open/close overhead.
 pub struct DataLoader {
     receiver: mpsc::Receiver<BatchData>,
     workers: Vec<thread::JoinHandle<()>>,

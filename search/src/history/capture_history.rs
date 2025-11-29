@@ -5,6 +5,10 @@ use crate::{EngineConfig, MAX_DEPTH};
 
 const CAPTURE_HISTORY_SIZE: usize = Piece::NUM * Square::NUM * Piece::NUM;
 
+/// History heuristic for captures. Boosts captures that caused cutoffs, penalizes those that didn't.
+/// Indexed by [attacker][to_square][victim].
+///
+/// <https://www.chessprogramming.org/Capture_History>
 #[derive(Clone)]
 pub struct CaptureHistory {
     history: Vec<i16>,

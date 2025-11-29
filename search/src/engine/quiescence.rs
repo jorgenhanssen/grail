@@ -16,6 +16,10 @@ use crate::{
 use super::Engine;
 
 impl Engine {
+    /// Quiescence search: continues searching captures until the position is stable enough
+    /// for a reliable static evaluation.
+    ///
+    /// <https://www.chessprogramming.org/Quiescence_Search>
     pub(super) fn quiescence_search(
         &mut self,
         board: &Board,

@@ -22,6 +22,9 @@ use crate::{
 use super::{Engine, MAX_DEPTH};
 
 impl Engine {
+    /// Iterative deepening search with aspiration windows.
+    ///
+    /// Returns the best move and score, or `None` if already in checkmate.
     pub fn search(
         &mut self,
         params: &GoParams,
@@ -106,6 +109,7 @@ impl Engine {
         best_move.map(|mv| (mv, best_score))
     }
 
+    /// Initializes the search - resets all state for a new search.
     fn init_search(&mut self) {
         self.stop.store(false, Ordering::Relaxed);
 
@@ -119,6 +123,8 @@ impl Engine {
         self.tt.age();
     }
 
+    /// Root search with the given alpha-beta window.
+    /// Called once per aspiration window attempt at each depth.
     pub(super) fn search_root(
         &mut self,
         depth: u8,
@@ -182,6 +188,10 @@ impl Engine {
         (current_best_move, best_score)
     }
 
+    /// Recursive alpha-beta search with PVS.
+    ///
+    /// Applies pruning, reductions, and searches child nodes.
+    /// Returns (score, pv).
     #[allow(clippy::too_many_arguments)]
     pub(super) fn search_subtree(
         &mut self,
@@ -223,13 +233,16 @@ impl Engine {
             maybe_tt_move = tt_move;
             tt_static_eval = tt_se;
             match tt_bound {
+                // Exact: previous search found true minimax value
                 Bound::Exact => return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m])),
+                // Lower: previous search failed high (value >= beta), so value is at least this good
                 Bound::Lower => {
                     alpha = alpha.max(tt_value);
                     if alpha >= beta {
                         return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m]));
                     }
                 }
+                // Upper: previous search failed low (value <= alpha), so value is at most this bad
                 Bound::Upper => {
                     if tt_value <= alpha {
                         return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m]));
@@ -443,6 +456,8 @@ impl Engine {
         (best_value, best_line)
     }
 
+    /// Searches a single move with per-move pruning and LMR.
+    /// Returns `None` if the move was pruned, otherwise (score, pv, is_quiet, depth).
     #[allow(clippy::too_many_arguments)]
     pub(super) fn search_move(
         &mut self,
@@ -504,6 +519,11 @@ impl Engine {
             self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
         );
 
+        // PVS/NegaScout: assume the first move (from TT/ordering) is best.
+        // Search it with full window to get an accurate score.
+        // For later moves, use a null window (alpha, alpha+1) to quickly verify they don't beat it.
+        // If one does beat alpha, our assumption was wrong, so we re-search with full window.
+        // https://www.chessprogramming.org/Principal_Variation_Search
         let alpha_child = alpha;
         let beta_child = if is_pv_move { beta } else { alpha + 1 };
 
@@ -525,6 +545,7 @@ impl Engine {
             return None;
         }
 
+        // TODO: Clean up names or refactor se we don't get depth1, child_depth, actual_depth, etc...
         let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
         let mut actual_depth = child_max_depth;
 
@@ -578,6 +599,7 @@ impl Engine {
         Some((value, line, is_quiet, actual_depth))
     }
 
+    /// Handler called if a search fails high - updates history tables, killers, etc.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn on_fail_high(
         &mut self,
