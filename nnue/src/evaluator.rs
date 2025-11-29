@@ -9,8 +9,15 @@ use crate::{
 };
 use candle_core::{DType, Device};
 
+/// NNUE evaluator for inference.
+///
+/// The `network` field exists because candle's VarMap requires creating the network structure
+/// first (which registers tensors), then loading weights. After loading, `enable_nnue()` creates
+/// the quantized network from the loaded weights.
 pub struct Evaluator {
-    nnue_network: Option<NNUENetwork>,
+    /// Quantized network for fast inference
+    nnue: Option<NNUENetwork>,
+    /// Full-precision network used to load weights before quantization
     network: Network,
 }
 
@@ -20,13 +27,13 @@ impl Evaluator {
         let network = Network::new(&vs).unwrap();
 
         Self {
-            nnue_network: None,
+            nnue: None,
             network,
         }
     }
 
     pub fn enable_nnue(&mut self) {
-        self.nnue_network = Some(NNUENetwork::from_network(&self.network).unwrap());
+        self.nnue = Some(NNUENetwork::from_network(&self.network).unwrap());
     }
 }
 
@@ -35,8 +42,8 @@ impl NNUE for Evaluator {
         "NNUE".to_string()
     }
 
+    /// Evaluates the position using the neural network.
     fn evaluate(&mut self, board: &Board) -> i16 {
-        // Compute tactical features
         let metrics = BoardMetrics::new(board);
         let white_attacks = metrics.attacks[Color::White as usize];
         let black_attacks = metrics.attacks[Color::Black as usize];
@@ -54,7 +61,7 @@ impl NNUE for Evaluator {
             white_threats,
             black_threats,
         );
-        self.nnue_network
+        self.nnue
             .as_mut()
             .expect("NNUE network not initialized - call enable_nnue() first")
             .forward(&bitset)

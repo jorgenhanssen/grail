@@ -1,6 +1,12 @@
 use cozy_chess::{BitBoard, Color};
 
-/// Piece-Square Table
+/// Piece-Square Table: position-dependent bonuses/penalties for each piece.
+/// Separate tables for middlegame (mg) and endgame (eg), interpolated by game phase.
+///
+/// Values are in centipawns. Positive = good square, negative = bad square.
+/// Tables are defined for White (a1=index 0, h8=index 63), Black tables are mirrored.
+///
+/// <https://www.chessprogramming.org/Piece-Square_Tables>
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Copy)]
 pub struct PST<'a> {
@@ -90,20 +96,22 @@ pub fn get_pst(color: Color) -> &'static PSTRefs<'static> {
     }
 }
 
+/// Mirrors a White PST vertically to create Black's perspective.
+/// Black's a8 corresponds to White's a1, etc.
 const fn invert_pst(source: &[f32; 64]) -> [f32; 64] {
     let mut table = [0.0; 64];
     let mut i = 0;
     while i < 64 {
         let rank = i / 8;
         let file = i % 8;
-        let flipped_index = (7 - rank) * 8 + file; // vertical mirror
+        let flipped_index = (7 - rank) * 8 + file;
         table[i] = source[flipped_index];
         i += 1;
     }
     table
 }
 
-// Pawns: Stronger push to ranks 4-6, eg rewards advancement more
+// Pawns MG: Reward central control (d4/e4), slight penalty for premature advancement to 7th.
 pub const WHITE_PAWN_MG_PST: [f32; 64] = [
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, // rank 1 (a1-h1)
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, // rank 2
@@ -114,6 +122,8 @@ pub const WHITE_PAWN_MG_PST: [f32; 64] = [
     -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, // rank 7
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, // rank 8
 ];
+
+// Pawns EG: Strong bonus for advanced pawns. Passed pawns on 6th/7th are very valuable.
 pub const WHITE_PAWN_EG_PST: [f32; 64] = [
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, // rank 1
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, // rank 2
@@ -125,7 +135,7 @@ pub const WHITE_PAWN_EG_PST: [f32; 64] = [
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, // rank 8
 ];
 
-// Knights: Boost central/outposts (e.g., d4/e5/f3), penalize edges/back ranks
+// Knights MG: Outposts in enemy territory are ideal. Center controls 8 squares vs 2-4 on edges.
 pub const WHITE_KNIGHT_MG_PST: [f32; 64] = [
     -50.0, -40.0, -30.0, -30.0, -30.0, -30.0, -40.0, -50.0, // rank 1
     -40.0, -20.0, 0.0, 5.0, 5.0, 0.0, -20.0, -40.0, // rank 2
@@ -136,6 +146,8 @@ pub const WHITE_KNIGHT_MG_PST: [f32; 64] = [
     -40.0, -20.0, 0.0, 0.0, 0.0, 0.0, -20.0, -40.0, // rank 7
     -50.0, -40.0, -30.0, -30.0, -30.0, -30.0, -40.0, -50.0, // rank 8
 ];
+
+// Knights EG: Still centralized but less critical. "Knight on the rim is dim" still applies.
 pub const WHITE_KNIGHT_EG_PST: [f32; 64] = [
     -50.0, -40.0, -30.0, -20.0, -20.0, -30.0, -40.0, -50.0, // rank 1
     -40.0, -20.0, 0.0, 0.0, 0.0, 0.0, -20.0, -40.0, // rank 2
@@ -147,7 +159,7 @@ pub const WHITE_KNIGHT_EG_PST: [f32; 64] = [
     -50.0, -40.0, -30.0, -20.0, -20.0, -30.0, -40.0, -50.0, // rank 8
 ];
 
-// Bishops: Symmetrical center bonuses, penalize back ranks/edges
+// Bishops MG: Long diagonals maximize scope. Fianchetto (b2/g2) controls key squares.
 pub const WHITE_BISHOP_MG_PST: [f32; 64] = [
     -20.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, -20.0, // rank 1
     -10.0, 5.0, 0.0, 0.0, 0.0, 0.0, 5.0, -10.0, // rank 2
@@ -158,6 +170,8 @@ pub const WHITE_BISHOP_MG_PST: [f32; 64] = [
     -10.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -10.0, // rank 7
     -20.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, -20.0, // rank 8
 ];
+
+// Bishops EG: Central placement for maximum reach. Edges and corners limit mobility.
 pub const WHITE_BISHOP_EG_PST: [f32; 64] = [
     -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, // rank 1
     -10.0, -5.0, 0.0, 0.0, 0.0, 0.0, -5.0, -10.0, // rank 2
@@ -169,7 +183,7 @@ pub const WHITE_BISHOP_EG_PST: [f32; 64] = [
     -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, // rank 8
 ];
 
-// Rooks: Preference for open ranks/files, slight center bonus
+// Rooks MG: Central files (d/e) slightly preferred. 7th rank is very strong (pins pawns).
 pub const WHITE_ROOK_MG_PST: [f32; 64] = [
     0.0, 0.0, 0.0, 5.0, 5.0, 0.0, 0.0, 0.0, // rank 1
     -5.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -5.0, // rank 2
@@ -180,6 +194,8 @@ pub const WHITE_ROOK_MG_PST: [f32; 64] = [
     5.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 5.0, // rank 7
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, // rank 8
 ];
+
+// Rooks EG: Active rooks are crucial; back rank can become a liability.
 pub const WHITE_ROOK_EG_PST: [f32; 64] = [
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, // rank 1
     5.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 5.0, // rank 2
@@ -191,7 +207,7 @@ pub const WHITE_ROOK_EG_PST: [f32; 64] = [
     -10.0, -10.0, -10.0, -5.0, -5.0, -10.0, -10.0, -10.0, // rank 8
 ];
 
-// Queens: Mild center bonus, penalize back ranks
+// Queens MG: Discourage early queen development—vulnerable to tempo-gaining attacks.
 pub const WHITE_QUEEN_MG_PST: [f32; 64] = [
     -20.0, -10.0, -10.0, -5.0, -5.0, -10.0, -10.0, -20.0, // rank 1
     -10.0, 0.0, 5.0, 0.0, 0.0, 0.0, 0.0, -10.0, // rank 2
@@ -202,6 +218,8 @@ pub const WHITE_QUEEN_MG_PST: [f32; 64] = [
     -10.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -10.0, // rank 7
     -20.0, -10.0, -10.0, -5.0, -5.0, -10.0, -10.0, -20.0, // rank 8
 ];
+
+// Queens EG: Central queen is powerful; corners and edges reduce mobility.
 pub const WHITE_QUEEN_EG_PST: [f32; 64] = [
     -10.0, -10.0, -5.0, 0.0, 0.0, -5.0, -10.0, -10.0, // rank 1
     -5.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -5.0, // rank 2
@@ -213,7 +231,7 @@ pub const WHITE_QUEEN_EG_PST: [f32; 64] = [
     -10.0, -10.0, -10.0, -5.0, -5.0, -10.0, -10.0, -10.0, // rank 8
 ];
 
-// Kings: Encourage castling sides in mg, central in eg
+// Kings MG: Safety first—castled positions (g1/c1) are safest, center is exposed.
 pub const WHITE_KING_MG_PST: [f32; 64] = [
     20.0, 30.0, 10.0, 0.0, 0.0, 10.0, 30.0, 20.0, // rank 1
     20.0, 20.0, 0.0, 0.0, 0.0, 0.0, 20.0, 20.0, // rank 2
@@ -224,6 +242,8 @@ pub const WHITE_KING_MG_PST: [f32; 64] = [
     -30.0, -40.0, -50.0, -60.0, -60.0, -50.0, -40.0, -30.0, // rank 7
     -40.0, -50.0, -60.0, -70.0, -70.0, -60.0, -50.0, -40.0, // rank 8
 ];
+
+// Kings EG: King becomes active; centralization is key for endgame technique.
 pub const WHITE_KING_EG_PST: [f32; 64] = [
     -50.0, -30.0, -20.0, -10.0, -10.0, -20.0, -30.0, -50.0, // rank 1
     -30.0, -20.0, 0.0, 5.0, 5.0, 0.0, -20.0, -30.0, // rank 2
@@ -235,6 +255,7 @@ pub const WHITE_KING_EG_PST: [f32; 64] = [
     -50.0, -30.0, -20.0, -10.0, -10.0, -20.0, -30.0, -50.0, // rank 8
 ];
 
+// Black PSTs are just vertically mirrored White PSTs
 const BLACK_PAWN_MG_PST: [f32; 64] = invert_pst(&WHITE_PAWN_MG_PST);
 const BLACK_PAWN_EG_PST: [f32; 64] = invert_pst(&WHITE_PAWN_EG_PST);
 const BLACK_KNIGHT_MG_PST: [f32; 64] = invert_pst(&WHITE_KNIGHT_MG_PST);

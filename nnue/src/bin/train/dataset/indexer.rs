@@ -13,7 +13,12 @@ pub const MAX_FEN_LEN: usize = 255;
 
 const PROGRESS_UPDATE_INTERVAL: usize = 100_000;
 
-/// Reference to a sample with its location and metadata for efficient access
+/// Compact reference to a sample stored on disk.
+///
+/// Instead of loading full FEN strings into memory, we store compact references
+/// pointing to each sample's location (file + byte offset). At training time,
+/// we seek to that position and read just the FEN we need. The index can still
+/// be large with millions of samples, but each entry is much smaller without the FEN.
 #[derive(Debug, Clone, Copy)]
 pub struct SampleRef {
     pub file_id: u8,
@@ -222,11 +227,19 @@ fn check_contiguity(samples: &[SampleRef]) -> bool {
 
     true
 }
+/// Splits samples into train/val/test sets BY GAME, not by sample.
+///
+/// Critical: positions from the same game are highly correlated (similar structure,
+/// consecutive moves). If we split randomly by sample, the model would see near-identical
+/// positions in both train and val, causing inflated validation scores and overfitting.
+///
+/// By splitting at the game level, all positions from a game stay together in one set.
 pub fn split_index(
     index: Vec<SampleRef>,
     test_ratio: f64,
     val_ratio: f64,
 ) -> (Vec<SampleRef>, Vec<SampleRef>, Vec<SampleRef>) {
+    // Group samples by game_id
     let mut game_map: AHashMap<u32, Vec<SampleRef>> = AHashMap::new();
     for sample in index {
         game_map.entry(sample.game_id).or_default().push(sample);

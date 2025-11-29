@@ -3,6 +3,8 @@ use std::str::FromStr;
 use evaluation::{hce::HCEConfig, PieceValues};
 use uci::{UciOption, UciOptionType, UciOutput};
 
+/// Helper to conditionally create UCI option metadata.
+/// If `include` is false (e.g., tuning feature disabled), option won't appear in UCI.
 fn uci(include: bool, name: &'static str, option_type: UciOptionType) -> Option<UciOption> {
     if include {
         Some(UciOption { name, option_type })
@@ -11,6 +13,18 @@ fn uci(include: bool, name: &'static str, option_type: UciOptionType) -> Option<
     }
 }
 
+/// Generates EngineConfig struct and UCI plumbing from a list of parameters.
+///
+/// Each entry: (field_name: Type, "UCI Name", UciOptionType, default_value, include_in_uci)
+///
+/// The macro generates:
+/// - `EngineConfig` struct with all fields as `ConfigParam<T>`
+/// - `Default` impl with specified defaults
+/// - `update_from_uci()` to set values from UCI setoption commands
+/// - `to_uci()` to send all options to the GUI
+///
+/// The `include` flag (often `cfg!(feature = "tuning")`) controls whether
+/// the option is exposed via UCI. useful for hiding tuning params in release builds.
 macro_rules! define_config {
     ($(($field:ident: $type:ty, $uci_name:expr, $uci_type:expr, $default:expr, $include:expr)),* $(,)?) => {
         #[derive(Debug, Clone)]
@@ -50,7 +64,11 @@ macro_rules! define_config {
     };
 }
 
+// Engine configuration parameters.
+// Format: (field, "UCI Name", type, default, exposed_via_uci)
+// Most tuning params use cfg!(feature = "tuning") so they're hidden in release builds.
 define_config!(
+    // --- Core UCI options (always exposed) ---
     (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 2048 }, 1024, true),
     (nnue: bool, "NNUE", UciOptionType::Check, true, true),
 
@@ -252,6 +270,8 @@ impl EngineConfig {
     }
 }
 
+/// A configuration parameter with optional UCI metadata.
+/// If `uci` is Some, the parameter can be changed via UCI setoption.
 #[derive(Debug, Clone)]
 pub struct ConfigParam<T> {
     pub value: T,

@@ -1,10 +1,15 @@
 use cozy_chess::{Move, Piece};
 
+/// A node in the search stack, tracking state at each ply.
 #[derive(Clone, Copy)]
 pub struct SearchNode {
+    /// Zobrist hash for repetition detection
     pub hash: u64,
+    /// Move that led to this position
     pub last_move: Option<Move>,
+    /// Piece that moved (for continuation history)
     pub piece: Option<Piece>,
+    /// Cached static eval (for improving detection)
     pub static_eval: Option<i16>,
 }
 
@@ -28,6 +33,7 @@ impl SearchNode {
     }
 }
 
+/// Stack tracking the search path from root to current position.
 pub struct SearchStack {
     nodes: Vec<SearchNode>,
 }
@@ -67,6 +73,8 @@ impl SearchStack {
         }
     }
 
+    /// Returns true if eval improved vs 2 plies ago (same side to move).
+    /// Used for more aggressive pruning when position is getting worse.
     pub fn is_improving(&self) -> bool {
         const IMPROVING_MARGIN: i16 = 20;
 
@@ -76,7 +84,6 @@ impl SearchStack {
         }
 
         if let Some(current_eval) = self.nodes[len - 1].static_eval {
-            // Compare 2 plies back (same side to move)
             if let Some(prev_eval) = self.nodes[len - 3].static_eval {
                 return current_eval > prev_eval - IMPROVING_MARGIN;
             }
@@ -85,6 +92,8 @@ impl SearchStack {
         false
     }
 
+    /// Detects a single repetition and treats it as a draw.
+    /// We don't require threefold because the search tends to cycle once it finds a repetition.
     pub fn is_repetition(&self, game_history: &ahash::AHashSet<u64>) -> bool {
         let current_hash = self.nodes[self.nodes.len() - 1].hash;
 
@@ -93,8 +102,7 @@ impl SearchStack {
             return true;
         }
 
-        // Check if this position appeared earlier in the current search tree
-        // (skip the last node which is the current position)
+        // Check search path (skip current position)
         for node in self.nodes.iter().rev().skip(1) {
             if node.hash == current_hash {
                 return true;
@@ -108,6 +116,7 @@ impl SearchStack {
         &self.nodes
     }
 
+    /// Penalty for repeatedly moving the same piece (discourages shuffling).
     pub fn piece_repetition_penalty(&self, base_penalty: i16) -> i16 {
         let stack_len = self.nodes.len();
         if stack_len < 2 {

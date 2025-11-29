@@ -29,6 +29,7 @@ impl Benchmark {
         self.print_header();
 
         let board = Board::default();
+        // TODO: Consider making history optional and defaulting to empty
         let history = ahash::AHashSet::new();
         self.engine.set_position(board, history);
 
@@ -115,6 +116,7 @@ impl InfoPrinter {
     }
 
     fn print_info(info: &Info) {
+        // TODO: Use UCI encoder instead
         print!(
             "info depth {} seldepth {} nodes {} nps {} time {} ",
             info.depth, info.sel_depth, info.nodes, info.nodes_per_second, info.time
@@ -127,6 +129,7 @@ impl InfoPrinter {
     }
 
     fn print_score(score: &Score) {
+        // TODO: Use UCI encoder instead
         match score {
             Score::Centipawns(cp) => print!("score cp {} ", cp),
             Score::Mate(m) => print!("score mate {} ", m),

@@ -4,10 +4,14 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
+// EPD has at least 4 fields: board, side, castling, en passant
 const EPD_MIN_FIELDS: usize = 4;
+// EPD doesn't include move counters, but FEN requires them. Add defaults.
 const DEFAULT_HALFMOVE: u8 = 0;
 const DEFAULT_FULLMOVE: u16 = 1;
 
+/// Opening book loaded from EPD file.
+/// Provides balanced, known opening positions to start self-play from.
 pub struct Book {
     positions: Vec<String>,
 }
@@ -40,6 +44,9 @@ impl Book {
     }
 }
 
+/// Parses an EPD line into a complete FEN string.
+/// EPD format: <board> <side> <castling> <ep> [operations...]
+/// We ignore EPD operations (bm, c0, etc.) and add default move counters.
 fn parse_epd_line(line: &str) -> Option<String> {
     let line = line.trim();
 
@@ -48,8 +55,6 @@ fn parse_epd_line(line: &str) -> Option<String> {
         return None;
     }
 
-    // EPD format: <board> <side> <castling> <ep> <operations...>
-    // We extract just the first 4 fields and ignore EPD operations (c0, bm, etc.)
     let parts: Vec<&str> = line.split_whitespace().collect();
     if parts.len() >= EPD_MIN_FIELDS {
         // Construct FEN from first 4 fields (board, side, castling, ep)

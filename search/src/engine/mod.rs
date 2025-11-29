@@ -25,27 +25,48 @@ mod search;
 use crate::MAX_DEPTH;
 
 pub struct Engine {
+    /// Configuration for the engine
     config: EngineConfig,
-    piece_values: PieceValues,
 
-    hce: Box<dyn HCE>,
-    nnue: Option<Box<dyn NNUE>>,
-
-    board: Board,
-    game_history: AHashSet<u64>,
-    nodes: u32,
-    killer_moves: [[Option<Move>; 2]; MAX_DEPTH], // 2 per depth
-    current_pv: Vec<Move>,
-    max_depth_reached: u8,
+    /// Signal to terminate search (time control or UCI stop)
     stop: Arc<AtomicBool>,
 
+    /// Piece values for the engine
+    piece_values: PieceValues,
+
+    /// Hand-crafted evaluation
+    hce: Box<dyn HCE>,
+    /// Neural network evaluation
+    nnue: Option<Box<dyn NNUE>>,
+
+    /// The position we are finding the best move for (root position)
+    board: Board,
+    /// Position hashes for repetition detection - all positions up until the search.
+    game_history: AHashSet<u64>,
+
+    /// Number of nodes searched
+    nodes: u32,
+    /// Principal variation - the current best line we have found
+    current_pv: Vec<Move>,
+    /// Selective depth (max ply reached including quiescence - deepest we have gotten)
+    max_depth_reached: u8,
+
+    /// Main transposition table
     tt: TranspositionTable,
+    /// Quiescence search transposition table
     qs_tt: QSTable,
 
+    /// Tracks active search path - used for repetition, improving, etc.
     search_stack: SearchStack,
 
+    /// Quiet moves that caused beta cutoffs (2 per ply, FIFO).
+    /// <https://www.chessprogramming.org/Killer_Heuristic>
+    killer_moves: [[Option<Move>; 2]; MAX_DEPTH],
+    /// Scores quiet moves by search success
     history_heuristic: HistoryHeuristic,
+    /// Scores captures by search success
     capture_history: CaptureHistory,
+    /// Scores based on move sequences
     continuation_history: Box<ContinuationHistory>,
 }
 

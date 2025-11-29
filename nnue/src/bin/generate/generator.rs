@@ -14,6 +14,8 @@ use std::time::Duration;
 const DEFAULT_NNUE_PATH: &str = "nnue/model.safetensors";
 const PROGRESS_UPDATE_INTERVAL_MS: u64 = 200;
 
+/// Coordinates multi-threaded self-play data generation.
+/// Spawns worker threads that play games and collect (FEN, score, game_id) samples.
 pub struct Generator {
     threads: usize,
     nnue_path: Option<PathBuf>,

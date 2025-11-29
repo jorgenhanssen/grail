@@ -7,25 +7,36 @@ use utils::memory::prefetch;
 
 use crate::pruning::MATE_SCORE_BOUND;
 
+/// Indicates whether the stored value is exact or a bound.
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum Bound {
+    /// True minimax value (alpha < value < beta)
     #[default]
     Exact = 0,
+    /// Value >= beta (beta cutoff)
     Lower = 1,
+    /// Value <= alpha (all moves failed)
     Upper = 2,
 }
 
+/// A single TT entry (16 bytes, fits 4 per cache line).
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
 pub struct TTEntry {
-    // 0 = empty slot
+    /// Lower 32 bits of Zobrist hash for verification
     pub key: u32,
+    /// Score from searching this position
     pub value: i16,
-    pub static_eval: i16, // i16::MIN denotes "unknown"
-    pub depth: u8,
+    /// Indicates whether the stored value is exact or a bound
     pub bound: Bound,
+    /// Static eval without search, cached to avoid recomputation (i16::MIN = unknown)
+    pub static_eval: i16,
+    /// Search depth that produced this result
+    pub depth: u8,
+    /// Best move found, packed as: [15:12]=promo, [11:6]=to, [5:0]=from
     pub best_move_packed: u16,
-    pub generation: u8, // Tracks freshness (increments per search)
+    /// Age for replacement policy
+    pub generation: u8,
 }
 
 impl TTEntry {
@@ -53,6 +64,11 @@ impl TTEntry {
 const CLUSTER_SIZE: usize = 4;
 const MIN_BUCKETS: usize = 1024;
 
+/// Hash table for memoizing search results.
+/// Uses 4-entry clusters for cache efficiency and SIMD probing.
+/// Replacement considers depth, age, and bound type.
+///
+/// <https://www.chessprogramming.org/Transposition_Table>
 pub struct TranspositionTable {
     entries: Vec<TTEntry>,
     buckets: usize,
@@ -60,6 +76,7 @@ pub struct TranspositionTable {
 }
 
 impl TranspositionTable {
+    /// Creates a new TT with the given size in megabytes.
     pub fn new(mb: usize) -> Self {
         let bytes = mb.saturating_mul(1024 * 1024);
         let entry_size = size_of::<TTEntry>().max(1);
@@ -85,6 +102,7 @@ impl TranspositionTable {
         self.generation = 0;
     }
 
+    /// Increments generation counter. Called at start of each search.
     pub fn age(&mut self) {
         self.generation = self.generation.wrapping_add(1);
     }
@@ -100,6 +118,7 @@ impl TranspositionTable {
         }
     }
 
+    /// Probes for a usable entry. Returns `Some` only if depth is sufficient.
     pub fn probe(
         &self,
         hash: u64,
@@ -151,6 +170,7 @@ impl TranspositionTable {
         None
     }
 
+    /// Probes for move ordering hint (ignores depth requirement).
     pub fn probe_hint(&self, hash: u64) -> Option<(Option<Move>, Option<i16>)> {
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
@@ -191,6 +211,7 @@ impl TranspositionTable {
         None
     }
 
+    /// Stores a search result using depth/age-based replacement.
     #[allow(clippy::too_many_arguments)]
     pub fn store(
         &mut self,
@@ -313,8 +334,8 @@ impl TranspositionTable {
     }
 }
 
+/// Packs a move into 16 bits: [15:12]=promo, [11:6]=to, [5:0]=from
 fn pack_move(mv: Option<Move>) -> u16 {
-    // Layout: [15..12]=promo (0=None,1=N,2=B,3=R,4=Q), [11..6]=to, [5..0]=from
     if let Some(m) = mv {
         let from = m.from as u16; // 0..63
         let to = m.to as u16; // 0..63
@@ -331,6 +352,7 @@ fn pack_move(mv: Option<Move>) -> u16 {
     }
 }
 
+/// Unpacks a 16-bit encoded move.
 fn unpack_move(code: u16) -> Option<Move> {
     if code == 0 {
         return None;
