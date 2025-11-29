@@ -71,11 +71,16 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(config: &EngineConfig, hce: Box<dyn HCE>, nnue: Option<Box<dyn NNUE>>) -> Self {
+    pub fn new(
+        config: &EngineConfig,
+        hce: Box<dyn HCE>,
+        nnue: Option<Box<dyn NNUE>>,
+        stop: Arc<AtomicBool>,
+    ) -> Self {
         let mut instance = Self {
             config: config.clone(),
             piece_values: config.get_piece_values(),
-            stop: Arc::new(AtomicBool::new(false)),
+            stop,
 
             hce,
             nnue,
@@ -143,9 +148,9 @@ impl Engine {
         self.init_game();
     }
 
-    pub fn set_position(&mut self, board: Board, game_history: AHashSet<u64>) {
+    pub fn set_position(&mut self, board: Board, game_history: Option<AHashSet<u64>>) {
         self.board = board;
-        self.game_history = game_history;
+        self.game_history = game_history.unwrap_or_default();
     }
 
     pub fn board(&self) -> &Board {

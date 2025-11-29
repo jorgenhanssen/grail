@@ -64,7 +64,7 @@ impl SelfPlayGame {
     fn compute_move(&self, engine: &mut Engine, depth: u8) -> (Move, i16) {
         let history = self.history();
 
-        engine.set_position(self.board.clone(), history);
+        engine.set_position(self.board.clone(), Some(history));
 
         let params = GoParams {
             depth: Some(depth),
