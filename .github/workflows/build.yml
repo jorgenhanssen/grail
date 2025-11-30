@@ -1,6 +1,7 @@
 name: Build binaries
 
 on:
+  workflow_dispatch: # Allow manual runs from Actions tab
   push:
     tags:
       - "v*"
