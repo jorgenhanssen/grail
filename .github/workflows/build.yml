@@ -1,0 +1,128 @@
+name: Build binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          # Linux builds
+          - os: ubuntu-latest
+            name: linux
+            rust_target: x86_64-unknown-linux-gnu
+            cpu: x86-64-v4
+            binary_name: grail-x86-64-v4
+          - os: ubuntu-latest
+            name: linux
+            rust_target: x86_64-unknown-linux-gnu
+            cpu: x86-64-v3
+            binary_name: grail-x86-64-v3
+
+          # Windows builds
+          - os: windows-latest
+            name: windows
+            rust_target: x86_64-pc-windows-msvc
+            cpu: x86-64-v4
+            binary_name: grail-x86-64-v4
+          - os: windows-latest
+            name: windows
+            rust_target: x86_64-pc-windows-msvc
+            cpu: x86-64-v3
+            binary_name: grail-x86-64-v3
+
+          # macOS Apple Silicon
+          - os: macos-latest
+            name: macos
+            rust_target: aarch64-apple-darwin
+            cpu: native
+            binary_name: grail-arm64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - run: rustup default nightly
+      - run: rustup target add ${{ matrix.rust_target }}
+      - run: cargo build --release --target ${{ matrix.rust_target }}
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: "-C target-cpu=${{ matrix.cpu }}"
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: "-C target-cpu=${{ matrix.cpu }}"
+          CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS: "-C target-cpu=${{ matrix.cpu }}"
+
+      # Rename binary to include CPU info
+      - name: Rename binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mv target/${{ matrix.rust_target }}/release/grail target/${{ matrix.rust_target }}/release/${{ matrix.binary_name }}
+
+      - name: Rename binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mv target/${{ matrix.rust_target }}/release/grail.exe target/${{ matrix.rust_target }}/release/${{ matrix.binary_name }}.exe
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-${{ matrix.binary_name }}
+          path: target/${{ matrix.rust_target }}/release/${{ matrix.binary_name }}*
+
+  package:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package Linux binaries
+        run: |
+          mkdir -p package-linux
+          cp artifacts/linux-grail-x86-64-v3/grail-x86-64-v3 package-linux/
+          cp artifacts/linux-grail-x86-64-v4/grail-x86-64-v4 package-linux/
+          chmod +x package-linux/*
+
+      - name: Package Windows binaries
+        run: |
+          mkdir -p package-windows
+          cp artifacts/windows-grail-x86-64-v3/grail-x86-64-v3.exe package-windows/
+          cp artifacts/windows-grail-x86-64-v4/grail-x86-64-v4.exe package-windows/
+
+      - name: Package macOS binaries
+        run: |
+          mkdir -p package-macos
+          cp artifacts/macos-grail-arm64/grail-arm64 package-macos/
+          chmod +x package-macos/*
+
+      - name: Upload Linux package
+        uses: actions/upload-artifact@v4
+        with:
+          name: grail-${{ github.ref_name }}-linux
+          path: package-linux/*
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: grail-${{ github.ref_name }}-windows
+          path: package-windows/*
+
+      - name: Upload macOS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: grail-${{ github.ref_name }}-macos
+          path: package-macos/*
+
+      - name: Delete intermediate binaries
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: |
+            linux-grail-x86-64-v3
+            linux-grail-x86-64-v4
+            windows-grail-x86-64-v3
+            windows-grail-x86-64-v4
+            macos-grail-arm64

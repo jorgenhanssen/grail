@@ -33,6 +33,16 @@ Each release includes builds optimized for different CPU architectures:
 >
 > For technical details, see [x86-64 Microarchitecture Levels](https://en.wikipedia.org/wiki/X86-64#Microarchitecture_levels).
 
+#### A note for macOS users
+
+macOS blocks unsigned binaries by default. Apple wants me to pay $99/year to sign the binary so you can avoid typing this command. So instead, after downloading, just run:
+
+```bash
+xattr -d com.apple.quarantine ~/Downloads/grail-arm64
+```
+
+and you should be able to run it! 🍎
+
 ### Configuration
 
 Once added to your GUI, you can configure the engine via the UCI options:
