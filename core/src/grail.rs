@@ -55,8 +55,6 @@ impl Grail {
 
     /// Runs the UCI protocol loop until quit.
     pub fn run(mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.send_greeting();
-
         let decoder = Decoder::new();
         let stdin = std::io::stdin();
 
@@ -124,13 +122,6 @@ impl Grail {
             UciInput::Unknown(line) => debug!("Unknown command: {}", line),
         }
         true
-    }
-
-    fn send_greeting(&self) {
-        let _ = self.output.send(UciOutput::Raw(format!(
-            "{} {} by {}",
-            ENGINE_NAME, ENGINE_VERSION, ENGINE_AUTHOR
-        )));
     }
 
     fn shutdown(self) {
