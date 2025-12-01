@@ -35,9 +35,7 @@ impl UciConnection {
             let encoder = Encoder {};
 
             while let Ok(output) = output_rx.recv() {
-                let out_line = encoder.encode(&output);
-                log::debug!("Output: {:?}", out_line);
-                println!("{}", out_line);
+                println!("{}", encoder.encode(&output));
             }
         });
     }

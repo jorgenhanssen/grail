@@ -954,17 +954,14 @@ dependencies = [
  "ahash",
  "candle-core",
  "candle-nn",
- "clap",
  "cozy-chess",
  "criterion",
  "evaluation",
  "hce",
- "log",
  "nnue",
  "rand 0.8.5",
  "rayon",
  "search",
- "simplelog",
  "uci",
 ]
 
@@ -1971,7 +1968,6 @@ version = "1.0.0"
 dependencies = [
  "ahash",
  "cozy-chess",
- "log",
 ]
 
 [[package]]

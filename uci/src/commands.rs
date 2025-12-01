@@ -33,6 +33,7 @@ pub enum UciOutput {
     ReadyOk,
     BestMove(String),
     Info(Info),
+    InfoString(String),
     Option(String),
 }
 

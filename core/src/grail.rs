@@ -6,7 +6,6 @@ use std::sync::{
 };
 use std::thread::{self, JoinHandle};
 
-use log::debug;
 use search::EngineConfig;
 use uci::{Decoder, UciConnection, UciInput, UciOutput};
 
@@ -60,8 +59,6 @@ impl Grail {
 
         for line in stdin.lock().lines() {
             let line = line?;
-            debug!("Input: {:?}", line.trim());
-
             let input = decoder.decode(line.trim());
             if !self.handle(input) {
                 break;
@@ -93,9 +90,8 @@ impl Grail {
             UciInput::Debug(_enabled) => {}
             UciInput::SetOption { name, value } => {
                 if let Err(e) = self.config.update_from_uci(&name, &value) {
-                    debug!("Option setting failed: {}", e);
+                    let _ = self.output.send(UciOutput::InfoString(e.to_string()));
                 } else {
-                    debug!("Set option '{}' to '{}'", name, value);
                     let _ = self
                         .cmd_tx
                         .send(EngineCommand::Configure(Box::new(self.config.clone())));
@@ -121,7 +117,7 @@ impl Grail {
                 self.stop.store(true, Ordering::Relaxed);
             }
             UciInput::Quit => return false,
-            UciInput::Unknown(line) => debug!("Unknown command: {}", line),
+            UciInput::Unknown(_) => {} // Ignore unknown commands per UCI spec
         }
         true
     }

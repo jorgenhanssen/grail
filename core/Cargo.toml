@@ -20,11 +20,8 @@ evaluation = { path = "../evaluation" }
 
 ahash = { workspace = true }
 cozy-chess = { workspace = true }
-clap = { workspace = true }
-log = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
-simplelog = { workspace = true }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
 
