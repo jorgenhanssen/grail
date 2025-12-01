@@ -24,6 +24,7 @@ impl Decoder {
             "isready" => UciInput::IsReady,
             "ucinewgame" => UciInput::UciNewGame,
 
+            _ if input.starts_with("debug") => UciInput::Debug(input.ends_with(" on")),
             _ if input.starts_with("position") => self.decode_position(input),
             _ if input.starts_with("go") => self.decode_go(input),
             _ if input.starts_with("setoption") => self.decode_setoption(input),
