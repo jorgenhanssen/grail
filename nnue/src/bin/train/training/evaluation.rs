@@ -1,11 +1,11 @@
 use candle_core::{Device, Tensor};
+use candle_nn::loss::mse;
 use candle_nn::Module;
 use nnue::encoding::NUM_FEATURES;
 use nnue::network::Network;
 use std::error::Error;
 
 use crate::dataset::DataLoader;
-use crate::utils::loss::huber;
 
 pub fn evaluate(
     network: &Network,
@@ -25,7 +25,7 @@ pub fn evaluate(
         let y = Tensor::from_vec(scores, (batch_len, 1), device)?;
 
         let preds = network.forward(&x)?;
-        let loss = huber(&preds, &y)?;
+        let loss = mse(&preds, &y)?;
 
         total_loss += loss.to_vec0::<f32>()?;
         batches += 1;
