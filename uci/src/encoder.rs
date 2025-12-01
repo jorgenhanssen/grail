@@ -29,6 +29,7 @@ impl Encoder {
                 )
             }
             UciOutput::Option(option_str) => option_str.clone(),
+            UciOutput::InfoString(message) => format!("info string {}", message),
         }
     }
 }

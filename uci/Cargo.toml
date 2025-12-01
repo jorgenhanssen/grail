@@ -12,5 +12,4 @@ tuning = []
 
 [dependencies]
 cozy-chess = { workspace = true }
-log = { workspace = true }
 ahash = { workspace = true }
