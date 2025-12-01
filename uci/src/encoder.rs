@@ -28,7 +28,6 @@ impl Encoder {
                 )
             }
             UciOutput::Option(option_str) => option_str.clone(),
-            UciOutput::Raw(message) => message.clone(),
         }
     }
 }

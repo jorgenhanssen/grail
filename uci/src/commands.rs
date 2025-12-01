@@ -33,7 +33,6 @@ pub enum UciOutput {
     BestMove(String),
     Info(Info),
     Option(String),
-    Raw(String),
 }
 
 /// Search information sent to the GUI during analysis.
