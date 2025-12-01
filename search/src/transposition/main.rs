@@ -107,6 +107,25 @@ impl TranspositionTable {
         self.generation = self.generation.wrapping_add(1);
     }
 
+    /// Returns hash table fill rate in permille (0-1000).
+    ///
+    /// Samples the first 1000 entries to get an approximation of the fill rate.
+    /// Looping through the entire table would be too slow.
+    pub fn hashfull(&self) -> u16 {
+        const MAX_SAMPLE: usize = 1000;
+
+        let sample_size = self.entries.len().min(MAX_SAMPLE);
+        let sample = &self.entries[..sample_size];
+
+        // Count non-empty entries (key == 0)
+        let filled_count = sample.iter().filter(|e| e.key != 0).count();
+
+        // Convert to permille: (filled / sample_size) * 1000
+        let permille = (filled_count * 1000) / sample_size;
+
+        permille as u16
+    }
+
     // Prefetch TT entry into cache
     pub fn prefetch(&self, hash: u64) {
         let idx = (hash as usize) % self.buckets;

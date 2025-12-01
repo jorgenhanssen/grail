@@ -45,6 +45,7 @@ pub struct Info {
     pub sel_depth: u8,
     pub nodes: u32,
     pub nodes_per_second: u32,
+    pub hashfull: u16,
     pub time: u32,
     pub pv: Vec<String>,
     pub score: Score,

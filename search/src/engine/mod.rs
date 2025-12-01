@@ -186,6 +186,7 @@ impl Engine {
                 sel_depth: self.max_depth_reached,
                 nodes: self.nodes,
                 nodes_per_second: nps,
+                hashfull: self.tt.hashfull(),
                 time: elapsed.as_millis() as u32,
                 score: if found_checkmate {
                     convert_mate_score(best_score)
