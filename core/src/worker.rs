@@ -3,7 +3,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use ahash::AHashSet;
 use cozy_chess::Board;
 use search::{Engine, EngineConfig};
-use uci::{move_to_uci, UciOutput};
+use uci::{move_to_uci, UciOutput, NULL_MOVE};
 
 /// Commands sent from the UCI thread to the engine worker.
 pub enum EngineCommand {
@@ -44,10 +44,12 @@ impl EngineWorker {
                 EngineCommand::Go(params) => {
                     let result = self.engine.search(&params, Some(&self.output));
 
-                    if let Some((best_move, _)) = result {
-                        let uci_move = move_to_uci(self.engine.board(), best_move);
-                        let _ = self.output.send(UciOutput::BestMove(uci_move));
-                    }
+                    // UCI requires bestmove for every "go" command, even in checkmate positions
+                    let uci_move = result
+                        .map(|(mv, _)| move_to_uci(self.engine.board(), mv))
+                        .unwrap_or_else(|| NULL_MOVE.to_string());
+
+                    let _ = self.output.send(UciOutput::BestMove(uci_move));
                 }
                 EngineCommand::SetPosition { board, history } => {
                     self.engine.set_position(board, Some(history));
