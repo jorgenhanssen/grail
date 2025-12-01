@@ -5,6 +5,7 @@ use cozy_chess::Board;
 #[derive(Debug)]
 pub enum UciInput {
     Uci,
+    Debug(bool),
     IsReady,
 
     UciNewGame,

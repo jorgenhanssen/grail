@@ -89,6 +89,8 @@ impl Grail {
             UciInput::IsReady => {
                 let _ = self.output.send(UciOutput::ReadyOk);
             }
+            // TODO: Implement debug mode - send extra info via `info string` when enabled
+            UciInput::Debug(_enabled) => {}
             UciInput::SetOption { name, value } => {
                 if let Err(e) = self.config.update_from_uci(&name, &value) {
                     debug!("Option setting failed: {}", e);
