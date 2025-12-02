@@ -50,11 +50,11 @@ impl Engine {
         let original_alpha = alpha;
         let original_beta = beta;
 
-        if let Some((cached_value, cached_bound)) = self.qs_tt.probe(hash, in_check) {
-            match cached_bound {
-                Bound::Exact => return (cached_value, Vec::new()),
-                Bound::Lower if cached_value >= beta => return (cached_value, Vec::new()),
-                Bound::Upper if cached_value <= alpha => return (cached_value, Vec::new()),
+        if let Some(qs) = self.qs_tt.probe(hash, in_check) {
+            match qs.bound {
+                Bound::Exact => return (qs.value, Vec::new()),
+                Bound::Lower if qs.value >= beta => return (qs.value, Vec::new()),
+                Bound::Upper if qs.value <= alpha => return (qs.value, Vec::new()),
                 _ => {}
             }
         }

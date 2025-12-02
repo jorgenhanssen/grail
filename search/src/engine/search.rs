@@ -229,30 +229,33 @@ impl Engine {
 
         let is_pv_node = beta > alpha + 1;
 
-        if let Some((tt_value, tt_bound, tt_move, tt_se)) = self.tt.probe(hash, depth, max_depth) {
-            maybe_tt_move = tt_move;
-            tt_static_eval = tt_se;
-            match tt_bound {
-                // Exact: previous search found true minimax value
-                Bound::Exact => return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m])),
-                // Lower: previous search failed high (value >= beta), so value is at least this good
-                Bound::Lower => {
-                    alpha = alpha.max(tt_value);
-                    if alpha >= beta {
-                        return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m]));
+        if let Some(tt) = self.tt.probe(hash, depth) {
+            maybe_tt_move = tt.best_move;
+            tt_static_eval = tt.static_eval;
+
+            // Only use value/bound for cutoffs if depth is sufficient
+            let needed_depth = max_depth - depth;
+            if tt.depth >= needed_depth {
+                match tt.bound {
+                    // Exact: previous search found true minimax value
+                    Bound::Exact => {
+                        return (tt.value, tt.best_move.map_or(Vec::new(), |m| vec![m]))
                     }
-                }
-                // Upper: previous search failed low (value <= alpha), so value is at most this bad
-                Bound::Upper => {
-                    if tt_value <= alpha {
-                        return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m]));
+                    // Lower: previous search failed high (value >= beta), so value is at least this good
+                    Bound::Lower => {
+                        alpha = alpha.max(tt.value);
+                        if alpha >= beta {
+                            return (tt.value, tt.best_move.map_or(Vec::new(), |m| vec![m]));
+                        }
+                    }
+                    // Upper: previous search failed low (value <= alpha), so value is at most this bad
+                    Bound::Upper => {
+                        if tt.value <= alpha {
+                            return (tt.value, tt.best_move.map_or(Vec::new(), |m| vec![m]));
+                        }
                     }
                 }
             }
-        } else if let Some((tt_move, tt_se)) = self.tt.probe_hint(hash) {
-            // Use shallow entry as hint for move ordering and static eval caching
-            maybe_tt_move = tt_move;
-            tt_static_eval = tt_se;
         }
 
         let phase = game_phase(board);
