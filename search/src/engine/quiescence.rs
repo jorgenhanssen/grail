@@ -50,11 +50,13 @@ impl Engine {
         let original_alpha = alpha;
         let original_beta = beta;
 
-        if let Some((cached_value, cached_bound)) = self.qs_tt.probe(hash, in_check) {
-            match cached_bound {
-                Bound::Exact => return (cached_value, Vec::new()),
-                Bound::Lower if cached_value >= beta => return (cached_value, Vec::new()),
-                Bound::Upper if cached_value <= alpha => return (cached_value, Vec::new()),
+        // QS entries don't track depth. All quiescence searches explore the same
+        // tactical horizon, so any hit is trustworthy for cutoffs
+        if let Some(tt) = self.qs_tt.probe(hash, in_check) {
+            match tt.bound {
+                Bound::Exact => return (tt.value, Vec::new()),
+                Bound::Lower if tt.value >= beta => return (tt.value, Vec::new()),
+                Bound::Upper if tt.value <= alpha => return (tt.value, Vec::new()),
                 _ => {}
             }
         }

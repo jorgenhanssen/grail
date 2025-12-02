@@ -19,6 +19,22 @@ pub enum Bound {
     Upper = 2,
 }
 
+/// Result from probing the transposition table.
+/// Caller should check `depth` to decide if `value`/`bound` are trustworthy for cutoffs.
+#[derive(Clone, Copy)]
+pub struct ProbeResult {
+    /// Score from searching this position (mate-adjusted for current ply)
+    pub value: i16,
+    /// Indicates whether the stored value is exact or a bound
+    pub bound: Bound,
+    /// Best move found from previous search
+    pub best_move: Option<Move>,
+    /// Cached static eval (None if unknown)
+    pub static_eval: Option<i16>,
+    /// Search depth that produced this result
+    pub depth: u8,
+}
+
 /// A single TT entry (16 bytes, fits 4 per cache line).
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
@@ -137,60 +153,9 @@ impl TranspositionTable {
         }
     }
 
-    /// Probes for a usable entry. Returns `Some` only if depth is sufficient.
-    pub fn probe(
-        &self,
-        hash: u64,
-        depth: u8,
-        max_depth: u8,
-    ) -> Option<(i16, Bound, Option<Move>, Option<i16>)> {
-        let needed_depth = max_depth - depth;
-        let idx = (hash as usize) % self.buckets;
-        let base = idx * CLUSTER_SIZE;
-        let key32 = hash as u32;
-
-        // Compare entries
-        let cluster = &self.entries[base..base + 4];
-        let keys = u32x4::from_array([
-            cluster[0].key,
-            cluster[1].key,
-            cluster[2].key,
-            cluster[3].key,
-        ]);
-        let target_keys = u32x4::splat(key32);
-        let key_matches = keys.simd_eq(target_keys);
-
-        // Check each match with depth requirement (most likely first)
-        for (i, entry) in cluster.iter().enumerate() {
-            if key_matches.test(i) && entry.depth >= needed_depth {
-                // Adjust mate scores relative to current position
-                let val = if entry.value.abs() >= MATE_SCORE_BOUND {
-                    if entry.value > 0 {
-                        entry.value - depth as i16
-                    } else {
-                        entry.value + depth as i16
-                    }
-                } else {
-                    entry.value
-                };
-                let se_opt = if entry.static_eval == i16::MIN {
-                    None
-                } else {
-                    Some(entry.static_eval)
-                };
-                return Some((
-                    val,
-                    entry.bound,
-                    unpack_move(entry.best_move_packed),
-                    se_opt,
-                ));
-            }
-        }
-        None
-    }
-
-    /// Probes for move ordering hint (ignores depth requirement).
-    pub fn probe_hint(&self, hash: u64) -> Option<(Option<Move>, Option<i16>)> {
+    /// Probes the TT for a matching entry, returning the deepest match.
+    /// Caller should check `result.depth >= needed_depth` before using value/bound for cutoffs.
+    pub fn probe(&self, hash: u64, depth: u8) -> Option<ProbeResult> {
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
         let key32 = hash as u32;
@@ -205,7 +170,7 @@ impl TranspositionTable {
         let target_keys = u32x4::splat(key32);
         let key_matches = keys.simd_eq(target_keys);
 
-        // Prefer deepest entry as hint
+        // Find deepest matching entry
         let mut best: Option<(usize, u8)> = None;
         for (i, entry) in cluster.iter().enumerate() {
             if key_matches.test(i) {
@@ -218,16 +183,34 @@ impl TranspositionTable {
                 }
             }
         }
-        if let Some((i, _)) = best {
-            let entry = &cluster[i];
-            let se = if entry.static_eval == i16::MIN {
-                None
+
+        let (i, _) = best?;
+        let entry = &cluster[i];
+
+        // Adjust mate scores relative to current depth
+        let value = if entry.value.abs() >= MATE_SCORE_BOUND {
+            if entry.value > 0 {
+                entry.value - depth as i16
             } else {
-                Some(entry.static_eval)
-            };
-            return Some((unpack_move(entry.best_move_packed), se));
-        }
-        None
+                entry.value + depth as i16
+            }
+        } else {
+            entry.value
+        };
+
+        let static_eval = if entry.static_eval == i16::MIN {
+            None
+        } else {
+            Some(entry.static_eval)
+        };
+
+        Some(ProbeResult {
+            value,
+            bound: entry.bound,
+            best_move: unpack_move(entry.best_move_packed),
+            static_eval,
+            depth: entry.depth,
+        })
     }
 
     /// Stores a search result using depth/age-based replacement.
