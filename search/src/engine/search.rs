@@ -230,10 +230,9 @@ impl Engine {
         let is_pv_node = beta > alpha + 1;
 
         if let Some(tt) = self.tt.probe(hash, depth) {
-            maybe_tt_move = tt.best_move;
-            tt_static_eval = tt.static_eval;
-
-            // Only use value/bound for cutoffs if depth is sufficient
+            // Only trust value/bound for cutoffs if the TT entry comes from a
+            // search at least as deep as we need. Shallow results may have
+            // missed tactics and can't safely prune the current search
             let needed_depth = max_depth - depth;
             if tt.depth >= needed_depth {
                 match tt.bound {
@@ -256,6 +255,11 @@ impl Engine {
                     }
                 }
             }
+
+            // However, we can use the TT move for ordering and static eval for caching,
+            // even from shallow searches - these are still valuable hints!
+            maybe_tt_move = tt.best_move;
+            tt_static_eval = tt.static_eval;
         }
 
         let phase = game_phase(board);
