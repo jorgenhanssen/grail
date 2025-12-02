@@ -1,5 +1,4 @@
 use candle_core::{DType, Device, Tensor};
-use candle_nn::loss::mse;
 use candle_nn::{AdamW, Module, Optimizer, ParamsAdamW, VarBuilder, VarMap};
 use nnue::encoding::NUM_FEATURES;
 use nnue::network::Network;
@@ -12,6 +11,7 @@ use crate::training::evaluation::evaluate;
 use crate::training::metrics::MetricsTracker;
 use crate::training::progress::TrainingProgressBar;
 use crate::utils::device::get_device;
+use crate::utils::loss::huber;
 
 pub struct Trainer {
     network: Network,
@@ -100,7 +100,7 @@ impl Trainer {
             let y = Tensor::from_vec(scores, (batch_len, 1), &self.device)?;
 
             let preds = self.network.forward(&x)?;
-            let loss = mse(&preds, &y)?;
+            let loss = huber(&preds, &y)?;
 
             self.optimizer.backward_step(&loss)?;
 
