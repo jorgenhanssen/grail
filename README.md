@@ -13,9 +13,8 @@ Grail is a command-line engine designed for **Standard Chess**. It requires a UC
 ### Getting Started
 
 1. **Download**: Grab the zip for your OS from the [Releases](../../releases) page and extract it.
-2. **Choose the right binary** (see table below).
-3. **Install**: Open your GUI of choice and add a new engine pointing to the `grail` binary.
-4. **Play**: Start a game or analysis session!
+2. **Install**: Open your chess GUI and add the right binary (see table below).
+3. **Play**: Start a game or analysis session!
 
 #### Which binary should I use?
 
