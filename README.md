@@ -53,7 +53,7 @@ The engine supports standard time controls (increment, sudden death, moves to go
 
 ## Play Against Grail Online
 
-You can challenge the latest version of Grail on [Lichess](https://lichess.org/@/grail-bot), running on a 1 vCPU Northflank instance with 1024 MB hash.
+You can challenge the latest version of Grail on [Lichess](https://lichess.org/@/grail-bot), running on a 1 vCPU Northflank instance with 256 MB hash.
 
 ## For Developers
 
