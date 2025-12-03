@@ -6,6 +6,15 @@ use utils::memory::prefetch;
 
 use super::main::Bound;
 
+/// Result from probing the quiescence search table.
+#[derive(Clone, Copy)]
+pub struct ProbeResult {
+    /// Score from quiescence search
+    pub value: i16,
+    /// Indicates whether the stored value is exact or a bound
+    pub bound: Bound,
+}
+
 const CLUSTER_SIZE: usize = 4;
 const MIN_BUCKETS: usize = 1024;
 
@@ -63,7 +72,7 @@ impl QSTable {
         }
     }
 
-    pub fn probe(&self, hash: u64, in_check: bool) -> Option<(i16, Bound)> {
+    pub fn probe(&self, hash: u64, in_check: bool) -> Option<ProbeResult> {
         let mixed = mix_key(hash, in_check);
         let start = self.cluster_start(mixed);
         let end = start + CLUSTER_SIZE;
@@ -81,7 +90,10 @@ impl QSTable {
 
         for (i, e) in cluster.iter().enumerate() {
             if mask.test(i) {
-                return Some((e.value, e.bound));
+                return Some(ProbeResult {
+                    value: e.value,
+                    bound: e.bound,
+                });
             }
         }
         None
