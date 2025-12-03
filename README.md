@@ -46,7 +46,7 @@ and you should be able to run it! 🍎
 
 Once added to your GUI, you can configure the engine via the UCI options:
 
-- **Hash**: Size of the transposition table in MB (Default: 1024).
+- **Hash**: Size of the transposition table in MB (Default: 256).
 - **NNUE**: Toggle between Neural Network (NNUE) and Hand-Crafted (HCE) evaluation (Default: true).
 
 The engine supports standard time controls (increment, sudden death, moves to go) and analysis modes (fixed depth, infinite).
