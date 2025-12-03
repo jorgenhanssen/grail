@@ -76,7 +76,7 @@ macro_rules! define_config {
 // Most tuning params use cfg!(feature = "tuning") so they're hidden in release builds.
 define_config!(
     // --- Core UCI options (always exposed) ---
-    (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 2048 }, 1024, true),
+    (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 16384 }, 256, true),
     (nnue: bool, "NNUE", UciOptionType::Check, true, true),
 
     (aspiration_window_size: i16, "Aspiration Window Size", UciOptionType::Spin { min: 10, max: 100 }, 40, cfg!(feature = "tuning")),
