@@ -126,8 +126,6 @@ impl Engine {
             return false;
         }
 
-        let see_value = see(board, m, phase, &self.config.get_piece_values());
-
         // Dynamic SEE threshold: how much material loss is acceptable?
         // - eval_gap: if we're far below alpha, we need the capture to work out
         // - depth_margin: at higher depths, be more conservative (less pruning)
@@ -136,7 +134,13 @@ impl Engine {
         let depth_margin = self.config.see_prune_depth_margin.value * (remaining_depth as i16);
         let see_threshold = -(eval_gap.max(0) + depth_margin);
 
-        see_value < see_threshold
+        !see(
+            board,
+            m,
+            phase,
+            &self.config.get_piece_values(),
+            see_threshold,
+        )
     }
 
     /// Null move pruning: give opponent a free move; if we still beat beta, prune the subtree.

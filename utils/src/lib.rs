@@ -1,6 +1,7 @@
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
 
+mod attacks;
 pub mod bitset;
 pub mod board_metrics;
 mod eval;
@@ -9,6 +10,7 @@ pub mod memory;
 mod moves;
 mod position;
 
+pub use attacks::{get_attackers_to, get_discovered_attacks};
 pub use eval::flip_eval_perspective;
 pub use material::{
     game_phase, has_insufficient_material, is_zugzwang, majors, minors,

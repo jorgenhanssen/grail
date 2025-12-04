@@ -1,86 +1,129 @@
-use cozy_chess::{Board, Move, Piece};
+use cozy_chess::{Board, Move, Piece, Square};
 use evaluation::piece_values::PieceValues;
-use utils::make_move;
+use utils::{get_attackers_to, get_discovered_attacks};
 
-/// Evaluates material gain/loss from an exhaustive capture sequence on a square.
+/// Static Exchange Evaluation (SEE) with threshold comparison.
 ///
-/// Builds a swaplist of alternating recaptures (least valuable attacker first),
-/// then works backward letting each side choose: recapture or stop.
+/// Evaluates the material outcome of a capture sequence on a square without
+/// making any moves. Used extensively for move ordering and pruning decisions.
 ///
-/// <https://www.chessprogramming.org/Static_Exchange_Evaluation>
+/// Returns true if the SEE value >= threshold. This is the de facto standard
+/// approach in modern chess engines, as it enables early exits and avoids
+/// computing the full SEE value when only a comparison is needed.
+///
+/// # Algorithm
+///
+/// Uses the negamax swap algorithm with bitboard manipulation:
+/// 1. Early exit if capturing for free doesn't meet threshold
+/// 2. Early exit if we still meet threshold after losing our piece
+/// 3. Otherwise, simulate the capture sequence using bitboards (no moves made)
+/// 4. Use `gain = -gain - 1 - piece_value` (negamax with strict inequality)
+/// 5. Handle X-ray attacks by updating occupancy and recalculating sliders
+///
+/// # References
+///
+/// - <https://www.chessprogramming.org/Static_Exchange_Evaluation>
+/// - [Stockfish `see_ge`](https://github.com/official-stockfish/Stockfish/blob/master/src/position.h)
+/// - [Black Marlin](https://github.com/jnlt3/blackmarlin)
+/// - [PlentyChess](https://github.com/Yoshie2000/PlentyChess)
 #[inline]
-pub fn see(board: &Board, mv: Move, phase: f32, piece_values: &PieceValues) -> i16 {
-    let target = mv.to;
-    let target_bb = target.bitboard();
+pub fn see(
+    board: &Board,
+    mv: Move,
+    phase: f32,
+    piece_values: &PieceValues,
+    threshold: i16,
+) -> bool {
+    let from = mv.from;
+    let to = mv.to;
 
-    let mut initial_gain: i16 = if let Some(victim) = board.piece_on(target) {
-        piece_values.get(victim, phase)
-    } else {
-        0
-    };
+    // Initial gain: value of victim - threshold
+    let mut gain = board
+        .piece_on(to)
+        .map(|victim| piece_values.get(victim, phase))
+        .unwrap_or(0)
+        - threshold;
 
     // Account for promotion delta
     if let Some(promo) = mv.promotion {
-        initial_gain += piece_values.get(promo, phase) - piece_values.get(Piece::Pawn, phase);
+        gain += piece_values.get(promo, phase) - piece_values.get(Piece::Pawn, phase);
     }
 
-    // Gains list stores the net gain after each ply using the CPW swaplist method.
-    // 16 max captures should be safe.
-    let mut gains: [i16; 16] = [0; 16];
-    let mut gains_length = 1;
-    gains[0] = initial_gain;
+    // If taking the victim for free isn't enough, fail immediately
+    if gain < 0 {
+        return false;
+    }
 
-    // Simulate alternating recaptures choosing the least valuable attacker each time
-    let mut current_board = make_move(board, mv);
+    // Subtract the value of our attacker (they might recapture it)
+    let attacker = board.piece_on(from).unwrap_or(Piece::Pawn);
+    gain -= piece_values.get(attacker, phase);
 
-    // Alternate sides capturing on target until no legal recapture exists
+    // If we're still above threshold after potentially losing our attacker, succeed
+    // (we can always choose to stop if recapturing would be bad)
+    if gain >= 0 {
+        return true;
+    }
+
+    // Set up occupancy for X-ray handling
+    let mut occupied = board.occupied();
+    occupied ^= from.bitboard();
+    occupied |= to.bitboard();
+
+    // Calculate all attackers to the target square
+    let mut attackers = get_attackers_to(board, to, occupied);
+
+    let bishops_queens = board.pieces(Piece::Bishop) | board.pieces(Piece::Queen);
+    let rooks_queens = board.pieces(Piece::Rook) | board.pieces(Piece::Queen);
+
+    let mut stm = !board.side_to_move();
+
     loop {
-        // Choose the least valuable attacker among recaptures
-        let mut best_recapture: Option<Move> = None;
-        let mut best_value = i16::MAX;
+        // Filter out pieces that have already captured
+        attackers &= occupied;
 
-        current_board.generate_moves(|moves| {
-            for mov in moves {
-                if !target_bb.has(mov.to) {
-                    continue;
-                }
-                if let Some(attacker) = current_board.piece_on(mov.from) {
-                    let val = piece_values.get(attacker, phase);
-                    if val < best_value {
-                        best_value = val;
-                        best_recapture = Some(mov);
-                    }
-                }
+        let my_attackers = attackers & board.colors(stm);
+        if my_attackers.is_empty() {
+            break;
+        }
+
+        // Find least valuable attacker
+        let (piece, attacker_sq) = find_least_valuable_attacker(board, my_attackers);
+
+        // Switch sides
+        stm = !stm;
+
+        // Negamax formula: -gain - 1 - piece_value
+        // The -1 handles strict inequality in integer domain
+        gain = -gain - 1 - piece_values.get(piece, phase);
+
+        if gain >= 0 {
+            // If king captured and opponent still has attackers, king capture is illegal
+            if piece == Piece::King && !(attackers & board.colors(stm)).is_empty() {
+                stm = !stm;
             }
-            false
-        });
+            break;
+        }
 
-        match best_recapture {
-            Some(best) => {
-                // Forward pass: net gain at this ply is captured piece value minus previous net
-                let prev = gains[gains_length - 1];
-                let captured_piece = current_board
-                    .piece_on(target)
-                    .expect("target must be occupied before recapture");
-                let captured_value = piece_values.get(captured_piece, phase);
+        // Remove the attacker from occupancy
+        occupied ^= attacker_sq.bitboard();
 
-                gains[gains_length] = captured_value - prev;
-                gains_length += 1;
-                current_board.play_unchecked(best);
-            }
-            None => break,
+        // Add any discovered attackers
+        attackers |= get_discovered_attacks(piece, to, occupied, bishops_queens, rooks_queens);
+    }
+
+    // If we ended on our original side's turn, opponent had the last profitable capture
+    stm != board.side_to_move()
+}
+
+/// Finds the least valuable attacker from the given attackers bitboard.
+#[inline]
+fn find_least_valuable_attacker(board: &Board, attackers: cozy_chess::BitBoard) -> (Piece, Square) {
+    // Piece::ALL is ordered by value: Pawn, Knight, Bishop, Rook, Queen, King
+    for piece in Piece::ALL {
+        let piece_attackers = attackers & board.pieces(piece);
+        if let Some(sq) = piece_attackers.next_square() {
+            return (piece, sq);
         }
     }
-
-    // Backward induction: each side chooses max(current gain, -opponent's best).
-    // Must evaluate from the end since earlier decisions depend on later outcomes.
-    let mut i = gains_length;
-    while i > 1 {
-        let next = gains[i - 1];
-        let prev = gains[i - 2];
-        gains[i - 2] = -std::cmp::max(-prev, next);
-        i -= 1;
-    }
-
-    gains[0]
+    unreachable!("attackers bitboard should not be empty")
 }

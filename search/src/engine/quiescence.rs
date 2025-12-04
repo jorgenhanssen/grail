@@ -151,7 +151,7 @@ impl Engine {
                         let attacker_value = self.piece_values.get(attacker, phase);
                         // Only run expensive SEE if capture seems questionable (equal/lower value)
                         if victim_value <= attacker_value
-                            && see(board, mv, phase, &self.piece_values) < 0
+                            && !see(board, mv, phase, &self.piece_values, 0)
                         {
                             continue;
                         }
