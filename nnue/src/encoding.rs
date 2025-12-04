@@ -1,12 +1,28 @@
 use cozy_chess::{BitBoard, Board, Color, Piece, Square};
 use utils::bitset::Bitset;
 
-// Feature layout (total 1153 features):
-// - Piece placements: 64 squares × 6 pieces × 2 colors = 768 features
-// - Support: squares where each color defends own pieces = 128 features (64 per color)
-// - Space: squares each color controls (non-piece squares) = 128 features
-// - Threats: squares where each color threatens enemy pieces = 128 features
-// - Side to move: 1 feature (1 if White to move)
+// Feature Layout (1153 total):
+//
+// Piece Placements [0-767]:
+//   Per square (12 features): [WP, WN, WB, WR, WQ, WK, BP, BN, BB, BR, BQ, BK]
+//
+//   [Sq0 (A1)][Sq1 (B1)]...[Sq63 (H8)]
+//   └─ 12 ──┘ └─ 12 ──┘    └── 12 ──┘
+//
+// Support [768-895] - squares where color defends own pieces:
+//   [White: Sq0...Sq63][Black: Sq0...Sq63]
+//   └────── 64 ───────┘└────── 64 ───────┘
+//
+// Space [896-1023] - squares color controls (excl. own pieces):
+//   [White: Sq0...Sq63][Black: Sq0...Sq63]
+//   └────── 64 ───────┘└────── 64 ───────┘
+//
+// Threats [1024-1151] - squares of valuable pieces attacked by lesser pieces:
+//   [White: Sq0...Sq63][Black: Sq0...Sq63]
+//   └────── 64 ───────┘└────── 64 ───────┘
+//
+// Side to Move [1152] - 1.0 if White to move
+
 const NUM_PIECE_PLACEMENT_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM;
 const NUM_SUPPORT_FEATURES: usize = Square::NUM * 2;
 const NUM_SPACE_FEATURES: usize = Square::NUM * 2;
@@ -49,11 +65,13 @@ pub fn encode_board(
     let mut features = [0f32; NUM_FEATURES];
 
     // Piece placements
-    for sq in Square::ALL {
-        if let Some(piece) = board.piece_on(sq) {
-            let color = board.color_on(sq).unwrap();
-            let offset = sq as usize * 12 + piece_color_to_index(piece, color);
-            features[offset] = 1.0;
+    for color in [Color::White, Color::Black] {
+        for piece in Piece::ALL {
+            let piece_idx = piece_color_to_index(piece, color);
+            for sq in board.colored_pieces(color, piece) {
+                let offset = sq as usize * (Piece::NUM * Color::NUM) + piece_idx;
+                features[offset] = 1.0;
+            }
         }
     }
 
@@ -116,11 +134,13 @@ pub fn encode_board_bitset(
     let mut bitset = Bitset::default();
 
     // Piece placements
-    for sq in Square::ALL {
-        if let Some(piece) = board.piece_on(sq) {
-            let color = board.color_on(sq).unwrap();
-            let idx = sq as usize * 12 + piece_color_to_index(piece, color);
-            bitset.set(idx);
+    for color in [Color::White, Color::Black] {
+        for piece in Piece::ALL {
+            let piece_idx = piece_color_to_index(piece, color);
+            for sq in board.colored_pieces(color, piece) {
+                let idx = sq as usize * (Piece::NUM * Color::NUM) + piece_idx;
+                bitset.set(idx);
+            }
         }
     }
 
