@@ -1,5 +1,3 @@
-// Move ordering for main search inspired by Black Marlin
-
 use arrayvec::ArrayVec;
 use cozy_chess::{BitBoard, Board, Move, Piece, Square};
 use evaluation::piece_values::PieceValues;
@@ -24,6 +22,18 @@ enum Phase {
     BadCaptures,
 }
 
+/// Staged move generator for main search. Based on Black Marlin.
+///
+/// Generates and sorts moves lazily in phases to avoid doing it all upfront:
+/// 1. BestMove (TT/PV move) - most likely to cause cutoff
+/// 2. GoodCaptures - winning/equal captures by SEE (includes capture promotions)
+/// 3. Killers - quiet moves that caused cutoffs at this ply before
+/// 4. Quiets - remaining quiet moves, scored by history (queen promos first, underpromos last)
+/// 5. BadCaptures - losing captures, tried last
+///
+/// <https://www.chessprogramming.org/Move_Ordering>
+/// <https://www.chessprogramming.org/Killer_Heuristic>
+/// <https://github.com/jnlt3/blackmarlin>
 pub struct MainMoveGenerator {
     gen_phase: Phase,
     game_phase: f32,
@@ -144,7 +154,13 @@ impl MainMoveGenerator {
                 }
 
                 // Only run expensive SEE if capture seems questionable
-                if see(board, scored_move.mov, self.game_phase, &self.piece_values) < 0 {
+                if !see(
+                    board,
+                    scored_move.mov,
+                    self.game_phase,
+                    &self.piece_values,
+                    0,
+                ) {
                     self.bad_captures.push(scored_move);
                     continue;
                 }

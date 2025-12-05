@@ -1,9 +1,11 @@
 use ahash::AHashSet;
 use cozy_chess::Board;
 
+/// Commands received from the UCI GUI.
 #[derive(Debug)]
 pub enum UciInput {
     Uci,
+    Debug(bool),
     IsReady,
 
     UciNewGame,
@@ -22,6 +24,7 @@ pub enum UciInput {
     Unknown(String),
 }
 
+/// Commands sent to the UCI GUI.
 #[derive(Debug)]
 pub enum UciOutput {
     IdName(String),
@@ -30,25 +33,32 @@ pub enum UciOutput {
     ReadyOk,
     BestMove(String),
     Info(Info),
+    InfoString(String),
     Option(String),
-    Raw(String),
 }
 
-#[derive(Debug, Default)]
+/// Search information sent to the GUI during analysis.
+///
+/// Example: `info depth 4 seldepth 7 nodes 3274 nps 922805 time 3 score cp 10 pv e2e4 d7d5 e4d5 d8d5`
+#[derive(Debug, Default, Clone)]
 pub struct Info {
     pub depth: u8,
     pub sel_depth: u8,
     pub nodes: u32,
     pub nodes_per_second: u32,
+    pub hashfull: u16,
     pub time: u32,
     pub pv: Vec<String>,
     pub score: Score,
 }
 
-#[derive(Debug)]
+/// Evaluation score in UCI format.
+#[derive(Debug, Clone, Copy)]
 pub enum Score {
-    Centipawns(i16), // centipawns
-    Mate(i16),       // Positive for mate-in-n, negative for mated-in-n
+    /// Score in centipawns.
+    Centipawns(i16),
+    /// Mate in N moves. Positive = we mate, negative = we get mated.
+    Mate(i16),
 }
 
 impl Default for Score {
@@ -57,33 +67,24 @@ impl Default for Score {
     }
 }
 
+/// Parameters for the "go" command.
 #[derive(Debug, Default)]
 pub struct GoParams {
-    // Search in the background until a stop command is received.
+    /// Search until "stop" is received.
     pub infinite: bool,
-
-    // Restrict search to moves in this list.
-    pub search_moves: Option<Vec<String>>,
-
-    // Integer of milliseconds White has left on the clock.
+    /// White's remaining time in milliseconds.
     pub wtime: Option<u64>,
-
-    // Integer of milliseconds Black has left on the clock.
+    /// Black's remaining time in milliseconds.
     pub btime: Option<u64>,
-
-    // Integer of white Fisher increment.
+    /// White's increment per move in milliseconds.
     pub winc: Option<u64>,
-
-    // Integer of black Fisher increment.
+    /// Black's increment per move in milliseconds.
     pub binc: Option<u64>,
-
-    // Number of moves to the next time control. If this is not set, but wtime or btime are, then it is sudden death.
+    /// Moves until next time control (sudden death if not set).
     pub moves_to_go: Option<u64>,
-
-    // Search depth ply only.
+    /// Search to this depth only.
     pub depth: Option<u8>,
-
-    // Search exactly movetime milliseconds.
+    /// Search for exactly this many milliseconds.
     pub move_time: Option<u64>,
 }
 

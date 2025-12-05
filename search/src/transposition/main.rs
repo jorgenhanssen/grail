@@ -7,25 +7,52 @@ use utils::memory::prefetch;
 
 use crate::pruning::MATE_SCORE_BOUND;
 
+/// Indicates whether the stored value is exact or a bound.
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum Bound {
+    /// True minimax value (alpha < value < beta)
     #[default]
     Exact = 0,
+    /// Value >= beta (beta cutoff)
     Lower = 1,
+    /// Value <= alpha (all moves failed)
     Upper = 2,
 }
 
+/// Result from probing the transposition table.
+/// Caller should check `depth` to decide if `value`/`bound` are trustworthy for cutoffs.
+#[derive(Clone, Copy)]
+pub struct ProbeResult {
+    /// Score from searching this position (mate-adjusted for current ply)
+    pub value: i16,
+    /// Indicates whether the stored value is exact or a bound
+    pub bound: Bound,
+    /// Best move found from previous search
+    pub best_move: Option<Move>,
+    /// Cached static eval (None if unknown)
+    pub static_eval: Option<i16>,
+    /// Search depth that produced this result
+    pub depth: u8,
+}
+
+/// A single TT entry (16 bytes, fits 4 per cache line).
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
 pub struct TTEntry {
-    // 0 = empty slot
+    /// Lower 32 bits of Zobrist hash for verification
     pub key: u32,
+    /// Score from searching this position
     pub value: i16,
-    pub static_eval: i16, // i16::MIN denotes "unknown"
-    pub depth: u8,
+    /// Indicates whether the stored value is exact or a bound
     pub bound: Bound,
+    /// Static eval without search, cached to avoid recomputation (i16::MIN = unknown)
+    pub static_eval: i16,
+    /// Search depth that produced this result
+    pub depth: u8,
+    /// Best move found, packed as: [15:12]=promo, [11:6]=to, [5:0]=from
     pub best_move_packed: u16,
-    pub generation: u8, // Tracks freshness (increments per search)
+    /// Age for replacement policy
+    pub generation: u8,
 }
 
 impl TTEntry {
@@ -53,6 +80,11 @@ impl TTEntry {
 const CLUSTER_SIZE: usize = 4;
 const MIN_BUCKETS: usize = 1024;
 
+/// Hash table for memoizing search results.
+/// Uses 4-entry clusters for cache efficiency and SIMD probing.
+/// Replacement considers depth, age, and bound type.
+///
+/// <https://www.chessprogramming.org/Transposition_Table>
 pub struct TranspositionTable {
     entries: Vec<TTEntry>,
     buckets: usize,
@@ -60,6 +92,7 @@ pub struct TranspositionTable {
 }
 
 impl TranspositionTable {
+    /// Creates a new TT with the given size in megabytes.
     pub fn new(mb: usize) -> Self {
         let bytes = mb.saturating_mul(1024 * 1024);
         let entry_size = size_of::<TTEntry>().max(1);
@@ -85,8 +118,28 @@ impl TranspositionTable {
         self.generation = 0;
     }
 
+    /// Increments generation counter. Called at start of each search.
     pub fn age(&mut self) {
         self.generation = self.generation.wrapping_add(1);
+    }
+
+    /// Returns hash table fill rate in permille (0-1000).
+    ///
+    /// Samples the first 1000 entries to get an approximation of the fill rate.
+    /// Looping through the entire table would be too slow.
+    pub fn hashfull(&self) -> u16 {
+        const MAX_SAMPLE: usize = 1000;
+
+        let sample_size = self.entries.len().min(MAX_SAMPLE);
+        let sample = &self.entries[..sample_size];
+
+        // Count non-empty entries (key == 0)
+        let filled_count = sample.iter().filter(|e| e.key != 0).count();
+
+        // Convert to permille: (filled / sample_size) * 1000
+        let permille = (filled_count * 1000) / sample_size;
+
+        permille as u16
     }
 
     // Prefetch TT entry into cache
@@ -100,58 +153,9 @@ impl TranspositionTable {
         }
     }
 
-    pub fn probe(
-        &self,
-        hash: u64,
-        depth: u8,
-        max_depth: u8,
-    ) -> Option<(i16, Bound, Option<Move>, Option<i16>)> {
-        let needed_depth = max_depth - depth;
-        let idx = (hash as usize) % self.buckets;
-        let base = idx * CLUSTER_SIZE;
-        let key32 = hash as u32;
-
-        // Compare entries
-        let cluster = &self.entries[base..base + 4];
-        let keys = u32x4::from_array([
-            cluster[0].key,
-            cluster[1].key,
-            cluster[2].key,
-            cluster[3].key,
-        ]);
-        let target_keys = u32x4::splat(key32);
-        let key_matches = keys.simd_eq(target_keys);
-
-        // Check each match with depth requirement (most likely first)
-        for (i, entry) in cluster.iter().enumerate() {
-            if key_matches.test(i) && entry.depth >= needed_depth {
-                // Adjust mate scores relative to current position
-                let val = if entry.value.abs() >= MATE_SCORE_BOUND {
-                    if entry.value > 0 {
-                        entry.value - depth as i16
-                    } else {
-                        entry.value + depth as i16
-                    }
-                } else {
-                    entry.value
-                };
-                let se_opt = if entry.static_eval == i16::MIN {
-                    None
-                } else {
-                    Some(entry.static_eval)
-                };
-                return Some((
-                    val,
-                    entry.bound,
-                    unpack_move(entry.best_move_packed),
-                    se_opt,
-                ));
-            }
-        }
-        None
-    }
-
-    pub fn probe_hint(&self, hash: u64) -> Option<(Option<Move>, Option<i16>)> {
+    /// Probes the TT for a matching entry, returning the deepest match.
+    /// Caller should check `result.depth >= needed_depth` before using value/bound for cutoffs.
+    pub fn probe(&self, hash: u64, depth: u8) -> Option<ProbeResult> {
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
         let key32 = hash as u32;
@@ -166,7 +170,7 @@ impl TranspositionTable {
         let target_keys = u32x4::splat(key32);
         let key_matches = keys.simd_eq(target_keys);
 
-        // Prefer deepest entry as hint
+        // Find deepest matching entry
         let mut best: Option<(usize, u8)> = None;
         for (i, entry) in cluster.iter().enumerate() {
             if key_matches.test(i) {
@@ -179,18 +183,37 @@ impl TranspositionTable {
                 }
             }
         }
-        if let Some((i, _)) = best {
-            let entry = &cluster[i];
-            let se = if entry.static_eval == i16::MIN {
-                None
+
+        let (i, _) = best?;
+        let entry = &cluster[i];
+
+        // Adjust mate scores relative to current depth
+        let value = if entry.value.abs() >= MATE_SCORE_BOUND {
+            if entry.value > 0 {
+                entry.value - depth as i16
             } else {
-                Some(entry.static_eval)
-            };
-            return Some((unpack_move(entry.best_move_packed), se));
-        }
-        None
+                entry.value + depth as i16
+            }
+        } else {
+            entry.value
+        };
+
+        let static_eval = if entry.static_eval == i16::MIN {
+            None
+        } else {
+            Some(entry.static_eval)
+        };
+
+        Some(ProbeResult {
+            value,
+            bound: entry.bound,
+            best_move: unpack_move(entry.best_move_packed),
+            static_eval,
+            depth: entry.depth,
+        })
     }
 
+    /// Stores a search result using depth/age-based replacement.
     #[allow(clippy::too_many_arguments)]
     pub fn store(
         &mut self,
@@ -313,8 +336,8 @@ impl TranspositionTable {
     }
 }
 
+/// Packs a move into 16 bits: [15:12]=promo, [11:6]=to, [5:0]=from
 fn pack_move(mv: Option<Move>) -> u16 {
-    // Layout: [15..12]=promo (0=None,1=N,2=B,3=R,4=Q), [11..6]=to, [5..0]=from
     if let Some(m) = mv {
         let from = m.from as u16; // 0..63
         let to = m.to as u16; // 0..63
@@ -331,6 +354,7 @@ fn pack_move(mv: Option<Move>) -> u16 {
     }
 }
 
+/// Unpacks a 16-bit encoded move.
 fn unpack_move(code: u16) -> Option<Move> {
     if code == 0 {
         return None;
@@ -352,4 +376,39 @@ fn unpack_move(code: u16) -> Option<Move> {
         to,
         promotion,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pack_unpack_roundtrip() {
+        let test_moves: &[(&str, &str, Option<Piece>)] = &[
+            ("e2", "e4", None),                // Simple pawn push
+            ("a1", "h8", None),                // Corner to corner
+            ("g1", "f3", None),                // Knight move
+            ("e7", "e8", Some(Piece::Queen)),  // Queen promotion
+            ("a7", "a8", Some(Piece::Knight)), // Knight promotion
+            ("h7", "h8", Some(Piece::Rook)),   // Rook promotion
+            ("b7", "b8", Some(Piece::Bishop)), // Bishop promotion
+        ];
+
+        for &(from, to, promo) in test_moves {
+            let mv = Move {
+                from: from.parse().unwrap(),
+                to: to.parse().unwrap(),
+                promotion: promo,
+            };
+            let packed = pack_move(Some(mv));
+            let unpacked = unpack_move(packed);
+            assert_eq!(unpacked, Some(mv), "Failed for move {}{}", from, to);
+        }
+    }
+
+    #[test]
+    fn test_pack_unpack_none() {
+        assert_eq!(pack_move(None), 0);
+        assert_eq!(unpack_move(0), None);
+    }
 }

@@ -1,60 +1,33 @@
-use super::commands::{UciInput, UciOutput};
-use super::decoder::Decoder;
+use super::commands::UciOutput;
 use super::encoder::Encoder;
-use std::error::Error;
-use std::io::{self, BufRead};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 
+/// Handles UCI output communication.
+///
+/// Spawns a dedicated thread for printing UCI responses to stdout.
+/// The main thread and engine worker can send output via the channel.
 pub struct UciConnection {
     output_tx: Sender<UciOutput>,
 }
 
+impl Default for UciConnection {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UciConnection {
     pub fn new() -> Self {
-        // Create a channel for UCI outputs
         let (output_tx, output_rx) = channel();
-
-        // Spawn a thread to handle output printing
         Self::spawn_output_handler(output_rx);
-
         Self { output_tx }
     }
 
-    pub fn send(&self, output: UciOutput) -> Result<(), Box<dyn Error>> {
-        self.output_tx.send(output)?;
-        Ok(())
-    }
-
-    // Takes a callback function that handles commands and returns a sender for responses
-    pub fn listen<F>(&mut self, mut callback: F) -> io::Result<()>
-    where
-        F: FnMut(&UciInput, Sender<UciOutput>) -> Result<(), Box<dyn Error>>,
-    {
-        let decoder = Decoder {};
-        let stdin = io::stdin();
-        let mut reader = stdin.lock();
-
-        loop {
-            let mut in_line = String::new();
-            reader.read_line(&mut in_line)?;
-
-            let in_line = in_line.trim();
-            log::debug!("Input: {:?}", in_line);
-
-            let input = decoder.decode(in_line);
-
-            // Handle potential errors from callback
-            if let Err(e) = callback(&input, self.output_tx.clone()) {
-                log::error!("Callback error: {:?}", e);
-            }
-
-            if matches!(input, UciInput::Quit) {
-                break;
-            }
-        }
-
-        Ok(())
+    /// Returns a sender for UCI output messages.
+    /// Can be cloned and shared with the engine worker thread.
+    pub fn output_sender(&self) -> Sender<UciOutput> {
+        self.output_tx.clone()
     }
 
     fn spawn_output_handler(output_rx: Receiver<UciOutput>) {
@@ -62,9 +35,7 @@ impl UciConnection {
             let encoder = Encoder {};
 
             while let Ok(output) = output_rx.recv() {
-                let out_line = encoder.encode(&output);
-                log::debug!("Output: {:?}", out_line);
-                println!("{}", out_line);
+                println!("{}", encoder.encode(&output));
             }
         });
     }

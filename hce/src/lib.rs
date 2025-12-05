@@ -14,12 +14,14 @@ pub use config::HCEConfig;
 use context::EvalContext;
 use pawn_cache::PawnCache;
 
-use crate::def::HCE;
-use crate::hce::pawn_cache::CachedPawnEvaluation;
-use crate::piece_values::PieceValues;
+use crate::pawn_cache::CachedPawnEvaluation;
 use cozy_chess::Color;
+use evaluation::{PieceValues, HCE};
 use utils::{side_has_insufficient_material, Position};
 
+/// Hand-Crafted Evaluation: tunable metrics based on human knowledge and chess concepts.
+///
+/// <https://www.chessprogramming.org/Evaluation>
 pub struct Evaluator {
     piece_values: PieceValues,
     config: HCEConfig,
@@ -41,6 +43,7 @@ impl HCE for Evaluator {
         "HCE".to_string()
     }
 
+    /// Evaluates from White's perspective. Positive = White advantage.
     fn evaluate(&mut self, position: &Position, phase: f32) -> i16 {
         let ctx = EvalContext::new(position, phase);
         let board = position.board;

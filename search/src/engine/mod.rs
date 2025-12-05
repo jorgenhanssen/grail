@@ -6,7 +6,7 @@ use std::sync::{
 
 use ahash::AHashSet;
 use cozy_chess::{Board, Move};
-use evaluation::{hce, PieceValues, HCE, NNUE};
+use evaluation::{PieceValues, HCE, NNUE};
 use uci::{commands::Info, pv_to_uci, UciOutput};
 
 use crate::{
@@ -25,36 +25,62 @@ mod search;
 use crate::MAX_DEPTH;
 
 pub struct Engine {
+    /// Configuration for the engine
     config: EngineConfig,
-    piece_values: PieceValues,
 
-    hce: Box<dyn HCE>,
-    nnue: Option<Box<dyn NNUE>>,
-
-    board: Board,
-    game_history: AHashSet<u64>,
-    nodes: u32,
-    killer_moves: [[Option<Move>; 2]; MAX_DEPTH], // 2 per depth
-    current_pv: Vec<Move>,
-    max_depth_reached: u8,
+    /// Signal to terminate search (time control or UCI stop)
     stop: Arc<AtomicBool>,
 
+    /// Piece values for the engine
+    piece_values: PieceValues,
+
+    /// Hand-crafted evaluation
+    hce: Box<dyn HCE>,
+    /// Neural network evaluation
+    nnue: Option<Box<dyn NNUE>>,
+
+    /// The position we are finding the best move for (root position)
+    board: Board,
+    /// Position hashes for repetition detection - all positions up until the search.
+    game_history: AHashSet<u64>,
+
+    /// Number of nodes searched
+    nodes: u32,
+    /// Principal variation - the current best line we have found
+    current_pv: Vec<Move>,
+    /// Selective depth (max ply reached including quiescence - deepest we have gotten)
+    max_depth_reached: u8,
+
+    /// Main transposition table
     tt: TranspositionTable,
+    /// Quiescence search transposition table
     qs_tt: QSTable,
 
+    /// Tracks active search path - used for repetition, improving, etc.
     search_stack: SearchStack,
 
+    /// Quiet moves that caused beta cutoffs (2 per ply, FIFO).
+    /// <https://www.chessprogramming.org/Killer_Heuristic>
+    killer_moves: [[Option<Move>; 2]; MAX_DEPTH],
+    /// Scores quiet moves by search success
     history_heuristic: HistoryHeuristic,
+    /// Scores captures by search success
     capture_history: CaptureHistory,
+    /// Scores based on move sequences
     continuation_history: Box<ContinuationHistory>,
 }
 
 impl Engine {
-    pub fn new(config: &EngineConfig, hce: Box<dyn HCE>, nnue: Option<Box<dyn NNUE>>) -> Self {
+    pub fn new(
+        config: &EngineConfig,
+        hce: Box<dyn HCE>,
+        nnue: Option<Box<dyn NNUE>>,
+        stop: Arc<AtomicBool>,
+    ) -> Self {
         let mut instance = Self {
             config: config.clone(),
             piece_values: config.get_piece_values(),
-            stop: Arc::new(AtomicBool::new(false)),
+            stop,
 
             hce,
             nnue,
@@ -122,9 +148,9 @@ impl Engine {
         self.init_game();
     }
 
-    pub fn set_position(&mut self, board: Board, game_history: AHashSet<u64>) {
+    pub fn set_position(&mut self, board: Board, game_history: Option<AHashSet<u64>>) {
         self.board = board;
-        self.game_history = game_history;
+        self.game_history = game_history.unwrap_or_default();
     }
 
     pub fn board(&self) -> &Board {
@@ -160,6 +186,7 @@ impl Engine {
                 sel_depth: self.max_depth_reached,
                 nodes: self.nodes,
                 nodes_per_second: nps,
+                hashfull: self.tt.hashfull(),
                 time: elapsed.as_millis() as u32,
                 score: if found_checkmate {
                     convert_mate_score(best_score)

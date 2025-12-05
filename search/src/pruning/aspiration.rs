@@ -1,5 +1,4 @@
-// aspiration.rs
-use evaluation::scores::{NEG_INFINITY, POS_INFINITY};
+use evaluation::scores::SCORE_INF;
 
 #[derive(PartialEq, Debug)]
 pub enum Pass {
@@ -8,6 +7,10 @@ pub enum Pass {
     FailHigh,
 }
 
+/// Manages aspiration window bounds across search iterations.
+/// Starts with a narrow window around the previous score, widens on fail-low/fail-high.
+///
+/// <https://www.chessprogramming.org/Aspiration_Windows>
 #[derive(Copy, Clone)]
 pub struct AspirationWindow {
     alpha: i16,
@@ -20,22 +23,23 @@ pub struct AspirationWindow {
 impl AspirationWindow {
     pub fn new(start_half: i16, widen: i16, enabled_from: u8) -> Self {
         Self {
-            alpha: NEG_INFINITY,
-            beta: POS_INFINITY,
+            alpha: -SCORE_INF,
+            beta: SCORE_INF,
             start_half,
             widen,
             enabled_from,
         }
     }
 
+    /// Sets up window for new depth based on previous score.
     pub fn begin_depth(&mut self, depth: u8, prev_score: i16) {
         if depth < self.enabled_from {
-            self.alpha = NEG_INFINITY;
-            self.beta = POS_INFINITY;
+            self.alpha = -SCORE_INF;
+            self.beta = SCORE_INF;
             return;
         }
 
-        let half = (self.start_half + 10 * depth as i16).min(POS_INFINITY);
+        let half = (self.start_half + 10 * depth as i16).min(SCORE_INF);
         self.alpha = prev_score.saturating_sub(half);
         self.beta = prev_score.saturating_add(half);
     }
@@ -44,6 +48,7 @@ impl AspirationWindow {
         (self.alpha, self.beta)
     }
 
+    /// Checks score against bounds; widens window on failure.
     pub fn analyse_pass(&mut self, score: i16) -> Pass {
         if score > self.alpha && score < self.beta {
             return Pass::Hit(score);
@@ -61,8 +66,9 @@ impl AspirationWindow {
         }
     }
 
+    /// Fully opens the window after too many failures.
     pub fn fully_extend(&mut self) {
-        self.alpha = NEG_INFINITY;
-        self.beta = POS_INFINITY;
+        self.alpha = -SCORE_INF;
+        self.beta = SCORE_INF;
     }
 }

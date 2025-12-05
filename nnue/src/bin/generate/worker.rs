@@ -1,13 +1,16 @@
 use crate::book::Book;
 use crate::game::SelfPlayGame;
 use crate::histogram::HistogramHandle;
-use evaluation::{hce, NNUE};
+use evaluation::NNUE;
 use search::{Engine, EngineConfig};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
+// Reduced hash per worker to limit total RAM when running many threads.
 const WORKER_HASH_SIZE_MB: i32 = 384;
 
+/// A single worker thread that plays self-play games and collects samples.
+/// Each worker has its own engine instance to avoid contention.
 pub struct SelfPlayWorker {
     _tid: usize,
     sample_counter: Arc<AtomicUsize>,
@@ -38,12 +41,15 @@ impl SelfPlayWorker {
             config.get_hce_config(),
         ));
 
+        // Engine stop flag (not used in data generation, but required by Engine)
+        let stop = Arc::new(AtomicBool::new(false));
+
         Self {
             _tid: tid,
             sample_counter,
             game_id_counter,
             depth,
-            engine: Engine::new(&config, hce, nnue),
+            engine: Engine::new(&config, hce, nnue, stop),
             opening_book,
             histogram,
         }

@@ -9,17 +9,21 @@ use std::thread;
 
 use cozy_chess::{Board, Color};
 use nnue::encoding::{encode_board, NUM_FEATURES};
+use nnue::network::FV_SCALE;
 use utils::board_metrics::BoardMetrics;
 
 use super::indexer::SampleRef;
 
-pub const FV_SCALE: f32 = 400.0;
-
 // Holds x items in the channel per worker
 const CHANNEL_BUFFER_MULTIPLIER: usize = 2;
 
-type BatchData = (Vec<f32>, Vec<f32>); // (x, y) - (features, scores)
+type BatchData = (Vec<f32>, Vec<f32>); // (features, scores)
 
+/// Multi-threaded data loader that reads samples from disk on-demand.
+///
+/// Workers read FENs from disk using SampleRef indices, encode them to features,
+/// and send batches through a channel. Each worker caches open file handles to
+/// avoid repeated open/close overhead.
 pub struct DataLoader {
     receiver: mpsc::Receiver<BatchData>,
     workers: Vec<thread::JoinHandle<()>>,

@@ -1,7 +1,6 @@
-pub mod def;
-pub mod hce;
 pub mod piece_values;
 pub mod scores;
+mod traits;
 
-pub use def::{HCE, NNUE};
 pub use piece_values::PieceValues;
+pub use traits::{HCE, NNUE};

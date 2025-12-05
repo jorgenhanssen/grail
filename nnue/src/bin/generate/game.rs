@@ -8,11 +8,17 @@ use utils::{
     collect_legal_moves, flip_eval_perspective, has_insufficient_material, has_legal_moves,
 };
 
+// Temperature-based move selection for diversity in training data.
+// High temperature early = more random moves, decays to deterministic play.
 const INITIAL_TEMPERATURE: f32 = 3.0;
 const TEMPERATURE_DECAY_RATE: f32 = 7.5;
 const MIN_TEMPERATURE: f32 = 0.05;
+// Skip positions near checkmate—they don't help the network learn nuanced eval.
+// TODO: Consider re-using and sharing with search crate
 const MATE_THRESHOLD: i16 = 5000;
 
+/// A self-play game that generates training samples: (FEN, score, game_id) tuples.
+/// Plays from an opening position until terminal, recording evaluations.
 pub struct SelfPlayGame {
     board: Board,
     game_id: usize,
@@ -58,7 +64,7 @@ impl SelfPlayGame {
     fn compute_move(&self, engine: &mut Engine, depth: u8) -> (Move, i16) {
         let history = self.history();
 
-        engine.set_position(self.board.clone(), history);
+        engine.set_position(self.board.clone(), Some(history));
 
         let params = GoParams {
             depth: Some(depth),
@@ -91,17 +97,21 @@ impl SelfPlayGame {
 
     fn record_eval(&mut self, engine_score: i16) {
         // Engine score is from STM perspective; flip to white's perspective for training
-        let white_score = flip_eval_perspective(&self.board, engine_score);
+        let white_score = flip_eval_perspective(self.board.side_to_move(), engine_score);
 
         self.current_game_samples
             .push((format!("{}", self.board), white_score));
     }
 
+    /// Selects a move using temperature-based randomization.
+    /// Early game: high chance of random move for position diversity.
+    /// Late game: always play the best move for accurate evaluations.
     fn select_move(&self, best_move: Move) -> Move {
         let mut rng = rand::thread_rng();
 
-        // Temperature decays based on full move number (not ply)
-        // This ensures both White and Black get equal exploration at each turn
+        // Temperature decays exponentially based on full move number (not ply).
+        // Using full move ensures equal randomness for both sides—otherwise Black
+        // would have less random moves at each turn, skewing games in Black's favor.
         let move_number = self.ply_count / 2;
         let temp = INITIAL_TEMPERATURE * (-(move_number as f32) / TEMPERATURE_DECAY_RATE).exp();
 

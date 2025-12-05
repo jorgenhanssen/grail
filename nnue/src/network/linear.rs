@@ -3,7 +3,11 @@ use candle_nn::Linear;
 
 use super::simd::dot_product;
 
-// Linear layer optimized for CPU inference
+/// Linear layer optimized for CPU inference.
+///
+/// Uses SIMD-accelerated dot products and pre-flattened weight storage.
+/// Unlike the embedding layer, this is not quantized since the hidden layers
+/// are small enough that f32 performance is acceptable.
 pub struct LinearLayer {
     weights: Box<[f32]>,
     biases: Box<[f32]>,

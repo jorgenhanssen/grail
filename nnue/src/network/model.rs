@@ -5,7 +5,7 @@ use crate::encoding::NUM_FEATURES;
 
 use super::{EMBEDDING_SIZE, HIDDEN_SIZE};
 
-// Candle-compatible network definition (used for loading/training)
+/// Full-precision network for training and weight loading (via Candle).
 pub struct Network {
     pub(crate) embedding: Linear,
     pub(crate) hidden1: Linear,

@@ -1,5 +1,5 @@
 use super::HCEConfig;
-use crate::hce::context::EvalContext;
+use crate::context::EvalContext;
 use cozy_chess::{Color, Piece};
 
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {

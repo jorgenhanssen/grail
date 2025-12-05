@@ -12,6 +12,11 @@ use std::{fs, io};
 
 use crate::args::Args;
 
+/// Training dataset with train/val/test splits.
+///
+/// Samples are stored as compact indices (SampleRef) pointing to FENs on disk,
+/// rather than loading all FENs into memory. This allows training on datasets
+/// much larger than available RAM.
 pub struct Dataset {
     train_samples: Vec<SampleRef>,
     val_samples: Vec<SampleRef>,

@@ -1,8 +1,8 @@
 use cozy_chess::{Color, Piece};
 
-use crate::hce::context::EvalContext;
-use crate::hce::pst::{get_pst, sum_pst};
-use crate::piece_values::PieceValues;
+use crate::context::EvalContext;
+use crate::pst::{get_pst, sum_pst};
+use evaluation::PieceValues;
 
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, piece_values: &PieceValues) -> i16 {
     let board = ctx.position.board;

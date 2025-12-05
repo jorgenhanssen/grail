@@ -13,6 +13,9 @@ use crate::{
 use super::Engine;
 
 impl Engine {
+    /// Futility pruning: skip moves unlikely to raise alpha based on static eval + margin.
+    ///
+    /// <https://www.chessprogramming.org/Futility_Pruning>
     pub(super) fn try_futility_prune(
         &self,
         remaining_depth: u8,
@@ -36,6 +39,9 @@ impl Engine {
         !is_tactical && static_eval + margin <= alpha
     }
 
+    /// Razoring: if eval is far below alpha, drop into qsearch to verify and return early.
+    ///
+    /// <https://www.chessprogramming.org/Razoring>
     #[allow(clippy::too_many_arguments)]
     pub(super) fn try_razor_prune(
         &mut self,
@@ -67,6 +73,12 @@ impl Engine {
         }
     }
 
+    /// SEE pruning: skip bad captures based on static exchange evaluation.
+    /// Only runs expensive SEE on questionable captures (victim < attacker), using a dynamic
+    /// threshold based on depth and eval gap. Inspired by Black Marlin.
+    ///
+    /// <https://www.chessprogramming.org/Static_Exchange_Evaluation>
+    /// <https://github.com/jnlt3/blackmarlin>
     #[allow(clippy::too_many_arguments)]
     pub(super) fn try_see_prune(
         &self,
@@ -114,17 +126,27 @@ impl Engine {
             return false;
         }
 
-        let see_value = see(board, m, phase, &self.config.get_piece_values());
-
-        // Calculate how much material this capture can afford to lose
-        // If we're close to alpha, we can tolerate losing more (threshold more negative)
+        // Dynamic SEE threshold: how much material loss is acceptable?
+        // - eval_gap: if we're far below alpha, we need the capture to work out
+        // - depth_margin: at higher depths, be more conservative (less pruning)
+        // A negative threshold means we can afford to lose some material
         let eval_gap = alpha - static_eval;
         let depth_margin = self.config.see_prune_depth_margin.value * (remaining_depth as i16);
         let see_threshold = -(eval_gap.max(0) + depth_margin);
 
-        see_value < see_threshold
+        !see(
+            board,
+            m,
+            phase,
+            &self.config.get_piece_values(),
+            see_threshold,
+        )
     }
 
+    /// Null move pruning: give opponent a free move; if we still beat beta, prune the subtree.
+    /// Includes verification search at low depths to avoid zugzwang.
+    ///
+    /// <https://www.chessprogramming.org/Null_Move_Pruning>
     #[allow(clippy::too_many_arguments)]
     pub(super) fn try_null_move_prune(
         &mut self,
@@ -139,9 +161,6 @@ impl Engine {
         try_null_move: bool,
         static_eval: Option<i16>,
     ) -> Option<i16> {
-        // Null move pruning: if giving the opponent a free move still doesn't let
-        // them reach beta, the position is strong enough to prune
-
         if !(try_null_move
             && can_null_move_prune(
                 board,
@@ -178,11 +197,10 @@ impl Engine {
         );
         self.search_stack.pop();
 
-        // The opponent still can't reach beta,
-        // so the position is strong enough to prune
+        // If opponent couldn't beat beta even with a free move, position is strong enough to prune
         if -score >= beta {
-            // However, in Zugzwang positions, passing is better than any legal move
-            // so we need to verify that the position is still good enough
+            // Zugzwang check: at shallow depths, verify with a real search.
+            // In zugzwang, passing is better than any legal move, so null move gives false positive.
             if base_remaining <= 6 {
                 self.search_stack.push(SearchNode::new(nm_board.hash()));
                 let verify_depth = max_depth - r.saturating_sub(1);
@@ -210,6 +228,9 @@ impl Engine {
         None
     }
 
+    /// Reverse futility pruning: if static eval - margin >= beta, the position is too good to search.
+    ///
+    /// <https://www.chessprogramming.org/Reverse_Futility_Pruning>
     #[allow(clippy::too_many_arguments)]
     pub(super) fn try_reverse_futility_prune(
         &mut self,
@@ -257,6 +278,9 @@ impl Engine {
         None
     }
 
+    /// Internal Iterative Deepening: do a shallow search to get a best move for ordering when TT misses.
+    ///
+    /// <https://www.chessprogramming.org/Internal_Iterative_Deepening>
     #[allow(clippy::too_many_arguments)]
     pub(super) fn try_iid(
         &mut self,
@@ -271,7 +295,6 @@ impl Engine {
         remaining_depth: u8,
         in_check: bool,
     ) -> Option<Move> {
-        // Gate
         if !(allow_iid && need_iid && remaining_depth >= 4 && !in_check) {
             return None;
         }

@@ -2,18 +2,6 @@
 ///
 /// The bits are stored in an array of `u64` values, automatically sized
 /// to fit the requested number of bits.
-///
-/// # Example
-/// ```
-/// use utils::bitset::Bitset;
-///
-/// let mut bits: Bitset<128> = Bitset::default();
-/// bits.set(0);
-/// bits.set(127);
-/// assert!(bits.get(0));
-/// assert!(bits.get(127));
-/// assert!(!bits.get(1));
-/// ```
 #[derive(Clone, Copy)]
 pub struct Bitset<const BITS: usize>([u64; BITS.div_ceil(64)])
 where
@@ -73,5 +61,93 @@ where
 {
     fn default() -> Self {
         Self([0; BITS.div_ceil(64)])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_set_and_get() {
+        let mut bits: Bitset<128> = Bitset::default();
+        assert!(!bits.get(0));
+        assert!(!bits.get(127));
+
+        bits.set(0);
+        bits.set(127);
+
+        assert!(bits.get(0));
+        assert!(bits.get(127));
+        assert!(!bits.get(1));
+        assert!(!bits.get(64));
+    }
+
+    #[test]
+    fn test_unset() {
+        let mut bits: Bitset<64> = Bitset::default();
+        bits.set(10);
+        assert!(bits.get(10));
+
+        bits.unset(10);
+        assert!(!bits.get(10));
+    }
+
+    #[test]
+    fn test_toggle() {
+        let mut bits: Bitset<64> = Bitset::default();
+        assert!(!bits.get(5));
+
+        bits.toggle(5);
+        assert!(bits.get(5));
+
+        bits.toggle(5);
+        assert!(!bits.get(5));
+    }
+
+    #[test]
+    fn test_cross_word_boundary() {
+        let mut bits: Bitset<128> = Bitset::default();
+
+        // Set bits at word boundaries
+        bits.set(63); // Last bit of first word
+        bits.set(64); // First bit of second word
+
+        assert!(bits.get(63));
+        assert!(bits.get(64));
+        assert!(!bits.get(62));
+        assert!(!bits.get(65));
+    }
+
+    #[test]
+    fn test_for_each_diff() {
+        let mut a: Bitset<128> = Bitset::default();
+        let mut b: Bitset<128> = Bitset::default();
+
+        a.set(0);
+        a.set(10);
+        a.set(64);
+
+        b.set(10);
+        b.set(64);
+        b.set(100);
+
+        let mut diffs = Vec::new();
+        a.for_each_diff(&b, |idx| diffs.push(idx));
+
+        // Bit 0: in a, not in b
+        // Bit 100: in b, not in a
+        // Bits 10 and 64: same in both (no diff)
+        assert_eq!(diffs.len(), 2);
+        assert!(diffs.contains(&0));
+        assert!(diffs.contains(&100));
+    }
+
+    #[test]
+    fn test_default_is_all_zeros() {
+        let bits: Bitset<256> = Bitset::default();
+        for i in 0..256 {
+            assert!(!bits.get(i));
+        }
     }
 }

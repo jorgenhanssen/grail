@@ -4,6 +4,13 @@ use super::utils::apply_gravity;
 use crate::stack::SearchNode;
 use crate::{EngineConfig, MAX_DEPTH};
 
+/// Continuation history: scores moves based on the sequence of prior moves.
+///
+/// Tracks correlations like "after Nf3, playing e4 tends to be good."
+/// Index 0 = opponent's last move, index 1 = our previous move, etc.
+/// Helps with move ordering by learning common tactical/positional patterns.
+///
+/// <https://www.chessprogramming.org/Countermove_Heuristic>
 #[derive(Clone)]
 pub struct ContinuationHistory {
     // Flattened: [continuation_index][color][prev_to][curr_from][curr_to]

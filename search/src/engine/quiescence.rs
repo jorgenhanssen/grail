@@ -1,7 +1,7 @@
 use std::sync::atomic::Ordering;
 
 use cozy_chess::{Board, Color, Move, Piece, Rank};
-use evaluation::scores::{MATE_VALUE, NEG_INFINITY};
+use evaluation::scores::{MATE_VALUE, SCORE_INF};
 use utils::flip_eval_perspective;
 use utils::{game_phase, has_check, make_move, Position};
 
@@ -16,6 +16,10 @@ use crate::{
 use super::Engine;
 
 impl Engine {
+    /// Quiescence search: continues searching captures until the position is stable enough
+    /// for a reliable static evaluation.
+    ///
+    /// <https://www.chessprogramming.org/Quiescence_Search>
     pub(super) fn quiescence_search(
         &mut self,
         board: &Board,
@@ -46,11 +50,13 @@ impl Engine {
         let original_alpha = alpha;
         let original_beta = beta;
 
-        if let Some((cached_value, cached_bound)) = self.qs_tt.probe(hash, in_check) {
-            match cached_bound {
-                Bound::Exact => return (cached_value, Vec::new()),
-                Bound::Lower if cached_value >= beta => return (cached_value, Vec::new()),
-                Bound::Upper if cached_value <= alpha => return (cached_value, Vec::new()),
+        // QS entries don't track depth. All quiescence searches explore the same
+        // tactical horizon, so any hit is trustworthy for cutoffs
+        if let Some(tt) = self.qs_tt.probe(hash, in_check) {
+            match tt.bound {
+                Bound::Exact => return (tt.value, Vec::new()),
+                Bound::Lower if tt.value >= beta => return (tt.value, Vec::new()),
+                Bound::Upper if tt.value <= alpha => return (tt.value, Vec::new()),
                 _ => {}
             }
         }
@@ -59,7 +65,7 @@ impl Engine {
         let position = Position::new(board);
 
         let eval = self.eval(&position, phase);
-        let stand_pat = flip_eval_perspective(board, eval);
+        let stand_pat = flip_eval_perspective(board.side_to_move(), eval);
 
         // Do a "stand-pat" evaluation if not in check
         if !in_check {
@@ -102,7 +108,7 @@ impl Engine {
         }
 
         let mut best_line = Vec::new();
-        let mut best_eval = if in_check { NEG_INFINITY } else { stand_pat };
+        let mut best_eval = if in_check { -SCORE_INF } else { stand_pat };
 
         let mut moves = QMoveGenerator::new(
             in_check,
@@ -145,7 +151,7 @@ impl Engine {
                         let attacker_value = self.piece_values.get(attacker, phase);
                         // Only run expensive SEE if capture seems questionable (equal/lower value)
                         if victim_value <= attacker_value
-                            && see(board, mv, phase, &self.piece_values) < 0
+                            && !see(board, mv, phase, &self.piece_values, 0)
                         {
                             continue;
                         }
@@ -184,7 +190,7 @@ impl Engine {
         }
 
         // If in check and no legal moves improved the position, it's checkmate
-        if in_check && best_eval == NEG_INFINITY {
+        if in_check && best_eval == -SCORE_INF {
             return (-(MATE_VALUE - depth as i16), Vec::new());
         }
 

@@ -1,5 +1,5 @@
 use super::HCEConfig;
-use crate::hce::context::EvalContext;
+use crate::context::EvalContext;
 use arrayvec::ArrayVec;
 use cozy_chess::{get_pawn_attacks, BitBoard, Color, File, Piece, Rank, Square};
 

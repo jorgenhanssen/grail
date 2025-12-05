@@ -2,7 +2,7 @@ use std::sync::{atomic::Ordering, mpsc::Sender, Arc};
 
 use arrayvec::ArrayVec;
 use cozy_chess::{BitBoard, Board, Move, Piece};
-use evaluation::scores::{MATE_VALUE, NEG_INFINITY};
+use evaluation::scores::{MATE_VALUE, SCORE_INF};
 use uci::{
     commands::{GoParams, Info, Score},
     UciOutput,
@@ -22,6 +22,9 @@ use crate::{
 use super::{Engine, MAX_DEPTH};
 
 impl Engine {
+    /// Iterative deepening search with aspiration windows.
+    ///
+    /// Returns the best move and score, or `None` if already in checkmate.
     pub fn search(
         &mut self,
         params: &GoParams,
@@ -106,6 +109,7 @@ impl Engine {
         best_move.map(|mv| (mv, best_score))
     }
 
+    /// Initializes the search - resets all state for a new search.
     fn init_search(&mut self) {
         self.stop.store(false, Ordering::Relaxed);
 
@@ -119,6 +123,8 @@ impl Engine {
         self.tt.age();
     }
 
+    /// Root search with the given alpha-beta window.
+    /// Called once per aspiration window attempt at each depth.
     pub(super) fn search_root(
         &mut self,
         depth: u8,
@@ -143,7 +149,7 @@ impl Engine {
             threats,
         );
 
-        let mut best_score = NEG_INFINITY;
+        let mut best_score = -SCORE_INF;
         let mut current_best_move = None;
 
         // Negamax at root: call search_subtree with flipped window, then negate result
@@ -182,6 +188,10 @@ impl Engine {
         (current_best_move, best_score)
     }
 
+    /// Recursive alpha-beta search with PVS.
+    ///
+    /// Applies pruning, reductions, and searches child nodes.
+    /// Returns (score, pv).
     #[allow(clippy::too_many_arguments)]
     pub(super) fn search_subtree(
         &mut self,
@@ -219,27 +229,37 @@ impl Engine {
 
         let is_pv_node = beta > alpha + 1;
 
-        if let Some((tt_value, tt_bound, tt_move, tt_se)) = self.tt.probe(hash, depth, max_depth) {
-            maybe_tt_move = tt_move;
-            tt_static_eval = tt_se;
-            match tt_bound {
-                Bound::Exact => return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m])),
-                Bound::Lower => {
-                    alpha = alpha.max(tt_value);
-                    if alpha >= beta {
-                        return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m]));
+        if let Some(tt) = self.tt.probe(hash, depth) {
+            // Only trust value/bound for cutoffs if the TT entry comes from a
+            // search at least as deep as we need. Shallow results may have
+            // missed tactics and can't safely prune the current search
+            let needed_depth = max_depth - depth;
+            if tt.depth >= needed_depth {
+                match tt.bound {
+                    // Exact: previous search found true minimax value
+                    Bound::Exact => {
+                        return (tt.value, tt.best_move.map_or(Vec::new(), |m| vec![m]))
                     }
-                }
-                Bound::Upper => {
-                    if tt_value <= alpha {
-                        return (tt_value, tt_move.map_or(Vec::new(), |m| vec![m]));
+                    // Lower: previous search failed high (value >= beta), so value is at least this good
+                    Bound::Lower => {
+                        alpha = alpha.max(tt.value);
+                        if alpha >= beta {
+                            return (tt.value, tt.best_move.map_or(Vec::new(), |m| vec![m]));
+                        }
+                    }
+                    // Upper: previous search failed low (value <= alpha), so value is at most this bad
+                    Bound::Upper => {
+                        if tt.value <= alpha {
+                            return (tt.value, tt.best_move.map_or(Vec::new(), |m| vec![m]));
+                        }
                     }
                 }
             }
-        } else if let Some((tt_move, tt_se)) = self.tt.probe_hint(hash) {
-            // Use shallow entry as hint for move ordering and static eval caching
-            maybe_tt_move = tt_move;
-            tt_static_eval = tt_se;
+
+            // However, we can use the TT move for ordering and static eval for caching,
+            // even from shallow searches - these are still valuable hints!
+            maybe_tt_move = tt.best_move;
+            tt_static_eval = tt.static_eval;
         }
 
         let phase = game_phase(board);
@@ -252,7 +272,7 @@ impl Engine {
             tt_se // Cached in TT
         } else {
             let eval = self.eval(&position, phase);
-            flip_eval_perspective(board, eval)
+            flip_eval_perspective(board.side_to_move(), eval)
         };
 
         self.search_stack
@@ -314,7 +334,7 @@ impl Engine {
 
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
-        let mut best_value = NEG_INFINITY;
+        let mut best_value = -SCORE_INF;
         let mut best_move = None;
         let mut best_line = Vec::new();
 
@@ -366,7 +386,7 @@ impl Engine {
                 continue;
             }
 
-            if let Some((value, mut line, is_quiet, child_depth)) = self.search_move(
+            if let Some((value, mut line, is_quiet, searched_depth)) = self.search_move(
                 board,
                 depth,
                 max_depth,
@@ -389,7 +409,7 @@ impl Engine {
                     best_move = Some(m);
                     line.insert(0, m);
                     best_line = line;
-                    best_move_depth = child_depth;
+                    best_move_depth = searched_depth;
                 }
 
                 alpha = alpha.max(best_value);
@@ -443,6 +463,8 @@ impl Engine {
         (best_value, best_line)
     }
 
+    /// Searches a single move with per-move pruning and LMR.
+    /// Returns `None` if the move was pruned, otherwise (score, pv, is_quiet, depth).
     #[allow(clippy::too_many_arguments)]
     pub(super) fn search_move(
         &mut self,
@@ -504,6 +526,11 @@ impl Engine {
             self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
         );
 
+        // PVS/NegaScout: assume the first move (from TT/ordering) is best.
+        // Search it with full window to get an accurate score.
+        // For later moves, use a null window (alpha, alpha+1) to quickly verify they don't beat it.
+        // If one does beat alpha, our assumption was wrong, so we re-search with full window.
+        // https://www.chessprogramming.org/Principal_Variation_Search
         let alpha_child = alpha;
         let beta_child = if is_pv_move { beta } else { alpha + 1 };
 
@@ -525,15 +552,15 @@ impl Engine {
             return None;
         }
 
-        let child_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
-        let mut actual_depth = child_max_depth;
+        let reduced_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
+        let mut searched_depth = reduced_max_depth;
 
         // Initial search (reduced if LMR, null window if not first move)
         self.search_stack.push_move(child_hash, m, moved_piece);
         let (child_value, pv_line) = self.search_subtree(
             &new_board,
             depth + 1,
-            child_max_depth,
+            reduced_max_depth,
             -beta_child,
             -alpha_child,
             true,
@@ -559,7 +586,7 @@ impl Engine {
             self.search_stack.pop();
             value = -re_child_value;
             line = re_line;
-            actual_depth = max_depth;
+            searched_depth = max_depth;
         }
 
         // Re-search with full window (if null window failed high in a PV node)
@@ -571,13 +598,14 @@ impl Engine {
             self.search_stack.pop();
             value = -full_child_value;
             line = full_line;
-            actual_depth = max_depth;
+            searched_depth = max_depth;
         }
 
         let is_quiet = !is_cap && !is_promotion;
-        Some((value, line, is_quiet, actual_depth))
+        Some((value, line, is_quiet, searched_depth))
     }
 
+    /// Handler called if a search fails high - updates history tables, killers, etc.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn on_fail_high(
         &mut self,

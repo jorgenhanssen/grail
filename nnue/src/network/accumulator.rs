@@ -9,8 +9,15 @@ use crate::encoding::NUM_FEATURES;
 use super::simd::{SimdF32, SimdI16, SIMD_WIDTH_F32, SIMD_WIDTH_I16};
 use super::{EMBEDDING_SIZE, QUANTIZATION_PERCENTILE};
 
-// The Accumulator manages the stateful first layer of the NNUE.
-// It efficiently updates the embedding buffer based on changed input features.
+/// The Accumulator manages the stateful first (embedding) layer of the NNUE.
+///
+/// Instead of recomputing the full embedding from scratch on each move,
+/// we track which input features changed and incrementally add/subtract
+/// the corresponding weight rows. This makes inference O(changed features)
+/// rather than O(all features).
+///
+/// Weights are quantized to i8 and accumulated in i16 for speed (SIMD-friendly).
+/// Dequantization back to f32 happens only when outputting to the next layer.
 pub struct Accumulator {
     // [feature_idx][embedding_idx]
     weights: Box<[i8]>,
@@ -122,6 +129,8 @@ impl Accumulator {
     }
 }
 
+/// Computes a scale factor to quantize f32 weights to i8.
+/// Uses a percentile-based approach to avoid extreme outliers stretching the range.
 fn compute_quantization_scale(weights: &[f32]) -> f32 {
     let max_abs_weight = weights.iter().map(|&w| w.abs()).fold(0.0f32, f32::max);
 
@@ -140,6 +149,8 @@ fn compute_quantization_scale(weights: &[f32]) -> f32 {
     }
 }
 
+/// Quantizes embedding weights from f32 to i8 and transposes for cache-friendly access.
+/// Layout changes from [out_idx][feature_idx] to [feature_idx][out_idx].
 fn quantize_embedding_weights(weights: &[f32], scale: f32) -> Box<[i8]> {
     let mut quantized = vec![0i8; NUM_FEATURES * EMBEDDING_SIZE].into_boxed_slice();
     for out_idx in 0..EMBEDDING_SIZE {

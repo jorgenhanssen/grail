@@ -1,8 +1,10 @@
 use cozy_chess::{Board, Move, Piece};
 use utils::is_capture;
 
-// Late Move Reduction (LMR)
-// Reduces search depth for moves that are likely to be bad (searched late in move ordering)
+/// Late Move Reductions: reduce depth for late quiet moves.
+/// Reduction based on ln(depth) * ln(move_index).
+///
+/// <https://www.chessprogramming.org/Late_Move_Reductions>
 #[allow(clippy::too_many_arguments)]
 pub fn lmr(
     remaining_depth: u8,
@@ -31,14 +33,17 @@ pub fn lmr(
     reduction.min(max_reduction)
 }
 
-// Late Move Pruning (LMP)
-// Conservative triangular limits per remaining depth for how many quiet moves
-// are searched before pruning subsequent quiets in non-PV, non-check nodes.
-pub fn lmp_move_limit(depth: u8, base_moves: i32, depth_multiplier: i32) -> i32 {
-    // Triangular number pattern: base + depth * (depth + multiplier) / 2
+/// Move limit for LMP: few moves near the horizon, growing toward the root.
+fn lmp_move_limit(depth: u8, base_moves: i32, depth_multiplier: i32) -> i32 {
     base_moves + (depth as i32 * (depth as i32 + depth_multiplier)) / 2
 }
 
+/// Late Move Pruning: at the horizon, focus only on the best-ordered quiet moves.
+/// As iterative deepening extends the horizon, nodes that were at the frontier open up
+/// to search more moves. This forms a right-triangle search shape, narrow tip at the
+/// current horizon, widening toward the root.
+///
+/// <https://www.chessprogramming.org/Futility_Pruning#MoveCountBasedPruning>
 #[allow(clippy::too_many_arguments)]
 pub fn should_lmp_prune(
     board: &Board,

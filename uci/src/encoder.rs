@@ -14,7 +14,7 @@ impl Encoder {
             UciOutput::BestMove(best_move) => format!("bestmove {}", best_move),
             UciOutput::Info(info) => {
                 format!(
-                    "info depth {} seldepth {} multipv 1 score {} nodes {} nps {} time {} pv {}",
+                    "info depth {} seldepth {} multipv 1 score {} nodes {} nps {} hashfull {} time {} pv {}",
                     info.depth,
                     info.sel_depth,
                     match info.score {
@@ -23,12 +23,13 @@ impl Encoder {
                     },
                     info.nodes,
                     info.nodes_per_second,
+                    info.hashfull,
                     info.time,
                     info.pv.join(" ")
                 )
             }
             UciOutput::Option(option_str) => option_str.clone(),
-            UciOutput::Raw(message) => message.clone(),
+            UciOutput::InfoString(message) => format!("info string {}", message),
         }
     }
 }

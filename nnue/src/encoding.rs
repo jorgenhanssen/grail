@@ -1,11 +1,32 @@
 use cozy_chess::{BitBoard, Board, Color, Piece, Square};
 use utils::bitset::Bitset;
 
-// Board encoding feature counts
-const NUM_PIECE_PLACEMENT_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM; // 768
-const NUM_SUPPORT_FEATURES: usize = Square::NUM * 2; // 128 (white + black defended pieces)
-const NUM_SPACE_FEATURES: usize = Square::NUM * 2; // 128 (white + black controlled non-piece squares)
-const NUM_THREAT_FEATURES: usize = Square::NUM * 2; // 128 (white + black threatened pieces)
+// Feature Layout (1153 total):
+//
+// Piece Placements [0-767]:
+//   Per square (12 features): [WP, WN, WB, WR, WQ, WK, BP, BN, BB, BR, BQ, BK]
+//
+//   [Sq0 (A1)][Sq1 (B1)]...[Sq63 (H8)]
+//   └─ 12 ──┘ └─ 12 ──┘    └── 12 ──┘
+//
+// Support [768-895] - squares where color defends own pieces:
+//   [White: Sq0...Sq63][Black: Sq0...Sq63]
+//   └────── 64 ───────┘└────── 64 ───────┘
+//
+// Space [896-1023] - squares color controls (excl. own pieces):
+//   [White: Sq0...Sq63][Black: Sq0...Sq63]
+//   └────── 64 ───────┘└────── 64 ───────┘
+//
+// Threats [1024-1151] - squares of valuable pieces attacked by lesser pieces:
+//   [White: Sq0...Sq63][Black: Sq0...Sq63]
+//   └────── 64 ───────┘└────── 64 ───────┘
+//
+// Side to Move [1152] - 1.0 if White to move
+
+const NUM_PIECE_PLACEMENT_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM;
+const NUM_SUPPORT_FEATURES: usize = Square::NUM * 2;
+const NUM_SPACE_FEATURES: usize = Square::NUM * 2;
+const NUM_THREAT_FEATURES: usize = Square::NUM * 2;
 const NUM_SIDE_TO_MOVE_FEATURES: usize = 1;
 
 pub const NUM_FEATURES: usize = NUM_PIECE_PLACEMENT_FEATURES
@@ -30,9 +51,8 @@ const BLACK_THREATS_START: usize = WHITE_THREATS_END;
 const BLACK_THREATS_END: usize = BLACK_THREATS_START + Square::NUM;
 const SIDE_TO_MOVE_IDX: usize = NUM_FEATURES - 1;
 
-// Bitset encoding
-pub const BITS_PER_U64: usize = 64;
-
+/// Encodes a board position into a dense f32 feature array.
+/// Used during training where f32 tensors are required.
 pub fn encode_board(
     board: &Board,
     white_attacks: BitBoard,
@@ -45,11 +65,13 @@ pub fn encode_board(
     let mut features = [0f32; NUM_FEATURES];
 
     // Piece placements
-    for sq in Square::ALL {
-        if let Some(piece) = board.piece_on(sq) {
-            let color = board.color_on(sq).unwrap();
-            let offset = sq as usize * 12 + piece_color_to_index(piece, color);
-            features[offset] = 1.0;
+    for color in [Color::White, Color::Black] {
+        for piece in Piece::ALL {
+            let piece_idx = piece_color_to_index(piece, color);
+            for sq in board.colored_pieces(color, piece) {
+                let offset = sq as usize * (Piece::NUM * Color::NUM) + piece_idx;
+                features[offset] = 1.0;
+            }
         }
     }
 
@@ -95,6 +117,11 @@ pub fn encode_board(
     features
 }
 
+/// Encodes a board position into a packed bitset for inference.
+///
+/// Bitset is faster than f32 for inference: XOR finds changed features instantly,
+/// and storage is 64x denser (64 bits per u64 vs one f32 per feature).
+/// Training still uses the f32 version above since tensors require floats.
 pub fn encode_board_bitset(
     board: &Board,
     white_attacks: BitBoard,
@@ -107,11 +134,13 @@ pub fn encode_board_bitset(
     let mut bitset = Bitset::default();
 
     // Piece placements
-    for sq in Square::ALL {
-        if let Some(piece) = board.piece_on(sq) {
-            let color = board.color_on(sq).unwrap();
-            let idx = sq as usize * 12 + piece_color_to_index(piece, color);
-            bitset.set(idx);
+    for color in [Color::White, Color::Black] {
+        for piece in Piece::ALL {
+            let piece_idx = piece_color_to_index(piece, color);
+            for sq in board.colored_pieces(color, piece) {
+                let idx = sq as usize * (Piece::NUM * Color::NUM) + piece_idx;
+                bitset.set(idx);
+            }
         }
     }
 
@@ -172,5 +201,58 @@ fn piece_color_to_index(piece: Piece, color: Color) -> usize {
         (Color::Black, Piece::Rook) => 9,
         (Color::Black, Piece::Queen) => 10,
         (Color::Black, Piece::King) => 11,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use utils::board_metrics::BoardMetrics;
+
+    const TEST_POSITIONS: &[&str] = &[
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", // Starting
+        "r1bqkbnr/pppppppp/2n5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2", // After 1.e4 Nc6
+        "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4", // Italian
+        "rnbqkb1r/pp1p1ppp/4pn2/2p5/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 4", // Sicilian
+        "8/8/8/8/8/5k2/8/4K2R w - - 0 1",                           // Endgame
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", // Kiwipete
+    ];
+
+    #[test]
+    fn test_encode_board_and_bitset_are_consistent() {
+        for fen in TEST_POSITIONS {
+            let board: Board = fen.parse().unwrap();
+            let metrics = BoardMetrics::new(&board);
+
+            let features = encode_board(
+                &board,
+                metrics.attacks[Color::White as usize],
+                metrics.attacks[Color::Black as usize],
+                metrics.support[Color::White as usize],
+                metrics.support[Color::Black as usize],
+                metrics.threats[Color::White as usize],
+                metrics.threats[Color::Black as usize],
+            );
+
+            let bitset = encode_board_bitset(
+                &board,
+                metrics.attacks[Color::White as usize],
+                metrics.attacks[Color::Black as usize],
+                metrics.support[Color::White as usize],
+                metrics.support[Color::Black as usize],
+                metrics.threats[Color::White as usize],
+                metrics.threats[Color::Black as usize],
+            );
+
+            for (i, &f) in features.iter().enumerate() {
+                assert_eq!(
+                    f == 1.0,
+                    bitset.get(i),
+                    "Mismatch at feature {} for FEN: {}",
+                    i,
+                    fen
+                );
+            }
+        }
     }
 }

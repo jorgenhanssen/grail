@@ -1,5 +1,5 @@
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use nnue::network::{CP_MAX, CP_MIN};
+use nnue::network::CP_BOUND;
 use std::sync::{Arc, Mutex};
 
 const BIN_SIZE: f32 = 1000.0;
@@ -23,7 +23,7 @@ impl ScoreHistogram {
         // Create a progress bar for each bin
         let mut progress_bars = Vec::with_capacity(NUM_BINS);
         for i in 0..NUM_BINS {
-            let range_start = CP_MIN as f32 + (i as f32 * BIN_SIZE);
+            let range_start = -CP_BOUND as f32 + (i as f32 * BIN_SIZE);
             let range_end = range_start + BIN_SIZE;
 
             let pb = multi_progress.add(ProgressBar::new(100));
@@ -106,8 +106,8 @@ impl HistogramHandle {
 
 fn score_to_bin_index(score: i16) -> usize {
     let score_f32 = score as f32;
-    let clamped = score_f32.clamp(CP_MIN as f32, CP_MAX as f32);
-    let normalized = clamped - CP_MIN as f32;
+    let clamped = score_f32.clamp(-CP_BOUND as f32, CP_BOUND as f32);
+    let normalized = clamped - (-CP_BOUND as f32);
     let bin = (normalized / BIN_SIZE) as usize;
     bin.min(NUM_BINS - 1)
 }
