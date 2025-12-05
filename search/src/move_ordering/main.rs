@@ -154,7 +154,13 @@ impl MainMoveGenerator {
                 }
 
                 // Only run expensive SEE if capture seems questionable
-                if see(board, scored_move.mov, self.game_phase, &self.piece_values) < 0 {
+                if !see(
+                    board,
+                    scored_move.mov,
+                    self.game_phase,
+                    &self.piece_values,
+                    0,
+                ) {
                     self.bad_captures.push(scored_move);
                     continue;
                 }
