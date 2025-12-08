@@ -40,6 +40,11 @@ impl Engine {
             return (0, Vec::new());
         }
 
+        // 50-move rule (draw)
+        if board.halfmove_clock() >= 100 {
+            return (0, Vec::new());
+        }
+
         let hash = self.search_stack.current().hash;
         if mate_distance_prune(&mut alpha, &mut beta, depth) {
             return (alpha, Vec::new());
