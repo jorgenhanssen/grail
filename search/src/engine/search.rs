@@ -51,7 +51,8 @@ impl Engine {
             self.config.aspiration_window_depth.value,
         );
 
-        let mut controller = SearchController::new(params, &self.board);
+        let mut controller =
+            SearchController::new(params, &self.board, self.config.move_overhead.value as u64);
         let stop = Arc::clone(&self.stop);
         controller.on_stop(move || stop.store(true, Ordering::Relaxed));
         controller.start_timer();

@@ -1,15 +1,22 @@
+//! Time budget management for chess search.
+//!
+//! Uses a two-tier system:
+//! - **target**: soft limit, aim to stop here (can be adjusted during search)
+//! - **hard**: absolute maximum, never exceed
+
 use cozy_chess::{Board, Color, Move};
 use uci::commands::GoParams;
 
 use utils::only_move;
 
 // Time management constants
+// Estimated moves remaining - intentionally conservative since the target
+// often gets reduced when the best move is stable (see adjust_for_search_behavior)
 const MOVE_MARGIN_START: u64 = 20;
 const MOVE_MARGIN_END: u64 = 10;
 const INCREMENT_USAGE: f64 = 0.8;
 const RESERVE_FRACTION: f64 = 0.08;
 const MIN_RESERVE_MS: u64 = 300;
-const OVERHEAD_MS: u64 = 20;
 const MIN_TIME_PER_MOVE: u64 = 25;
 const INITIAL_TARGET_FACTOR: f64 = 0.7; // Start with 70% of available time per move
 const MAX_TARGET_FACTOR: f64 = 0.95; // Never use more than 95% of hard limit
@@ -102,7 +109,7 @@ impl SearchHistory {
 }
 
 impl TimeBudget {
-    pub fn new(params: &GoParams, board: &Board) -> Option<Self> {
+    pub fn new(params: &GoParams, board: &Board, move_overhead_ms: u64) -> Option<Self> {
         // UCI movetime: spend exactly this exact amount
         if let Some(move_time) = params.move_time {
             return Some(Self::Exact { millis: move_time });
@@ -128,13 +135,19 @@ impl TimeBudget {
 
         let moves_left = params.moves_to_go.unwrap_or(move_margin(board));
 
-        // TODO: skip reserve when moves_to_go is set (time control refills after those moves)
-        let reserve = ((time_left as f64) * RESERVE_FRACTION) as u64;
-        let reserve = reserve.max(MIN_RESERVE_MS);
+        let reserve = if params.moves_to_go.is_some() {
+            // Skip reserving time when we know how many moves to the next refill.
+            0
+        } else {
+            // Reserve time as safety buffer since we don't know when the game ends.
+            let r = ((time_left as f64) * RESERVE_FRACTION) as u64;
+            r.max(MIN_RESERVE_MS)
+        };
         let available = time_left
             .saturating_sub(reserve)
-            .saturating_sub(OVERHEAD_MS);
+            .saturating_sub(move_overhead_ms);
 
+        // If we have more time than opponent, we can afford to spend a bit more
         let time_advantage = opponent_time
             .map(|opp| time_left.saturating_sub(opp))
             .unwrap_or(0);
@@ -219,6 +232,8 @@ fn get_increment(params: &GoParams, color: Color) -> u64 {
     }
 }
 
+/// Estimates moves remaining based on game phase.
+/// More pieces = earlier in game = more moves expected.
 fn move_margin(board: &Board) -> u64 {
     const TOTAL_PIECES: f32 = 32.0;
 
