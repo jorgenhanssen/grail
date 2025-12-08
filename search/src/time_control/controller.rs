@@ -24,10 +24,10 @@ pub struct SearchController {
 }
 
 impl SearchController {
-    pub fn new(params: &GoParams, board: &Board) -> Self {
+    pub fn new(params: &GoParams, board: &Board, move_overhead_ms: u64) -> Self {
         Self {
             start_time: std::time::Instant::now(),
-            time_budget: TimeBudget::new(params, board),
+            time_budget: TimeBudget::new(params, board, move_overhead_ms),
             max_depth: params.depth,
             timer_handle: None,
             on_stop_callback: None,
