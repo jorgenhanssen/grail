@@ -5,7 +5,8 @@ use std::time::Duration;
 use cozy_chess::{Board, Move};
 use uci::commands::GoParams;
 
-use crate::time_control::budget::{SearchHistory, TimeBudget};
+use crate::time_control::budget::TimeBudget;
+use crate::time_control::stats::TimeControlStats;
 
 // To predict the duration of the next iteration based on the previous one.
 // Assumes next iteration takes ~2x longer than the previous.
@@ -19,7 +20,7 @@ pub struct SearchController {
     on_stop_callback: Option<Arc<dyn Fn() + Send + Sync>>,
     last_iteration_duration_ms: Option<u64>,
     current_iteration_start_ms: Option<u64>,
-    search_history: SearchHistory,
+    stats: TimeControlStats,
 }
 
 impl SearchController {
@@ -32,7 +33,7 @@ impl SearchController {
             on_stop_callback: None,
             last_iteration_duration_ms: None,
             current_iteration_start_ms: None,
-            search_history: SearchHistory::new(),
+            stats: TimeControlStats::new(),
         }
     }
 
@@ -132,15 +133,15 @@ impl SearchController {
     }
 
     pub fn on_iteration_complete(&mut self, depth: u8, score: i16, best_move: Option<Move>) {
-        self.search_history.add_iteration(depth, score, best_move);
+        self.stats.add_iteration(depth, score, best_move);
 
         if let Some(ref mut budget) = self.time_budget {
-            budget.adjust_for_search_behavior(&self.search_history);
+            budget.adjust_for_search_behavior(&self.stats);
         }
     }
 
     pub fn on_aspiration_failure(&mut self) {
-        self.search_history.add_aspiration_failure();
+        self.stats.add_aspiration_failure();
     }
 
     pub fn stop_timer(&mut self) {
