@@ -4,10 +4,12 @@
 //! - **target**: soft limit, aim to stop here (can be adjusted during search)
 //! - **hard**: absolute maximum, never exceed
 
-use cozy_chess::{Board, Color, Move};
-use uci::commands::GoParams;
+use cozy_chess::{Board, Color};
 
+use uci::commands::GoParams;
 use utils::only_move;
+
+use super::stats::{TimeControlStats, MIN_DEPTH_FOR_ADJUSTMENTS};
 
 // Time management constants
 // Estimated moves remaining - intentionally conservative since the target
@@ -24,88 +26,17 @@ const MIN_TARGET_FACTOR: f64 = 0.3; // Never go below 30% of hard limit
 
 const ONLY_MOVE_TIME_MS: u64 = 100;
 
-// Stockfish-style time management constants
-const BEST_MOVE_STABILITY_BONUS: f64 = 0.8; // 20% time reduction when best move is stable
-const BEST_MOVE_INSTABILITY_PENALTY: f64 = 1.4; // 40% time increase when best move changes
-const SCORE_DROP_THRESHOLD: i16 = 50; // Significant score drop in centipawns
-const SCORE_DROP_PENALTY: f64 = 1.3; // 30% time increase on score drop
-const MIN_DEPTH_FOR_ADJUSTMENTS: u8 = 6; // Don't adjust before this depth
-const EASY_MOVE_THRESHOLD: f64 = 0.6; // If same best move for 60% of iterations = easy
+// Time adjustment factors based on search behavior
+const BEST_MOVE_STABILITY_BONUS: f64 = 0.8; // -20% time when best move is stable
+const BEST_MOVE_INSTABILITY_PENALTY: f64 = 1.4; // +40% time when best move changes
+const SCORE_DROP_PENALTY: f64 = 1.3; // +30% time on score drop
 
 #[derive(Debug, Clone, Copy)]
 pub enum TimeBudget {
-    // Spend approximately this exact amount (e.g., UCI movetime, only move)
+    /// Spend approximately this exact amount (e.g., UCI movetime, only move)
     Exact { millis: u64 },
-    // Managed time where target may be adjusted during search, capped by hard
+    /// Managed time where target may be adjusted during search, capped by hard
     Managed { target: u64, hard: u64 },
-}
-
-#[derive(Debug, Clone)]
-pub struct SearchHistory {
-    pub scores: Vec<i16>,
-    pub depths: Vec<u8>,
-    pub best_moves: Vec<Option<Move>>,
-    pub aspiration_failures: u32,
-}
-
-impl SearchHistory {
-    pub fn new() -> Self {
-        Self {
-            scores: Vec::new(),
-            depths: Vec::new(),
-            best_moves: Vec::new(),
-            aspiration_failures: 0,
-        }
-    }
-
-    pub fn add_iteration(&mut self, depth: u8, score: i16, best_move: Option<Move>) {
-        self.depths.push(depth);
-        self.scores.push(score);
-        self.best_moves.push(best_move);
-    }
-
-    pub fn add_aspiration_failure(&mut self) {
-        self.aspiration_failures += 1;
-    }
-
-    fn current_depth(&self) -> u8 {
-        self.depths.last().copied().unwrap_or(0)
-    }
-
-    fn best_move_is_stable(&self) -> bool {
-        if self.best_moves.len() < 4 {
-            return false;
-        }
-
-        let recent_moves = &self.best_moves[self.best_moves.len() - 4..];
-        let first_move = &recent_moves[0];
-
-        // Count how many recent iterations have the same best move
-        let same_move_count = recent_moves
-            .iter()
-            .filter(|&mv| mv == first_move && mv.is_some())
-            .count();
-
-        (same_move_count as f64) / (recent_moves.len() as f64) >= EASY_MOVE_THRESHOLD
-    }
-
-    fn best_move_changed_recently(&self) -> bool {
-        if self.best_moves.len() < 2 {
-            return false;
-        }
-
-        let last_two = &self.best_moves[self.best_moves.len() - 2..];
-        last_two[0] != last_two[1] && last_two[0].is_some() && last_two[1].is_some()
-    }
-
-    fn has_score_drop(&self) -> bool {
-        if self.scores.len() < 2 {
-            return false;
-        }
-
-        let last_two = &self.scores[self.scores.len() - 2..];
-        (last_two[0] - last_two[1]) >= SCORE_DROP_THRESHOLD
-    }
 }
 
 impl TimeBudget {
@@ -179,30 +110,30 @@ impl TimeBudget {
     }
 
     // Stockfish-style time adjustment based on search behavior (Managed only)
-    pub fn adjust_for_search_behavior(&mut self, search_history: &SearchHistory) {
+    pub fn adjust_for_search_behavior(&mut self, stats: &TimeControlStats) {
         match self {
             TimeBudget::Exact { .. } => {
                 // Do not adjust in exact mode
             }
             TimeBudget::Managed { target, hard } => {
-                if search_history.current_depth() < MIN_DEPTH_FOR_ADJUSTMENTS {
+                if stats.current_depth() < MIN_DEPTH_FOR_ADJUSTMENTS {
                     return;
                 }
 
                 let mut target_factor = INITIAL_TARGET_FACTOR;
 
-                if search_history.best_move_is_stable() {
+                if stats.best_move_is_stable() {
                     target_factor *= BEST_MOVE_STABILITY_BONUS; // -20% time
-                } else if search_history.best_move_changed_recently() {
+                } else if stats.best_move_changed_recently() {
                     target_factor *= BEST_MOVE_INSTABILITY_PENALTY; // +40% time
                 }
 
-                if search_history.has_score_drop() {
+                if stats.has_score_drop() {
                     // Score has dropped, so verify
                     target_factor *= SCORE_DROP_PENALTY; // +30% time
                 }
 
-                if search_history.aspiration_failures > 2 {
+                if stats.aspiration_failures > 2 {
                     // Position is complex, so verify
                     target_factor *= 1.2; // +20% time
                 }
