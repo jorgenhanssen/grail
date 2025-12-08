@@ -12,6 +12,19 @@ pub fn majors(board: &Board, color: Color) -> BitBoard {
     board.colored_pieces(color, Piece::Rook) | board.colored_pieces(color, Piece::Queen)
 }
 
+/// Cap evaluation based on insufficient material.
+/// If a side cannot possibly win, cap eval so they can't be "winning".
+pub fn cap_eval_by_material(board: &Board, score: i16) -> i16 {
+    let mut capped = score;
+    if side_has_insufficient_material(board, Color::White) {
+        capped = capped.min(0);
+    }
+    if side_has_insufficient_material(board, Color::Black) {
+        capped = capped.max(0);
+    }
+    capped
+}
+
 /// Check if a specific color has insufficient material to force checkmate.
 pub fn side_has_insufficient_material(board: &Board, color: Color) -> bool {
     let color_pieces = board.colors(color);

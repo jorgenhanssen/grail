@@ -1,4 +1,4 @@
-use utils::Position;
+use utils::{cap_eval_by_material, Position};
 
 use super::Engine;
 
@@ -11,6 +11,7 @@ impl Engine {
         };
 
         score = self.apply_penalties(score, phase);
+        score = cap_eval_by_material(position.board, score);
 
         score
     }
