@@ -1,10 +1,10 @@
-# Grail Chess Engine
+# Grail
 
 [![CI](https://github.com/jorgenhanssen/grail/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jorgenhanssen/grail/actions/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-nightly-orange.svg)](https://www.rust-lang.org/)
 
-Grail is a hobby chess engine written in Rust, featuring both Neural Network (NNUE) and Hand-Crafted (HCE) evaluation. It implements modern search techniques including Principal Variation Search, advanced pruning, and sophisticated move ordering.
+Grail is a hobby chess engine written in Rust. Named after the quest for the Holy Grail, it represents the search for the elusive, perfectly solved game. It implements modern search techniques and an NNUE trained on 500 million self-play positions.
 
 ## Usage
 
@@ -48,6 +48,7 @@ Once added to your GUI, you can configure the engine via the UCI options:
 
 - **Hash**: Size of the transposition table in MB (Default: 256).
 - **NNUE**: Toggle between Neural Network (NNUE) and Hand-Crafted (HCE) evaluation (Default: true).
+- **Move Overhead**: Time buffer in milliseconds to account for communication lag (Default: 20).
 
 The engine supports standard time controls (increment, sudden death, moves to go) and analysis modes (fixed depth, infinite).
 

@@ -12,6 +12,7 @@ use utils::{
 };
 
 use crate::{
+    extensions,
     move_ordering::{MainMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
     pruning::{lmr, mate_distance_prune, should_lmp_prune, AspirationWindow, Pass},
     stack::SearchNode,
@@ -51,7 +52,8 @@ impl Engine {
             self.config.aspiration_window_depth.value,
         );
 
-        let mut controller = SearchController::new(params, &self.board);
+        let mut controller =
+            SearchController::new(params, &self.board, self.config.move_overhead.value as u64);
         let stop = Arc::clone(&self.stop);
         controller.on_stop(move || stop.store(true, Ordering::Relaxed));
         controller.start_timer();
@@ -552,7 +554,10 @@ impl Engine {
             return None;
         }
 
-        let reduced_max_depth = max_depth.saturating_sub(reduction).max(depth + 1);
+        let extension = extensions::get(board, &m, moved_piece, is_cap);
+
+        let extended_max_depth = max_depth + extension;
+        let reduced_max_depth = extended_max_depth.saturating_sub(reduction).max(depth + 1);
         let mut searched_depth = reduced_max_depth;
 
         // Initial search (reduced if LMR, null window if not first move)
@@ -577,8 +582,8 @@ impl Engine {
             let (re_child_value, re_line) = self.search_subtree(
                 &new_board,
                 depth + 1,
-                max_depth,
-                -beta_child, // Use beta_child (full window for PV, null for others)
+                extended_max_depth,
+                -beta_child,
                 -alpha_child,
                 true,
                 true,
@@ -586,19 +591,26 @@ impl Engine {
             self.search_stack.pop();
             value = -re_child_value;
             line = re_line;
-            searched_depth = max_depth;
+            searched_depth = extended_max_depth;
         }
 
         // Re-search with full window (if null window failed high in a PV node)
         if value > alpha && value < beta && !is_pv_move && is_pv_node {
             self.search_stack
                 .push(SearchNode::with_move(child_hash, m, moved_piece));
-            let (full_child_value, full_line) =
-                self.search_subtree(&new_board, depth + 1, max_depth, -beta, -alpha, true, true);
+            let (full_child_value, full_line) = self.search_subtree(
+                &new_board,
+                depth + 1,
+                extended_max_depth,
+                -beta,
+                -alpha,
+                true,
+                true,
+            );
             self.search_stack.pop();
             value = -full_child_value;
             line = full_line;
-            searched_depth = max_depth;
+            searched_depth = extended_max_depth;
         }
 
         let is_quiet = !is_cap && !is_promotion;
