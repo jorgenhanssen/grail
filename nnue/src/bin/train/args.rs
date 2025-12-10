@@ -36,4 +36,8 @@ pub struct Args {
     /// Epochs without improvement before early stopping.
     #[arg(long, default_value_t = 2)]
     pub patience: u64,
+
+    /// Size of each shard in megabytes.
+    #[arg(long, default_value_t = 500)]
+    pub shard_size_mb: usize,
 }
