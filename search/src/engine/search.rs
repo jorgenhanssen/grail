@@ -264,7 +264,9 @@ impl Engine {
             tt_static_eval = tt.static_eval;
         }
 
+        let position = Position::new(board);
         let phase = game_phase(board);
+        let in_check = has_check(board);
         let remaining_depth = max_depth - depth;
 
         // Internal Iterative Reductions
@@ -275,9 +277,6 @@ impl Engine {
             self.config.iir_min_depth.value,
             self.config.iir_reduction.value,
         );
-        let in_check = has_check(board);
-
-        let position = Position::new(board);
 
         let static_eval = if let Some(tt_se) = tt_static_eval {
             tt_se // Cached in TT
