@@ -14,7 +14,7 @@ use utils::{
 use crate::{
     extensions,
     move_ordering::{MainMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
-    pruning::{lmr, mate_distance_prune, should_lmp_prune, AspirationWindow, Pass},
+    pruning::{iir, lmr, mate_distance_prune, should_lmp_prune, AspirationWindow, Pass},
     stack::SearchNode,
     time_control::SearchController,
     transposition::Bound,
@@ -266,6 +266,15 @@ impl Engine {
 
         let phase = game_phase(board);
         let remaining_depth = max_depth - depth;
+
+        // Internal Iterative Reductions
+        let (max_depth, remaining_depth) = iir(
+            max_depth,
+            remaining_depth,
+            maybe_tt_move.is_some(),
+            self.config.iir_min_depth.value,
+            self.config.iir_reduction.value,
+        );
         let in_check = has_check(board);
 
         let position = Position::new(board);

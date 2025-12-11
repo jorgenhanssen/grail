@@ -1,6 +1,32 @@
 use cozy_chess::{Board, Move, Piece};
 use utils::is_capture;
 
+/// Internal Iterative Reductions: reduce depth when no TT move is found.
+///
+/// When no hash move is found, reduce the search depth instead of doing a
+/// full-depth search with poor move ordering. This is simpler and cheaper
+/// than IID (which runs a shallow search to find a move).
+///
+/// TODO: Consider applying only at expected cut-nodes like Stockfish/Ethereal.
+///
+/// <https://www.chessprogramming.org/Internal_Iterative_Reductions>
+pub fn iir(
+    max_depth: u8,
+    remaining_depth: u8,
+    has_tt_move: bool,
+    min_depth: u8,
+    reduction: u8,
+) -> (u8, u8) {
+    if !has_tt_move && remaining_depth >= min_depth {
+        (
+            max_depth.saturating_sub(reduction),
+            remaining_depth.saturating_sub(reduction),
+        )
+    } else {
+        (max_depth, remaining_depth)
+    }
+}
+
 /// Late Move Reductions: reduce depth for late quiet moves.
 /// Reduction based on ln(depth) * ln(move_index).
 ///
