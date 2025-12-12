@@ -229,8 +229,6 @@ impl Engine {
         let mut maybe_tt_move = None;
         let mut tt_static_eval = None;
 
-        let is_pv_node = beta > alpha + 1;
-
         if let Some(tt) = self.tt.probe(hash, depth) {
             // Only trust value/bound for cutoffs if the TT entry comes from a
             // search at least as deep as we need. Shallow results may have
@@ -251,8 +249,9 @@ impl Engine {
                     }
                     // Upper: previous search failed low (value <= alpha), so value is at most this bad
                     Bound::Upper => {
-                        if tt.value <= alpha {
-                            return (tt.value, tt.best_move.map_or(Vec::new(), |m| vec![m]));
+                        beta = beta.min(tt.value);
+                        if beta <= alpha {
+                            return (beta, tt.best_move.map_or(Vec::new(), |m| vec![m]));
                         }
                     }
                 }
@@ -263,6 +262,9 @@ impl Engine {
             maybe_tt_move = tt.best_move;
             tt_static_eval = tt.static_eval;
         }
+
+        // PV-ness depends on the current window, so compute it after any TT bound tightening.
+        let is_pv_node = beta > alpha + 1;
 
         let position = Position::new(board);
         let phase = game_phase(board);
