@@ -154,21 +154,96 @@ impl Engine {
         let mut best_score = -SCORE_INF;
         let mut current_best_move = None;
 
-        // Negamax at root: call search_subtree with flipped window, then negate result
+        // Root PVS (NegaScout):
+        // - Search the first move with the full window
+        // - Search later moves with a null window (alpha, alpha+1)
+        // - If a move beats alpha, re-search with the full window
+        //
+        // This is a big node saver vs full-window searching every root move.
+        let root_in_check = has_check(&self.board);
+        let root_remaining_depth = depth.saturating_sub(1);
+        let mut move_index: i32 = -1;
         while let Some(m) = moves.next(
             &self.board,
             &self.history_heuristic,
             &self.capture_history,
             &self.continuation_history,
         ) {
+            move_index += 1;
+            let is_pv_move = move_index == 0;
+
             let moved_piece = self.board.piece_on(m.from).unwrap();
             let new_board = make_move(&self.board, m);
 
             self.search_stack
                 .push_move(new_board.hash(), m, moved_piece);
-            let (child_value, mut pv) =
-                self.search_subtree(&new_board, 1, depth, -beta, -alpha, true, true);
-            let score = -child_value;
+
+            // Root LMR: reduce late non-tactical moves at root.
+            // Kept conservative: no reduction for the PV move or tactical moves.
+            let gives_check = !new_board.checkers().is_empty();
+            let is_cap = is_capture(&self.board, m);
+            let is_promotion = m.promotion.is_some();
+            let is_tactical = root_in_check || gives_check || is_cap || is_promotion;
+
+            let reduction = if is_pv_move {
+                0
+            } else {
+                lmr(
+                    root_remaining_depth,
+                    is_tactical,
+                    move_index,
+                    is_pv_move,
+                    true, // conservative at root (treat as improving)
+                    self.config.lmr_min_depth.value,
+                    self.config.lmr_divisor.value as f32 / 100.0,
+                    self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
+                )
+            };
+
+            // PVS windowing at root
+            let alpha_child = alpha;
+            let beta_child = if is_pv_move {
+                beta
+            } else {
+                alpha_child.saturating_add(1)
+            };
+
+            // Reduced-depth/null-window probe search (re-search full depth if it looks promising)
+            let reduced_depth = depth.saturating_sub(reduction);
+            let (child_value, mut pv) = self.search_subtree(
+                &new_board,
+                1,
+                reduced_depth,
+                -beta_child,
+                -alpha_child,
+                true,
+                true,
+            );
+            let mut score = -child_value;
+
+            // If the reduced search beats alpha, re-search at full depth (still null/full window).
+            // Note: We already pushed this child node onto the search stack, so don't push again.
+            if reduction > 0 && score > alpha_child {
+                let (re_child_value, re_pv) = self.search_subtree(
+                    &new_board,
+                    1,
+                    depth,
+                    -beta_child,
+                    -alpha_child,
+                    true,
+                    true,
+                );
+                score = -re_child_value;
+                pv = re_pv;
+            }
+
+            // If null-window search indicates the move can beat alpha, re-search with full window.
+            if !is_pv_move && score > alpha_child && score < beta {
+                let (full_child_value, full_pv) =
+                    self.search_subtree(&new_board, 1, depth, -beta, -alpha_child, true, true);
+                score = -full_child_value;
+                pv = full_pv;
+            }
             self.search_stack.pop();
 
             // Check if we were stopped during the subtree search
@@ -185,6 +260,12 @@ impl Engine {
             }
 
             alpha = alpha.max(best_score);
+
+            // Fail-high cutoff at root (aspiration optimization).
+            // If we already exceeded beta, this iteration will be retried with a wider window.
+            if alpha >= beta {
+                break;
+            }
         }
 
         (current_best_move, best_score)
