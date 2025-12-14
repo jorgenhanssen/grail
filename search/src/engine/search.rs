@@ -127,6 +127,10 @@ impl Engine {
 
     /// Root search with the given alpha-beta window.
     /// Called once per aspiration window attempt at each depth.
+    ///
+    /// TODO: This function duplicates much of search_subtree() and search_move() (PVS windowing,
+    /// LMR, re-search logic, PV creation). Consider unifying into a single search_node() function
+    /// to simplify.
     pub(super) fn search_root(
         &mut self,
         depth: u8,
