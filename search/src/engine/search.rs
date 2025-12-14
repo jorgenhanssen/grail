@@ -158,14 +158,8 @@ impl Engine {
         let mut best_score = -SCORE_INF;
         let mut current_best_move = None;
 
-        // Root PVS (NegaScout):
-        // - Search the first move with the full window
-        // - Search later moves with a null window (alpha, alpha+1)
-        // - If a move beats alpha, re-search with the full window
-        //
-        // This is a big node saver vs full-window searching every root move.
-        let root_in_check = has_check(&self.board);
-        let root_remaining_depth = depth.saturating_sub(1);
+        let in_check = has_check(&self.board);
+        let remaining_depth = depth.saturating_sub(1);
         let mut move_index: i32 = -1;
         while let Some(m) = moves.next(
             &self.board,
@@ -182,18 +176,17 @@ impl Engine {
             self.search_stack
                 .push_move(new_board.hash(), m, moved_piece);
 
-            // Root LMR: reduce late non-tactical moves at root.
-            // Kept conservative: no reduction for the PV move or tactical moves.
+            // LMR: reduce late non-tactical moves
             let gives_check = !new_board.checkers().is_empty();
             let is_cap = is_capture(&self.board, m);
             let is_promotion = m.promotion.is_some();
-            let is_tactical = root_in_check || gives_check || is_cap || is_promotion;
+            let is_tactical = in_check || gives_check || is_cap || is_promotion;
 
             let reduction = if is_pv_move {
                 0
             } else {
                 lmr(
-                    root_remaining_depth,
+                    remaining_depth,
                     is_tactical,
                     move_index,
                     is_pv_move,
@@ -204,7 +197,7 @@ impl Engine {
                 )
             };
 
-            // PVS windowing at root
+            // PVS window
             let alpha_child = alpha;
             let beta_child = if is_pv_move {
                 beta
@@ -212,7 +205,7 @@ impl Engine {
                 alpha_child.saturating_add(1)
             };
 
-            // Reduced-depth/null-window probe search (re-search full depth if it looks promising)
+            // Initial search (possibly reduced depth, null window for non-PV moves)
             let reduced_depth = depth.saturating_sub(reduction);
             let (child_value, mut pv) = self.search_subtree(
                 &new_board,
@@ -225,8 +218,7 @@ impl Engine {
             );
             let mut score = -child_value;
 
-            // If the reduced search beats alpha, re-search at full depth (still null/full window).
-            // Note: We already pushed this child node onto the search stack, so don't push again.
+            // LMR re-search: reduced search beat alpha, verify at full depth
             if reduction > 0 && score > alpha_child {
                 let (re_child_value, re_pv) = self.search_subtree(
                     &new_board,
@@ -241,7 +233,7 @@ impl Engine {
                 pv = re_pv;
             }
 
-            // If null-window search indicates the move can beat alpha, re-search with full window.
+            // PVS re-search: null window beat alpha, verify with full window
             if !is_pv_move && score > alpha_child && score < beta {
                 let (full_child_value, full_pv) =
                     self.search_subtree(&new_board, 1, depth, -beta, -alpha_child, true, true);
@@ -265,8 +257,7 @@ impl Engine {
 
             alpha = alpha.max(best_score);
 
-            // Fail-high cutoff at root (aspiration optimization).
-            // If we already exceeded beta, this iteration will be retried with a wider window.
+            // Beta cutoff
             if alpha >= beta {
                 break;
             }
@@ -623,11 +614,6 @@ impl Engine {
             self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
         );
 
-        // PVS/NegaScout: assume the first move (from TT/ordering) is best.
-        // Search it with full window to get an accurate score.
-        // For later moves, use a null window (alpha, alpha+1) to quickly verify they don't beat it.
-        // If one does beat alpha, our assumption was wrong, so we re-search with full window.
-        // https://www.chessprogramming.org/Principal_Variation_Search
         let alpha_child = alpha;
         let beta_child = if is_pv_move { beta } else { alpha + 1 };
 
