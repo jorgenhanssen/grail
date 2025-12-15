@@ -127,6 +127,10 @@ impl Engine {
 
     /// Root search with the given alpha-beta window.
     /// Called once per aspiration window attempt at each depth.
+    ///
+    /// TODO: This function duplicates much of search_subtree() and search_move() (PVS windowing,
+    /// LMR, re-search logic, PV creation). Consider unifying into a single search_node() function
+    /// to simplify.
     pub(super) fn search_root(
         &mut self,
         depth: u8,
@@ -154,21 +158,88 @@ impl Engine {
         let mut best_score = -SCORE_INF;
         let mut current_best_move = None;
 
-        // Negamax at root: call search_subtree with flipped window, then negate result
+        let in_check = has_check(&self.board);
+        let remaining_depth = depth.saturating_sub(1);
+        let mut move_index: i32 = -1;
         while let Some(m) = moves.next(
             &self.board,
             &self.history_heuristic,
             &self.capture_history,
             &self.continuation_history,
         ) {
+            move_index += 1;
+            let is_pv_move = move_index == 0;
+
             let moved_piece = self.board.piece_on(m.from).unwrap();
             let new_board = make_move(&self.board, m);
 
             self.search_stack
                 .push_move(new_board.hash(), m, moved_piece);
-            let (child_value, mut pv) =
-                self.search_subtree(&new_board, 1, depth, -beta, -alpha, true, true);
-            let score = -child_value;
+
+            // LMR: reduce late non-tactical moves
+            let gives_check = !new_board.checkers().is_empty();
+            let is_cap = is_capture(&self.board, m);
+            let is_promotion = m.promotion.is_some();
+            let is_tactical = in_check || gives_check || is_cap || is_promotion;
+
+            let reduction = if is_pv_move {
+                0
+            } else {
+                lmr(
+                    remaining_depth,
+                    is_tactical,
+                    move_index,
+                    is_pv_move,
+                    true, // conservative at root (treat as improving)
+                    self.config.lmr_min_depth.value,
+                    self.config.lmr_divisor.value as f32 / 100.0,
+                    self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
+                )
+            };
+
+            // PVS window
+            let alpha_child = alpha;
+            let beta_child = if is_pv_move {
+                beta
+            } else {
+                alpha_child.saturating_add(1)
+            };
+
+            // Initial search (possibly reduced depth, null window for non-PV moves)
+            let reduced_depth = depth.saturating_sub(reduction);
+            let (child_value, mut pv) = self.search_subtree(
+                &new_board,
+                1,
+                reduced_depth,
+                -beta_child,
+                -alpha_child,
+                true,
+                true,
+            );
+            let mut score = -child_value;
+
+            // LMR re-search: reduced search beat alpha, verify at full depth
+            if reduction > 0 && score > alpha_child {
+                let (re_child_value, re_pv) = self.search_subtree(
+                    &new_board,
+                    1,
+                    depth,
+                    -beta_child,
+                    -alpha_child,
+                    true,
+                    true,
+                );
+                score = -re_child_value;
+                pv = re_pv;
+            }
+
+            // PVS re-search: null window beat alpha, verify with full window
+            if !is_pv_move && score > alpha_child && score < beta {
+                let (full_child_value, full_pv) =
+                    self.search_subtree(&new_board, 1, depth, -beta, -alpha_child, true, true);
+                score = -full_child_value;
+                pv = full_pv;
+            }
             self.search_stack.pop();
 
             // Check if we were stopped during the subtree search
@@ -185,6 +256,11 @@ impl Engine {
             }
 
             alpha = alpha.max(best_score);
+
+            // Beta cutoff
+            if alpha >= beta {
+                break;
+            }
         }
 
         (current_best_move, best_score)
@@ -538,11 +614,6 @@ impl Engine {
             self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
         );
 
-        // PVS/NegaScout: assume the first move (from TT/ordering) is best.
-        // Search it with full window to get an accurate score.
-        // For later moves, use a null window (alpha, alpha+1) to quickly verify they don't beat it.
-        // If one does beat alpha, our assumption was wrong, so we re-search with full window.
-        // https://www.chessprogramming.org/Principal_Variation_Search
         let alpha_child = alpha;
         let beta_child = if is_pv_move { beta } else { alpha + 1 };
 
