@@ -27,6 +27,8 @@ clap = { workspace = true }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
 indicatif = { workspace = true }
+tempfile = { workspace = true }
+hyperloglogplus = { workspace = true }
 
 [features]
 default = []

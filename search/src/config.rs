@@ -135,6 +135,9 @@ define_config!(
 
     (iid_reduction: u8, "IID Reduction", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")),
 
+    (iir_reduction: u8, "IIR Reduction", UciOptionType::Spin { min: 0, max: 4 }, 1, cfg!(feature = "tuning")),
+    (iir_min_depth: u8, "IIR Min Depth", UciOptionType::Spin { min: 2, max: 10 }, 4, cfg!(feature = "tuning")),
+
     // SEE Pruning
     (see_prune_min_remaining_depth: u8, "SEE Prune Min Remaining Depth", UciOptionType::Spin { min: 0, max: 10 }, 1, cfg!(feature = "tuning")),
     (see_prune_max_depth: u8, "SEE Prune Max Depth", UciOptionType::Spin { min: 1, max: 10 }, 6, cfg!(feature = "tuning")),

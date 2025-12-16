@@ -1,169 +1,88 @@
-use ahash::AHashMap;
-use std::collections::hash_map::Entry;
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread;
 
-use cozy_chess::{Board, Color};
-use nnue::encoding::{encode_board, NUM_FEATURES};
-use nnue::network::FV_SCALE;
-use utils::board_metrics::BoardMetrics;
+use nnue::encoding::NUM_FEATURES;
 
-use super::indexer::SampleRef;
+use super::shard_reader::ShardReader;
 
-// Holds x items in the channel per worker
 const CHANNEL_BUFFER_MULTIPLIER: usize = 2;
 
-type BatchData = (Vec<f32>, Vec<f32>); // (features, scores)
+type BatchData = (Vec<f32>, Vec<f32>);
 
-/// Multi-threaded data loader that reads samples from disk on-demand.
+/// Multi-threaded data loader that reads samples from shards.
 ///
-/// Workers read FENs from disk using SampleRef indices, encode them to features,
-/// and send batches through a channel. Each worker caches open file handles to
-/// avoid repeated open/close overhead.
+/// Workers read samples from the ShardReader, encode them to features,
+/// and send batches through a channel for training.
 pub struct DataLoader {
     receiver: mpsc::Receiver<BatchData>,
     workers: Vec<thread::JoinHandle<()>>,
-    num_samples: usize,
 }
 
 impl DataLoader {
     pub fn new(
-        samples: &[SampleRef],
-        files: &[PathBuf],
+        reader: Arc<ShardReader>,
         batch_size: usize,
         num_workers: usize,
+        shutdown: Arc<AtomicBool>,
     ) -> Self {
         let (sender, receiver) = mpsc::sync_channel(num_workers * CHANNEL_BUFFER_MULTIPLIER);
 
-        let files = Arc::new(files.to_vec());
-        let shared_samples = Arc::new(samples.to_vec());
+        let workers: Vec<_> = (0..num_workers)
+            .map(|_| {
+                Self::spawn_worker(
+                    Arc::clone(&reader),
+                    sender.clone(),
+                    Arc::clone(&shutdown),
+                    batch_size,
+                )
+            })
+            .collect();
 
-        let (work_sender, work_receiver) =
-            mpsc::sync_channel::<Vec<SampleRef>>(num_workers * CHANNEL_BUFFER_MULTIPLIER);
-        let work_receiver = Arc::new(std::sync::Mutex::new(work_receiver));
+        // Drop sender so receiver sees EOF when all workers finish
+        drop(sender);
 
-        let workers = Self::spawn_workers(num_workers, work_receiver, sender.clone(), files);
+        Self { receiver, workers }
+    }
 
-        // Distribute batches to workers
+    fn spawn_worker(
+        reader: Arc<ShardReader>,
+        tx: mpsc::SyncSender<BatchData>,
+        shutdown: Arc<AtomicBool>,
+        batch_size: usize,
+    ) -> thread::JoinHandle<()> {
         thread::spawn(move || {
-            for chunk in shared_samples.chunks(batch_size) {
-                if work_sender.send(chunk.to_vec()).is_err() {
+            while !shutdown.load(Ordering::Relaxed) {
+                let (features, scores) = Self::collect_batch(&reader, batch_size, &shutdown);
+
+                if scores.is_empty() || tx.send((features, scores)).is_err() {
                     break;
                 }
             }
-        });
-
-        Self {
-            receiver,
-            workers,
-            num_samples: samples.len(),
-        }
+        })
     }
 
-    pub fn num_samples(&self) -> usize {
-        self.num_samples
-    }
+    fn collect_batch(reader: &ShardReader, batch_size: usize, shutdown: &AtomicBool) -> BatchData {
+        let mut features = Vec::with_capacity(batch_size * NUM_FEATURES);
+        let mut scores = Vec::with_capacity(batch_size);
 
-    fn spawn_workers(
-        num_workers: usize,
-        work_receiver: Arc<std::sync::Mutex<mpsc::Receiver<Vec<SampleRef>>>>,
-        sender: mpsc::SyncSender<BatchData>,
-        files: Arc<Vec<PathBuf>>,
-    ) -> Vec<thread::JoinHandle<()>> {
-        (0..num_workers)
-            .map(|_| {
-                let rx = Arc::clone(&work_receiver);
-                let tx = sender.clone();
-                let paths = Arc::clone(&files);
-
-                thread::spawn(move || {
-                    let mut file_cache: AHashMap<u8, File> = AHashMap::new();
-
-                    loop {
-                        let batch_samples: Vec<SampleRef> = {
-                            match rx.lock().unwrap().recv() {
-                                Ok(b) => b,
-                                Err(_) => break,
-                            }
-                        };
-
-                        let batch_size = batch_samples.len();
-
-                        let mut features = Vec::with_capacity(batch_size * NUM_FEATURES);
-                        let mut scores = Vec::with_capacity(batch_size);
-
-                        for sample_ref in batch_samples {
-                            if let Err(e) = Self::process_sample(
-                                sample_ref,
-                                &mut file_cache,
-                                &paths,
-                                &mut features,
-                                &mut scores,
-                            ) {
-                                log::debug!("Failed to process sample: {}", e);
-                            }
-                        }
-
-                        if tx.send((features, scores)).is_err() {
-                            break;
-                        }
-                    }
-                })
-            })
-            .collect()
-    }
-
-    fn process_sample(
-        sample_ref: SampleRef,
-        file_cache: &mut AHashMap<u8, File>,
-        paths: &[PathBuf],
-        features: &mut Vec<f32>,
-        scores: &mut Vec<f32>,
-    ) -> Result<(), String> {
-        // Get or open file
-        let file = match file_cache.entry(sample_ref.file_id) {
-            Entry::Occupied(e) => e.into_mut(),
-            Entry::Vacant(e) => {
-                let path = paths
-                    .get(sample_ref.file_id as usize)
-                    .ok_or_else(|| format!("Invalid file_id: {}", sample_ref.file_id))?;
-                let f = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
-                e.insert(f)
+        for _ in 0..batch_size {
+            if shutdown.load(Ordering::Relaxed) {
+                break;
             }
-        };
 
-        file.seek(SeekFrom::Start(sample_ref.byte_start))
-            .map_err(|e| format!("Failed to seek: {}", e))?;
+            match reader.next() {
+                Some(sample) => {
+                    if let Some((encoded, score)) = sample.encode() {
+                        features.extend_from_slice(&encoded);
+                        scores.push(score);
+                    }
+                }
+                None => break,
+            }
+        }
 
-        let mut fen_bytes = vec![0u8; sample_ref.fen_len as usize];
-
-        file.read_exact(&mut fen_bytes)
-            .map_err(|e| format!("Failed to read FEN: {}", e))?;
-
-        let fen =
-            std::str::from_utf8(&fen_bytes).map_err(|e| format!("Invalid UTF-8 in FEN: {}", e))?;
-        let board =
-            Board::from_str(fen).map_err(|e| format!("Failed to parse FEN '{}': {}", fen, e))?;
-
-        let metrics = BoardMetrics::new(&board);
-        let encoded_features = encode_board(
-            &board,
-            metrics.attacks[Color::White as usize],
-            metrics.attacks[Color::Black as usize],
-            metrics.support[Color::White as usize],
-            metrics.support[Color::Black as usize],
-            metrics.threats[Color::White as usize],
-            metrics.threats[Color::Black as usize],
-        );
-
-        features.extend_from_slice(&encoded_features);
-        scores.push(sample_ref.score as f32 / FV_SCALE);
-
-        Ok(())
+        (features, scores)
     }
 }
 
@@ -177,7 +96,8 @@ impl Iterator for DataLoader {
 
 impl Drop for DataLoader {
     fn drop(&mut self) {
-        // Join all workers on drop to ensure clean shutdown
+        while self.receiver.try_recv().is_ok() {}
+
         for worker in self.workers.drain(..) {
             let _ = worker.join();
         }

@@ -22,40 +22,63 @@ impl QMoveGenerator {
         phase: f32,
         piece_values: PieceValues,
     ) -> Self {
+        if in_check {
+            Self::gen_evasions(board, phase, piece_values)
+        } else {
+            Self::gen_captures(board, capture_history, phase, piece_values)
+        }
+    }
+
+    fn gen_captures(
+        board: &Board,
+        capture_history: &CaptureHistory,
+        phase: f32,
+        piece_values: PieceValues,
+    ) -> Self {
+        let mut forcing_moves = ArrayVec::new();
+        let enemy_pieces = board.colors(!board.side_to_move());
+
+        board.generate_moves(|moves| {
+            let mut captures = moves;
+            captures.to &= enemy_pieces;
+
+            for mov in captures {
+                if forcing_moves.len() >= MAX_FORCING_MOVES {
+                    return true;
+                }
+
+                // MVV-LVA + capture history: prefer capturing valuable pieces with cheap ones
+                let score = capture_score(board, mov, capture_history, phase, &piece_values);
+
+                forcing_moves.push(ScoredMove { mov, score });
+            }
+            false
+        });
+
+        Self { forcing_moves }
+    }
+
+    fn gen_evasions(board: &Board, phase: f32, piece_values: PieceValues) -> Self {
         let mut forcing_moves = ArrayVec::new();
 
-        if !in_check {
-            let enemy_pieces = board.colors(!board.side_to_move());
-
-            board.generate_moves(|moves| {
-                let mut captures = moves;
-                captures.to &= enemy_pieces;
-
-                for mov in captures {
-                    if forcing_moves.len() >= MAX_FORCING_MOVES {
-                        return true;
-                    }
-                    forcing_moves.push(ScoredMove {
-                        mov,
-                        score: capture_score(board, mov, capture_history, phase, &piece_values),
-                    });
+        board.generate_moves(|moves| {
+            for mov in moves {
+                if forcing_moves.len() >= MAX_FORCING_MOVES {
+                    return true;
                 }
-                false
-            });
 
-            Self { forcing_moves }
-        } else {
-            board.generate_moves(|moves| {
-                for mov in moves {
-                    if forcing_moves.len() >= MAX_FORCING_MOVES {
-                        return true;
-                    }
-                    forcing_moves.push(ScoredMove { mov, score: 0 });
-                }
-                false
-            });
-            Self { forcing_moves }
-        }
+                // Evasion ordering by negated piece value: king (0) first, then
+                // cheapest pieces. This prioritizes safe king escapes and risks
+                // the least valuable material when blocking or capturing.
+                let moved_piece = board.piece_on(mov.from).unwrap();
+                let score: i16 = -piece_values.get(moved_piece, phase);
+
+                forcing_moves.push(ScoredMove { mov, score });
+            }
+            false
+        });
+
+        Self { forcing_moves }
     }
 
     pub fn next(&mut self) -> Option<Move> {

@@ -11,4 +11,4 @@ pub use futility::{
 };
 pub use mate_distance::{mate_distance_prune, MATE_SCORE_BOUND};
 pub use null_move::{can_null_move_prune, null_move_reduction};
-pub use reductions::{lmr, should_lmp_prune};
+pub use reductions::{iir, lmr, should_lmp_prune};

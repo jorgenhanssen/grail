@@ -1,86 +1,65 @@
-mod indexer;
 mod loader;
 mod progress;
+mod shard;
+mod shard_builder;
+mod shard_reader;
 
-pub use indexer::{build_index, split_index, SampleRef};
+use std::io;
+use std::path::Path;
+use tempfile::TempDir;
+
 pub use loader::DataLoader;
+pub use shard_builder::ShardStats;
+pub use shard_reader::ShardReader;
 
-use rand::seq::SliceRandom;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::{fs, io};
+use shard_builder::{build_shards, ShardPaths};
 
-use crate::args::Args;
-
-/// Training dataset with train/val/test splits.
+/// A sharded dataset ready for training.
 ///
-/// Samples are stored as compact indices (SampleRef) pointing to FENs on disk,
-/// rather than loading all FENs into memory. This allows training on datasets
-/// much larger than available RAM.
-pub struct Dataset {
-    train_samples: Vec<SampleRef>,
-    val_samples: Vec<SampleRef>,
-    test_samples: Vec<SampleRef>,
-    files: Arc<Vec<PathBuf>>,
+/// Owns the temporary shard files and cleans them up on drop.
+pub struct ShardedDataset {
+    _temp_dir: TempDir,
+    paths: ShardPaths,
+    pub stats: ShardStats,
 }
 
-impl Dataset {
-    pub fn load(args: &Args, data_dir: &str) -> std::io::Result<Self> {
-        log::info!("Loading data from {:?}...", data_dir);
+impl ShardedDataset {
+    /// Builds shards from CSV files in the given directory.
+    pub fn build(
+        data_dir: &Path,
+        shard_size_mb: usize,
+        val_ratio: f64,
+        test_ratio: f64,
+    ) -> io::Result<Self> {
+        let temp_dir = tempfile::tempdir()?;
+        log::info!("Building shards from {:?}...", data_dir);
 
-        let files = get_files(Path::new(data_dir))?;
-
-        let (index, stats) = build_index(&files)?;
+        let (paths, stats) = build_shards(
+            data_dir,
+            temp_dir.path(),
+            shard_size_mb,
+            val_ratio,
+            test_ratio,
+        )?;
 
         stats.log();
 
-        let (train_samples, val_samples, test_samples) =
-            split_index(index, args.test_ratio, args.val_ratio);
-
         Ok(Self {
-            train_samples,
-            val_samples,
-            test_samples,
-            files: Arc::new(files),
+            _temp_dir: temp_dir,
+            paths,
+            stats,
         })
     }
 
-    pub fn train_loader(&mut self, batch_size: usize, workers: usize) -> DataLoader {
-        self.train_samples.shuffle(&mut rand::thread_rng());
-        DataLoader::new(&self.train_samples, &self.files, batch_size, workers)
+    pub fn train_path(&self) -> &Path {
+        &self.paths.train
     }
 
-    pub fn val_loader(&self, batch_size: usize, workers: usize) -> DataLoader {
-        DataLoader::new(&self.val_samples, &self.files, batch_size, workers)
+    pub fn val_path(&self) -> &Path {
+        &self.paths.val
     }
 
-    pub fn test_loader(&self, batch_size: usize, workers: usize) -> DataLoader {
-        DataLoader::new(&self.test_samples, &self.files, batch_size, workers)
+    pub fn test_path(&self) -> &Path {
+        &self.paths.test
     }
-}
-
-fn get_files(data_dir: &Path) -> io::Result<Vec<PathBuf>> {
-    let mut entries: Vec<PathBuf> = fs::read_dir(data_dir)?
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|ext| ext == "csv"))
-        .collect();
-
-    log::info!("Found {} CSV files", entries.len());
-
-    // file_id is u8, so we can't have more than u8::MAX (255) files
-    if entries.len() > u8::MAX as usize {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!(
-                "Too many CSV files: found {}, but maximum is {}!",
-                entries.len(),
-                u8::MAX
-            ),
-        ));
-    }
-
-    entries.sort();
-
-    Ok(entries)
 }

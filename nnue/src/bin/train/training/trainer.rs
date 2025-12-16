@@ -4,14 +4,22 @@ use nnue::encoding::NUM_FEATURES;
 use nnue::network::Network;
 use std::error::Error;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use crate::args::Args;
-use crate::dataset::Dataset;
+use crate::dataset::{DataLoader, ShardReader, ShardedDataset};
 use crate::training::evaluation::evaluate;
 use crate::training::metrics::MetricsTracker;
 use crate::training::progress::TrainingProgressBar;
 use crate::utils::device::get_device;
 use crate::utils::loss::huber;
+
+/// Number of shards to keep loaded for training.
+const TRAIN_SHARDS: usize = 10;
+
+/// Number of shards to keep loaded for validation/test.
+const EVAL_SHARDS: usize = 4;
 
 pub struct Trainer {
     network: Network,
@@ -56,11 +64,25 @@ impl Trainer {
         })
     }
 
-    pub fn train(&mut self, dataset: &mut Dataset) -> Result<(), Box<dyn Error>> {
+    pub fn train(
+        &mut self,
+        dataset: &ShardedDataset,
+        shutdown: Arc<AtomicBool>,
+    ) -> Result<(), Box<dyn Error>> {
         let mut metrics = MetricsTracker::new(self.patience);
 
         for epoch in 1..=self.epochs {
-            let val_loss = self.train_epoch(dataset)?;
+            if shutdown.load(Ordering::Relaxed) {
+                log::info!("Training interrupted at epoch {}", epoch);
+                break;
+            }
+
+            let val_loss = self.train_epoch(dataset, &shutdown)?;
+
+            let Some(val_loss) = val_loss else {
+                log::info!("Epoch {} interrupted", epoch);
+                break;
+            };
 
             let did_improve = metrics.update(val_loss);
             if did_improve {
@@ -75,15 +97,22 @@ impl Trainer {
             self.decay_learning_rate();
         }
 
-        self.test_model(dataset)?;
+        if !shutdown.load(Ordering::Relaxed) {
+            self.test_model(dataset, &shutdown)?;
+        }
 
         Ok(())
     }
 
-    fn train_epoch(&mut self, dataset: &mut Dataset) -> Result<f32, Box<dyn Error>> {
-        let loader = dataset.train_loader(self.batch_size, self.workers);
-        let num_batches = loader.num_samples().div_ceil(self.batch_size);
+    fn train_epoch(
+        &mut self,
+        dataset: &ShardedDataset,
+        shutdown: &Arc<AtomicBool>,
+    ) -> Result<Option<f32>, Box<dyn Error>> {
+        let reader = Arc::new(ShardReader::new(dataset.train_path(), TRAIN_SHARDS)?);
+        let loader = DataLoader::new(reader, self.batch_size, self.workers, Arc::clone(shutdown));
 
+        let num_batches = dataset.stats.train_samples.div_ceil(self.batch_size);
         let progress = TrainingProgressBar::new(num_batches)?;
 
         let mut batches_processed = 0;
@@ -91,6 +120,11 @@ impl Trainer {
         let mut train_loss = 0.0;
 
         for (features, scores) in loader {
+            // Check for shutdown
+            if shutdown.load(Ordering::Relaxed) {
+                return Ok(None);
+            }
+
             let batch_len = scores.len();
             if batch_len == 0 {
                 continue;
@@ -112,13 +146,18 @@ impl Trainer {
             progress.update(train_loss);
         }
 
-        // Evaluate on validation set
-        let val_loader = dataset.val_loader(self.batch_size, self.workers);
+        let val_reader = Arc::new(ShardReader::new(dataset.val_path(), EVAL_SHARDS)?);
+        let val_loader = DataLoader::new(
+            val_reader,
+            self.batch_size,
+            self.workers,
+            Arc::clone(shutdown),
+        );
         let val_loss = evaluate(&self.network, val_loader, &self.device)?;
 
         progress.finish(val_loss, train_loss);
 
-        Ok(val_loss)
+        Ok(Some(val_loss))
     }
 
     fn decay_learning_rate(&mut self) {
@@ -127,12 +166,22 @@ impl Trainer {
         self.optimizer.set_learning_rate(new_lr);
     }
 
-    fn test_model(&mut self, dataset: &mut Dataset) -> Result<f32, Box<dyn Error>> {
+    fn test_model(
+        &mut self,
+        dataset: &ShardedDataset,
+        shutdown: &Arc<AtomicBool>,
+    ) -> Result<f32, Box<dyn Error>> {
         log::info!("Running final test set evaluation...");
         let model_path = self.model_path.clone();
         self.load_model(Path::new(&model_path))?;
 
-        let test_loader = dataset.test_loader(self.batch_size, self.workers);
+        let test_reader = Arc::new(ShardReader::new(dataset.test_path(), EVAL_SHARDS)?);
+        let test_loader = DataLoader::new(
+            test_reader,
+            self.batch_size,
+            self.workers,
+            Arc::clone(shutdown),
+        );
         let test_loss = evaluate(&self.network, test_loader, &self.device)?;
         log::info!("Test Loss: {:.6}", test_loss);
 
