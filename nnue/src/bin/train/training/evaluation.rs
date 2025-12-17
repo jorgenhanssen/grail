@@ -1,5 +1,4 @@
 use candle_core::{Device, Tensor};
-use candle_nn::Module;
 use nnue::encoding::NUM_FEATURES;
 use nnue::network::Network;
 use std::error::Error;
@@ -15,7 +14,7 @@ pub fn evaluate(
     let mut total_loss = 0.0;
     let mut batches = 0;
 
-    for (features, scores) in loader {
+    for (features, scores, buckets) in loader {
         let batch_len = scores.len();
         if batch_len == 0 {
             continue;
@@ -24,7 +23,7 @@ pub fn evaluate(
         let x = Tensor::from_vec(features, (batch_len, NUM_FEATURES), device)?;
         let y = Tensor::from_vec(scores, (batch_len, 1), device)?;
 
-        let preds = network.forward(&x)?;
+        let preds = network.forward_with_buckets(&x, &buckets)?;
         let loss = huber(&preds, &y)?;
 
         total_loss += loss.to_vec0::<f32>()?;

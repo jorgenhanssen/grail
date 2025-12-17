@@ -7,18 +7,25 @@ use super::accumulator::Accumulator;
 use super::linear::LinearLayer;
 use super::model::Network;
 use super::simd::{simd_add, simd_relu};
-use super::{CP_BOUND, EMBEDDING_SIZE, FV_SCALE, HIDDEN_SIZE};
+use super::{CP_BOUND, EMBEDDING_SIZE, FV_SCALE, HIDDEN_SIZE, OUTPUT_BUCKETS};
 
-/// Main NNUE inference engine with quantized weights for fast evaluation.
-/// Uses an incremental accumulator for the embedding layer.
-pub struct NNUENetwork {
-    accumulator: Accumulator,
+/// Per-bucket layers for quantized inference.
+/// Each bucket has separate hidden layer weights for phase-specific evaluation.
+struct BucketLayers {
     hidden1: LinearLayer,
     hidden2: LinearLayer,
     output: LinearLayer,
+}
+
+/// Main NNUE inference engine with quantized weights for fast evaluation.
+/// Uses an incremental accumulator for the embedding layer.
+/// Full bucketing: separate hidden layers and output per game phase.
+pub struct NNUENetwork {
+    accumulator: Accumulator,
+    buckets: [BucketLayers; OUTPUT_BUCKETS],
 
     // Scratch buffers to avoid allocation during forward pass.
-    // TODO: Move these into LinearLayer for consistency with Accumulator.
+    embedding_buffer: [f32; EMBEDDING_SIZE],
     hidden1_buffer: [f32; HIDDEN_SIZE],
     hidden2_buffer: [f32; HIDDEN_SIZE],
     output_buffer: [f32; 1],
@@ -31,11 +38,19 @@ impl NNUENetwork {
             &network.embedding.bias().unwrap().to_vec1()?,
         );
 
+        let buckets: [BucketLayers; OUTPUT_BUCKETS] = std::array::from_fn(|i| {
+            let bucket = &network.buckets[i];
+            BucketLayers {
+                hidden1: LinearLayer::from_candle_linear(&bucket.hidden1).unwrap(),
+                hidden2: LinearLayer::from_candle_linear(&bucket.hidden2).unwrap(),
+                output: LinearLayer::from_candle_linear(&bucket.output).unwrap(),
+            }
+        });
+
         Ok(Self {
             accumulator,
-            hidden1: LinearLayer::from_candle_linear(&network.hidden1)?,
-            hidden2: LinearLayer::from_candle_linear(&network.hidden2)?,
-            output: LinearLayer::from_candle_linear(&network.output)?,
+            buckets,
+            embedding_buffer: [0.0; EMBEDDING_SIZE],
             hidden1_buffer: [0.0; HIDDEN_SIZE],
             hidden2_buffer: [0.0; HIDDEN_SIZE],
             output_buffer: [0.0; 1],
@@ -46,23 +61,30 @@ impl NNUENetwork {
         self.accumulator.reset();
     }
 
-    // Forward pass with incremental updates from a bitset.
-    pub fn forward(&mut self, bitset: &Bitset<NUM_FEATURES>) -> f32 {
+    /// Forward pass with incremental updates from a bitset.
+    /// Use `output_bucket(&board)` to compute the bucket index.
+    #[inline]
+    pub fn forward(&mut self, bitset: &Bitset<NUM_FEATURES>, bucket: usize) -> f32 {
         self.accumulator.update(bitset);
+        self.accumulator
+            .dequantize_and_relu(&mut self.embedding_buffer);
 
-        let mut embedding_output = [0.0; EMBEDDING_SIZE];
-        self.accumulator.dequantize_and_relu(&mut embedding_output);
+        // Use bucket-specific hidden layers
+        let layers = &self.buckets[bucket];
 
-        self.hidden1
-            .forward(&embedding_output, &mut self.hidden1_buffer);
+        layers
+            .hidden1
+            .forward(&self.embedding_buffer, &mut self.hidden1_buffer);
         simd_relu(&mut self.hidden1_buffer);
 
-        self.hidden2
+        layers
+            .hidden2
             .forward(&self.hidden1_buffer, &mut self.hidden2_buffer);
         simd_add(&mut self.hidden2_buffer, &self.hidden1_buffer); // residual connection
         simd_relu(&mut self.hidden2_buffer);
 
-        self.output
+        layers
+            .output
             .forward(&self.hidden2_buffer, &mut self.output_buffer);
 
         // Scale to CP range
