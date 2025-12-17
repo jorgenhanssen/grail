@@ -9,22 +9,22 @@ use super::model::Network;
 use super::simd::{simd_add, simd_relu};
 use super::{CP_BOUND, EMBEDDING_SIZE, FV_SCALE, HIDDEN_SIZE, OUTPUT_BUCKETS};
 
-/// Per-bucket layers for quantized inference.
-/// Each bucket has separate hidden layer weights for phase-specific evaluation.
-struct BucketLayers {
+/// Hidden layers and output head for a single game phase.
+struct OutputStack {
     hidden1: LinearLayer,
     hidden2: LinearLayer,
     output: LinearLayer,
 }
 
-/// Main NNUE inference engine with quantized weights for fast evaluation.
-/// Uses an incremental accumulator for the embedding layer.
-/// Full bucketing: separate hidden layers and output per game phase.
+/// NNUE inference engine with quantized weights.
+/// Uses an incremental accumulator for the embedding layer and
+/// phase-specific output stacks selected by piece count.
 pub struct NNUENetwork {
     accumulator: Accumulator,
-    buckets: [BucketLayers; OUTPUT_BUCKETS],
+    buckets: [OutputStack; OUTPUT_BUCKETS],
 
     // Scratch buffers to avoid allocation during forward pass.
+    // TODO: Move these into LinearLayer for consistency with Accumulator.
     embedding_buffer: [f32; EMBEDDING_SIZE],
     hidden1_buffer: [f32; HIDDEN_SIZE],
     hidden2_buffer: [f32; HIDDEN_SIZE],
@@ -38,9 +38,9 @@ impl NNUENetwork {
             &network.embedding.bias().unwrap().to_vec1()?,
         );
 
-        let buckets: [BucketLayers; OUTPUT_BUCKETS] = std::array::from_fn(|i| {
+        let buckets: [OutputStack; OUTPUT_BUCKETS] = std::array::from_fn(|i| {
             let bucket = &network.buckets[i];
-            BucketLayers {
+            OutputStack {
                 hidden1: LinearLayer::from_candle_linear(&bucket.hidden1).unwrap(),
                 hidden2: LinearLayer::from_candle_linear(&bucket.hidden2).unwrap(),
                 output: LinearLayer::from_candle_linear(&bucket.output).unwrap(),
@@ -69,7 +69,6 @@ impl NNUENetwork {
         self.accumulator
             .dequantize_and_relu(&mut self.embedding_buffer);
 
-        // Use bucket-specific hidden layers
         let layers = &self.buckets[bucket];
 
         layers

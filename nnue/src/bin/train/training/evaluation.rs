@@ -23,7 +23,7 @@ pub fn evaluate(
         let x = Tensor::from_vec(features, (batch_len, NUM_FEATURES), device)?;
         let y = Tensor::from_vec(scores, (batch_len, 1), device)?;
 
-        let preds = network.forward_with_buckets(&x, &buckets)?;
+        let preds = network.forward(&x, &buckets)?;
         let loss = huber(&preds, &y)?;
 
         total_loss += loss.to_vec0::<f32>()?;

@@ -36,7 +36,7 @@ pub const OUTPUT_BUCKETS: usize = 8;
 /// Uses standard formula from engines like Stockfish: bucket = (pieceCount - 2) / divisor
 #[inline]
 pub fn output_bucket(board: &Board) -> usize {
-    /// Evenly distributes piece counts 2-32 across all buckets.
+    // Evenly distributes piece counts 2-32 across all buckets.
     const BUCKET_DIVISOR: usize = 32_usize.div_ceil(OUTPUT_BUCKETS);
     (board.occupied().len() as usize - 2) / BUCKET_DIVISOR
 }

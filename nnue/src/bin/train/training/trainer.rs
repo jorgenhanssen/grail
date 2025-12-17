@@ -133,7 +133,7 @@ impl Trainer {
             let x = Tensor::from_vec(features, (batch_len, NUM_FEATURES), &self.device)?;
             let y = Tensor::from_vec(scores, (batch_len, 1), &self.device)?;
 
-            let preds = self.network.forward_with_buckets(&x, &buckets)?;
+            let preds = self.network.forward(&x, &buckets)?;
             let loss = huber(&preds, &y)?;
 
             self.optimizer.backward_step(&loss)?;
