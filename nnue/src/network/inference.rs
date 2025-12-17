@@ -9,26 +9,13 @@ use super::model::Network;
 use super::simd::{simd_add, simd_relu};
 use super::{CP_BOUND, EMBEDDING_SIZE, FV_SCALE, HIDDEN_SIZE, OUTPUT_BUCKETS};
 
-/// Hidden layers and output head for a single game phase.
-struct OutputStack {
-    hidden1: LinearLayer,
-    hidden2: LinearLayer,
-    output: LinearLayer,
-}
-
 /// NNUE inference engine with quantized weights.
 /// Uses an incremental accumulator for the embedding layer and
 /// phase-specific output stacks selected by piece count.
 pub struct NNUENetwork {
     accumulator: Accumulator,
     buckets: [OutputStack; OUTPUT_BUCKETS],
-
-    // Scratch buffers to avoid allocation during forward pass.
-    // TODO: Move these into LinearLayer for consistency with Accumulator.
     embedding_buffer: [f32; EMBEDDING_SIZE],
-    hidden1_buffer: [f32; HIDDEN_SIZE],
-    hidden2_buffer: [f32; HIDDEN_SIZE],
-    output_buffer: [f32; 1],
 }
 
 impl NNUENetwork {
@@ -44,6 +31,9 @@ impl NNUENetwork {
                 hidden1: LinearLayer::from_candle_linear(&bucket.hidden1).unwrap(),
                 hidden2: LinearLayer::from_candle_linear(&bucket.hidden2).unwrap(),
                 output: LinearLayer::from_candle_linear(&bucket.output).unwrap(),
+                h1_buffer: [0.0; HIDDEN_SIZE],
+                h2_buffer: [0.0; HIDDEN_SIZE],
+                out_buffer: [0.0; 1],
             }
         });
 
@@ -51,9 +41,6 @@ impl NNUENetwork {
             accumulator,
             buckets,
             embedding_buffer: [0.0; EMBEDDING_SIZE],
-            hidden1_buffer: [0.0; HIDDEN_SIZE],
-            hidden2_buffer: [0.0; HIDDEN_SIZE],
-            output_buffer: [0.0; 1],
         })
     }
 
@@ -69,24 +56,34 @@ impl NNUENetwork {
         self.accumulator
             .dequantize_and_relu(&mut self.embedding_buffer);
 
-        let layers = &self.buckets[bucket];
+        let output = self.buckets[bucket].forward(&self.embedding_buffer);
 
-        layers
-            .hidden1
-            .forward(&self.embedding_buffer, &mut self.hidden1_buffer);
-        simd_relu(&mut self.hidden1_buffer);
+        (output * FV_SCALE).clamp(-CP_BOUND as f32, CP_BOUND as f32)
+    }
+}
 
-        layers
-            .hidden2
-            .forward(&self.hidden1_buffer, &mut self.hidden2_buffer);
-        simd_add(&mut self.hidden2_buffer, &self.hidden1_buffer); // residual connection
-        simd_relu(&mut self.hidden2_buffer);
+/// Hidden layers and output head for a single game phase.
+struct OutputStack {
+    hidden1: LinearLayer,
+    hidden2: LinearLayer,
+    output: LinearLayer,
+    h1_buffer: [f32; HIDDEN_SIZE],
+    h2_buffer: [f32; HIDDEN_SIZE],
+    out_buffer: [f32; 1],
+}
 
-        layers
-            .output
-            .forward(&self.hidden2_buffer, &mut self.output_buffer);
+impl OutputStack {
+    #[inline]
+    fn forward(&mut self, input: &[f32]) -> f32 {
+        self.hidden1.forward(input, &mut self.h1_buffer);
+        simd_relu(&mut self.h1_buffer);
 
-        // Scale to CP range
-        (self.output_buffer[0] * FV_SCALE).clamp(-CP_BOUND as f32, CP_BOUND as f32)
+        self.hidden2.forward(&self.h1_buffer, &mut self.h2_buffer);
+        simd_add(&mut self.h2_buffer, &self.h1_buffer); // residual connection
+        simd_relu(&mut self.h2_buffer);
+
+        self.output.forward(&self.h2_buffer, &mut self.out_buffer);
+
+        self.out_buffer[0]
     }
 }

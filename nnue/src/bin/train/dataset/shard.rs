@@ -28,6 +28,8 @@ impl Sample {
         let board = Board::from_str(&self.fen).ok()?;
         let metrics = BoardMetrics::new(&board);
 
+        let score = self.score as f32 / FV_SCALE;
+        let bucket = output_bucket(&board);
         let features = encode_board(
             &board,
             metrics.attacks[Color::White as usize],
@@ -38,12 +40,10 @@ impl Sample {
             metrics.threats[Color::Black as usize],
         );
 
-        let bucket = output_bucket(&board);
-
         Some(EncodedSample {
-            features,
-            score: self.score as f32 / FV_SCALE,
+            score,
             bucket,
+            features,
         })
     }
 }
