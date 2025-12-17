@@ -8,7 +8,8 @@ use super::shard_reader::ShardReader;
 
 const CHANNEL_BUFFER_MULTIPLIER: usize = 2;
 
-type BatchData = (Vec<f32>, Vec<f32>);
+/// Batch data: (features, scores, bucket_indices)
+pub type BatchData = (Vec<f32>, Vec<f32>, Vec<usize>);
 
 /// Multi-threaded data loader that reads samples from shards.
 ///
@@ -53,9 +54,10 @@ impl DataLoader {
     ) -> thread::JoinHandle<()> {
         thread::spawn(move || {
             while !shutdown.load(Ordering::Relaxed) {
-                let (features, scores) = Self::collect_batch(&reader, batch_size, &shutdown);
+                let (features, scores, buckets) =
+                    Self::collect_batch(&reader, batch_size, &shutdown);
 
-                if scores.is_empty() || tx.send((features, scores)).is_err() {
+                if scores.is_empty() || tx.send((features, scores, buckets)).is_err() {
                     break;
                 }
             }
@@ -65,6 +67,7 @@ impl DataLoader {
     fn collect_batch(reader: &ShardReader, batch_size: usize, shutdown: &AtomicBool) -> BatchData {
         let mut features = Vec::with_capacity(batch_size * NUM_FEATURES);
         let mut scores = Vec::with_capacity(batch_size);
+        let mut buckets = Vec::with_capacity(batch_size);
 
         for _ in 0..batch_size {
             if shutdown.load(Ordering::Relaxed) {
@@ -73,16 +76,17 @@ impl DataLoader {
 
             match reader.next() {
                 Some(sample) => {
-                    if let Some((encoded, score)) = sample.encode() {
-                        features.extend_from_slice(&encoded);
-                        scores.push(score);
+                    if let Some(encoded) = sample.encode() {
+                        features.extend_from_slice(&encoded.features);
+                        scores.push(encoded.score);
+                        buckets.push(encoded.bucket);
                     }
                 }
                 None => break,
             }
         }
 
-        (features, scores)
+        (features, scores, buckets)
     }
 }
 

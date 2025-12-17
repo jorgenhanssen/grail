@@ -5,7 +5,7 @@ use utils::board_metrics::BoardMetrics;
 
 use crate::{
     encoding::encode_board_bitset,
-    network::{NNUENetwork, Network},
+    network::{output_bucket, NNUENetwork, Network},
 };
 use candle_core::{DType, Device};
 
@@ -61,10 +61,13 @@ impl NNUE for Evaluator {
             white_threats,
             black_threats,
         );
+
+        let bucket = output_bucket(board);
+
         self.nnue
             .as_mut()
             .expect("NNUE network not initialized - call enable_nnue() first")
-            .forward(&bitset)
+            .forward(&bitset, bucket)
             .clamp(i16::MIN as f32, i16::MAX as f32) as i16
     }
 }

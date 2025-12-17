@@ -4,6 +4,7 @@ pub mod linear;
 pub mod model;
 pub mod simd;
 
+use cozy_chess::Board;
 pub use inference::NNUENetwork;
 pub use linear::LinearLayer;
 pub use model::Network;
@@ -27,3 +28,15 @@ pub const FV_SCALE: f32 = 400.0;
 /// and that extreme outliers don't stretch the range and waste precision.
 /// 99.9% proved a good value during testing.
 pub const QUANTIZATION_PERCENTILE: f32 = 0.999;
+
+/// Number of output buckets for game-phase-specific evaluation.
+pub const OUTPUT_BUCKETS: usize = 8;
+
+/// Compute output bucket from board position based on piece count.
+/// Uses standard formula from engines like Stockfish: bucket = (pieceCount - 2) / divisor
+#[inline]
+pub fn output_bucket(board: &Board) -> usize {
+    // Evenly distributes piece counts 2-32 across all buckets.
+    const BUCKET_DIVISOR: usize = 32_usize.div_ceil(OUTPUT_BUCKETS);
+    (board.occupied().len() as usize - 2) / BUCKET_DIVISOR
+}
