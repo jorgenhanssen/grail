@@ -4,6 +4,7 @@ pub mod linear;
 pub mod model;
 pub mod simd;
 
+use cozy_chess::Board;
 pub use inference::NNUENetwork;
 pub use linear::LinearLayer;
 pub use model::Network;
@@ -13,11 +14,6 @@ pub const EMBEDDING_SIZE: usize = 1024;
 
 /// Size of the hidden layers after the embedding.
 pub const HIDDEN_SIZE: usize = 16;
-
-/// Number of output buckets for game-phase-specific evaluation.
-/// Bucket is selected by piece count: bucket = (piece_count - 2) / 4
-/// This gives roughly: endgame (0-1), late middle (2-3), early middle (4-5), opening (6-7)
-pub const OUTPUT_BUCKETS: usize = 8;
 
 /// Evaluation clipping bound (centipawns). Output is clamped to [-CP_BOUND, CP_BOUND].
 pub const CP_BOUND: i16 = 5000;
@@ -33,11 +29,14 @@ pub const FV_SCALE: f32 = 400.0;
 /// 99.9% proved a good value during testing.
 pub const QUANTIZATION_PERCENTILE: f32 = 0.999;
 
-/// Compute output bucket from board position.
-/// Based on piece count: bucket = (pieces - 2) / 4, clamped to [0, OUTPUT_BUCKETS-1]
-/// Roughly: endgame (0-1), late middle (2-3), early middle (4-5), opening (6-7)
+/// Number of output buckets for game-phase-specific evaluation.
+pub const OUTPUT_BUCKETS: usize = 8;
+
+/// Compute output bucket from board position based on piece count.
+/// Uses standard formula from engines like Stockfish: bucket = (pieceCount - 2) / divisor
 #[inline]
-pub fn output_bucket(board: &cozy_chess::Board) -> usize {
-    let piece_count = board.occupied().len() as usize;
-    ((piece_count.saturating_sub(2)) / 4).min(OUTPUT_BUCKETS - 1)
+pub fn output_bucket(board: &Board) -> usize {
+    /// Evenly distributes piece counts 2-32 across all buckets.
+    const BUCKET_DIVISOR: usize = 32_usize.div_ceil(OUTPUT_BUCKETS);
+    (board.occupied().len() as usize - 2) / BUCKET_DIVISOR
 }
