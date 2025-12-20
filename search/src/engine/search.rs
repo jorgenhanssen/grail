@@ -722,6 +722,20 @@ impl Engine {
                 killers[0] = Some(mv);
             }
 
+            // Recursive killer: propagate to grandparent node (same side to move).
+            // If this move caused a cutoff here, it might be good 2 plies earlier too.
+            //
+            // TODO: Consider a "candidate killer" structure instead of immediate promotion.
+            // Track propagated moves separately, only promote to real killer if they cause
+            // a cutoff when actually tried at grandparent depth. This avoids polluting
+            // killer slots with unproven speculative moves.
+            if depth + 2 < MAX_DEPTH {
+                let grandparent_killers = &mut self.killer_moves[depth + 2];
+                if grandparent_killers[0] != Some(mv) && grandparent_killers[1] != Some(mv) {
+                    grandparent_killers[1] = Some(mv);
+                }
+            }
+
             // Boost the quiet move that caused the cutoff
             let bonus = self.history_heuristic.get_bonus(remaining_depth);
             self.history_heuristic.update(board, mv, bonus, threats);
