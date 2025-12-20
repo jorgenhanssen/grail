@@ -31,6 +31,10 @@ enum Phase {
 /// 4. Quiets - remaining quiet moves, scored by history (queen promos first, underpromos last)
 /// 5. BadCaptures - losing captures, tried last
 ///
+/// TODO: Consider adding support move bonus - bonus for quiets that move to squares
+/// defending a threatened piece. Would need to precompute "support bitboards" per piece
+/// type (squares from which each piece type could defend each threatened piece).
+///
 /// <https://www.chessprogramming.org/Move_Ordering>
 /// <https://www.chessprogramming.org/Killer_Heuristic>
 /// <https://github.com/jnlt3/blackmarlin>
@@ -118,15 +122,26 @@ impl MainMoveGenerator {
                         return true;
                     }
 
+                    let piece = board.piece_on(mov.from).unwrap();
+                    let base_score = capture_score(
+                        board,
+                        mov,
+                        capture_history,
+                        self.game_phase,
+                        &self.piece_values,
+                    );
+
+                    // Bonus for moving a threatened piece - scaled by piece value
+                    // (more valuable piece = more urgent to save)
+                    let evasion = if self.threats.has(mov.from) {
+                        self.piece_values.get(piece, self.game_phase)
+                    } else {
+                        0
+                    };
+
                     self.good_captures.push(ScoredMove {
                         mov,
-                        score: capture_score(
-                            board,
-                            mov,
-                            capture_history,
-                            self.game_phase,
-                            &self.piece_values,
-                        ),
+                        score: base_score + evasion,
                     });
                 }
                 false
@@ -219,12 +234,8 @@ impl MainMoveGenerator {
                         Some(Piece::Queen) => i16::MAX,
                         Some(_) => i16::MIN,
                         None => {
-                            let hist = history_heuristic.get(
-                                board.side_to_move(),
-                                mov.from,
-                                mov.to,
-                                self.threats,
-                            );
+                            let piece = board.piece_on(mov.from).unwrap();
+                            let hist = history_heuristic.get(board.side_to_move(), piece, mov.to);
 
                             let cont = continuation_history.get(
                                 board.side_to_move(),
@@ -239,7 +250,15 @@ impl MainMoveGenerator {
                                 0
                             };
 
-                            hist + cont + check_bonus
+                            // Bonus for moving a threatened piece - scaled by piece value
+                            // (more valuable piece = more urgent to save)
+                            let evasion = if self.threats.has(mov.from) {
+                                self.piece_values.get(piece, self.game_phase)
+                            } else {
+                                0
+                            };
+
+                            hist + cont + check_bonus + evasion
                         }
                     };
 

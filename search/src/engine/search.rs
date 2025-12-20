@@ -1,7 +1,7 @@
 use std::sync::{atomic::Ordering, mpsc::Sender, Arc};
 
 use arrayvec::ArrayVec;
-use cozy_chess::{BitBoard, Board, Move, Piece};
+use cozy_chess::{Board, Move, Piece};
 use evaluation::scores::{MATE_VALUE, SCORE_INF};
 use uci::{
     commands::{GoParams, Info, Score},
@@ -486,7 +486,6 @@ impl Engine {
                 move_index,
                 is_improving,
                 static_eval,
-                threats,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
                     break;
@@ -510,7 +509,6 @@ impl Engine {
                         is_quiet,
                         &quiets_searched,
                         &captures_searched,
-                        threats,
                     );
 
                     break; // beta cutoff
@@ -567,7 +565,6 @@ impl Engine {
         move_index: i32,
         is_improving: bool,
         static_eval: i16,
-        pre_move_threats: BitBoard,
     ) -> Option<(i16, Vec<Move>, bool, u8)> {
         let moved_piece = board.piece_on(m.from).unwrap();
         let new_board = make_move(board, m);
@@ -630,7 +627,6 @@ impl Engine {
             move_index,
             is_improving,
             &mut reduction,
-            pre_move_threats,
         ) {
             return None;
         }
@@ -709,7 +705,6 @@ impl Engine {
         is_quiet: bool,
         quiets_searched: &[Move],
         captures_searched: &[Move],
-        threats: BitBoard,
     ) {
         let prev_to = self
             .continuation_history
@@ -724,7 +719,7 @@ impl Engine {
 
             // Boost the quiet move that caused the cutoff
             let bonus = self.history_heuristic.get_bonus(remaining_depth);
-            self.history_heuristic.update(board, mv, bonus, threats);
+            self.history_heuristic.update(board, mv, bonus);
 
             // Continuation history bonus for quiet cutoff move
             let cont_bonus = self.continuation_history.get_bonus(remaining_depth);
@@ -740,8 +735,7 @@ impl Engine {
             // Apply malus to all previously searched quiet moves
             let quiet_malus = self.history_heuristic.get_malus(remaining_depth);
             for &q in quiets_searched {
-                self.history_heuristic
-                    .update(board, q, quiet_malus, threats);
+                self.history_heuristic.update(board, q, quiet_malus);
             }
 
             // Continuation history malus for previously searched quiets

@@ -1,11 +1,11 @@
-use cozy_chess::{BitBoard, Board, Color, Move, Square};
+use cozy_chess::{Board, Color, Move, Piece, Square};
 
 use super::utils::apply_gravity;
 use crate::{EngineConfig, MAX_DEPTH};
 
-const HISTORY_SIZE: usize = Color::NUM * 2 * Square::NUM * Square::NUM;
+const HISTORY_SIZE: usize = Color::NUM * Piece::NUM * Square::NUM;
 
-/// Scores quiet moves based on search success. Indexed by [color][is_threatened][from][to].
+/// Scores quiet moves based on search success. Indexed by [color][piece][to].
 /// Moves causing beta cutoffs get bonuses; moves searched before a cutoff get malus.
 ///
 /// <https://www.chessprogramming.org/History_Heuristic>
@@ -69,45 +69,31 @@ impl HistoryHeuristic {
         self.history.fill(0);
     }
 
-    pub fn get(&self, color: Color, source: Square, dest: Square, threats: BitBoard) -> i16 {
-        let is_threatened = threats.has(source);
-        self.history[Self::index(color, is_threatened, source, dest)]
+    pub fn get(&self, color: Color, piece: Piece, dest: Square) -> i16 {
+        self.history[Self::index(color, piece, dest)]
     }
 
-    fn update_move(
-        &mut self,
-        c: Color,
-        is_threatened: bool,
-        source: Square,
-        dest: Square,
-        bonus: i32,
-    ) {
-        let idx = Self::index(c, is_threatened, source, dest);
+    fn update_move(&mut self, color: Color, piece: Piece, dest: Square, bonus: i32) {
+        let idx = Self::index(color, piece, dest);
         apply_gravity(&mut self.history[idx], bonus, self.max_history);
     }
 
-    pub fn update(&mut self, board: &Board, mv: Move, delta: i32, threats: BitBoard) {
+    pub fn update(&mut self, board: &Board, mv: Move, delta: i32) {
         let color = board.side_to_move();
-        let source = mv.from;
+        let piece = board.piece_on(mv.from).unwrap();
         let dest = mv.to;
-        let is_threatened = threats.has(source);
-        self.update_move(color, is_threatened, source, dest, delta);
+        self.update_move(color, piece, dest, delta);
     }
 
-    fn index(color: Color, is_threatened: bool, source: Square, dest: Square) -> usize {
+    fn index(color: Color, piece: Piece, dest: Square) -> usize {
         let color_idx = color as usize;
-        let threat_idx = is_threatened as usize;
-        let source_idx = source as usize;
+        let piece_idx = piece as usize;
         let dest_idx = dest as usize;
 
-        let color_stride = 2 * Square::NUM * Square::NUM;
-        let threat_stride = Square::NUM * Square::NUM;
-        let source_stride = Square::NUM;
+        let color_stride = Piece::NUM * Square::NUM;
+        let piece_stride = Square::NUM;
 
-        color_idx * color_stride
-            + threat_idx * threat_stride
-            + source_idx * source_stride
-            + dest_idx
+        color_idx * color_stride + piece_idx * piece_stride + dest_idx
     }
 
     /// Applies extra reduction or pruning based on history score.
@@ -126,7 +112,6 @@ impl HistoryHeuristic {
         move_index: i32,
         is_improving: bool,
         reduction: &mut u8,
-        threats: BitBoard,
     ) -> bool {
         if !(remaining_depth > 0
             && !in_check
@@ -138,9 +123,9 @@ impl HistoryHeuristic {
         }
 
         let color = board.side_to_move();
-        let source = mv.from;
+        let piece = board.piece_on(mv.from).unwrap();
         let dest = mv.to;
-        let hist_score = self.get(color, source, dest, threats);
+        let hist_score = self.get(color, piece, dest);
 
         if hist_score < self.reduction_threshold {
             // Only apply additional reductions/pruning when position isn't improving
