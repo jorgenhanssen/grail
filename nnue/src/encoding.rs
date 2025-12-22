@@ -144,39 +144,21 @@ pub fn encode_board_bitset(
         }
     }
 
-    // White support
-    for sq in white_support {
-        bitset.set(WHITE_SUPPORT_START + sq as usize);
-    }
+    // Support, space, and threats are 64-bit aligned - use bulk u64 assignment
+    // instead of iterating through each square
+    bitset.set_u64(bitset.u64_index(WHITE_SUPPORT_START), white_support.0);
+    bitset.set_u64(bitset.u64_index(BLACK_SUPPORT_START), black_support.0);
 
-    // Black support
-    for sq in black_support {
-        bitset.set(BLACK_SUPPORT_START + sq as usize);
-    }
-
-    // White space (controlled non-piece squares)
     let white_pieces = board.colors(Color::White);
     let white_space_bb = white_attacks & !white_pieces;
-    for sq in white_space_bb {
-        bitset.set(WHITE_SPACE_START + sq as usize);
-    }
+    bitset.set_u64(bitset.u64_index(WHITE_SPACE_START), white_space_bb.0);
 
-    // Black space
     let black_pieces = board.colors(Color::Black);
     let black_space_bb = black_attacks & !black_pieces;
-    for sq in black_space_bb {
-        bitset.set(BLACK_SPACE_START + sq as usize);
-    }
+    bitset.set_u64(bitset.u64_index(BLACK_SPACE_START), black_space_bb.0);
 
-    // White threats
-    for sq in white_threats {
-        bitset.set(WHITE_THREATS_START + sq as usize);
-    }
-
-    // Black threats
-    for sq in black_threats {
-        bitset.set(BLACK_THREATS_START + sq as usize);
-    }
+    bitset.set_u64(bitset.u64_index(WHITE_THREATS_START), white_threats.0);
+    bitset.set_u64(bitset.u64_index(BLACK_THREATS_START), black_threats.0);
 
     // Side to move
     if board.side_to_move() == Color::White {

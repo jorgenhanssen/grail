@@ -31,6 +31,16 @@ where
         self.0[idx / 64] ^= 1u64 << (idx % 64);
     }
 
+    /// Get the index of the u64 that represents the given bit offset.
+    pub const fn u64_index(&self, bit_offset: usize) -> usize {
+        bit_offset / 64
+    }
+
+    /// Set a u64 at the given u64 by index.
+    pub fn set_u64(&mut self, index: usize, value: u64) {
+        self.0[index] = value;
+    }
+
     /// Get the underlying `u64` array.
     pub fn as_array(&self) -> &[u64; BITS.div_ceil(64)] {
         &self.0
@@ -148,6 +158,54 @@ mod tests {
         let bits: Bitset<256> = Bitset::default();
         for i in 0..256 {
             assert!(!bits.get(i));
+        }
+    }
+
+    #[test]
+    fn test_u64_index() {
+        let bits: Bitset<256> = Bitset::default();
+        assert_eq!(bits.u64_index(0), 0);
+        assert_eq!(bits.u64_index(63), 0);
+        assert_eq!(bits.u64_index(64), 1);
+        assert_eq!(bits.u64_index(127), 1);
+        assert_eq!(bits.u64_index(128), 2);
+    }
+
+    #[test]
+    fn test_set_u64() {
+        let mut bits: Bitset<256> = Bitset::default();
+
+        // Set all bits in the second word (bits 64-127)
+        bits.set_u64(1, u64::MAX);
+
+        // Bits 0-63 should be unset
+        for i in 0..64 {
+            assert!(!bits.get(i), "bit {} should be unset", i);
+        }
+        // Bits 64-127 should be set
+        for i in 64..128 {
+            assert!(bits.get(i), "bit {} should be set", i);
+        }
+        // Bits 128+ should be unset
+        for i in 128..256 {
+            assert!(!bits.get(i), "bit {} should be unset", i);
+        }
+    }
+
+    #[test]
+    fn test_set_u64_specific_pattern() {
+        let mut bits: Bitset<128> = Bitset::default();
+
+        // Set a specific pattern: alternating bits
+        bits.set_u64(0, 0xAAAAAAAAAAAAAAAA);
+
+        // Even bits should be unset, odd bits should be set
+        for i in 0..64 {
+            if i % 2 == 0 {
+                assert!(!bits.get(i), "bit {} should be unset", i);
+            } else {
+                assert!(bits.get(i), "bit {} should be set", i);
+            }
         }
     }
 }
