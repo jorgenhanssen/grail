@@ -1,5 +1,5 @@
 use cozy_chess::{Board, Move, Piece};
-use utils::{game_phase, is_capture};
+use utils::{is_capture, piece_value};
 
 use crate::{
     pruning::{
@@ -112,9 +112,8 @@ impl Engine {
             return false;
         }
 
-        let phase = game_phase(board);
-        let captured_value = self.config.get_piece_values().get(captured_piece, phase);
-        let attacker_value = self.config.get_piece_values().get(moved_piece, phase);
+        let captured_value = piece_value(captured_piece);
+        let attacker_value = piece_value(moved_piece);
 
         // Only run SEE on questionable captures (expensive):
         // Skip if: victim >= attacker (looks good)
@@ -134,13 +133,7 @@ impl Engine {
         let depth_margin = self.config.see_prune_depth_margin.value * (remaining_depth as i16);
         let see_threshold = -(eval_gap.max(0) + depth_margin);
 
-        !see(
-            board,
-            m,
-            phase,
-            &self.config.get_piece_values(),
-            see_threshold,
-        )
+        !see(board, m, see_threshold)
     }
 
     /// Null move pruning: give opponent a free move; if we still beat beta, prune the subtree.

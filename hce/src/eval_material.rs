@@ -1,10 +1,10 @@
 use cozy_chess::{Color, Piece};
+use utils::{BISHOP_VALUE, KNIGHT_VALUE, PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE};
 
 use crate::context::EvalContext;
 use crate::pst::{get_pst, sum_pst};
-use evaluation::PieceValues;
 
-pub(super) fn evaluate(ctx: &EvalContext, color: Color, piece_values: &PieceValues) -> i16 {
+pub(super) fn evaluate(ctx: &EvalContext, color: Color) -> i16 {
     let board = ctx.position.board;
 
     let pawns = board.colored_pieces(color, Piece::Pawn);
@@ -16,11 +16,11 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, piece_values: &PieceValu
 
     let mut cp = 0i16;
 
-    cp += piece_values.get(Piece::Pawn, ctx.phase) * pawns.len() as i16;
-    cp += piece_values.get(Piece::Knight, ctx.phase) * knights.len() as i16;
-    cp += piece_values.get(Piece::Bishop, ctx.phase) * bishops.len() as i16;
-    cp += piece_values.get(Piece::Rook, ctx.phase) * rooks.len() as i16;
-    cp += piece_values.get(Piece::Queen, ctx.phase) * queens.len() as i16;
+    cp += PAWN_VALUE * pawns.len() as i16;
+    cp += KNIGHT_VALUE * knights.len() as i16;
+    cp += BISHOP_VALUE * bishops.len() as i16;
+    cp += ROOK_VALUE * rooks.len() as i16;
+    cp += QUEEN_VALUE * queens.len() as i16;
 
     let pst = get_pst(color);
     if !pawns.is_empty() {

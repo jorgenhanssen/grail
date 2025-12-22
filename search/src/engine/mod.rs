@@ -6,7 +6,7 @@ use std::sync::{
 
 use ahash::AHashSet;
 use cozy_chess::{Board, Move};
-use evaluation::{PieceValues, HCE, NNUE};
+use evaluation::{HCE, NNUE};
 use uci::{commands::Info, pv_to_uci, UciOutput};
 
 use crate::{
@@ -30,9 +30,6 @@ pub struct Engine {
 
     /// Signal to terminate search (time control or UCI stop)
     stop: Arc<AtomicBool>,
-
-    /// Piece values for the engine
-    piece_values: PieceValues,
 
     /// Hand-crafted evaluation
     hce: Box<dyn HCE>,
@@ -79,7 +76,6 @@ impl Engine {
     ) -> Self {
         let mut instance = Self {
             config: config.clone(),
-            piece_values: config.get_piece_values(),
             stop,
 
             hce,
@@ -112,12 +108,7 @@ impl Engine {
         self.config = config.clone();
 
         // Update the HCE
-        // TODO: Find a better way to do this
-        self.piece_values = config.get_piece_values();
-        self.hce = Box::new(hce::Evaluator::new(
-            self.piece_values,
-            config.get_hce_config(),
-        ));
+        self.hce = Box::new(hce::Evaluator::new(config.get_hce_config()));
 
         if init || old_config.hash_size.value != config.hash_size.value {
             self.configure_transposition_tables();

@@ -36,10 +36,7 @@ impl SelfPlayWorker {
         // Reduced hash size to reduce RAM usage
         config.hash_size.value = WORKER_HASH_SIZE_MB;
 
-        let hce = Box::new(hce::Evaluator::new(
-            config.get_piece_values(),
-            config.get_hce_config(),
-        ));
+        let hce = Box::new(hce::Evaluator::new(config.get_hce_config()));
 
         // Engine stop flag (not used in data generation, but required by Engine)
         let stop = Arc::new(AtomicBool::new(false));
