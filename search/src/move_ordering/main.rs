@@ -56,7 +56,7 @@ impl MainMoveGenerator {
     pub fn new(
         best_move: Option<Move>,
         killer_moves: [Option<Move>; 2],
-        prev_to: &[Option<Square>],
+        prev_to: Vec<Option<Square>>,
         quiet_check_bonus: i16,
         threats: BitBoard,
     ) -> Self {
@@ -64,7 +64,7 @@ impl MainMoveGenerator {
             gen_phase: Phase::BestMove,
             best_move,
 
-            prev_to: prev_to.to_vec(),
+            prev_to,
 
             killer_moves,
             killer_index: 0,

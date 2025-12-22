@@ -9,7 +9,6 @@
 // the `nnue` crate can depend on `search` for its training tools without
 // creating a circular dependency.
 
-use cozy_chess::Board;
 use utils::Position;
 
 /// Hand-Crafted Evaluation interface.
@@ -23,5 +22,5 @@ pub trait HCE: Send {
 pub trait NNUE: Send {
     fn name(&self) -> String;
     /// Evaluate position from White's perspective. Positive = White advantage.
-    fn evaluate(&mut self, board: &Board) -> i16;
+    fn evaluate(&mut self, position: &Position) -> i16;
 }

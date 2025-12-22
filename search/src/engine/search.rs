@@ -148,7 +148,7 @@ impl Engine {
         let mut moves = MainMoveGenerator::new(
             best_move,
             [None; 2],
-            &prev_to,
+            prev_to,
             self.config.quiet_check_bonus.value,
             threats,
         );
@@ -435,7 +435,7 @@ impl Engine {
         let mut movegen = MainMoveGenerator::new(
             maybe_tt_move,
             self.killer_moves[depth as usize],
-            &prev_to,
+            prev_to,
             self.config.quiet_check_bonus.value,
             threats,
         );
