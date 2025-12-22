@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use evaluation::PieceValues;
 use hce::HCEConfig;
 use uci::{UciOption, UciOptionType, UciOutput};
 
@@ -144,17 +143,6 @@ define_config!(
     (see_prune_depth_margin: i16, "SEE Prune Depth Margin", UciOptionType::Spin { min: 10, max: 150 }, 75, cfg!(feature = "tuning")),
     (see_prune_min_attacker_value: i16, "SEE Prune Min Attacker Value", UciOptionType::Spin { min: 0, max: 500 }, 200, cfg!(feature = "tuning")),
 
-    (piece_value_pawn_mg: f32, "Piece Value Pawn MG", UciOptionType::Spin { min: 50, max: 150 }, 98.0, cfg!(feature = "tuning")),
-    (piece_value_pawn_eg: f32, "Piece Value Pawn EG", UciOptionType::Spin { min: 50, max: 150 }, 113.0, cfg!(feature = "tuning")),
-    (piece_value_knight_mg: f32, "Piece Value Knight MG", UciOptionType::Spin { min: 250, max: 400 }, 325.0, cfg!(feature = "tuning")),
-    (piece_value_knight_eg: f32, "Piece Value Knight EG", UciOptionType::Spin { min: 250, max: 400 }, 340.0, cfg!(feature = "tuning")),
-    (piece_value_bishop_mg: f32, "Piece Value Bishop MG", UciOptionType::Spin { min: 250, max: 400 }, 335.0, cfg!(feature = "tuning")),
-    (piece_value_bishop_eg: f32, "Piece Value Bishop EG", UciOptionType::Spin { min: 250, max: 400 }, 350.0, cfg!(feature = "tuning")),
-    (piece_value_rook_mg: f32, "Piece Value Rook MG", UciOptionType::Spin { min: 400, max: 600 }, 510.0, cfg!(feature = "tuning")),
-    (piece_value_rook_eg: f32, "Piece Value Rook EG", UciOptionType::Spin { min: 450, max: 650 }, 560.0, cfg!(feature = "tuning")),
-    (piece_value_queen_mg: f32, "Piece Value Queen MG", UciOptionType::Spin { min: 800, max: 1200 }, 975.0, cfg!(feature = "tuning")),
-    (piece_value_queen_eg: f32, "Piece Value Queen EG", UciOptionType::Spin { min: 800, max: 1300 }, 1020.0, cfg!(feature = "tuning")),
-
     (hce_tempo_bonus: i16, "HCE Tempo Bonus", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
 
     (hce_doubled_pawn_penalty: i16, "HCE Doubled Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 30, cfg!(feature = "tuning")),
@@ -200,21 +188,6 @@ define_config!(
 );
 
 impl EngineConfig {
-    pub fn get_piece_values(&self) -> PieceValues {
-        PieceValues {
-            pawn_value_mg: self.piece_value_pawn_mg.value,
-            pawn_value_eg: self.piece_value_pawn_eg.value,
-            knight_value_mg: self.piece_value_knight_mg.value,
-            knight_value_eg: self.piece_value_knight_eg.value,
-            bishop_value_mg: self.piece_value_bishop_mg.value,
-            bishop_value_eg: self.piece_value_bishop_eg.value,
-            rook_value_mg: self.piece_value_rook_mg.value,
-            rook_value_eg: self.piece_value_rook_eg.value,
-            queen_value_mg: self.piece_value_queen_mg.value,
-            queen_value_eg: self.piece_value_queen_eg.value,
-        }
-    }
-
     pub fn get_hce_config(&self) -> HCEConfig {
         HCEConfig {
             tempo_bonus: self.hce_tempo_bonus.value,

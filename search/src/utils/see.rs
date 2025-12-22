@@ -1,6 +1,5 @@
 use cozy_chess::{Board, Move, Piece, Square};
-use evaluation::piece_values::PieceValues;
-use utils::{get_attackers_to, get_discovered_attacks};
+use utils::{get_attackers_to, get_discovered_attacks, piece_value};
 
 /// Static Exchange Evaluation (SEE) with threshold comparison.
 ///
@@ -27,26 +26,20 @@ use utils::{get_attackers_to, get_discovered_attacks};
 /// - [Black Marlin](https://github.com/jnlt3/blackmarlin)
 /// - [PlentyChess](https://github.com/Yoshie2000/PlentyChess)
 #[inline]
-pub fn see(
-    board: &Board,
-    mv: Move,
-    phase: f32,
-    piece_values: &PieceValues,
-    threshold: i16,
-) -> bool {
+pub fn see(board: &Board, mv: Move, threshold: i16) -> bool {
     let from = mv.from;
     let to = mv.to;
 
     // Initial gain: value of victim - threshold
     let mut gain = board
         .piece_on(to)
-        .map(|victim| piece_values.get(victim, phase))
+        .map(|victim| piece_value(victim))
         .unwrap_or(0)
         - threshold;
 
     // Account for promotion delta
     if let Some(promo) = mv.promotion {
-        gain += piece_values.get(promo, phase) - piece_values.get(Piece::Pawn, phase);
+        gain += piece_value(promo) - piece_value(Piece::Pawn);
     }
 
     // If taking the victim for free isn't enough, fail immediately
@@ -56,7 +49,7 @@ pub fn see(
 
     // Subtract the value of our attacker (they might recapture it)
     let attacker = board.piece_on(from).unwrap_or(Piece::Pawn);
-    gain -= piece_values.get(attacker, phase);
+    gain -= piece_value(attacker);
 
     // If we're still above threshold after potentially losing our attacker, succeed
     // (we can always choose to stop if recapturing would be bad)
@@ -94,7 +87,7 @@ pub fn see(
 
         // Negamax formula: -gain - 1 - piece_value
         // The -1 handles strict inequality in integer domain
-        gain = -gain - 1 - piece_values.get(piece, phase);
+        gain = -gain - 1 - piece_value(piece);
 
         if gain >= 0 {
             // If king captured and opponent still has attackers, king capture is illegal

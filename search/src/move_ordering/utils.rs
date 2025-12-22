@@ -1,5 +1,5 @@
 use cozy_chess::{Board, Move};
-use evaluation::piece_values::PieceValues;
+use utils::piece_value;
 
 use crate::history::CaptureHistory;
 
@@ -23,15 +23,9 @@ pub(super) fn select_highest(array: &[ScoredMove]) -> Option<usize> {
     Some(best_index)
 }
 
-pub(super) fn capture_score(
-    board: &Board,
-    mv: Move,
-    capture_history: &CaptureHistory,
-    phase: f32,
-    piece_values: &PieceValues,
-) -> i16 {
+pub(super) fn capture_score(board: &Board, mv: Move, capture_history: &CaptureHistory) -> i16 {
     let victim = board.piece_on(mv.to).unwrap();
     let hist = capture_history.get(board, mv);
 
-    piece_values.get(victim, phase) + hist
+    piece_value(victim) + hist
 }

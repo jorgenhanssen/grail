@@ -2,6 +2,37 @@ use cozy_chess::{BitBoard, Board, Color, Piece};
 
 const LIGHT_SQUARES_MASK: u64 = 0x55AA55AA55AA55AA;
 
+// Standard piece values (centipawns), indexed by Piece enum order
+const PIECE_VALUES: [i16; Piece::NUM] = [
+    100, // Pawn
+    320, // Knight
+    330, // Bishop
+    500, // Rook
+    900, // Queen
+    0,   // King
+];
+
+pub const PAWN_VALUE: i16 = PIECE_VALUES[Piece::Pawn as usize];
+pub const KNIGHT_VALUE: i16 = PIECE_VALUES[Piece::Knight as usize];
+pub const BISHOP_VALUE: i16 = PIECE_VALUES[Piece::Bishop as usize];
+pub const ROOK_VALUE: i16 = PIECE_VALUES[Piece::Rook as usize];
+pub const QUEEN_VALUE: i16 = PIECE_VALUES[Piece::Queen as usize];
+
+/// Get the value of a piece in centipawns.
+#[inline]
+pub fn piece_value(piece: Piece) -> i16 {
+    PIECE_VALUES[piece as usize]
+}
+
+/// Sum the value of all pieces on the board.
+pub fn total_material(board: &Board) -> i16 {
+    let mut material = 0;
+    for piece in Piece::ALL {
+        material += piece_value(piece) * (board.pieces(piece).len() as i16);
+    }
+    material
+}
+
 /// Get minor pieces (knights and bishops) for a color.
 pub fn minors(board: &Board, color: Color) -> BitBoard {
     board.colored_pieces(color, Piece::Knight) | board.colored_pieces(color, Piece::Bishop)

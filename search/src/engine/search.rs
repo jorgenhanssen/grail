@@ -149,8 +149,6 @@ impl Engine {
             best_move,
             [None; 2],
             &prev_to,
-            game_phase(&self.board),
-            self.config.get_piece_values(),
             self.config.quiet_check_bonus.value,
             threats,
         );
@@ -438,8 +436,6 @@ impl Engine {
             maybe_tt_move,
             self.killer_moves[depth as usize],
             &prev_to,
-            phase,
-            self.config.get_piece_values(),
             self.config.quiet_check_bonus.value,
             threats,
         );
