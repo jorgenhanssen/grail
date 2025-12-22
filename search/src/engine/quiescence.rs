@@ -67,6 +67,8 @@ impl Engine {
         let eval = self.eval(&position, phase);
         let stand_pat = flip_eval_perspective(board.side_to_move(), eval);
 
+        let board_material = total_material(board);
+
         // Do a "stand-pat" evaluation if not in check
         if !in_check {
             if stand_pat >= beta {
@@ -74,8 +76,6 @@ impl Engine {
                     .store(hash, stand_pat, original_alpha, original_beta, in_check);
                 return (stand_pat, Vec::new());
             }
-
-            let board_material = total_material(board);
 
             // Node-level delta pruning (big delta)
             if can_delta_prune(
@@ -116,7 +116,7 @@ impl Engine {
             if can_delta_prune(
                 in_check,
                 self.config.qs_delta_material_threshold.value,
-                total_material(board),
+                board_material,
             ) {
                 let captured = board.piece_on(mv.to);
                 if let Some(piece) = captured {
