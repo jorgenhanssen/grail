@@ -4,8 +4,7 @@ use utils::is_capture;
 /// Internal Iterative Reductions: reduce depth when no TT move is found.
 ///
 /// When no hash move is found, reduce the search depth instead of doing a
-/// full-depth search with poor move ordering. This is simpler and cheaper
-/// than IID (which runs a shallow search to find a move).
+/// full-depth search with poor move ordering.
 ///
 /// TODO: Consider applying only at expected cut-nodes like Stockfish/Ethereal.
 ///
