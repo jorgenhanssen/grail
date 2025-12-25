@@ -179,15 +179,8 @@ impl Engine {
 
         // Do a reduced depth null search to check if our position is still good enough
         self.search_stack.push(SearchNode::new(nm_board.hash()));
-        let (score, _) = self.search_subtree(
-            &nm_board,
-            depth + 1,
-            max_depth - r,
-            -beta,
-            -beta + 1,
-            false,
-            false,
-        );
+        let (score, _) =
+            self.search_subtree(&nm_board, depth + 1, max_depth - r, -beta, -beta + 1, false);
         self.search_stack.pop();
 
         // If opponent couldn't beat beta even with a free move, position is strong enough to prune
@@ -203,7 +196,6 @@ impl Engine {
                     verify_depth,
                     -beta,
                     -beta + 1,
-                    false,
                     false,
                 );
                 self.search_stack.pop();
@@ -269,38 +261,5 @@ impl Engine {
             return Some(beta);
         }
         None
-    }
-
-    /// Internal Iterative Deepening: do a shallow search to get a best move for ordering when TT misses.
-    ///
-    /// <https://www.chessprogramming.org/Internal_Iterative_Deepening>
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn try_iid(
-        &mut self,
-        board: &Board,
-        depth: u8,
-        max_depth: u8,
-        alpha: i16,
-        beta: i16,
-        try_null_move: bool,
-        allow_iid: bool,
-        need_iid: bool,
-        remaining_depth: u8,
-        in_check: bool,
-    ) -> Option<Move> {
-        if !(allow_iid && need_iid && remaining_depth >= 4 && !in_check) {
-            return None;
-        }
-        let shallow_max = max_depth.saturating_sub(self.config.iid_reduction.value);
-        let (.., shallow_line) = self.search_subtree(
-            board,
-            depth,
-            shallow_max,
-            alpha,
-            beta,
-            try_null_move,
-            false, // disable nested IID
-        );
-        shallow_line.first().copied()
     }
 }

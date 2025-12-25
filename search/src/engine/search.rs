@@ -212,21 +212,13 @@ impl Engine {
                 -beta_child,
                 -alpha_child,
                 true,
-                true,
             );
             let mut score = -child_value;
 
             // LMR re-search: reduced search beat alpha, verify at full depth
             if reduction > 0 && score > alpha_child {
-                let (re_child_value, re_pv) = self.search_subtree(
-                    &new_board,
-                    1,
-                    depth,
-                    -beta_child,
-                    -alpha_child,
-                    true,
-                    true,
-                );
+                let (re_child_value, re_pv) =
+                    self.search_subtree(&new_board, 1, depth, -beta_child, -alpha_child, true);
                 score = -re_child_value;
                 pv = re_pv;
             }
@@ -234,7 +226,7 @@ impl Engine {
             // PVS re-search: null window beat alpha, verify with full window
             if !is_pv_move && score > alpha_child && score < beta {
                 let (full_child_value, full_pv) =
-                    self.search_subtree(&new_board, 1, depth, -beta, -alpha_child, true, true);
+                    self.search_subtree(&new_board, 1, depth, -beta, -alpha_child, true);
                 score = -full_child_value;
                 pv = full_pv;
             }
@@ -277,7 +269,6 @@ impl Engine {
         mut alpha: i16,
         mut beta: i16,
         try_null_move: bool,
-        allow_iid: bool,
     ) -> (i16, Vec<Move>) {
         if self.stop.load(Ordering::Relaxed) {
             return (0, Vec::new());
@@ -383,22 +374,6 @@ impl Engine {
             Some(static_eval),
         ) {
             return (score, Vec::new());
-        }
-
-        // Internal Iterative Deepening (IID)
-        if let Some(m) = self.try_iid(
-            board,
-            depth,
-            max_depth,
-            alpha,
-            beta,
-            try_null_move,
-            allow_iid,
-            maybe_tt_move.is_none(),
-            remaining_depth,
-            in_check,
-        ) {
-            maybe_tt_move = Some(m);
         }
 
         let is_improving = !in_check && self.search_stack.is_improving();
@@ -646,7 +621,6 @@ impl Engine {
             -beta_child,
             -alpha_child,
             true,
-            true,
         );
         self.search_stack.pop();
         let mut value = -child_value;
@@ -662,7 +636,6 @@ impl Engine {
                 extended_max_depth,
                 -beta_child,
                 -alpha_child,
-                true,
                 true,
             );
             self.search_stack.pop();
@@ -681,7 +654,6 @@ impl Engine {
                 extended_max_depth,
                 -beta,
                 -alpha,
-                true,
                 true,
             );
             self.search_stack.pop();

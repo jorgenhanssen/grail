@@ -132,8 +132,6 @@ define_config!(
     (qs_delta_margin: i16, "QS Delta Margin", UciOptionType::Spin { min: 10, max: 500 }, 200, cfg!(feature = "tuning")),
     (qs_delta_material_threshold: i16, "QS Delta Material Threshold", UciOptionType::Spin { min: 100, max: 3000 }, 1500, cfg!(feature = "tuning")),
 
-    (iid_reduction: u8, "IID Reduction", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")),
-
     (iir_reduction: u8, "IIR Reduction", UciOptionType::Spin { min: 0, max: 4 }, 1, cfg!(feature = "tuning")),
     (iir_min_depth: u8, "IIR Min Depth", UciOptionType::Spin { min: 2, max: 10 }, 4, cfg!(feature = "tuning")),
 
