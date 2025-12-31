@@ -294,12 +294,17 @@ impl Engine {
         let mut maybe_tt_move = None;
         let mut tt_static_eval = None;
 
+        let is_pv_node = beta > alpha + 1;
+
         if let Some(tt) = self.tt.probe(hash, depth) {
             // Only trust value/bound for cutoffs if the TT entry comes from a
             // search at least as deep as we need. Shallow results may have
-            // missed tactics and can't safely prune the current search
+            // missed tactics and can't safely prune the current search.
+            //
+            // Don't do TT cutoffs in PV nodes - TT only stores one move,
+            // so cutting off here could truncate the PV to just that move.
             let needed_depth = max_depth - depth;
-            if tt.depth >= needed_depth {
+            if !is_pv_node && tt.depth >= needed_depth {
                 match tt.bound {
                     // Exact: previous search found true minimax value
                     Bound::Exact => {
@@ -327,9 +332,6 @@ impl Engine {
             maybe_tt_move = tt.best_move;
             tt_static_eval = tt.static_eval;
         }
-
-        // PV-ness depends on the current window, so compute it after any TT bound tightening.
-        let is_pv_node = beta > alpha + 1;
 
         let position = Position::new(board);
         let phase = game_phase(board);
