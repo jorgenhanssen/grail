@@ -157,6 +157,9 @@ impl Engine {
         let mut best_score = -SCORE_INF;
         let mut current_best_move = None;
 
+        // Root node is PV
+        let node_type = NodeType::Pv;
+
         let in_check = has_check(&self.board);
         let remaining_depth = depth.saturating_sub(1);
         let mut move_index: i32 = -1;
@@ -204,8 +207,7 @@ impl Engine {
                 alpha_child.saturating_add(1)
             };
 
-            // Child node type: first move is PV, rest are Cut (scout search)
-            let child_node_type = NodeType::Pv.child(move_index);
+            let child_node_type = node_type.child(move_index);
 
             // Initial search (possibly reduced depth, null window for non-PV moves)
             let reduced_depth = depth.saturating_sub(reduction);
@@ -636,7 +638,6 @@ impl Engine {
         let reduced_max_depth = extended_max_depth.saturating_sub(reduction).max(depth + 1);
         let mut searched_depth = reduced_max_depth;
 
-        // Child node type based on move index
         let child_node_type = node_type.child(move_index);
 
         // Initial search (reduced if LMR, null window if not first move)
