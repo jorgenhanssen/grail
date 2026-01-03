@@ -17,7 +17,7 @@ use pawn_cache::PawnCache;
 use crate::pawn_cache::CachedPawnEvaluation;
 use cozy_chess::Color;
 use evaluation::HCE;
-use utils::Position;
+use utils::Node;
 
 /// Hand-Crafted Evaluation: tunable metrics based on human knowledge and chess concepts.
 ///
@@ -42,9 +42,9 @@ impl HCE for Evaluator {
     }
 
     /// Evaluates from White's perspective. Positive = White advantage.
-    fn evaluate(&mut self, position: &Position, phase: f32) -> i16 {
-        let ctx = EvalContext::new(position, phase);
-        let board = position.board;
+    fn evaluate(&mut self, node: &Node, phase: f32) -> i16 {
+        let ctx = EvalContext::new(node, phase);
+        let board = node.board();
 
         let mut cp: i16 = 0;
 

@@ -1,13 +1,11 @@
-use cozy_chess::{Board, Move, Piece};
-use utils::{is_capture, piece_value};
+use cozy_chess::{Move, Piece};
+use utils::{is_capture, piece_value, Node};
 
 use crate::{
-    node::NodeType,
     pruning::{
         can_futility_prune, can_null_move_prune, can_razor_prune, can_reverse_futility_prune,
         futility_margin, null_move_reduction, razor_margin, rfp_margin, RAZOR_NEAR_MATE,
     },
-    stack::SearchNode,
     utils::see::see,
 };
 
@@ -43,10 +41,9 @@ impl Engine {
     /// Razoring: if eval is far below alpha, drop into qsearch to verify and return early.
     ///
     /// <https://www.chessprogramming.org/Razoring>
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn try_razor_prune(
         &mut self,
-        board: &Board,
+        node: &Node,
         remaining_depth: u8,
         alpha: i16,
         depth: u8,
@@ -66,7 +63,7 @@ impl Engine {
             return None;
         }
         // Q search with null window
-        let (value, _) = self.quiescence_search(board, alpha - 1, alpha, depth);
+        let (value, _) = self.quiescence_search(node, alpha - 1, alpha, depth);
         if value < alpha && value.abs() < RAZOR_NEAR_MATE {
             Some(value)
         } else {
@@ -83,18 +80,19 @@ impl Engine {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn try_see_prune(
         &self,
-        board: &Board,
+        node: &Node,
         m: Move,
         moved_piece: Piece,
         remaining_depth: u8,
         in_check: bool,
-        node_type: NodeType,
         is_pv_move: bool,
         alpha: i16,
         static_eval: i16,
     ) -> bool {
+        let board = node.board();
+
         if in_check
-            || node_type.is_pv()
+            || node.is_pv()
             || is_pv_move
             || remaining_depth < self.config.see_prune_min_remaining_depth.value
             || remaining_depth > self.config.see_prune_max_depth.value
@@ -144,17 +142,17 @@ impl Engine {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn try_null_move_prune(
         &mut self,
-        board: &Board,
+        node: &Node,
         depth: u8,
         max_depth: u8,
         alpha: i16,
         beta: i16,
-        hash: u64,
         remaining_depth: u8,
         in_check: bool,
         try_null_move: bool,
         static_eval: Option<i16>,
     ) -> Option<i16> {
+        let board = node.board();
         if !(try_null_move
             && can_null_move_prune(
                 board,
@@ -165,7 +163,9 @@ impl Engine {
         {
             return None;
         }
-        let nm_board = board.null_move()?;
+
+        // Create null move child node
+        let nm_child = node.create_null_move_child()?;
         let base_remaining = max_depth - depth;
 
         // Calculate reduction based on remaining depth and static eval
@@ -179,16 +179,9 @@ impl Engine {
         );
 
         // Do a reduced depth null search to check if our position is still good enough
-        self.search_stack.push(SearchNode::new(nm_board.hash()));
-        let (score, _) = self.search_subtree(
-            &nm_board,
-            depth + 1,
-            max_depth - r,
-            -beta,
-            -beta + 1,
-            NodeType::Cut,
-            false,
-        );
+        self.search_stack.push_node(&nm_child);
+        let (score, _) =
+            self.search_subtree(&nm_child, depth + 1, max_depth - r, -beta, -beta + 1, false);
         self.search_stack.pop();
 
         // If opponent couldn't beat beta even with a free move, position is strong enough to prune
@@ -196,15 +189,14 @@ impl Engine {
             // Zugzwang check: at shallow depths, verify with a real search.
             // In zugzwang, passing is better than any legal move, so null move gives false positive.
             if base_remaining <= 6 {
-                self.search_stack.push(SearchNode::new(nm_board.hash()));
+                self.search_stack.push_node(&nm_child);
                 let verify_depth = max_depth - r.saturating_sub(1);
                 let (v_score, _) = self.search_subtree(
-                    &nm_board,
+                    &nm_child,
                     depth + 1,
                     verify_depth,
                     -beta,
                     -beta + 1,
-                    NodeType::Cut,
                     false,
                 );
                 self.search_stack.pop();
@@ -214,8 +206,16 @@ impl Engine {
             }
 
             let null_move_depth = max_depth - r;
-            self.tt
-                .store(hash, depth, null_move_depth, beta, None, alpha, beta, None);
+            self.tt.store(
+                node.hash(),
+                depth,
+                null_move_depth,
+                beta,
+                None,
+                alpha,
+                beta,
+                None,
+            );
             return Some(beta);
         }
 
@@ -228,21 +228,19 @@ impl Engine {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn try_reverse_futility_prune(
         &mut self,
+        node: &Node,
         remaining_depth: u8,
         in_check: bool,
-        node_type: NodeType,
         static_eval: i16,
         beta: i16,
-        hash: u64,
         depth: u8,
-        _max_depth: u8,
         alpha: i16,
         is_improving: bool,
     ) -> Option<i16> {
         if !can_reverse_futility_prune(
             remaining_depth,
             in_check,
-            node_type,
+            node.node_type(),
             self.config.rfp_max_depth.value,
         ) {
             return None;
@@ -258,7 +256,7 @@ impl Engine {
         if static_eval - margin >= beta && static_eval.abs() < RAZOR_NEAR_MATE {
             let rfp_depth = depth;
             self.tt.store(
-                hash,
+                node.hash(),
                 depth,
                 rfp_depth,
                 beta,

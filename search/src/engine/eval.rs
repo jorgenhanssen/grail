@@ -1,17 +1,19 @@
-use utils::{cap_eval_by_material, Position};
+use utils::cap_eval_by_material;
+
+use utils::Node;
 
 use super::Engine;
 
 impl Engine {
-    pub(super) fn eval(&mut self, position: &Position, phase: f32) -> i16 {
+    pub(super) fn eval(&mut self, node: &Node, phase: f32) -> i16 {
         let mut score = if self.config.nnue.value && self.nnue.is_some() {
-            self.nnue.as_mut().unwrap().evaluate(position)
+            self.nnue.as_mut().unwrap().evaluate(node)
         } else {
-            self.hce.evaluate(position, phase)
+            self.hce.evaluate(node, phase)
         };
 
         score = self.apply_penalties(score, phase);
-        score = cap_eval_by_material(position.board, score);
+        score = cap_eval_by_material(node.board(), score);
 
         score
     }

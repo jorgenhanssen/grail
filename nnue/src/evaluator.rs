@@ -1,7 +1,7 @@
 use candle_nn::{VarBuilder, VarMap};
 use cozy_chess::Color;
 use evaluation::NNUE;
-use utils::Position;
+use utils::Node;
 
 use crate::{
     encoding::encode_board_bitset,
@@ -43,14 +43,14 @@ impl NNUE for Evaluator {
     }
 
     /// Evaluates the position using the neural network.
-    fn evaluate(&mut self, position: &Position) -> i16 {
-        let board = position.board;
-        let white_attacks = position.attacks_for(Color::White);
-        let black_attacks = position.attacks_for(Color::Black);
-        let white_support = position.support_for(Color::White);
-        let black_support = position.support_for(Color::Black);
-        let white_threats = position.threats_for(Color::White);
-        let black_threats = position.threats_for(Color::Black);
+    fn evaluate(&mut self, node: &Node) -> i16 {
+        let board = node.board();
+        let white_attacks = node.attacks_for(Color::White);
+        let black_attacks = node.attacks_for(Color::Black);
+        let white_support = node.support_for(Color::White);
+        let black_support = node.support_for(Color::Black);
+        let white_threats = node.threats_for(Color::White);
+        let black_threats = node.threats_for(Color::Black);
 
         let bitset = encode_board_bitset(
             board,

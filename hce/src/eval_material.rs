@@ -5,7 +5,7 @@ use crate::context::EvalContext;
 use crate::pst::{get_pst, sum_pst};
 
 pub(super) fn evaluate(ctx: &EvalContext, color: Color) -> i16 {
-    let board = ctx.position.board;
+    let board = ctx.node.board();
 
     let pawns = board.colored_pieces(color, Piece::Pawn);
     let knights = board.colored_pieces(color, Piece::Knight);

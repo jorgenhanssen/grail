@@ -1,14 +1,15 @@
 use std::sync::atomic::Ordering;
 
-use cozy_chess::{Board, Color, Move, Piece, Rank};
+use cozy_chess::{Color, Move, Piece, Rank};
 use evaluation::scores::{MATE_VALUE, SCORE_INF};
 use utils::flip_eval_perspective;
-use utils::{game_phase, has_check, make_move, piece_value, total_material, Position, QUEEN_VALUE};
+use utils::{make_move, piece_value, QUEEN_VALUE};
+
+use utils::Node;
 
 use crate::{
     move_ordering::QMoveGenerator,
     pruning::{can_delta_prune, mate_distance_prune},
-    stack::SearchNode,
     transposition::Bound,
     utils::see::see,
 };
@@ -22,7 +23,7 @@ impl Engine {
     /// <https://www.chessprogramming.org/Quiescence_Search>
     pub(super) fn quiescence_search(
         &mut self,
-        board: &Board,
+        node: &Node,
         mut alpha: i16,
         mut beta: i16,
         depth: u8,
@@ -40,12 +41,13 @@ impl Engine {
             return (0, Vec::new());
         }
 
-        let hash = self.search_stack.current().hash;
+        let hash = node.hash();
         if mate_distance_prune(&mut alpha, &mut beta, depth) {
             return (alpha, Vec::new());
         }
 
-        let in_check = has_check(board);
+        let board = node.board();
+        let in_check = node.in_check();
 
         let original_alpha = alpha;
         let original_beta = beta;
@@ -61,13 +63,11 @@ impl Engine {
             }
         }
 
-        let phase = game_phase(board);
-        let position = Position::new(board);
-
-        let eval = self.eval(&position, phase);
+        let phase = node.game_phase();
+        let eval = self.eval(node, phase);
         let stand_pat = flip_eval_perspective(board.side_to_move(), eval);
 
-        let board_material = total_material(board);
+        let board_material = node.total_material();
 
         // Do a "stand-pat" evaluation if not in check
         if !in_check {
@@ -109,7 +109,7 @@ impl Engine {
         let mut best_line = Vec::new();
         let mut best_eval = if in_check { -SCORE_INF } else { stand_pat };
 
-        let mut moves = QMoveGenerator::new(in_check, board, &self.capture_history);
+        let mut moves = QMoveGenerator::new(node, &self.capture_history);
 
         while let Some(mv) = moves.next() {
             // Per-move delta pruning (skip if capture can't possibly improve alpha)
@@ -148,15 +148,19 @@ impl Engine {
                 }
             }
 
+            // Create child node for this capture
             let new_board = make_move(board, mv);
             let child_hash = new_board.hash();
 
             // Prefetch QS TT entry to hide memory latency
             self.qs_tt.prefetch(child_hash);
 
-            self.search_stack.push(SearchNode::new(child_hash));
+            // For QS, we create a simple node (node type doesn't matter for captures)
+            let child = Node::new(new_board, node.node_type());
+
+            self.search_stack.push_node(&child);
             let (child_score, mut child_line) =
-                self.quiescence_search(&new_board, -beta, -alpha, depth + 1);
+                self.quiescence_search(&child, -beta, -alpha, depth + 1);
             self.search_stack.pop();
 
             let value = -child_score;
