@@ -14,6 +14,7 @@ use utils::{
 use crate::{
     extensions,
     move_ordering::{MainMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
+    node::NodeType,
     pruning::{iir, lmr, mate_distance_prune, should_lmp_prune, AspirationWindow, Pass},
     stack::SearchNode,
     time_control::SearchController,
@@ -156,6 +157,9 @@ impl Engine {
         let mut best_score = -SCORE_INF;
         let mut current_best_move = None;
 
+        // Root node is PV
+        let node_type = NodeType::Pv;
+
         let in_check = has_check(&self.board);
         let remaining_depth = depth.saturating_sub(1);
         let mut move_index: i32 = -1;
@@ -203,6 +207,8 @@ impl Engine {
                 alpha_child.saturating_add(1)
             };
 
+            let child_node_type = node_type.child(move_index);
+
             // Initial search (possibly reduced depth, null window for non-PV moves)
             let reduced_depth = depth.saturating_sub(reduction);
             let (child_value, mut pv) = self.search_subtree(
@@ -211,22 +217,37 @@ impl Engine {
                 reduced_depth,
                 -beta_child,
                 -alpha_child,
+                child_node_type,
                 true,
             );
             let mut score = -child_value;
 
             // LMR re-search: reduced search beat alpha, verify at full depth
             if reduction > 0 && score > alpha_child {
-                let (re_child_value, re_pv) =
-                    self.search_subtree(&new_board, 1, depth, -beta_child, -alpha_child, true);
+                let (re_child_value, re_pv) = self.search_subtree(
+                    &new_board,
+                    1,
+                    depth,
+                    -beta_child,
+                    -alpha_child,
+                    child_node_type.inverted(),
+                    true,
+                );
                 score = -re_child_value;
                 pv = re_pv;
             }
 
             // PVS re-search: null window beat alpha, verify with full window
             if !is_pv_move && score > alpha_child && score < beta {
-                let (full_child_value, full_pv) =
-                    self.search_subtree(&new_board, 1, depth, -beta, -alpha_child, true);
+                let (full_child_value, full_pv) = self.search_subtree(
+                    &new_board,
+                    1,
+                    depth,
+                    -beta,
+                    -alpha_child,
+                    NodeType::Pv,
+                    true,
+                );
                 score = -full_child_value;
                 pv = full_pv;
             }
@@ -268,7 +289,8 @@ impl Engine {
         max_depth: u8,
         mut alpha: i16,
         mut beta: i16,
-        try_null_move: bool,
+        node_type: NodeType,
+        null_move_allowed: bool,
     ) -> (i16, Vec<Move>) {
         if self.stop.load(Ordering::Relaxed) {
             return (0, Vec::new());
@@ -294,7 +316,7 @@ impl Engine {
         let mut maybe_tt_move = None;
         let mut tt_static_eval = None;
 
-        let is_pv_node = beta > alpha + 1;
+        let is_pv_node = node_type.is_pv();
 
         if let Some(tt) = self.tt.probe(hash, depth) {
             // Only trust value/bound for cutoffs if the TT entry comes from a
@@ -372,7 +394,7 @@ impl Engine {
             hash,
             remaining_depth,
             in_check,
-            try_null_move,
+            null_move_allowed,
             Some(static_eval),
         ) {
             return (score, Vec::new());
@@ -383,7 +405,7 @@ impl Engine {
         if let Some(score) = self.try_reverse_futility_prune(
             remaining_depth,
             in_check,
-            is_pv_node,
+            node_type,
             static_eval,
             beta,
             hash,
@@ -435,7 +457,7 @@ impl Engine {
                 board,
                 m,
                 in_check,
-                is_pv_node,
+                node_type,
                 remaining_depth,
                 move_index,
                 is_improving,
@@ -460,6 +482,7 @@ impl Engine {
                 is_improving,
                 static_eval,
                 threats,
+                node_type,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
                     break;
@@ -541,6 +564,7 @@ impl Engine {
         is_improving: bool,
         static_eval: i16,
         pre_move_threats: BitBoard,
+        node_type: NodeType,
     ) -> Option<(i16, Vec<Move>, bool, u8)> {
         let moved_piece = board.piece_on(m.from).unwrap();
         let new_board = make_move(board, m);
@@ -554,7 +578,7 @@ impl Engine {
         let is_cap = is_capture(board, m);
         let is_promotion = m.promotion == Some(Piece::Queen);
         let is_tactical = in_check || gives_check || is_cap || is_promotion;
-        let is_pv_node = beta > alpha + 1;
+        let is_pv_node = node_type.is_pv();
         let is_pv_move = move_index == 0;
 
         if self.try_futility_prune(remaining_depth, in_check, is_tactical, alpha, static_eval) {
@@ -567,7 +591,7 @@ impl Engine {
             moved_piece,
             remaining_depth,
             in_check,
-            is_pv_node,
+            node_type,
             is_pv_move,
             alpha,
             static_eval,
@@ -614,6 +638,8 @@ impl Engine {
         let reduced_max_depth = extended_max_depth.saturating_sub(reduction).max(depth + 1);
         let mut searched_depth = reduced_max_depth;
 
+        let child_node_type = node_type.child(move_index);
+
         // Initial search (reduced if LMR, null window if not first move)
         self.search_stack.push_move(child_hash, m, moved_piece);
         let (child_value, pv_line) = self.search_subtree(
@@ -622,6 +648,7 @@ impl Engine {
             reduced_max_depth,
             -beta_child,
             -alpha_child,
+            child_node_type,
             true,
         );
         self.search_stack.pop();
@@ -638,6 +665,7 @@ impl Engine {
                 extended_max_depth,
                 -beta_child,
                 -alpha_child,
+                child_node_type.inverted(),
                 true,
             );
             self.search_stack.pop();
@@ -656,6 +684,7 @@ impl Engine {
                 extended_max_depth,
                 -beta,
                 -alpha,
+                NodeType::Pv,
                 true,
             );
             self.search_stack.pop();

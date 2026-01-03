@@ -2,6 +2,7 @@ use cozy_chess::{Board, Move, Piece};
 use utils::{is_capture, piece_value};
 
 use crate::{
+    node::NodeType,
     pruning::{
         can_futility_prune, can_null_move_prune, can_razor_prune, can_reverse_futility_prune,
         futility_margin, null_move_reduction, razor_margin, rfp_margin, RAZOR_NEAR_MATE,
@@ -87,13 +88,13 @@ impl Engine {
         moved_piece: Piece,
         remaining_depth: u8,
         in_check: bool,
-        is_pv_node: bool,
+        node_type: NodeType,
         is_pv_move: bool,
         alpha: i16,
         static_eval: i16,
     ) -> bool {
         if in_check
-            || is_pv_node
+            || node_type.is_pv()
             || is_pv_move
             || remaining_depth < self.config.see_prune_min_remaining_depth.value
             || remaining_depth > self.config.see_prune_max_depth.value
@@ -179,8 +180,15 @@ impl Engine {
 
         // Do a reduced depth null search to check if our position is still good enough
         self.search_stack.push(SearchNode::new(nm_board.hash()));
-        let (score, _) =
-            self.search_subtree(&nm_board, depth + 1, max_depth - r, -beta, -beta + 1, false);
+        let (score, _) = self.search_subtree(
+            &nm_board,
+            depth + 1,
+            max_depth - r,
+            -beta,
+            -beta + 1,
+            NodeType::Cut,
+            false,
+        );
         self.search_stack.pop();
 
         // If opponent couldn't beat beta even with a free move, position is strong enough to prune
@@ -196,6 +204,7 @@ impl Engine {
                     verify_depth,
                     -beta,
                     -beta + 1,
+                    NodeType::Cut,
                     false,
                 );
                 self.search_stack.pop();
@@ -221,7 +230,7 @@ impl Engine {
         &mut self,
         remaining_depth: u8,
         in_check: bool,
-        is_pv_node: bool,
+        node_type: NodeType,
         static_eval: i16,
         beta: i16,
         hash: u64,
@@ -233,7 +242,7 @@ impl Engine {
         if !can_reverse_futility_prune(
             remaining_depth,
             in_check,
-            is_pv_node,
+            node_type,
             self.config.rfp_max_depth.value,
         ) {
             return None;
