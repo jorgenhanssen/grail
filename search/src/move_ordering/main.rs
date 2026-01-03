@@ -58,7 +58,7 @@ impl MainMoveGenerator {
         best_move: Option<Move>,
         killer_moves: [Option<Move>; 2],
         prev_to: Vec<Option<Square>>,
-        quiet_check_bonus: i16, // Re-export Node and NodeType from utils for convenience
+        quiet_check_bonus: i16,
         threats: BitBoard,
     ) -> Self {
         Self {

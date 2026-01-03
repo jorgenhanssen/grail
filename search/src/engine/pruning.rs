@@ -164,7 +164,6 @@ impl Engine {
             return None;
         }
 
-        // Create null move child node
         let nm_child = node.create_null_move_child()?;
         let base_remaining = max_depth - depth;
 

@@ -148,14 +148,11 @@ impl Engine {
                 }
             }
 
-            // Create child node for this capture
             let new_board = make_move(board, mv);
             let child_hash = new_board.hash();
 
-            // Prefetch QS TT entry to hide memory latency
             self.qs_tt.prefetch(child_hash);
 
-            // For QS, we create a simple node (node type doesn't matter for captures)
             let child = Node::new(new_board, node.node_type());
 
             self.search_stack.push_node(&child);
