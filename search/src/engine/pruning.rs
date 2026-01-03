@@ -242,7 +242,7 @@ impl Engine {
         if !can_reverse_futility_prune(
             remaining_depth,
             in_check,
-            node_type.is_pv(),
+            node_type,
             self.config.rfp_max_depth.value,
         ) {
             return None;
