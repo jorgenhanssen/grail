@@ -5,6 +5,7 @@ pub mod engine;
 mod extensions;
 mod history;
 mod move_ordering;
+pub mod node;
 mod pruning;
 mod stack;
 mod time_control;

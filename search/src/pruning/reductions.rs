@@ -69,12 +69,14 @@ fn lmp_move_limit(depth: u8, base_moves: i32, depth_multiplier: i32) -> i32 {
 /// current horizon, widening toward the root.
 ///
 /// <https://www.chessprogramming.org/Futility_Pruning#MoveCountBasedPruning>
+use crate::node::NodeType;
+
 #[allow(clippy::too_many_arguments)]
 pub fn should_lmp_prune(
     board: &Board,
     mv: Move,
     in_check: bool,
-    is_pv_node: bool,
+    node_type: NodeType,
     remaining_depth: u8,
     move_index: i32,
     is_improving: bool,
@@ -86,7 +88,7 @@ pub fn should_lmp_prune(
     let is_cap = is_capture(board, mv);
     let is_promotion = mv.promotion == Some(Piece::Queen);
 
-    if in_check || is_pv_node || is_cap || is_promotion || remaining_depth > max_depth {
+    if in_check || node_type.is_pv() || is_cap || is_promotion || remaining_depth > max_depth {
         return false;
     }
 
