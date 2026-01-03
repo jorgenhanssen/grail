@@ -1,4 +1,5 @@
 use cozy_chess::{Move, Piece};
+use utils::Node;
 
 /// A node in the search stack, tracking state at each ply.
 #[derive(Clone, Copy)]
@@ -52,16 +53,16 @@ impl SearchStack {
     pub fn push(&mut self, node: SearchNode) {
         self.nodes.push(node);
     }
-    pub fn push_move(&mut self, hash: u64, mv: Move, piece: Piece) {
-        self.push(SearchNode::with_move(hash, mv, piece));
+    pub fn push_node(&mut self, node: &Node) {
+        self.push(SearchNode::new(node.hash()));
+    }
+
+    pub fn push_move(&mut self, node: &Node, mv: Move, piece: Piece) {
+        self.push(SearchNode::with_move(node.hash(), mv, piece));
     }
 
     pub fn pop(&mut self) -> Option<SearchNode> {
         self.nodes.pop()
-    }
-
-    pub fn current(&self) -> SearchNode {
-        *self.nodes.last().unwrap()
     }
 
     pub fn current_mut<F>(&mut self, f: F)

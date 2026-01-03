@@ -19,7 +19,7 @@ pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i
 // Pawns in front act as a shield. Count our pawns in the 3-file window on ranks 2/3 (7/6),
 // weight the closer ones more. Most relevant in the opening/middlegame.
 fn pawn_shield_phase_bonus(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let board = ctx.position.board;
+    let board = &ctx.node.board();
     let pawns = board.pieces(Piece::Pawn);
     let my_pawns = pawns & board.colors(color);
     let king_sq = board.king(color);
@@ -39,7 +39,7 @@ fn pawn_shield_phase_bonus(ctx: &EvalContext, color: Color, config: &HCEConfig) 
 // Open/semi-open files next to the king increase exposure.
 // Penalize no own pawns (fully open worse) and thin cover. Mostly an opening/middlegame concern.
 fn king_file_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
-    let board = ctx.position.board;
+    let board = &ctx.node.board();
     let king_sq = board.king(color);
     let files_window = king_files_window(king_sq.file());
     let pawns = board.pieces(Piece::Pawn);
@@ -64,7 +64,7 @@ fn king_file_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfig) 
 // Count enemy attacks into a 2-square ring; weight by piece and pawn diagonals. Stronger in the middlegame.
 fn king_ring_phase_pressure(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let enemy = !color;
-    let board = ctx.position.board;
+    let board = &ctx.node.board();
     let king_sq = board.king(color);
     let king_zone = KING_ZONES[king_sq as usize];
     let mut pressure = 0i16;
@@ -142,7 +142,7 @@ fn central_king_phase_penalty(ctx: &EvalContext, color: Color, config: &HCEConfi
         return 0;
     }
 
-    let sq = ctx.position.board.king(color);
+    let sq = ctx.node.board().king(color);
 
     let file_idx = sq.file() as i32;
     let rank_idx = sq.rank() as i32;
@@ -166,7 +166,7 @@ fn endgame_king_activity(ctx: &EvalContext, color: Color, config: &HCEConfig) ->
         return 0;
     }
 
-    let king_sq = ctx.position.board.king(color);
+    let king_sq = ctx.node.board().king(color);
 
     let file = king_sq.file() as i32;
     let rank = king_sq.rank() as i32;

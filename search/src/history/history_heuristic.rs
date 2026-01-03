@@ -1,4 +1,5 @@
 use cozy_chess::{BitBoard, Board, Color, Move, Square};
+use utils::Node;
 
 use super::utils::apply_gravity;
 use crate::{EngineConfig, MAX_DEPTH};
@@ -115,7 +116,7 @@ impl HistoryHeuristic {
     #[allow(clippy::too_many_arguments)]
     pub fn maybe_reduce_or_prune(
         &self,
-        board: &Board,
+        node: &Node,
         mv: Move,
         depth: u8,
         max_depth: u8,
@@ -137,7 +138,7 @@ impl HistoryHeuristic {
             return false;
         }
 
-        let color = board.side_to_move();
+        let color = node.side_to_move();
         let source = mv.from;
         let dest = mv.to;
         let hist_score = self.get(color, source, dest, threats);

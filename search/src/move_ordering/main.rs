@@ -1,9 +1,10 @@
 use arrayvec::ArrayVec;
-use cozy_chess::{BitBoard, Board, Move, Piece, Square};
+use cozy_chess::{BitBoard, Move, Piece, Square};
 use utils::{gives_check, is_capture, piece_value};
 
 use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic};
 use crate::utils::see::see;
+use utils::Node;
 
 use super::utils::{capture_score, select_highest, ScoredMove};
 
@@ -80,11 +81,13 @@ impl MainMoveGenerator {
 
     pub fn next(
         &mut self,
-        board: &Board,
+        node: &Node,
         history_heuristic: &HistoryHeuristic,
         capture_history: &CaptureHistory,
         continuation_history: &ContinuationHistory,
     ) -> Option<Move> {
+        let board = node.board();
+
         if self.gen_phase == Phase::BestMove {
             self.gen_phase = Phase::GenCaptures;
             if let Some(best_move) = self.best_move {

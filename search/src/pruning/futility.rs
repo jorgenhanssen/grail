@@ -1,5 +1,5 @@
-use crate::node::NodeType;
 use evaluation::scores::MATE_VALUE;
+use utils::NodeType;
 
 pub const RAZOR_NEAR_MATE: i16 = MATE_VALUE - 200;
 

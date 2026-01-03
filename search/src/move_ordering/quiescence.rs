@@ -1,10 +1,11 @@
 // Move ordering for quiescence search inspired by Black Marlin
 
 use arrayvec::ArrayVec;
-use cozy_chess::{Board, Move};
+use cozy_chess::Move;
 use utils::piece_value;
 
 use crate::history::CaptureHistory;
+use utils::Node;
 
 use super::utils::{capture_score, select_highest, ScoredMove};
 
@@ -15,15 +16,16 @@ pub struct QMoveGenerator {
 }
 
 impl QMoveGenerator {
-    pub fn new(in_check: bool, board: &Board, capture_history: &CaptureHistory) -> Self {
-        if in_check {
-            Self::gen_evasions(board)
+    pub fn new(node: &Node, capture_history: &CaptureHistory) -> Self {
+        if node.in_check() {
+            Self::gen_evasions(node)
         } else {
-            Self::gen_captures(board, capture_history)
+            Self::gen_captures(node, capture_history)
         }
     }
 
-    fn gen_captures(board: &Board, capture_history: &CaptureHistory) -> Self {
+    fn gen_captures(node: &Node, capture_history: &CaptureHistory) -> Self {
+        let board = node.board();
         let mut forcing_moves = ArrayVec::new();
         let enemy_pieces = board.colors(!board.side_to_move());
 
@@ -47,7 +49,8 @@ impl QMoveGenerator {
         Self { forcing_moves }
     }
 
-    fn gen_evasions(board: &Board) -> Self {
+    fn gen_evasions(node: &Node) -> Self {
+        let board = node.board();
         let mut forcing_moves = ArrayVec::new();
 
         board.generate_moves(|moves| {

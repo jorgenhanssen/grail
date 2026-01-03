@@ -8,7 +8,7 @@ mod eval;
 mod material;
 pub mod memory;
 mod moves;
-mod position;
+mod node;
 
 pub use attacks::{get_attackers_to, get_discovered_attacks};
 pub use eval::flip_eval_perspective;
@@ -20,4 +20,4 @@ pub use material::{
 pub use moves::{
     collect_legal_moves, gives_check, has_check, has_legal_moves, is_capture, make_move, only_move,
 };
-pub use position::Position;
+pub use node::{Node, NodeType};
