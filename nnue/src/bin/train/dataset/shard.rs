@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use cozy_chess::{Board, Color};
 use nnue::encoding::{encode_board, NUM_FEATURES};
-use nnue::network::FV_SCALE;
+use nnue::network::{output_bucket, FV_SCALE};
 use utils::board_metrics::BoardMetrics;
 
 /// A single sample from a shard file.
@@ -15,12 +15,21 @@ pub struct Sample {
     pub score: i16,
 }
 
+/// Encoded sample ready for training: features, normalized score, and bucket index.
+pub struct EncodedSample {
+    pub features: [f32; NUM_FEATURES],
+    pub score: f32,
+    pub bucket: usize,
+}
+
 impl Sample {
-    /// Encodes the sample into features and a normalized score for training.
-    pub fn encode(&self) -> Option<([f32; NUM_FEATURES], f32)> {
+    /// Encodes the sample into features, normalized score, and bucket index.
+    pub fn encode(&self) -> Option<EncodedSample> {
         let board = Board::from_str(&self.fen).ok()?;
         let metrics = BoardMetrics::new(&board);
 
+        let score = self.score as f32 / FV_SCALE;
+        let bucket = output_bucket(&board);
         let features = encode_board(
             &board,
             metrics.attacks[Color::White as usize],
@@ -31,7 +40,11 @@ impl Sample {
             metrics.threats[Color::Black as usize],
         );
 
-        Some((features, self.score as f32 / FV_SCALE))
+        Some(EncodedSample {
+            score,
+            bucket,
+            features,
+        })
     }
 }
 

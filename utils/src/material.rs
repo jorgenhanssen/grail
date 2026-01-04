@@ -2,6 +2,37 @@ use cozy_chess::{BitBoard, Board, Color, Piece};
 
 const LIGHT_SQUARES_MASK: u64 = 0x55AA55AA55AA55AA;
 
+// Standard piece values (centipawns), indexed by Piece enum order
+const PIECE_VALUES: [i16; Piece::NUM] = [
+    100, // Pawn
+    320, // Knight
+    330, // Bishop
+    500, // Rook
+    900, // Queen
+    0,   // King
+];
+
+pub const PAWN_VALUE: i16 = PIECE_VALUES[Piece::Pawn as usize];
+pub const KNIGHT_VALUE: i16 = PIECE_VALUES[Piece::Knight as usize];
+pub const BISHOP_VALUE: i16 = PIECE_VALUES[Piece::Bishop as usize];
+pub const ROOK_VALUE: i16 = PIECE_VALUES[Piece::Rook as usize];
+pub const QUEEN_VALUE: i16 = PIECE_VALUES[Piece::Queen as usize];
+
+/// Get the value of a piece in centipawns.
+#[inline]
+pub fn piece_value(piece: Piece) -> i16 {
+    PIECE_VALUES[piece as usize]
+}
+
+/// Sum the value of all pieces on the board.
+pub fn total_material(board: &Board) -> i16 {
+    let mut material = 0;
+    for piece in Piece::ALL {
+        material += piece_value(piece) * (board.pieces(piece).len() as i16);
+    }
+    material
+}
+
 /// Get minor pieces (knights and bishops) for a color.
 pub fn minors(board: &Board, color: Color) -> BitBoard {
     board.colored_pieces(color, Piece::Knight) | board.colored_pieces(color, Piece::Bishop)
@@ -123,32 +154,12 @@ pub fn game_phase(board: &Board) -> f32 {
     (score.min(24) as f32) / 24.0
 }
 
-/// Check if position is prone to zugzwang (null-move pruning unsafe).
+/// Check if position is prone to zugzwang (based on Stockfish).
 ///
-/// Returns true when:
-/// - Side to move has only king and pawns
-/// - Side to move has no pawns, no majors, and at most one minor piece
+/// Returns true when side to move has no pieces (only king and pawns).
 pub fn is_zugzwang(board: &Board) -> bool {
-    let side_bits = board.colors(board.side_to_move());
-    let pawn_bits = board.pieces(Piece::Pawn) & side_bits;
-    let king_bits = board.pieces(Piece::King) & side_bits;
-
-    // Only king and pawns
-    if side_bits == (pawn_bits | king_bits) {
-        return true;
-    }
-
-    // No pawns, no majors, at most one minor
-    let knight_bits = board.pieces(Piece::Knight) & side_bits;
-    let bishop_bits = board.pieces(Piece::Bishop) & side_bits;
-    let rook_bits = board.pieces(Piece::Rook) & side_bits;
-    let queen_bits = board.pieces(Piece::Queen) & side_bits;
-
-    let has_pawns = !pawn_bits.is_empty();
-    let has_major = !(rook_bits | queen_bits).is_empty();
-    let minor_count = (knight_bits | bishop_bits).len();
-
-    !has_pawns && !has_major && minor_count <= 1
+    let stm = board.side_to_move();
+    (minors(board, stm) | majors(board, stm)).is_empty()
 }
 
 #[cfg(test)]

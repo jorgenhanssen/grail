@@ -1,16 +1,16 @@
-use utils::Position;
+use utils::Node;
 
-/// Evaluation context with Position (for cached attack map) and phase
+/// Evaluation context with Node (for cached metrics) and phase
 pub struct EvalContext<'a> {
-    pub position: &'a Position<'a>,
+    pub node: &'a Node,
     pub phase: f32,
     pub inv_phase: f32,
 }
 
 impl<'a> EvalContext<'a> {
-    pub fn new(position: &'a Position<'a>, phase: f32) -> Self {
+    pub fn new(node: &'a Node, phase: f32) -> Self {
         Self {
-            position,
+            node,
             phase,
             inv_phase: 1.0 - phase,
         }

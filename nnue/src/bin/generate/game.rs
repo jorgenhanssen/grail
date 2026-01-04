@@ -1,4 +1,5 @@
 use cozy_chess::{Board, Move};
+use nnue::network::CP_BOUND;
 use rand::Rng;
 use search::Engine;
 use std::collections::HashMap;
@@ -13,9 +14,6 @@ use utils::{
 const INITIAL_TEMPERATURE: f32 = 3.0;
 const TEMPERATURE_DECAY_RATE: f32 = 7.5;
 const MIN_TEMPERATURE: f32 = 0.05;
-// Skip positions near checkmate—they don't help the network learn nuanced eval.
-// TODO: Consider re-using and sharing with search crate
-const MATE_THRESHOLD: i16 = 5000;
 
 /// A self-play game that generates training samples: (FEN, score, game_id) tuples.
 /// Plays from an opening position until terminal, recording evaluations.
@@ -52,7 +50,7 @@ impl SelfPlayGame {
 
             // Skip near-mate positions
             // Testing showed this improves strength (by freeing capacity for nuanced positions, I guess)
-            if eval.abs() >= MATE_THRESHOLD {
+            if eval.abs() >= CP_BOUND {
                 break;
             }
 

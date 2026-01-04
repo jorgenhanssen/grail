@@ -1,4 +1,5 @@
 use evaluation::scores::MATE_VALUE;
+use utils::NodeType;
 
 pub const RAZOR_NEAR_MATE: i16 = MATE_VALUE - 200;
 
@@ -55,10 +56,10 @@ pub fn rfp_margin(
 pub fn can_reverse_futility_prune(
     remaining_depth: u8,
     in_check: bool,
-    is_pv_node: bool,
+    node_type: NodeType,
     max_depth: u8,
 ) -> bool {
-    remaining_depth <= max_depth && remaining_depth > 0 && !in_check && !is_pv_node
+    remaining_depth <= max_depth && remaining_depth > 0 && !in_check && !node_type.is_pv()
 }
 
 // Delta Pruning (for quiescence search)

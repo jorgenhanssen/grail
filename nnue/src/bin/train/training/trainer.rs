@@ -1,5 +1,5 @@
 use candle_core::{DType, Device, Tensor};
-use candle_nn::{AdamW, Module, Optimizer, ParamsAdamW, VarBuilder, VarMap};
+use candle_nn::{AdamW, Optimizer, ParamsAdamW, VarBuilder, VarMap};
 use nnue::encoding::NUM_FEATURES;
 use nnue::network::Network;
 use std::error::Error;
@@ -119,7 +119,7 @@ impl Trainer {
         let mut total_loss = 0.0;
         let mut train_loss = 0.0;
 
-        for (features, scores) in loader {
+        for (features, scores, buckets) in loader {
             // Check for shutdown
             if shutdown.load(Ordering::Relaxed) {
                 return Ok(None);
@@ -133,7 +133,7 @@ impl Trainer {
             let x = Tensor::from_vec(features, (batch_len, NUM_FEATURES), &self.device)?;
             let y = Tensor::from_vec(scores, (batch_len, 1), &self.device)?;
 
-            let preds = self.network.forward(&x)?;
+            let preds = self.network.forward(&x, &buckets)?;
             let loss = huber(&preds, &y)?;
 
             self.optimizer.backward_step(&loss)?;

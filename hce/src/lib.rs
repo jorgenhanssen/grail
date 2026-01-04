@@ -16,22 +16,20 @@ use pawn_cache::PawnCache;
 
 use crate::pawn_cache::CachedPawnEvaluation;
 use cozy_chess::Color;
-use evaluation::{PieceValues, HCE};
-use utils::Position;
+use evaluation::HCE;
+use utils::Node;
 
 /// Hand-Crafted Evaluation: tunable metrics based on human knowledge and chess concepts.
 ///
 /// <https://www.chessprogramming.org/Evaluation>
 pub struct Evaluator {
-    piece_values: PieceValues,
     config: HCEConfig,
     pawn_cache: PawnCache,
 }
 
 impl Evaluator {
-    pub fn new(piece_values: PieceValues, config: HCEConfig) -> Self {
+    pub fn new(config: HCEConfig) -> Self {
         Self {
-            piece_values,
             config,
             pawn_cache: PawnCache::new(),
         }
@@ -44,14 +42,14 @@ impl HCE for Evaluator {
     }
 
     /// Evaluates from White's perspective. Positive = White advantage.
-    fn evaluate(&mut self, position: &Position, phase: f32) -> i16 {
-        let ctx = EvalContext::new(position, phase);
-        let board = position.board;
+    fn evaluate(&mut self, node: &Node, phase: f32) -> i16 {
+        let ctx = EvalContext::new(node, phase);
+        let board = node.board();
 
         let mut cp: i16 = 0;
 
-        cp += eval_material::evaluate(&ctx, Color::White, &self.piece_values);
-        cp -= eval_material::evaluate(&ctx, Color::Black, &self.piece_values);
+        cp += eval_material::evaluate(&ctx, Color::White);
+        cp -= eval_material::evaluate(&ctx, Color::Black);
 
         if let Some(scores) = self.pawn_cache.get(&ctx) {
             cp += scores.white;

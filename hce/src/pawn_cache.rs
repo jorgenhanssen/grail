@@ -25,7 +25,7 @@ impl PawnCache {
     }
 
     pub fn get(&self, ctx: &EvalContext) -> Option<CachedPawnEvaluation> {
-        let board = ctx.position.board;
+        let board = ctx.node.board();
         let white_pawns = board.colored_pieces(Color::White, Piece::Pawn);
         let black_pawns = board.colored_pieces(Color::Black, Piece::Pawn);
 
@@ -37,7 +37,7 @@ impl PawnCache {
     }
 
     pub fn set(&mut self, ctx: &EvalContext, cache_entry: CachedPawnEvaluation) {
-        let board = ctx.position.board;
+        let board = ctx.node.board();
         self.white_pawns = board.colored_pieces(Color::White, Piece::Pawn);
         self.black_pawns = board.colored_pieces(Color::Black, Piece::Pawn);
         self.evaluation = cache_entry;

@@ -1,14 +1,15 @@
 use std::sync::atomic::Ordering;
 
-use cozy_chess::{Board, Color, Move, Piece, Rank};
+use cozy_chess::{Color, Move, Piece, Rank};
 use evaluation::scores::{MATE_VALUE, SCORE_INF};
 use utils::flip_eval_perspective;
-use utils::{game_phase, has_check, make_move, Position};
+use utils::{make_move, piece_value, QUEEN_VALUE};
+
+use utils::Node;
 
 use crate::{
     move_ordering::QMoveGenerator,
     pruning::{can_delta_prune, mate_distance_prune},
-    stack::SearchNode,
     transposition::Bound,
     utils::see::see,
 };
@@ -22,7 +23,7 @@ impl Engine {
     /// <https://www.chessprogramming.org/Quiescence_Search>
     pub(super) fn quiescence_search(
         &mut self,
-        board: &Board,
+        node: &Node,
         mut alpha: i16,
         mut beta: i16,
         depth: u8,
@@ -40,12 +41,13 @@ impl Engine {
             return (0, Vec::new());
         }
 
-        let hash = self.search_stack.current().hash;
+        let hash = node.hash();
         if mate_distance_prune(&mut alpha, &mut beta, depth) {
             return (alpha, Vec::new());
         }
 
-        let in_check = has_check(board);
+        let board = node.board();
+        let in_check = node.in_check();
 
         let original_alpha = alpha;
         let original_beta = beta;
@@ -61,11 +63,11 @@ impl Engine {
             }
         }
 
-        let phase = game_phase(board);
-        let position = Position::new(board);
-
-        let eval = self.eval(&position, phase);
+        let phase = node.game_phase();
+        let eval = self.eval(node, phase);
         let stand_pat = flip_eval_perspective(board.side_to_move(), eval);
+
+        let board_material = node.total_material();
 
         // Do a "stand-pat" evaluation if not in check
         if !in_check {
@@ -75,15 +77,13 @@ impl Engine {
                 return (stand_pat, Vec::new());
             }
 
-            let total_material = self.piece_values.total_material(board, phase);
-
             // Node-level delta pruning (big delta)
             if can_delta_prune(
                 in_check,
                 self.config.qs_delta_material_threshold.value,
-                total_material,
+                board_material,
             ) {
-                let mut big_delta = self.piece_values.get(Piece::Queen, phase);
+                let mut big_delta = QUEEN_VALUE;
                 let promotion_rank = if board.side_to_move() == Color::White {
                     Rank::Seventh
                 } else {
@@ -93,8 +93,7 @@ impl Engine {
                 let promoting_pawns = pawns & promotion_rank.bitboard();
 
                 if !promoting_pawns.is_empty() {
-                    big_delta += self.piece_values.get(Piece::Queen, phase)
-                        - self.piece_values.get(Piece::Pawn, phase);
+                    big_delta += QUEEN_VALUE - piece_value(Piece::Pawn);
                 }
 
                 if stand_pat + big_delta < alpha {
@@ -110,28 +109,20 @@ impl Engine {
         let mut best_line = Vec::new();
         let mut best_eval = if in_check { -SCORE_INF } else { stand_pat };
 
-        let mut moves = QMoveGenerator::new(
-            in_check,
-            board,
-            &self.capture_history,
-            phase,
-            self.piece_values,
-        );
+        let mut moves = QMoveGenerator::new(node, &self.capture_history);
 
         while let Some(mv) = moves.next() {
             // Per-move delta pruning (skip if capture can't possibly improve alpha)
             if can_delta_prune(
                 in_check,
                 self.config.qs_delta_material_threshold.value,
-                self.piece_values.total_material(board, phase),
+                board_material,
             ) {
                 let captured = board.piece_on(mv.to);
                 if let Some(piece) = captured {
-                    let mut delta =
-                        self.piece_values.get(piece, phase) + self.config.qs_delta_margin.value;
+                    let mut delta = piece_value(piece) + self.config.qs_delta_margin.value;
                     if let Some(promotion) = mv.promotion {
-                        delta += self.piece_values.get(promotion, phase)
-                            - self.piece_values.get(Piece::Pawn, phase);
+                        delta += piece_value(promotion) - piece_value(Piece::Pawn);
                         // promotion bonus
                     }
                     if stand_pat + delta < alpha {
@@ -147,12 +138,10 @@ impl Engine {
             if !in_check {
                 if let Some(victim) = board.piece_on(mv.to) {
                     if let Some(attacker) = board.piece_on(mv.from) {
-                        let victim_value = self.piece_values.get(victim, phase);
-                        let attacker_value = self.piece_values.get(attacker, phase);
+                        let victim_value = piece_value(victim);
+                        let attacker_value = piece_value(attacker);
                         // Only run expensive SEE if capture seems questionable (equal/lower value)
-                        if victim_value <= attacker_value
-                            && !see(board, mv, phase, &self.piece_values, 0)
-                        {
+                        if victim_value <= attacker_value && !see(board, mv, 0) {
                             continue;
                         }
                     }
@@ -162,12 +151,13 @@ impl Engine {
             let new_board = make_move(board, mv);
             let child_hash = new_board.hash();
 
-            // Prefetch QS TT entry to hide memory latency
             self.qs_tt.prefetch(child_hash);
 
-            self.search_stack.push(SearchNode::new(child_hash));
+            let child = Node::new(new_board, node.node_type());
+
+            self.search_stack.push_node(&child);
             let (child_score, mut child_line) =
-                self.quiescence_search(&new_board, -beta, -alpha, depth + 1);
+                self.quiescence_search(&child, -beta, -alpha, depth + 1);
             self.search_stack.pop();
 
             let value = -child_score;

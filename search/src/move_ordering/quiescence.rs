@@ -1,10 +1,11 @@
 // Move ordering for quiescence search inspired by Black Marlin
 
 use arrayvec::ArrayVec;
-use cozy_chess::{Board, Move};
-use evaluation::piece_values::PieceValues;
+use cozy_chess::Move;
+use utils::piece_value;
 
 use crate::history::CaptureHistory;
+use utils::Node;
 
 use super::utils::{capture_score, select_highest, ScoredMove};
 
@@ -15,26 +16,16 @@ pub struct QMoveGenerator {
 }
 
 impl QMoveGenerator {
-    pub fn new(
-        in_check: bool,
-        board: &Board,
-        capture_history: &CaptureHistory,
-        phase: f32,
-        piece_values: PieceValues,
-    ) -> Self {
-        if in_check {
-            Self::gen_evasions(board, phase, piece_values)
+    pub fn new(node: &Node, capture_history: &CaptureHistory) -> Self {
+        if node.in_check() {
+            Self::gen_evasions(node)
         } else {
-            Self::gen_captures(board, capture_history, phase, piece_values)
+            Self::gen_captures(node, capture_history)
         }
     }
 
-    fn gen_captures(
-        board: &Board,
-        capture_history: &CaptureHistory,
-        phase: f32,
-        piece_values: PieceValues,
-    ) -> Self {
+    fn gen_captures(node: &Node, capture_history: &CaptureHistory) -> Self {
+        let board = node.board();
         let mut forcing_moves = ArrayVec::new();
         let enemy_pieces = board.colors(!board.side_to_move());
 
@@ -48,7 +39,7 @@ impl QMoveGenerator {
                 }
 
                 // MVV-LVA + capture history: prefer capturing valuable pieces with cheap ones
-                let score = capture_score(board, mov, capture_history, phase, &piece_values);
+                let score = capture_score(board, mov, capture_history);
 
                 forcing_moves.push(ScoredMove { mov, score });
             }
@@ -58,7 +49,8 @@ impl QMoveGenerator {
         Self { forcing_moves }
     }
 
-    fn gen_evasions(board: &Board, phase: f32, piece_values: PieceValues) -> Self {
+    fn gen_evasions(node: &Node) -> Self {
+        let board = node.board();
         let mut forcing_moves = ArrayVec::new();
 
         board.generate_moves(|moves| {
@@ -71,7 +63,7 @@ impl QMoveGenerator {
                 // cheapest pieces. This prioritizes safe king escapes and risks
                 // the least valuable material when blocking or capturing.
                 let moved_piece = board.piece_on(mov.from).unwrap();
-                let score: i16 = -piece_values.get(moved_piece, phase);
+                let score: i16 = -piece_value(moved_piece);
 
                 forcing_moves.push(ScoredMove { mov, score });
             }

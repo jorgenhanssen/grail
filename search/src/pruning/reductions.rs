@@ -1,13 +1,11 @@
-use cozy_chess::{Board, Move, Piece};
-use utils::is_capture;
+use cozy_chess::{Move, Piece};
+
+use utils::Node;
 
 /// Internal Iterative Reductions: reduce depth when no TT move is found.
 ///
 /// When no hash move is found, reduce the search depth instead of doing a
-/// full-depth search with poor move ordering. This is simpler and cheaper
-/// than IID (which runs a shallow search to find a move).
-///
-/// TODO: Consider applying only at expected cut-nodes like Stockfish/Ethereal.
+/// full-depth search with poor move ordering.
 ///
 /// <https://www.chessprogramming.org/Internal_Iterative_Reductions>
 pub fn iir(
@@ -72,10 +70,9 @@ fn lmp_move_limit(depth: u8, base_moves: i32, depth_multiplier: i32) -> i32 {
 /// <https://www.chessprogramming.org/Futility_Pruning#MoveCountBasedPruning>
 #[allow(clippy::too_many_arguments)]
 pub fn should_lmp_prune(
-    board: &Board,
+    node: &Node,
     mv: Move,
     in_check: bool,
-    is_pv_node: bool,
     remaining_depth: u8,
     move_index: i32,
     is_improving: bool,
@@ -84,10 +81,10 @@ pub fn should_lmp_prune(
     depth_multiplier: i32,
     improving_reduction: i32,
 ) -> bool {
-    let is_cap = is_capture(board, mv);
+    let is_cap = node.is_capture(mv);
     let is_promotion = mv.promotion == Some(Piece::Queen);
 
-    if in_check || is_pv_node || is_cap || is_promotion || remaining_depth > max_depth {
+    if in_check || node.is_pv() || is_cap || is_promotion || remaining_depth > max_depth {
         return false;
     }
 

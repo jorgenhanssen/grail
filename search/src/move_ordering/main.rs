@@ -1,10 +1,10 @@
 use arrayvec::ArrayVec;
-use cozy_chess::{BitBoard, Board, Move, Piece, Square};
-use evaluation::piece_values::PieceValues;
-use utils::{gives_check, is_capture};
+use cozy_chess::{BitBoard, Move, Piece, Square};
+use utils::{gives_check, is_capture, piece_value};
 
 use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic};
 use crate::utils::see::see;
+use utils::Node;
 
 use super::utils::{capture_score, select_highest, ScoredMove};
 
@@ -36,7 +36,6 @@ enum Phase {
 /// <https://github.com/jnlt3/blackmarlin>
 pub struct MainMoveGenerator {
     gen_phase: Phase,
-    game_phase: f32,
 
     best_move: Option<Move>,
 
@@ -50,7 +49,6 @@ pub struct MainMoveGenerator {
     bad_captures: ArrayVec<ScoredMove, MAX_CAPTURES>,
     quiets: ArrayVec<ScoredMove, MAX_QUIETS>,
 
-    piece_values: PieceValues,
     quiet_check_bonus: i16,
     threats: BitBoard,
 }
@@ -59,18 +57,15 @@ impl MainMoveGenerator {
     pub fn new(
         best_move: Option<Move>,
         killer_moves: [Option<Move>; 2],
-        prev_to: &[Option<Square>],
-        game_phase: f32,
-        piece_values: PieceValues,
+        prev_to: Vec<Option<Square>>,
         quiet_check_bonus: i16,
         threats: BitBoard,
     ) -> Self {
         Self {
             gen_phase: Phase::BestMove,
-            game_phase,
             best_move,
 
-            prev_to: prev_to.to_vec(),
+            prev_to,
 
             killer_moves,
             killer_index: 0,
@@ -79,7 +74,6 @@ impl MainMoveGenerator {
             bad_captures: ArrayVec::new(),
             quiets: ArrayVec::new(),
 
-            piece_values,
             quiet_check_bonus,
             threats,
         }
@@ -87,11 +81,13 @@ impl MainMoveGenerator {
 
     pub fn next(
         &mut self,
-        board: &Board,
+        node: &Node,
         history_heuristic: &HistoryHeuristic,
         capture_history: &CaptureHistory,
         continuation_history: &ContinuationHistory,
     ) -> Option<Move> {
+        let board = node.board();
+
         if self.gen_phase == Phase::BestMove {
             self.gen_phase = Phase::GenCaptures;
             if let Some(best_move) = self.best_move {
@@ -120,13 +116,7 @@ impl MainMoveGenerator {
 
                     self.good_captures.push(ScoredMove {
                         mov,
-                        score: capture_score(
-                            board,
-                            mov,
-                            capture_history,
-                            self.game_phase,
-                            &self.piece_values,
-                        ),
+                        score: capture_score(board, mov, capture_history),
                     });
                 }
                 false
@@ -145,8 +135,8 @@ impl MainMoveGenerator {
                 // Use MVV-LVA for quick filtering before expensive SEE
                 let victim = board.piece_on(scored_move.mov.to).unwrap();
                 let attacker = board.piece_on(scored_move.mov.from).unwrap();
-                let victim_value = self.piece_values.get(victim, self.game_phase);
-                let attacker_value = self.piece_values.get(attacker, self.game_phase);
+                let victim_value = piece_value(victim);
+                let attacker_value = piece_value(attacker);
 
                 // If victim is more valuable than attacker, it's likely good - skip SEE
                 if victim_value > attacker_value {
@@ -154,13 +144,7 @@ impl MainMoveGenerator {
                 }
 
                 // Only run expensive SEE if capture seems questionable
-                if !see(
-                    board,
-                    scored_move.mov,
-                    self.game_phase,
-                    &self.piece_values,
-                    0,
-                ) {
+                if !see(board, scored_move.mov, 0) {
                     self.bad_captures.push(scored_move);
                     continue;
                 }

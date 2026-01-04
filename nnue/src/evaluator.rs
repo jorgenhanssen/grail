@@ -1,11 +1,11 @@
 use candle_nn::{VarBuilder, VarMap};
-use cozy_chess::{Board, Color};
+use cozy_chess::Color;
 use evaluation::NNUE;
-use utils::board_metrics::BoardMetrics;
+use utils::Node;
 
 use crate::{
     encoding::encode_board_bitset,
-    network::{NNUENetwork, Network},
+    network::{output_bucket, NNUENetwork, Network},
 };
 use candle_core::{DType, Device};
 
@@ -43,14 +43,14 @@ impl NNUE for Evaluator {
     }
 
     /// Evaluates the position using the neural network.
-    fn evaluate(&mut self, board: &Board) -> i16 {
-        let metrics = BoardMetrics::new(board);
-        let white_attacks = metrics.attacks[Color::White as usize];
-        let black_attacks = metrics.attacks[Color::Black as usize];
-        let white_support = metrics.support[Color::White as usize];
-        let black_support = metrics.support[Color::Black as usize];
-        let white_threats = metrics.threats[Color::White as usize];
-        let black_threats = metrics.threats[Color::Black as usize];
+    fn evaluate(&mut self, node: &Node) -> i16 {
+        let board = node.board();
+        let white_attacks = node.attacks_for(Color::White);
+        let black_attacks = node.attacks_for(Color::Black);
+        let white_support = node.support_for(Color::White);
+        let black_support = node.support_for(Color::Black);
+        let white_threats = node.threats_for(Color::White);
+        let black_threats = node.threats_for(Color::Black);
 
         let bitset = encode_board_bitset(
             board,
@@ -61,10 +61,13 @@ impl NNUE for Evaluator {
             white_threats,
             black_threats,
         );
+
+        let bucket = output_bucket(board);
+
         self.nnue
             .as_mut()
             .expect("NNUE network not initialized - call enable_nnue() first")
-            .forward(&bitset)
+            .forward(&bitset, bucket)
             .clamp(i16::MIN as f32, i16::MAX as f32) as i16
     }
 }
