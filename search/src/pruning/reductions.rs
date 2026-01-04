@@ -7,8 +7,6 @@ use utils::Node;
 /// When no hash move is found, reduce the search depth instead of doing a
 /// full-depth search with poor move ordering.
 ///
-/// TODO: Consider applying only at expected cut-nodes like Stockfish/Ethereal.
-///
 /// <https://www.chessprogramming.org/Internal_Iterative_Reductions>
 pub fn iir(
     max_depth: u8,
