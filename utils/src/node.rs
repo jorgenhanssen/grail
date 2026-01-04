@@ -3,6 +3,7 @@ use std::cell::OnceCell;
 use cozy_chess::{BitBoard, Board, Color, Move, Piece, Square};
 
 use crate::board_metrics::BoardMetrics;
+use crate::is_zugzwang;
 use crate::material::{game_phase, total_material};
 use crate::moves::is_capture;
 
@@ -39,13 +40,11 @@ pub enum NodeType {
 
 impl NodeType {
     /// Returns if this is a PV node (full window search).
-    #[inline]
     pub fn is_pv(self) -> bool {
         matches!(self, Self::Pv)
     }
 
     /// Returns if this is an expected cut-node.
-    #[inline]
     pub fn is_cut(self) -> bool {
         matches!(self, Self::Cut)
     }
@@ -58,7 +57,6 @@ impl NodeType {
     /// - All's first child is Cut
     ///
     /// Later moves (index > 0): always Cut (scout search expects cutoff)
-    #[inline]
     pub fn child(self, move_index: i32) -> Self {
         if move_index == 0 {
             match self {
@@ -79,7 +77,6 @@ impl NodeType {
     /// Used when passing to a child with opposite expectations:
     /// - Null move: we expect fail-high, so opponent should fail-low even with extra tempo
     /// - LMR re-search: a surprising result needs verification with flipped expectation
-    #[inline]
     pub fn inverted(self) -> Self {
         match self {
             // PV shouldn't be inverted, but default to Cut for scout-like searches
@@ -113,74 +110,72 @@ impl Node {
     }
 
     /// Get a reference to the board.
-    #[inline]
     pub fn board(&self) -> &Board {
         &self.board
     }
 
     /// Get the side to move.
-    #[inline]
     pub fn side_to_move(&self) -> Color {
         self.board.side_to_move()
     }
 
     /// Get the board hash.
-    #[inline]
     pub fn hash(&self) -> u64 {
         self.board.hash()
     }
 
     /// Check if the side to move is in check.
-    #[inline]
     pub fn in_check(&self) -> bool {
         !self.board.checkers().is_empty()
     }
 
     /// Get the piece on a square.
-    #[inline]
     pub fn piece_on(&self, sq: Square) -> Option<Piece> {
         self.board.piece_on(sq)
     }
 
     /// Check if a move is a capture.
-    #[inline]
     pub fn is_capture(&self, mv: Move) -> bool {
         is_capture(&self.board, mv)
     }
 
     /// Get the game phase (0.0 = endgame, 1.0 = opening).
-    #[inline]
     pub fn game_phase(&self) -> f32 {
         game_phase(&self.board)
     }
 
     /// Get total material on the board.
-    #[inline]
     pub fn total_material(&self) -> i16 {
         total_material(&self.board)
     }
 
+    /// Check if the position is zugzwang.
+    pub fn is_zugzwang(&self) -> bool {
+        is_zugzwang(&self.board)
+    }
+
     /// Get pieces of a specific color and type.
-    #[inline]
     pub fn colored_pieces(&self, color: Color, piece: Piece) -> BitBoard {
         self.board.colored_pieces(color, piece)
     }
 
     /// Get the node type.
-    #[inline]
     pub fn node_type(&self) -> NodeType {
         self.node_type
     }
 
     /// Check if this is a PV node.
-    #[inline]
     pub fn is_pv(&self) -> bool {
         self.node_type.is_pv()
     }
 
+    /// Check if this is a Cut node.
+    pub fn is_cut(&self) -> bool {
+        self.node_type.is_cut()
+    }
+
     /// Change the node type without cloning the board.
     /// Used for re-searches where we need a different node type for the same position.
-    #[inline]
     pub fn set_type(&mut self, node_type: NodeType) {
         self.node_type = node_type;
     }

@@ -154,32 +154,12 @@ pub fn game_phase(board: &Board) -> f32 {
     (score.min(24) as f32) / 24.0
 }
 
-/// Check if position is prone to zugzwang (null-move pruning unsafe).
+/// Check if position is prone to zugzwang (based on Stockfish).
 ///
-/// Returns true when:
-/// - Side to move has only king and pawns
-/// - Side to move has no pawns, no majors, and at most one minor piece
+/// Returns true when side to move has no pieces (only king and pawns).
 pub fn is_zugzwang(board: &Board) -> bool {
-    let side_bits = board.colors(board.side_to_move());
-    let pawn_bits = board.pieces(Piece::Pawn) & side_bits;
-    let king_bits = board.pieces(Piece::King) & side_bits;
-
-    // Only king and pawns
-    if side_bits == (pawn_bits | king_bits) {
-        return true;
-    }
-
-    // No pawns, no majors, at most one minor
-    let knight_bits = board.pieces(Piece::Knight) & side_bits;
-    let bishop_bits = board.pieces(Piece::Bishop) & side_bits;
-    let rook_bits = board.pieces(Piece::Rook) & side_bits;
-    let queen_bits = board.pieces(Piece::Queen) & side_bits;
-
-    let has_pawns = !pawn_bits.is_empty();
-    let has_major = !(rook_bits | queen_bits).is_empty();
-    let minor_count = (knight_bits | bishop_bits).len();
-
-    !has_pawns && !has_major && minor_count <= 1
+    let stm = board.side_to_move();
+    (minors(board, stm) | majors(board, stm)).is_empty()
 }
 
 #[cfg(test)]

@@ -1,18 +1,15 @@
-use cozy_chess::Board;
-use utils::is_zugzwang;
+use utils::Node;
 
 // Null Move Pruning
 // Try passing the turn to the opponent. If they still can't beat beta with a free move,
 // the position is likely so good we can prune this branch.
-//
-// TODO: Consider skipping null move pruning in PV nodes (most engines do this).
 pub fn can_null_move_prune(
-    board: &Board,
+    node: &Node,
     remaining_depth: u8,
     in_check: bool,
     min_depth: u8,
 ) -> bool {
-    remaining_depth >= min_depth && !in_check && !is_zugzwang(board)
+    !in_check && node.is_cut() && remaining_depth >= min_depth && !node.is_zugzwang()
 }
 
 pub fn null_move_reduction(

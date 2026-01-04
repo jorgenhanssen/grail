@@ -152,10 +152,9 @@ impl Engine {
         try_null_move: bool,
         static_eval: Option<i16>,
     ) -> Option<i16> {
-        let board = node.board();
         if !(try_null_move
             && can_null_move_prune(
-                board,
+                node,
                 remaining_depth,
                 in_check,
                 self.config.nmp_min_depth.value,
@@ -168,7 +167,7 @@ impl Engine {
         let base_remaining = max_depth - depth;
 
         // Calculate reduction based on remaining depth and static eval
-        let r = null_move_reduction(
+        let reduction: u8 = null_move_reduction(
             base_remaining,
             static_eval,
             beta,
@@ -179,8 +178,14 @@ impl Engine {
 
         // Do a reduced depth null search to check if our position is still good enough
         self.search_stack.push_node(&nm_child);
-        let (score, _) =
-            self.search_subtree(&nm_child, depth + 1, max_depth - r, -beta, -beta + 1, false);
+        let (score, _) = self.search_subtree(
+            &nm_child,
+            depth + 1,
+            max_depth - reduction,
+            -beta,
+            -beta + 1,
+            false,
+        );
         self.search_stack.pop();
 
         // If opponent couldn't beat beta even with a free move, position is strong enough to prune
@@ -189,7 +194,7 @@ impl Engine {
             // In zugzwang, passing is better than any legal move, so null move gives false positive.
             if base_remaining <= 6 {
                 self.search_stack.push_node(&nm_child);
-                let verify_depth = max_depth - r.saturating_sub(1);
+                let verify_depth = max_depth - reduction.saturating_sub(1);
                 let (v_score, _) = self.search_subtree(
                     &nm_child,
                     depth + 1,
@@ -204,7 +209,7 @@ impl Engine {
                 }
             }
 
-            let null_move_depth = max_depth - r;
+            let null_move_depth = max_depth - reduction;
             self.tt.store(
                 node.hash(),
                 depth,
