@@ -1,7 +1,7 @@
 use std::sync::{atomic::Ordering, mpsc::Sender, Arc};
 
 use arrayvec::ArrayVec;
-use cozy_chess::{BitBoard, Move, Piece};
+use cozy_chess::{Move, Piece};
 use evaluation::scores::{MATE_VALUE, SCORE_INF};
 use uci::{
     commands::{GoParams, Info, Score},
@@ -189,10 +189,9 @@ impl Engine {
                 is_cap,
                 move_index,
                 root,
+                &child,
                 m,
                 depth,
-                root.threats(),
-                child.threats(),
                 &self.lmr,
             ) {
                 Reduction::Reduction(r) => r,
@@ -454,7 +453,6 @@ impl Engine {
                 move_index,
                 is_improving,
                 static_eval,
-                threats,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
                     break;
@@ -534,7 +532,6 @@ impl Engine {
         move_index: i32,
         is_improving: bool,
         static_eval: i16,
-        pre_move_threats: BitBoard,
     ) -> Option<(i16, Vec<Move>, bool, u8)> {
         let moved_piece = node.piece_on(m.from).unwrap();
         let mut child = node.create_child(m, move_index);
@@ -577,10 +574,9 @@ impl Engine {
             is_cap,
             move_index,
             node,
+            &child,
             m,
             max_depth,
-            pre_move_threats,
-            child.threats(),
             &self.lmr,
         ) {
             Reduction::Reduction(r) => r,

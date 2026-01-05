@@ -20,4 +20,4 @@ pub use material::{
 pub use moves::{
     collect_legal_moves, gives_check, has_check, has_legal_moves, is_capture, make_move, only_move,
 };
-pub use node::{Node, NodeType};
+pub use node::{creates_threat, evades_threat, Node, NodeType};

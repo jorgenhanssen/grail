@@ -1,5 +1,5 @@
-use cozy_chess::{BitBoard, Move};
-use utils::Node;
+use cozy_chess::Move;
+use utils::{creates_threat, evades_threat, Node};
 
 use crate::{
     reductions::{cap_reduction, LmrTable},
@@ -24,26 +24,25 @@ impl Engine {
         is_improving: bool,
         is_capture: bool,
         move_index: i32,
-        node: &Node,
+        parent: &Node,
+        child: &Node,
         m: Move,
         max_depth: u8,
-        pre_threats: BitBoard,
-        new_threats: BitBoard,
         lmr_table: &LmrTable,
     ) -> Reduction {
         if is_pv_move {
             return Reduction::Reduction(0);
         }
 
-        let hist = self
-            .history_heuristic
-            .get(node.side_to_move(), m.from, m.to, pre_threats);
+        let hist =
+            self.history_heuristic
+                .get(parent.side_to_move(), m.from, m.to, parent.threats());
 
-        // Late move reductions - worse-sorted moves get reduced more
+        // Late move reductions - later moves in ordering are less likely to be best
         let mut reduction = lmr_table.get(remaining_depth, move_index);
 
         // Reduce more
-        if node.is_cut() {
+        if parent.is_cut() {
             reduction = reduction.saturating_add(1);
         }
         if !is_improving {
@@ -61,10 +60,10 @@ impl Engine {
         if is_tactical {
             reduction = reduction.saturating_sub(1);
         }
-        if node.is_pv() {
+        if parent.is_pv() {
             reduction = reduction.saturating_sub(1);
         }
-        if new_threats.len() > pre_threats.len() {
+        if creates_threat(parent, child) || evades_threat(parent, child) {
             reduction = reduction.saturating_sub(1);
         }
         if self.killer_moves[depth as usize].contains(&Some(m)) {
