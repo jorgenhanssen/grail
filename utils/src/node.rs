@@ -230,3 +230,15 @@ impl Node {
         })
     }
 }
+
+/// Returns true if the move creates new threats to opponent pieces.
+pub fn creates_threat(parent: &Node, child: &Node) -> bool {
+    let them = !parent.side_to_move();
+    child.threats_for(them).len() > parent.threats_for(them).len()
+}
+
+/// Returns true if the move removes threats from our pieces.
+pub fn evades_threat(parent: &Node, child: &Node) -> bool {
+    let us = parent.side_to_move();
+    child.threats_for(us).len() < parent.threats_for(us).len()
+}
