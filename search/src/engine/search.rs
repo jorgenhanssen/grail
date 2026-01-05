@@ -12,7 +12,8 @@ use utils::{flip_eval_perspective, has_legal_moves, Node, NodeType};
 use crate::{
     extensions,
     move_ordering::{MainMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
-    pruning::{iir, lmr, mate_distance_prune, should_lmp_prune, AspirationWindow, Pass},
+    pruning::{mate_distance_prune, should_lmp_prune, AspirationWindow, Pass},
+    reductions::{iir, lmr},
     stack::SearchNode,
     time_control::SearchController,
     transposition::Bound,
