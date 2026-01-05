@@ -11,6 +11,7 @@ use uci::{commands::Info, pv_to_uci, UciOutput};
 
 use crate::{
     history::{CaptureHistory, ContinuationHistory, HistoryHeuristic},
+    reductions::LmrTable,
     stack::SearchStack,
     transposition::{QSTable, TranspositionTable},
     utils::{convert_centipawn_score, convert_mate_score},
@@ -67,6 +68,9 @@ pub struct Engine {
     capture_history: CaptureHistory,
     /// Scores based on move sequences
     continuation_history: Box<ContinuationHistory>,
+
+    /// Late Move Reductions table
+    lmr: LmrTable,
 }
 
 impl Engine {
@@ -98,6 +102,8 @@ impl Engine {
             history_heuristic: HistoryHeuristic::new(1, 1, 1, 1, 1, 1),
             capture_history: CaptureHistory::new(1, 1, 1),
             continuation_history: Box::new(ContinuationHistory::new(1, 1, 1, 1)),
+
+            lmr: LmrTable::new(config.lmr_divisor.value as f32 / 100.0),
         };
 
         instance.configure(config, true);

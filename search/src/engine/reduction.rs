@@ -2,7 +2,7 @@ use cozy_chess::{BitBoard, Move};
 use utils::Node;
 
 use crate::{
-    reductions::{cap_reduction, lmr},
+    reductions::{cap_reduction, LmrTable},
     utils::near_root,
 };
 
@@ -29,6 +29,7 @@ impl Engine {
         max_depth: u8,
         pre_threats: BitBoard,
         new_threats: BitBoard,
+        lmr_table: &LmrTable,
     ) -> Reduction {
         if is_pv_move {
             return Reduction::Reduction(0);
@@ -39,11 +40,7 @@ impl Engine {
             .get(node.side_to_move(), m.from, m.to, pre_threats);
 
         // Late move reductions - worse-sorted moves get reduced more
-        let mut reduction = lmr(
-            remaining_depth,
-            move_index,
-            self.config.lmr_divisor.value as f32 / 100.0,
-        );
+        let mut reduction = lmr_table.get(remaining_depth, move_index);
 
         // Reduce more
         if node.is_cut() {

@@ -193,6 +193,7 @@ impl Engine {
                 depth,
                 root.threats(),
                 child.threats(),
+                &self.lmr,
             ) {
                 Reduction::Reduction(r) => r,
                 Reduction::Prune => continue,
@@ -580,6 +581,7 @@ impl Engine {
             max_depth,
             pre_move_threats,
             child.threats(),
+            &self.lmr,
         ) {
             Reduction::Reduction(r) => r,
             Reduction::Prune => return None,
