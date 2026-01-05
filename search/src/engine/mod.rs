@@ -18,8 +18,10 @@ use crate::{
 };
 
 mod eval;
+mod extension;
 mod pruning;
 mod quiescence;
+mod reduction;
 mod search;
 
 use crate::MAX_DEPTH;

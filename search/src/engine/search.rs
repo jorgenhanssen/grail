@@ -10,10 +10,10 @@ use uci::{
 use utils::{flip_eval_perspective, has_legal_moves, Node, NodeType};
 
 use crate::{
-    extensions,
+    engine::reduction::Reduction,
     move_ordering::{MainMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
     pruning::{mate_distance_prune, should_lmp_prune, AspirationWindow, Pass},
-    reductions::{iir, lmr},
+    reductions::iir,
     stack::SearchNode,
     time_control::SearchController,
     transposition::Bound,
@@ -180,19 +180,22 @@ impl Engine {
             let is_promotion = m.promotion.is_some();
             let is_tactical = in_check || gives_check || is_cap || is_promotion;
 
-            let reduction = if is_pv_move {
-                0
-            } else {
-                lmr(
-                    remaining_depth,
-                    is_tactical,
-                    move_index,
-                    is_pv_move,
-                    true, // conservative at root (treat as improving)
-                    self.config.lmr_min_depth.value,
-                    self.config.lmr_divisor.value as f32 / 100.0,
-                    self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
-                )
+            let reduction = match self.get_reduction(
+                depth,
+                remaining_depth,
+                is_pv_move,
+                is_tactical,
+                true,
+                is_cap,
+                move_index,
+                root,
+                m,
+                depth,
+                root.threats(),
+                child.threats(),
+            ) {
+                Reduction::Reduction(r) => r,
+                Reduction::Prune => continue,
             };
 
             // PVS window
@@ -564,44 +567,32 @@ impl Engine {
             return None;
         }
 
-        // Late move reduction
-        let mut reduction = lmr(
+        let reduction = match self.get_reduction(
+            depth,
             remaining_depth,
-            is_tactical,
-            move_index,
             is_pv_move,
+            is_tactical,
             is_improving,
-            self.config.lmr_min_depth.value,
-            self.config.lmr_divisor.value as f32 / 100.0,
-            self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
-        );
-
-        let alpha_child = alpha;
-        let beta_child = if is_pv_move { beta } else { alpha + 1 };
-
-        // History-leaf pruning / extra reduction on quiet late moves
-        if self.history_heuristic.maybe_reduce_or_prune(
+            is_cap,
+            move_index,
             node,
             m,
-            depth,
             max_depth,
-            remaining_depth,
-            in_check,
-            is_tactical,
-            is_pv_move,
-            move_index,
-            is_improving,
-            &mut reduction,
             pre_move_threats,
+            child.threats(),
         ) {
-            return None;
-        }
+            Reduction::Reduction(r) => r,
+            Reduction::Prune => return None,
+        };
 
-        let extension = extensions::get(node, &m, moved_piece, is_cap);
+        let extension = self.get_extension(node, &m, moved_piece, is_cap);
 
         let extended_max_depth = max_depth + extension;
         let reduced_max_depth = extended_max_depth.saturating_sub(reduction).max(depth + 1);
         let mut searched_depth = reduced_max_depth;
+
+        let alpha_child = alpha;
+        let beta_child = if is_pv_move { beta } else { alpha + 1 };
 
         // Initial search (reduced if LMR, null window if not first move)
         self.search_stack.push_move(&child, m, moved_piece);
@@ -652,6 +643,7 @@ impl Engine {
     }
 
     /// Handler called if a search fails high - updates history tables, killers, etc.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn on_fail_high(
         &mut self,
         node: &Node,
