@@ -4,7 +4,7 @@
 /// <https://www.chessprogramming.org/Late_Move_Reductions>
 #[allow(clippy::too_many_arguments)]
 pub fn lmr(remaining_depth: u8, move_index: i32, divisor: f32) -> u8 {
-    if remaining_depth == 0 || move_index < 3 {
+    if remaining_depth == 0 || move_index == 0 {
         return 0;
     }
 
