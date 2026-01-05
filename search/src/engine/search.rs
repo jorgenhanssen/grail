@@ -10,10 +10,10 @@ use uci::{
 use utils::{flip_eval_perspective, has_legal_moves, Node, NodeType};
 
 use crate::{
-    extensions,
+    engine::reduction::Reduction,
     move_ordering::{MainMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
     pruning::{mate_distance_prune, should_lmp_prune, AspirationWindow, Pass},
-    reductions::{can_reduce, cap_reduction, iir, lmr},
+    reductions::iir,
     stack::SearchNode,
     time_control::SearchController,
     transposition::Bound,
@@ -180,19 +180,22 @@ impl Engine {
             let is_promotion = m.promotion.is_some();
             let is_tactical = in_check || gives_check || is_cap || is_promotion;
 
-            let mut reduction = 0;
-            if can_reduce(is_tactical, is_pv_move) {
-                let r = lmr(
-                    remaining_depth,
-                    move_index,
-                    self.config.lmr_divisor.value as f32 / 100.0,
-                );
-                reduction = cap_reduction(
-                    r,
-                    remaining_depth,
-                    self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
-                );
-            }
+            let reduction = match self.get_reduction(
+                depth,
+                remaining_depth,
+                is_pv_move,
+                is_tactical,
+                true,
+                move_index,
+                root,
+                m,
+                depth,
+                root.threats(),
+                child.threats(),
+            ) {
+                Reduction::Reduction(r) => r,
+                Reduction::Prune => continue,
+            };
 
             // PVS window
             let alpha_child = alpha;
@@ -563,44 +566,24 @@ impl Engine {
             return None;
         }
 
-        let mut reduction = 0;
-        if can_reduce(is_tactical, is_pv_move) {
-            reduction = lmr(
-                remaining_depth,
-                move_index,
-                self.config.lmr_divisor.value as f32 / 100.0,
-            );
-
-            if !is_improving {
-                reduction = reduction.saturating_add(1);
-            }
-
-            reduction = cap_reduction(
-                reduction,
-                remaining_depth,
-                self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
-            );
-        }
-
-        // History-leaf pruning / extra reduction on quiet late moves
-        if self.history_heuristic.maybe_reduce_or_prune(
+        let reduction = match self.get_reduction(
+            depth,
+            remaining_depth,
+            is_pv_move,
+            is_tactical,
+            is_improving,
+            move_index,
             node,
             m,
-            depth,
             max_depth,
-            remaining_depth,
-            in_check,
-            is_tactical,
-            is_pv_move,
-            move_index,
-            is_improving,
-            &mut reduction,
             pre_move_threats,
+            child.threats(),
         ) {
-            return None;
-        }
+            Reduction::Reduction(r) => r,
+            Reduction::Prune => return None,
+        };
 
-        let extension = extensions::get(node, &m, moved_piece, is_cap);
+        let extension = self.get_extension(node, &m, moved_piece, is_cap);
 
         let extended_max_depth = max_depth + extension;
         let reduced_max_depth = extended_max_depth.saturating_sub(reduction).max(depth + 1);

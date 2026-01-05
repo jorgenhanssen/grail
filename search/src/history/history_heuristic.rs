@@ -1,5 +1,4 @@
 use cozy_chess::{BitBoard, Board, Color, Move, Square};
-use utils::Node;
 
 use super::utils::apply_gravity;
 use crate::{EngineConfig, MAX_DEPTH};
@@ -111,54 +110,12 @@ impl HistoryHeuristic {
             + dest_idx
     }
 
-    /// Applies extra reduction or pruning based on history score.
-    /// Low-history moves get reduced more; very low scores may be pruned.
-    #[allow(clippy::too_many_arguments)]
-    pub fn maybe_reduce_or_prune(
-        &self,
-        node: &Node,
-        mv: Move,
-        depth: u8,
-        max_depth: u8,
-        remaining_depth: u8,
-        in_check: bool,
-        is_tactical: bool,
-        is_pv_move: bool,
-        move_index: i32,
-        is_improving: bool,
-        reduction: &mut u8,
-        threats: BitBoard,
-    ) -> bool {
-        if !(remaining_depth > 0
-            && !in_check
-            && !is_tactical
-            && !is_pv_move
-            && move_index >= self.min_move_index)
-        {
-            return false;
-        }
+    pub fn reduction_threshold(&self) -> i16 {
+        self.reduction_threshold
+    }
 
-        let color = node.side_to_move();
-        let source = mv.from;
-        let dest = mv.to;
-        let hist_score = self.get(color, source, dest, threats);
-
-        if hist_score < self.reduction_threshold {
-            // Only apply additional reductions/pruning when position isn't improving
-            if !is_improving {
-                *reduction = reduction.saturating_add(1);
-            }
-
-            let projected_child_max = max_depth.saturating_sub(*reduction);
-            if !is_improving
-                && hist_score < self.prune_threshold
-                && projected_child_max <= depth + 1
-            {
-                return true; // prune
-            }
-        }
-
-        false
+    pub fn prune_threshold(&self) -> i16 {
+        self.prune_threshold
     }
 
     pub fn get_bonus(&self, remaining_depth: u8) -> i32 {
