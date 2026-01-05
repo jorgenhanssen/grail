@@ -22,6 +22,7 @@ impl Engine {
         is_pv_move: bool,
         is_tactical: bool,
         is_improving: bool,
+        is_capture: bool,
         move_index: i32,
         node: &Node,
         m: Move,
@@ -45,15 +46,15 @@ impl Engine {
         );
 
         // Reduce more
+        if node.is_cut() {
+            reduction = reduction.saturating_add(1);
+        }
         if !is_improving {
             reduction = reduction.saturating_add(1);
 
-            if !is_tactical && hist < self.history_heuristic.reduction_threshold() {
+            if !is_capture && hist < self.history_heuristic.reduction_threshold() {
                 reduction = reduction.saturating_add(1);
             }
-        }
-        if !node.is_pv() {
-            reduction = reduction.saturating_add(1);
         }
 
         // Reduce less
@@ -63,16 +64,22 @@ impl Engine {
         if is_tactical {
             reduction = reduction.saturating_sub(1);
         }
+        if node.is_pv() {
+            reduction = reduction.saturating_sub(1);
+        }
         if new_threats.len() > pre_threats.len() {
+            reduction = reduction.saturating_sub(1);
+        }
+        if self.killer_moves[depth as usize].contains(&Some(m)) {
             reduction = reduction.saturating_sub(1);
         }
 
         reduction = cap_reduction(reduction, remaining_depth);
 
-        // Prune if bad history AND would barely search anyway
+        // Prune when bad history if it would barely search anyway
         let reduced_depth = max_depth.saturating_sub(reduction);
-        if !is_improving
-            && !is_tactical
+        if !is_capture
+            && !is_improving
             && hist < self.history_heuristic.prune_threshold()
             && reduced_depth <= depth + 1
         {
