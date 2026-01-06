@@ -54,20 +54,19 @@ impl Engine {
         }
 
         // Reduce less
-        if near_root(depth, remaining_depth) {
-            reduction = reduction.saturating_sub(1);
-        }
-        if is_tactical {
-            reduction = reduction.saturating_sub(1);
-        }
-        if parent.is_pv() {
-            reduction = reduction.saturating_sub(1);
-        }
-        if creates_threat(parent, child) || evades_threat(parent, child) {
-            reduction = reduction.saturating_sub(1);
-        }
-        if self.killer_moves[depth as usize].contains(&Some(m)) {
-            reduction = reduction.saturating_sub(1);
+        if reduction > 0 {
+            if near_root(depth, remaining_depth) {
+                reduction = reduction.saturating_sub(1);
+            }
+            if parent.is_pv() {
+                reduction = reduction.saturating_sub(1);
+            }
+            if is_tactical || creates_threat(parent, child) || evades_threat(parent, child) {
+                reduction = reduction.saturating_sub(1);
+            }
+            if self.killer_moves[depth as usize].contains(&Some(m)) {
+                reduction = reduction.saturating_sub(1);
+            }
         }
 
         reduction = cap_reduction(reduction, remaining_depth);
