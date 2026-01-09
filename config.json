@@ -1,0 +1,152 @@
+{
+    "resign": {
+        "move_count": 3,
+        "score": 400,
+        "twosided": false,
+        "enabled": true
+    },
+    "draw": {
+        "move_number": 40,
+        "move_count": 8,
+        "score": 10,
+        "enabled": true
+    },
+    "maxmoves": {
+        "move_count": 1,
+        "enabled": false
+    },
+    "tb_adjudication": {
+        "syzygy_dirs": "",
+        "max_pieces": 0,
+        "ignore_50_move_rule": false,
+        "enabled": false
+    },
+    "opening": {
+        "file": "books/swcr-fq-openings-v4.1.epd",
+        "format": 0,
+        "order": 0,
+        "plies": -1,
+        "start": 1
+    },
+    "pgn": {
+        "additional_lines_rgx": [],
+        "event_name": "Fastchess Tournament",
+        "site": "?",
+        "file": "",
+        "notation": 0,
+        "track_nodes": false,
+        "track_seldepth": false,
+        "track_nps": false,
+        "track_hashfull": false,
+        "track_tbhits": false,
+        "track_timeleft": false,
+        "track_latency": false,
+        "track_pv": false,
+        "min": false,
+        "crc": false
+    },
+    "epd": {
+        "file": ""
+    },
+    "sprt": {
+        "alpha": 0.0,
+        "beta": 0.0,
+        "elo0": 0.0,
+        "elo1": 0.0,
+        "model": "normalized",
+        "enabled": false
+    },
+    "config_name": "config.json",
+    "output": 0,
+    "seed": 15807984832183393395,
+    "variant": 0,
+    "type": 0,
+    "gauntlet_seeds": 1,
+    "ratinginterval": 10,
+    "scoreinterval": 1,
+    "wait": 0,
+    "autosaveinterval": 0,
+    "games": 2,
+    "rounds": 250,
+    "concurrency": 15,
+    "force_concurrency": false,
+    "recover": true,
+    "noswap": false,
+    "reverse": false,
+    "report_penta": true,
+    "affinity": false,
+    "show_latency": false,
+    "log": {
+        "file": "",
+        "level": 2,
+        "compress": false,
+        "realtime": true,
+        "engine_coms": false
+    },
+    "engines": [
+        {
+            "name": "grail",
+            "dir": "",
+            "cmd": "./target/release/grail",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 100,
+                    "fixed_time": 0,
+                    "time": 10000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
+            "name": "grail-next",
+            "dir": "",
+            "cmd": "./target/release/grail-next",
+            "args": "",
+            "restart": false,
+            "options": [],
+            "limit": {
+                "tc": {
+                    "increment": 100,
+                    "fixed_time": 0,
+                    "time": 10000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        }
+    ],
+    "stats": {
+        "grail-next vs grail": {
+            "wins": 64,
+            "losses": 64,
+            "draws": 144,
+            "penta_WW": 3,
+            "penta_WD": 42,
+            "penta_WL": 16,
+            "penta_DD": 35,
+            "penta_LD": 32,
+            "penta_LL": 8
+        },
+        "grail vs grail-next": {
+            "wins": 64,
+            "losses": 43,
+            "draws": 121,
+            "penta_WW": 11,
+            "penta_WD": 30,
+            "penta_WL": 12,
+            "penta_DD": 35,
+            "penta_LD": 21,
+            "penta_LL": 5
+        }
+    }
+}
