@@ -2,7 +2,6 @@ use std::sync::atomic::Ordering;
 
 use cozy_chess::{Color, Move, Piece, Rank};
 use evaluation::scores::{MATE_VALUE, SCORE_INF};
-use utils::flip_eval_perspective;
 use utils::{make_move, piece_value, QUEEN_VALUE};
 
 use utils::Node;
@@ -12,6 +11,7 @@ use crate::{
     pruning::{can_delta_prune, mate_distance_prune},
     transposition::Bound,
     utils::see::see,
+    MAX_DEPTH,
 };
 
 use super::Engine;
@@ -41,6 +41,11 @@ impl Engine {
             return (0, Vec::new());
         }
 
+        // Depth limit - return static eval if we've hit max depth
+        if depth as usize >= MAX_DEPTH {
+            return (self.static_eval(node), Vec::new());
+        }
+
         let hash = node.hash();
         if mate_distance_prune(&mut alpha, &mut beta, depth) {
             return (alpha, Vec::new());
@@ -63,9 +68,7 @@ impl Engine {
             }
         }
 
-        let phase = node.game_phase();
-        let eval = self.eval(node, phase);
-        let stand_pat = flip_eval_perspective(board.side_to_move(), eval);
+        let stand_pat = self.static_eval(node);
 
         let board_material = node.total_material();
 

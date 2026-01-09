@@ -7,7 +7,7 @@ use uci::{
     commands::{GoParams, Info, Score},
     UciOutput,
 };
-use utils::{flip_eval_perspective, has_legal_moves, Node, NodeType};
+use utils::{has_legal_moves, Node, NodeType};
 
 use crate::{
     engine::reduction::Reduction,
@@ -64,7 +64,7 @@ impl Engine {
         // Root node is always PV
         let root = Node::new(self.board.clone(), NodeType::Pv);
 
-        while !self.stop.load(Ordering::Relaxed) && depth <= MAX_DEPTH as u8 {
+        while !self.stop.load(Ordering::Relaxed) && depth < MAX_DEPTH as u8 {
             controller.on_iteration_start();
 
             if !controller.should_continue_to_next_depth(depth) {
@@ -279,6 +279,11 @@ impl Engine {
             return (0, Vec::new());
         }
 
+        // Depth limit - return static eval if we've hit max depth
+        if depth as usize >= MAX_DEPTH {
+            return (self.static_eval(node), Vec::new());
+        }
+
         let hash = node.hash();
         if mate_distance_prune(&mut alpha, &mut beta, depth) {
             return (alpha, Vec::new());
@@ -332,7 +337,6 @@ impl Engine {
             tt_static_eval = tt.static_eval;
         }
 
-        let phase = node.game_phase();
         let in_check = node.in_check();
         let remaining_depth = max_depth - depth;
 
@@ -345,12 +349,7 @@ impl Engine {
             self.config.iir_reduction.value,
         );
 
-        let static_eval = if let Some(tt_se) = tt_static_eval {
-            tt_se // Cached in TT
-        } else {
-            let eval = self.eval(node, phase);
-            flip_eval_perspective(node.side_to_move(), eval)
-        };
+        let static_eval = tt_static_eval.unwrap_or_else(|| self.static_eval(node));
 
         self.search_stack
             .current_mut(|n| n.static_eval = Some(static_eval));
