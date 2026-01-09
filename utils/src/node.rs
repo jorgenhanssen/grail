@@ -129,6 +129,11 @@ impl Node {
         !self.board.checkers().is_empty()
     }
 
+    /// Check if the 50-move rule has been exceeded (100+ half-moves without pawn move or capture).
+    pub fn is_fifty_move_draw(&self) -> bool {
+        self.board.halfmove_clock() >= 100
+    }
+
     /// Get the piece on a square.
     pub fn piece_on(&self, sq: Square) -> Option<Piece> {
         self.board.piece_on(sq)

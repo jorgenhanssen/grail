@@ -274,8 +274,8 @@ impl Engine {
         }
         self.nodes += 1;
 
-        // If this position has been seen before, treat it as a draw
-        if self.search_stack.is_repetition(&self.game_history) {
+        // Draw detection
+        if node.is_fifty_move_draw() || self.search_stack.is_repetition(&self.game_history) {
             return (0, Vec::new());
         }
 
