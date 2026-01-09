@@ -36,9 +36,8 @@ impl Engine {
         self.nodes += 1;
         self.max_depth_reached = self.max_depth_reached.max(depth);
 
-        // If this position has been seen before, treat it as a draw
-        if self.search_stack.is_repetition(&self.game_history) {
-            return (0, Vec::new());
+        if self.is_forced_draw(node) {
+            return (self.draw_value(), Vec::new());
         }
 
         // Depth limit - return static eval if we've hit max depth
