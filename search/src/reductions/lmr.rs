@@ -24,6 +24,8 @@ impl LmrTable {
     }
 
     fn index(remaining_depth: u8, move_index: i32) -> usize {
-        remaining_depth as usize * MAX_DEPTH + move_index as usize
+        let rd = (remaining_depth as usize).min(MAX_DEPTH - 1);
+        let mi = (move_index as usize).min(MAX_DEPTH - 1);
+        rd * MAX_DEPTH + mi
     }
 }
