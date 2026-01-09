@@ -1,6 +1,6 @@
 use std::cell::OnceCell;
 
-use cozy_chess::{BitBoard, Board, Color, Move, Piece, Square};
+use cozy_chess::{BitBoard, Board, Color, GameStatus, Move, Piece, Square};
 
 use crate::board_metrics::BoardMetrics;
 use crate::is_zugzwang;
@@ -129,9 +129,14 @@ impl Node {
         !self.board.checkers().is_empty()
     }
 
+    /// Check if the position is checkmate.
+    pub fn is_checkmate(&self) -> bool {
+        self.in_check() && self.board.status() == GameStatus::Won
+    }
+
     /// Check if the 50-move rule has been exceeded (100+ half-moves without pawn move or capture).
     pub fn is_fifty_move_draw(&self) -> bool {
-        self.board.halfmove_clock() >= 100
+        self.board.halfmove_clock() >= 100 && !self.is_checkmate()
     }
 
     /// Get the piece on a square.
