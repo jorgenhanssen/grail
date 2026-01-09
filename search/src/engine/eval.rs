@@ -1,11 +1,12 @@
-use utils::cap_eval_by_material;
-
-use utils::Node;
+use utils::{cap_eval_by_material, flip_eval_perspective, Node};
 
 use super::Engine;
 
 impl Engine {
-    pub(super) fn eval(&mut self, node: &Node, phase: f32) -> i16 {
+    /// Get the static evaluation from the perspective of the side to move.
+    pub(super) fn static_eval(&mut self, node: &Node) -> i16 {
+        let phase = node.game_phase();
+
         let mut score = if self.config.nnue.value && self.nnue.is_some() {
             self.nnue.as_mut().unwrap().evaluate(node)
         } else {
@@ -15,7 +16,7 @@ impl Engine {
         score = self.apply_penalties(score, phase);
         score = cap_eval_by_material(node.board(), score);
 
-        score
+        flip_eval_perspective(node.side_to_move(), score)
     }
 
     fn apply_penalties(&self, score: i16, phase: f32) -> i16 {
