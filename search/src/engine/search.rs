@@ -82,6 +82,14 @@ impl Engine {
                     break;
                 }
 
+                // If stopped during search, use partial results from current iteration
+                // This is often better than using the known best from the previous iteration
+                if self.stop.load(Ordering::Relaxed) {
+                    best_move = mv;
+                    best_score = score;
+                    break;
+                }
+
                 match window.analyse_pass(score) {
                     Pass::Hit(s) => {
                         best_move = mv;
@@ -231,9 +239,9 @@ impl Engine {
             }
             self.search_stack.pop();
 
-            // Check if we were stopped during the subtree search
+            // Stopped during search, return partial results
             if self.stop.load(Ordering::Relaxed) {
-                return (None, 0);
+                return (current_best_move, best_score);
             }
 
             pv.insert(0, m);
