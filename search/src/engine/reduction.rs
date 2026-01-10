@@ -33,6 +33,9 @@ impl Engine {
         if is_pv_move {
             return Reduction::Reduction(0);
         }
+        if is_tactical && is_improving {
+            return Reduction::Reduction(0);
+        }
 
         let hist =
             self.history_heuristic
