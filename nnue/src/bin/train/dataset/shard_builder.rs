@@ -1,10 +1,13 @@
 use ahash::AHashMap;
+use cozy_chess::Board;
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
+use nnue::network::{output_bucket, OUTPUT_BUCKETS};
 use rayon::prelude::*;
 use std::collections::hash_map::RandomState;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
@@ -26,6 +29,7 @@ pub struct ShardStats {
     pub train_samples: usize,
     pub unique_fens: usize,
     pub total_games: usize,
+    pub bucket_counts: [usize; OUTPUT_BUCKETS],
 }
 
 impl ShardStats {
@@ -36,6 +40,12 @@ impl ShardStats {
             (self.unique_fens as f64 / self.total_samples as f64) * 100.0
         );
         log::info!("Total games: {}", self.total_games);
+
+        log::info!("Output bucket distribution:");
+        for (i, &count) in self.bucket_counts.iter().enumerate() {
+            let percentage = 100.0 * count as f64 / self.total_samples as f64;
+            log::info!("  Bucket {}: {} samples ({:.1}%)", i, count, percentage);
+        }
     }
 }
 
@@ -95,6 +105,7 @@ struct WorkerStats {
     train_samples: usize,
     games: usize,
     unique_fens: HyperLogLogPlus<String, RandomState>,
+    bucket_counts: [usize; OUTPUT_BUCKETS],
 }
 
 impl WorkerStats {
@@ -104,6 +115,7 @@ impl WorkerStats {
             train_samples: 0,
             games: 0,
             unique_fens: HyperLogLogPlus::new(HLL_PRECISION, RandomState::new()).unwrap(),
+            bucket_counts: [0; OUTPUT_BUCKETS],
         }
     }
 
@@ -115,6 +127,11 @@ impl WorkerStats {
         }
 
         self.unique_fens.insert(&fen.to_string());
+
+        if let Ok(board) = Board::from_str(fen) {
+            let bucket = output_bucket(&board);
+            self.bucket_counts[bucket] += 1;
+        }
     }
 
     fn register_game(&mut self) {
@@ -181,6 +198,7 @@ pub fn build_shards(
     let mut total_samples = 0;
     let mut train_samples = 0;
     let mut total_games = 0;
+    let mut bucket_counts = [0usize; OUTPUT_BUCKETS];
     let mut combined_hll: HyperLogLogPlus<String, RandomState> =
         HyperLogLogPlus::new(HLL_PRECISION, RandomState::new()).unwrap();
 
@@ -189,6 +207,10 @@ pub fn build_shards(
         train_samples += stats.train_samples;
         total_games += stats.games;
         combined_hll.merge(&stats.unique_fens).unwrap();
+
+        for (i, count) in stats.bucket_counts.iter().enumerate() {
+            bucket_counts[i] += count;
+        }
     }
 
     let unique_fens_count = combined_hll.count() as usize;
@@ -208,6 +230,7 @@ pub fn build_shards(
         train_samples,
         unique_fens: unique_fens_count,
         total_games,
+        bucket_counts,
     };
 
     Ok((shard_paths, stats))
