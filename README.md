@@ -114,7 +114,7 @@ make generate
 
 - `--book`: Path to an opening book in EPD format (required).
 - `--depth`: Search depth for each move (default: 10).
-- `--nnue`: Use NNUE for generation (default: false, uses HCE).
+- `--nnue`: Use NNUE for generation (default: true, else HCE).
 
 Generated data is saved to `nnue/data/YYYY-MM-DD-HH:MM.csv`.
 
