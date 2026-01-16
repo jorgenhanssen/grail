@@ -540,23 +540,10 @@ impl Engine {
         static_eval: i16,
     ) -> Option<(i16, Vec<Move>, bool, u8)> {
         let moved_piece = node.piece_on(m.from).unwrap();
-        let mut child = node.create_child(m, move_index);
-        let child_hash = child.hash();
-
-        self.tt.prefetch(child_hash);
-
-        let gives_check = child.in_check();
-
-        // Consider move tactical if it's check, capture, or promotion
         let is_cap = node.is_capture(m);
         let is_promotion = m.promotion == Some(Piece::Queen);
-        let is_tactical = in_check || gives_check || is_cap || is_promotion;
         let is_pv_node = node.is_pv();
         let is_pv_move = move_index == 0;
-
-        if self.try_futility_prune(remaining_depth, in_check, is_tactical, alpha, static_eval) {
-            return None;
-        }
 
         if self.try_see_prune(
             node,
@@ -568,6 +555,18 @@ impl Engine {
             alpha,
             static_eval,
         ) {
+            return None;
+        }
+
+        let mut child = node.create_child(m, move_index);
+        let child_hash = child.hash();
+
+        self.tt.prefetch(child_hash);
+
+        let gives_check = child.in_check();
+        let is_tactical = in_check || gives_check || is_cap || is_promotion;
+
+        if self.try_futility_prune(remaining_depth, in_check, is_tactical, alpha, static_eval) {
             return None;
         }
 
