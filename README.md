@@ -48,7 +48,7 @@ Once added to your GUI, you can configure the engine via the UCI options:
 
 - **Hash**: Size of the transposition table in MB (Default: 256).
 - **NNUE**: Toggle between Neural Network (NNUE) and Hand-Crafted (HCE) evaluation (Default: true).
-- **Move Overhead**: Time buffer in milliseconds to account for communication lag (Default: 20).
+- **Move Overhead**: Time buffer in milliseconds to account for communication lag (Default: 10).
 
 The engine supports standard time controls (increment, sudden death, moves to go) and analysis modes (fixed depth, infinite).
 
@@ -114,7 +114,7 @@ make generate
 
 - `--book`: Path to an opening book in EPD format (required).
 - `--depth`: Search depth for each move (default: 10).
-- `--nnue`: Use NNUE for generation (default: false, uses HCE).
+- `--nnue`: Use NNUE for generation (default: true, else HCE).
 
 Generated data is saved to `nnue/data/YYYY-MM-DD-HH:MM.csv`.
 

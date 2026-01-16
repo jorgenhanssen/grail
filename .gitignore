@@ -16,3 +16,5 @@ nnue/data/
 
 # Profiling
 flamegraph.svg
+
+config.json

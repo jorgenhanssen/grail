@@ -1,11 +1,12 @@
-use utils::cap_eval_by_material;
-
-use utils::Node;
+use utils::{cap_eval_by_material, flip_eval_perspective, Node};
 
 use super::Engine;
 
 impl Engine {
-    pub(super) fn eval(&mut self, node: &Node, phase: f32) -> i16 {
+    /// Get the static evaluation from the perspective of the side to move.
+    pub(super) fn static_eval(&mut self, node: &Node) -> i16 {
+        let phase = node.game_phase();
+
         let mut score = if self.config.nnue.value && self.nnue.is_some() {
             self.nnue.as_mut().unwrap().evaluate(node)
         } else {
@@ -15,7 +16,7 @@ impl Engine {
         score = self.apply_penalties(score, phase);
         score = cap_eval_by_material(node.board(), score);
 
-        score
+        flip_eval_perspective(node.side_to_move(), score)
     }
 
     fn apply_penalties(&self, score: i16, phase: f32) -> i16 {
@@ -35,5 +36,17 @@ impl Engine {
     fn piece_repetition_penalty(&self) -> i16 {
         let base_penalty = self.config.piece_repetition_base_penalty.value;
         self.search_stack.piece_repetition_penalty(base_penalty)
+    }
+
+    /// Returns a small random value for draws to avoid draw blindness.
+    /// Based on Stockfish's approach: VALUE_DRAW - 1 + (nodes & 0x2)
+    /// Returns -1 or +1 to break symmetry and prevent repetitive play.
+    pub(super) fn draw_value(&self) -> i16 {
+        -1 + (self.nodes & 0x2) as i16
+    }
+
+    /// Check if the position is a forced draw (fifty-move rule or repetition).
+    pub(super) fn is_forced_draw(&self, node: &Node) -> bool {
+        node.is_fifty_move_draw() || self.search_stack.is_repetition(&self.game_history)
     }
 }

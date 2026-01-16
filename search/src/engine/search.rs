@@ -1,18 +1,19 @@
 use std::sync::{atomic::Ordering, mpsc::Sender, Arc};
 
 use arrayvec::ArrayVec;
-use cozy_chess::{BitBoard, Move, Piece};
+use cozy_chess::{Move, Piece};
 use evaluation::scores::{MATE_VALUE, SCORE_INF};
 use uci::{
     commands::{GoParams, Info, Score},
     UciOutput,
 };
-use utils::{flip_eval_perspective, has_legal_moves, Node, NodeType};
+use utils::{has_legal_moves, Node, NodeType};
 
 use crate::{
-    extensions,
+    engine::reduction::Reduction,
     move_ordering::{MainMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
-    pruning::{iir, lmr, mate_distance_prune, should_lmp_prune, AspirationWindow, Pass},
+    pruning::{mate_distance_prune, should_lmp_prune, AspirationWindow, Pass},
+    reductions::iir,
     stack::SearchNode,
     time_control::SearchController,
     transposition::Bound,
@@ -63,7 +64,7 @@ impl Engine {
         // Root node is always PV
         let root = Node::new(self.board.clone(), NodeType::Pv);
 
-        while !self.stop.load(Ordering::Relaxed) && depth <= MAX_DEPTH as u8 {
+        while !self.stop.load(Ordering::Relaxed) && depth < MAX_DEPTH as u8 {
             controller.on_iteration_start();
 
             if !controller.should_continue_to_next_depth(depth) {
@@ -78,6 +79,14 @@ impl Engine {
                 let (mv, score) = self.search_root(&root, depth, alpha, beta);
 
                 if mv.is_none() {
+                    break;
+                }
+
+                // If stopped during search, use partial results from current iteration
+                // This is often better than using the known best from the previous iteration
+                if self.stop.load(Ordering::Relaxed) {
+                    best_move = mv;
+                    best_score = score;
                     break;
                 }
 
@@ -179,19 +188,22 @@ impl Engine {
             let is_promotion = m.promotion.is_some();
             let is_tactical = in_check || gives_check || is_cap || is_promotion;
 
-            let reduction = if is_pv_move {
-                0
-            } else {
-                lmr(
-                    remaining_depth,
-                    is_tactical,
-                    move_index,
-                    is_pv_move,
-                    true, // conservative at root (treat as improving)
-                    self.config.lmr_min_depth.value,
-                    self.config.lmr_divisor.value as f32 / 100.0,
-                    self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
-                )
+            let reduction = match self.get_reduction(
+                depth,
+                remaining_depth,
+                is_pv_move,
+                is_tactical,
+                true,
+                is_cap,
+                move_index,
+                root,
+                &child,
+                m,
+                depth,
+                &self.lmr,
+            ) {
+                Reduction::Reduction(r) => r,
+                Reduction::Prune => continue,
             };
 
             // PVS window
@@ -227,9 +239,9 @@ impl Engine {
             }
             self.search_stack.pop();
 
-            // Check if we were stopped during the subtree search
+            // Stopped during search, return partial results
             if self.stop.load(Ordering::Relaxed) {
-                return (None, 0);
+                return (current_best_move, best_score);
             }
 
             pv.insert(0, m);
@@ -270,9 +282,13 @@ impl Engine {
         }
         self.nodes += 1;
 
-        // If this position has been seen before, treat it as a draw
-        if self.search_stack.is_repetition(&self.game_history) {
-            return (0, Vec::new());
+        if self.is_forced_draw(node) {
+            return (self.draw_value(), Vec::new());
+        }
+
+        // Depth limit - return static eval if we've hit max depth
+        if depth as usize >= MAX_DEPTH {
+            return (self.static_eval(node), Vec::new());
         }
 
         let hash = node.hash();
@@ -328,7 +344,6 @@ impl Engine {
             tt_static_eval = tt.static_eval;
         }
 
-        let phase = node.game_phase();
         let in_check = node.in_check();
         let remaining_depth = max_depth - depth;
 
@@ -341,12 +356,7 @@ impl Engine {
             self.config.iir_reduction.value,
         );
 
-        let static_eval = if let Some(tt_se) = tt_static_eval {
-            tt_se // Cached in TT
-        } else {
-            let eval = self.eval(node, phase);
-            flip_eval_perspective(node.side_to_move(), eval)
-        };
+        let static_eval = tt_static_eval.unwrap_or_else(|| self.static_eval(node));
 
         self.search_stack
             .current_mut(|n| n.static_eval = Some(static_eval));
@@ -449,7 +459,6 @@ impl Engine {
                 move_index,
                 is_improving,
                 static_eval,
-                threats,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
                     break;
@@ -529,7 +538,6 @@ impl Engine {
         move_index: i32,
         is_improving: bool,
         static_eval: i16,
-        pre_move_threats: BitBoard,
     ) -> Option<(i16, Vec<Move>, bool, u8)> {
         let moved_piece = node.piece_on(m.from).unwrap();
         let mut child = node.create_child(m, move_index);
@@ -563,44 +571,32 @@ impl Engine {
             return None;
         }
 
-        // Late move reduction
-        let mut reduction = lmr(
-            remaining_depth,
-            is_tactical,
-            move_index,
-            is_pv_move,
-            is_improving,
-            self.config.lmr_min_depth.value,
-            self.config.lmr_divisor.value as f32 / 100.0,
-            self.config.lmr_max_reduction_ratio.value as f32 / 100.0,
-        );
-
-        let alpha_child = alpha;
-        let beta_child = if is_pv_move { beta } else { alpha + 1 };
-
-        // History-leaf pruning / extra reduction on quiet late moves
-        if self.history_heuristic.maybe_reduce_or_prune(
-            node,
-            m,
+        let reduction = match self.get_reduction(
             depth,
-            max_depth,
             remaining_depth,
-            in_check,
-            is_tactical,
             is_pv_move,
-            move_index,
+            is_tactical,
             is_improving,
-            &mut reduction,
-            pre_move_threats,
+            is_cap,
+            move_index,
+            node,
+            &child,
+            m,
+            max_depth,
+            &self.lmr,
         ) {
-            return None;
-        }
+            Reduction::Reduction(r) => r,
+            Reduction::Prune => return None,
+        };
 
-        let extension = extensions::get(node, &m, moved_piece, is_cap);
+        let extension = self.get_extension(node, &m, moved_piece, is_cap);
 
         let extended_max_depth = max_depth + extension;
         let reduced_max_depth = extended_max_depth.saturating_sub(reduction).max(depth + 1);
         let mut searched_depth = reduced_max_depth;
+
+        let alpha_child = alpha;
+        let beta_child = if is_pv_move { beta } else { alpha + 1 };
 
         // Initial search (reduced if LMR, null window if not first move)
         self.search_stack.push_move(&child, m, moved_piece);
@@ -651,6 +647,7 @@ impl Engine {
     }
 
     /// Handler called if a search fails high - updates history tables, killers, etc.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn on_fail_high(
         &mut self,
         node: &Node,

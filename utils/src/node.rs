@@ -1,6 +1,6 @@
 use std::cell::OnceCell;
 
-use cozy_chess::{BitBoard, Board, Color, Move, Piece, Square};
+use cozy_chess::{BitBoard, Board, Color, GameStatus, Move, Piece, Square};
 
 use crate::board_metrics::BoardMetrics;
 use crate::is_zugzwang;
@@ -129,6 +129,16 @@ impl Node {
         !self.board.checkers().is_empty()
     }
 
+    /// Check if the position is checkmate.
+    pub fn is_checkmate(&self) -> bool {
+        self.in_check() && self.board.status() == GameStatus::Won
+    }
+
+    /// Check if the 50-move rule has been exceeded (100+ half-moves without pawn move or capture).
+    pub fn is_fifty_move_draw(&self) -> bool {
+        self.board.halfmove_clock() >= 100 && !self.is_checkmate()
+    }
+
     /// Get the piece on a square.
     pub fn piece_on(&self, sq: Square) -> Option<Piece> {
         self.board.piece_on(sq)
@@ -229,4 +239,16 @@ impl Node {
             node_type: self.node_type.inverted(),
         })
     }
+}
+
+/// Returns true if the move creates new threats to opponent pieces.
+pub fn creates_threat(parent: &Node, child: &Node) -> bool {
+    let them = !parent.side_to_move();
+    child.threats_for(them).len() > parent.threats_for(them).len()
+}
+
+/// Returns true if the move removes threats from our pieces.
+pub fn evades_threat(parent: &Node, child: &Node) -> bool {
+    let us = parent.side_to_move();
+    child.threats_for(us).len() < parent.threats_for(us).len()
 }
