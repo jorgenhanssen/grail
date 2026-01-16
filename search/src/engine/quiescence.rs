@@ -71,6 +71,12 @@ impl Engine {
 
         let board_material = node.total_material();
 
+        let can_delta = can_delta_prune(
+            in_check,
+            self.config.qs_delta_material_threshold.value,
+            board_material,
+        );
+
         // Do a "stand-pat" evaluation if not in check
         if !in_check {
             if stand_pat >= beta {
@@ -80,11 +86,7 @@ impl Engine {
             }
 
             // Node-level delta pruning (big delta)
-            if can_delta_prune(
-                in_check,
-                self.config.qs_delta_material_threshold.value,
-                board_material,
-            ) {
+            if can_delta {
                 let mut big_delta = QUEEN_VALUE;
                 let promotion_rank = if board.side_to_move() == Color::White {
                     Rank::Seventh
@@ -115,11 +117,7 @@ impl Engine {
 
         while let Some(mv) = moves.next() {
             // Per-move delta pruning (skip if capture can't possibly improve alpha)
-            if can_delta_prune(
-                in_check,
-                self.config.qs_delta_material_threshold.value,
-                board_material,
-            ) {
+            if can_delta {
                 let captured = board.piece_on(mv.to);
                 if let Some(piece) = captured {
                     let mut delta = piece_value(piece) + self.config.qs_delta_margin.value;
