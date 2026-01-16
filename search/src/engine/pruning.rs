@@ -1,5 +1,5 @@
 use cozy_chess::{Move, Piece};
-use utils::{is_capture, piece_value, Node};
+use utils::{piece_value, Node};
 
 use crate::{
     pruning::{
@@ -83,6 +83,7 @@ impl Engine {
         node: &Node,
         m: Move,
         moved_piece: Piece,
+        is_capture: bool,
         remaining_depth: u8,
         in_check: bool,
         is_pv_move: bool,
@@ -91,16 +92,16 @@ impl Engine {
     ) -> bool {
         let board = node.board();
 
+        if !is_capture {
+            return false;
+        }
+
         if in_check
             || node.is_pv()
             || is_pv_move
             || remaining_depth < self.config.see_prune_min_remaining_depth.value
             || remaining_depth > self.config.see_prune_max_depth.value
         {
-            return false;
-        }
-
-        if !is_capture(board, m) {
             return false;
         }
 

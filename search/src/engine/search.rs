@@ -549,6 +549,7 @@ impl Engine {
             node,
             m,
             moved_piece,
+            is_cap,
             remaining_depth,
             in_check,
             is_pv_move,
