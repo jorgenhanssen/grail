@@ -76,7 +76,8 @@ impl Engine {
 
             loop {
                 let (alpha, beta) = window.bounds();
-                let (mv, score) = self.search_root(&root, iteration, alpha, beta);
+                let (score, pv) = self.search_node(&root, iteration, 0, alpha, beta, true);
+                let mv = pv.first().cloned();
 
                 if mv.is_none() {
                     break;
@@ -135,147 +136,9 @@ impl Engine {
         self.tt.age();
     }
 
-    /// Root search with the given alpha-beta window.
-    /// Called once per aspiration window attempt at each depth.
-    ///
-    /// TODO: This function duplicates much of search_subtree() and search_move() (PVS windowing,
-    /// LMR, re-search logic, PV creation). Consider unifying into a single search_node() function
-    /// to simplify.
-    pub(super) fn search_root(
-        &mut self,
-        root: &Node,
-        iteration: u8,
-        mut alpha: i16,
-        beta: i16,
-    ) -> (Option<Move>, i16) {
-        let best_move = self.current_pv.first().cloned();
-        let threats = root.threats();
-
-        let prev_to = self
-            .continuation_history
-            .get_prev_to_squares(self.search_stack.as_slice());
-        let mut moves = MainMoveGenerator::new(
-            best_move,
-            [None; 2],
-            prev_to,
-            self.config.quiet_check_bonus.value,
-            threats,
-        );
-
-        let mut best_score = -SCORE_INF;
-        let mut current_best_move = None;
-
-        let in_check = root.in_check();
-        let depth = iteration.saturating_sub(1);
-        let mut move_index: i32 = -1;
-        while let Some(m) = moves.next(
-            root,
-            &self.history_heuristic,
-            &self.capture_history,
-            &self.continuation_history,
-        ) {
-            move_index += 1;
-            let is_pv_move = move_index == 0;
-
-            let moved_piece = root.piece_on(m.from).unwrap();
-            let mut child = root.create_child(m, move_index);
-
-            self.search_stack.push_move(&child, m, moved_piece);
-
-            // LMR: reduce late non-tactical moves
-            let gives_check = child.in_check();
-            let is_cap = root.is_capture(m);
-            let is_promotion = m.promotion.is_some();
-            let is_tactical = in_check || gives_check || is_cap || is_promotion;
-
-            let reduction = match self.get_reduction(
-                0,
-                depth,
-                is_pv_move,
-                is_tactical,
-                true,
-                is_cap,
-                move_index,
-                root,
-                &child,
-                m,
-                &self.lmr,
-            ) {
-                Reduction::Reduction(r) => r,
-                Reduction::Prune => continue,
-            };
-
-            // PVS window
-            let alpha_child = alpha;
-            let beta_child = if is_pv_move {
-                beta
-            } else {
-                alpha_child.saturating_add(1)
-            };
-
-            // Initial search (possibly reduced depth, null window for non-PV moves)
-            let (child_value, mut pv) = self.search_subtree(
-                &child,
-                depth.saturating_sub(reduction),
-                1,
-                -beta_child,
-                -alpha_child,
-                true,
-            );
-            let mut score = -child_value;
-
-            // LMR re-search: reduced search beat alpha, verify at full depth
-            if reduction > 0 && score > alpha_child {
-                child.set_type(child.node_type().inverted());
-                let (re_child_value, re_pv) =
-                    self.search_subtree(&child, depth, 1, -beta_child, -alpha_child, true);
-                score = -re_child_value;
-                pv = re_pv;
-            }
-
-            // PVS re-search: null window beat alpha, verify with full window
-            if !is_pv_move && score > alpha_child && score < beta {
-                child.set_type(NodeType::Pv);
-                let (full_child_value, full_pv) =
-                    self.search_subtree(&child, depth, 1, -beta, -alpha_child, true);
-                score = -full_child_value;
-                pv = full_pv;
-            }
-            self.search_stack.pop();
-
-            // Stopped during search, return partial results
-            if self.stop.load(Ordering::Relaxed) {
-                return (current_best_move, best_score);
-            }
-
-            pv.insert(0, m);
-
-            if score > best_score {
-                best_score = score;
-                current_best_move = Some(m);
-                self.current_pv = pv;
-            }
-
-            alpha = alpha.max(best_score);
-
-            // Beta cutoff
-            if alpha >= beta {
-                break;
-            }
-        }
-
-        (current_best_move, best_score)
-    }
-
-    /// Recursive alpha-beta search with PVS.
-    ///
-    /// # Parameters
-    /// - `depth`: remaining depth to search (decreases each level, qsearch at 0)
-    /// - `ply`: distance from root (0 at root, increases each level)
-    ///
-    /// Returns (score, pv).
+    /// Alpha-beta search with principal variation search (PVS) and late move reductions.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn search_subtree(
+    pub(super) fn search_node(
         &mut self,
         node: &Node,
         depth: u8,
@@ -289,16 +152,15 @@ impl Engine {
         }
         self.nodes += 1;
 
-        if self.is_forced_draw(node) {
+        if ply > 0 && self.is_forced_draw(node) {
             return (self.draw_value(), Vec::new());
         }
 
-        // Ply limit - return static eval if we've hit max ply
+        // As deep as we can go, so return static eval
         if ply as usize >= MAX_DEPTH {
             return (self.static_eval(node), Vec::new());
         }
 
-        let hash = node.hash();
         if mate_distance_prune(&mut alpha, &mut beta, ply) {
             return (alpha, Vec::new());
         }
@@ -306,6 +168,8 @@ impl Engine {
         if depth == 0 {
             return self.quiescence_search(node, alpha, beta, ply);
         }
+
+        let hash = node.hash();
 
         // Transposition table probe
         let original_alpha = alpha;
@@ -319,8 +183,7 @@ impl Engine {
             // search at least as deep as we need. Shallow results may have
             // missed tactics and can't safely prune the current search.
             //
-            // Don't do TT cutoffs in PV nodes - TT only stores one move,
-            // so cutting off here could truncate the PV to just that move.
+            // Don't do TT cutoffs in PV nodes.
             if !is_pv_node && tt.depth >= depth {
                 match tt.bound {
                     // Exact: previous search found true minimax value
@@ -352,8 +215,8 @@ impl Engine {
 
         let in_check = node.in_check();
 
-        // Internal Iterative Reductions
         let depth = iir(
+            ply,
             depth,
             maybe_tt_move.is_some(),
             self.config.iir_min_depth.value,
@@ -411,9 +274,17 @@ impl Engine {
             .continuation_history
             .get_prev_to_squares(self.search_stack.as_slice());
 
+        let best_move_hint = if ply == 0 {
+            // At root we can use the currently best move (pv[0]) for ordering
+            self.current_pv.first().cloned()
+        } else {
+            maybe_tt_move
+        };
+        let killers = self.killer_moves[ply as usize];
+
         let mut movegen = MainMoveGenerator::new(
-            maybe_tt_move,
-            self.killer_moves[ply as usize],
+            best_move_hint,
+            killers,
             prev_to,
             self.config.quiet_check_bonus.value,
             threats,
@@ -432,7 +303,6 @@ impl Engine {
         ) {
             move_index += 1;
 
-            // Late Move Pruning (LMP)
             if should_lmp_prune(
                 node,
                 m,
@@ -468,8 +338,14 @@ impl Engine {
                     best_value = value;
                     best_move = Some(m);
                     line.insert(0, m);
-                    best_line = line;
+                    best_line = line.clone();
                     best_move_depth = searched_depth;
+
+                    // If we are at root and this is a great move,
+                    // then let's use this move as the current PV.
+                    if ply == 0 {
+                        self.current_pv = line;
+                    }
                 }
 
                 alpha = alpha.max(best_value);
@@ -483,8 +359,7 @@ impl Engine {
                         &quiets_searched,
                         &captures_searched,
                     );
-
-                    break; // beta cutoff
+                    break;
                 }
 
                 if is_quiet {
@@ -508,7 +383,6 @@ impl Engine {
             };
         }
 
-        // Store TT entry with the depth actually searched for the best move
         self.tt.store(
             hash,
             ply,
@@ -603,7 +477,7 @@ impl Engine {
 
         // Initial search (reduced if LMR, null window if not first move)
         self.search_stack.push_move(&child, m, moved_piece);
-        let (child_value, pv_line) = self.search_subtree(
+        let (child_value, pv_line) = self.search_node(
             &child,
             reduced_child_depth,
             ply + 1,
@@ -619,7 +493,7 @@ impl Engine {
         if reduction > 0 && value > alpha {
             child.set_type(child.node_type().inverted());
             self.search_stack.push_move(&child, m, moved_piece);
-            let (re_child_value, re_line) = self.search_subtree(
+            let (re_child_value, re_line) = self.search_node(
                 &child,
                 extended_child_depth,
                 ply + 1,
@@ -638,7 +512,7 @@ impl Engine {
             child.set_type(NodeType::Pv);
             self.search_stack.push_move(&child, m, moved_piece);
             let (full_child_value, full_line) =
-                self.search_subtree(&child, extended_child_depth, ply + 1, -beta, -alpha, true);
+                self.search_node(&child, extended_child_depth, ply + 1, -beta, -alpha, true);
             self.search_stack.pop();
             value = -full_child_value;
             line = full_line;
