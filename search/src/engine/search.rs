@@ -57,26 +57,26 @@ impl Engine {
         controller.on_stop(move || stop.store(true, Ordering::Relaxed));
         controller.start_timer();
 
-        let mut depth = 1;
+        let mut iteration = 1;
         let mut best_move = None;
         let mut best_score = 0;
 
         // Root node is always PV
         let root = Node::new(self.board.clone(), NodeType::Pv);
 
-        while !self.stop.load(Ordering::Relaxed) && depth < MAX_DEPTH as u8 {
+        while !self.stop.load(Ordering::Relaxed) && iteration < MAX_DEPTH as u8 {
             controller.on_iteration_start();
 
-            if !controller.should_continue_to_next_depth(depth) {
+            if !controller.should_continue_to_next_depth(iteration) {
                 break;
             }
 
-            window.begin_depth(depth, best_score);
+            window.begin_depth(iteration, best_score);
             let mut retries = 0;
 
             loop {
                 let (alpha, beta) = window.bounds();
-                let (mv, score) = self.search_root(&root, depth, alpha, beta);
+                let (mv, score) = self.search_root(&root, iteration, alpha, beta);
 
                 if mv.is_none() {
                     break;
@@ -95,10 +95,10 @@ impl Engine {
                         best_move = mv;
                         best_score = s;
 
-                        controller.on_iteration_complete(depth, s, mv);
+                        controller.on_iteration_complete(iteration, s, mv);
 
                         if let Some(out) = output {
-                            self.send_search_info(out, depth, s, controller.elapsed());
+                            self.send_search_info(out, iteration, s, controller.elapsed());
                         }
                         break;
                     }
@@ -115,7 +115,7 @@ impl Engine {
                 }
             }
 
-            depth += 1;
+            iteration += 1;
         }
 
         best_move.map(|mv| (mv, best_score))
@@ -144,7 +144,7 @@ impl Engine {
     pub(super) fn search_root(
         &mut self,
         root: &Node,
-        depth: u8,
+        iteration: u8,
         mut alpha: i16,
         beta: i16,
     ) -> (Option<Move>, i16) {
@@ -166,7 +166,7 @@ impl Engine {
         let mut current_best_move = None;
 
         let in_check = root.in_check();
-        let remaining_depth = depth.saturating_sub(1);
+        let remaining_depth = iteration.saturating_sub(1);
         let mut move_index: i32 = -1;
         while let Some(m) = moves.next(
             root,
@@ -189,7 +189,7 @@ impl Engine {
             let is_tactical = in_check || gives_check || is_cap || is_promotion;
 
             let reduction = match self.get_reduction(
-                depth,
+                0,
                 remaining_depth,
                 is_pv_move,
                 is_tactical,
@@ -199,7 +199,7 @@ impl Engine {
                 root,
                 &child,
                 m,
-                depth,
+                iteration,
                 &self.lmr,
             ) {
                 Reduction::Reduction(r) => r,
@@ -215,16 +215,22 @@ impl Engine {
             };
 
             // Initial search (possibly reduced depth, null window for non-PV moves)
-            let reduced_depth = depth.saturating_sub(reduction);
-            let (child_value, mut pv) =
-                self.search_subtree(&child, 1, reduced_depth, -beta_child, -alpha_child, true);
+            let reduced_max_depth = iteration.saturating_sub(reduction);
+            let (child_value, mut pv) = self.search_subtree(
+                &child,
+                1,
+                reduced_max_depth,
+                -beta_child,
+                -alpha_child,
+                true,
+            );
             let mut score = -child_value;
 
             // LMR re-search: reduced search beat alpha, verify at full depth
             if reduction > 0 && score > alpha_child {
                 child.set_type(child.node_type().inverted());
                 let (re_child_value, re_pv) =
-                    self.search_subtree(&child, 1, depth, -beta_child, -alpha_child, true);
+                    self.search_subtree(&child, 1, iteration, -beta_child, -alpha_child, true);
                 score = -re_child_value;
                 pv = re_pv;
             }
@@ -233,7 +239,7 @@ impl Engine {
             if !is_pv_move && score > alpha_child && score < beta {
                 child.set_type(NodeType::Pv);
                 let (full_child_value, full_pv) =
-                    self.search_subtree(&child, 1, depth, -beta, -alpha_child, true);
+                    self.search_subtree(&child, 1, iteration, -beta, -alpha_child, true);
                 score = -full_child_value;
                 pv = full_pv;
             }
