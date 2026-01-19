@@ -169,7 +169,7 @@ impl Engine {
         // Do a reduced depth null search to check if our position is still good enough
         self.search_stack.push_node(&nm_child);
         let reduced_child_depth = depth.saturating_sub(reduction + 1);
-        let (score, _) = self.search_subtree(
+        let (score, _) = self.search_node(
             &nm_child,
             reduced_child_depth,
             ply + 1,
@@ -186,7 +186,7 @@ impl Engine {
             if depth <= 6 {
                 self.search_stack.push_node(&nm_child);
                 let verify_child_depth = depth.saturating_sub(reduction);
-                let (v_score, _) = self.search_subtree(
+                let (v_score, _) = self.search_node(
                     &nm_child,
                     verify_child_depth,
                     ply + 1,
