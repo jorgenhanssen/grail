@@ -6,7 +6,7 @@ use crate::{
         can_futility_prune, can_null_move_prune, can_razor_prune, can_reverse_futility_prune,
         futility_margin, null_move_reduction, razor_margin, rfp_margin, RAZOR_NEAR_MATE,
     },
-    utils::see::see,
+    utils::{see::see, Bounds},
 };
 
 use super::Engine;
@@ -59,7 +59,7 @@ impl Engine {
             return None;
         }
         // Q search with null window
-        let (value, _) = self.quiescence_search(node, alpha - 1, alpha, ply);
+        let (value, _) = self.quiescence_search(node, Bounds::null(alpha - 1), ply);
         if value < alpha && value.abs() < RAZOR_NEAR_MATE {
             Some(value)
         } else {
@@ -136,14 +136,12 @@ impl Engine {
     /// Includes verification search at low depths to avoid zugzwang.
     ///
     /// <https://www.chessprogramming.org/Null_Move_Pruning>
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn try_null_move_prune(
         &mut self,
         node: &Node,
         depth: u8,
         ply: u8,
-        alpha: i16,
-        beta: i16,
+        bounds: Bounds,
         in_check: bool,
         try_null_move: bool,
         static_eval: Option<i16>,
@@ -160,42 +158,33 @@ impl Engine {
         let reduction: u8 = null_move_reduction(
             depth,
             static_eval,
-            beta,
+            bounds.beta,
             self.config.nmp_base_reduction.value,
             self.config.nmp_depth_divisor.value,
             self.config.nmp_eval_margin.value,
         );
 
+        // Null window around beta for the null move search
+        let null_bounds = Bounds::null(-bounds.beta);
+
         // Do a reduced depth null search to check if our position is still good enough
         self.search_stack.push_node(&nm_child);
         let reduced_child_depth = depth.saturating_sub(reduction + 1);
-        let (score, _) = self.search_node(
-            &nm_child,
-            reduced_child_depth,
-            ply + 1,
-            -beta,
-            -beta + 1,
-            false,
-        );
+        let (score, _) =
+            self.search_node(&nm_child, reduced_child_depth, ply + 1, null_bounds, false);
         self.search_stack.pop();
 
         // If opponent couldn't beat beta even with a free move, position is strong enough to prune
-        if -score >= beta {
+        if -score >= bounds.beta {
             // Zugzwang check: at shallow depths, verify with a real search.
             // In zugzwang, passing is better than any legal move, so null move gives false positive.
             if depth <= 6 {
                 self.search_stack.push_node(&nm_child);
                 let verify_child_depth = depth.saturating_sub(reduction);
-                let (v_score, _) = self.search_node(
-                    &nm_child,
-                    verify_child_depth,
-                    ply + 1,
-                    -beta,
-                    -beta + 1,
-                    false,
-                );
+                let (v_score, _) =
+                    self.search_node(&nm_child, verify_child_depth, ply + 1, null_bounds, false);
                 self.search_stack.pop();
-                if -v_score < beta {
+                if -v_score < bounds.beta {
                     return None; // fail verification; do not prune
                 }
             }
@@ -204,13 +193,13 @@ impl Engine {
                 node.hash(),
                 ply,
                 depth.saturating_sub(reduction),
-                beta,
+                bounds.beta,
                 None,
-                alpha,
-                beta,
+                bounds.alpha,
+                bounds.beta,
                 None,
             );
-            return Some(beta);
+            return Some(bounds.beta);
         }
 
         None
@@ -219,16 +208,14 @@ impl Engine {
     /// Reverse futility pruning: if static eval - margin >= beta, the position is too good to search.
     ///
     /// <https://www.chessprogramming.org/Reverse_Futility_Pruning>
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn try_reverse_futility_prune(
         &mut self,
         node: &Node,
         depth: u8,
         in_check: bool,
         static_eval: i16,
-        beta: i16,
+        bounds: Bounds,
         ply: u8,
-        alpha: i16,
         is_improving: bool,
     ) -> Option<i16> {
         if !can_reverse_futility_prune(
@@ -247,18 +234,18 @@ impl Engine {
             is_improving,
             self.config.rfp_improving_bonus.value,
         );
-        if static_eval - margin >= beta && static_eval.abs() < RAZOR_NEAR_MATE {
+        if static_eval - margin >= bounds.beta && static_eval.abs() < RAZOR_NEAR_MATE {
             self.tt.store(
                 node.hash(),
                 ply,
                 0,
-                beta,
+                bounds.beta,
                 Some(static_eval),
-                alpha,
-                beta,
+                bounds.alpha,
+                bounds.beta,
                 None,
             );
-            return Some(beta);
+            return Some(bounds.beta);
         }
         None
     }

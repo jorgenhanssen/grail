@@ -17,6 +17,7 @@ use crate::{
     stack::SearchNode,
     time_control::SearchController,
     transposition::Bound,
+    utils::Bounds,
 };
 
 use super::{Engine, MAX_DEPTH};
@@ -75,8 +76,8 @@ impl Engine {
             let mut retries = 0;
 
             loop {
-                let (alpha, beta) = window.bounds();
-                let (score, pv) = self.search_node(&root, iteration, 0, alpha, beta, true);
+                let bounds = window.bounds();
+                let (score, pv) = self.search_node(&root, iteration, 0, bounds, true);
                 let mv = pv.first().cloned();
 
                 if mv.is_none() {
@@ -137,14 +138,12 @@ impl Engine {
     }
 
     /// Alpha-beta search with principal variation search (PVS) and late move reductions.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn search_node(
         &mut self,
         node: &Node,
         depth: u8,
         ply: u8,
-        mut alpha: i16,
-        mut beta: i16,
+        mut bounds: Bounds,
         null_move_allowed: bool,
     ) -> (i16, Vec<Move>) {
         if self.stop.load(Ordering::Relaxed) {
@@ -161,18 +160,18 @@ impl Engine {
             return (self.static_eval(node), Vec::new());
         }
 
-        if mate_distance_prune(&mut alpha, &mut beta, ply) {
-            return (alpha, Vec::new());
+        if mate_distance_prune(&mut bounds, ply) {
+            return (bounds.alpha, Vec::new());
         }
 
         if depth == 0 {
-            return self.quiescence_search(node, alpha, beta, ply);
+            return self.quiescence_search(node, bounds, ply);
         }
 
         let hash = node.hash();
 
         // Transposition table probe
-        let original_alpha = alpha;
+        let original_bounds = bounds;
         let mut maybe_tt_move = None;
         let mut tt_static_eval = None;
 
@@ -192,16 +191,16 @@ impl Engine {
                     }
                     // Lower: previous search failed high (value >= beta), so value is at least this good
                     Bound::Lower => {
-                        alpha = alpha.max(tt.value);
-                        if alpha >= beta {
+                        bounds.raise_alpha(tt.value);
+                        if bounds.is_cutoff(bounds.alpha) {
                             return (tt.value, tt.best_move.map_or(Vec::new(), |m| vec![m]));
                         }
                     }
                     // Upper: previous search failed low (value <= alpha), so value is at most this bad
                     Bound::Upper => {
-                        beta = beta.min(tt.value);
-                        if beta <= alpha {
-                            return (beta, tt.best_move.map_or(Vec::new(), |m| vec![m]));
+                        bounds.beta = bounds.beta.min(tt.value);
+                        if bounds.beta <= bounds.alpha {
+                            return (bounds.beta, tt.best_move.map_or(Vec::new(), |m| vec![m]));
                         }
                     }
                 }
@@ -228,7 +227,9 @@ impl Engine {
         self.search_stack
             .current_mut(|n| n.static_eval = Some(static_eval));
 
-        if let Some(score) = self.try_razor_prune(node, depth, alpha, ply, in_check, static_eval) {
+        if let Some(score) =
+            self.try_razor_prune(node, depth, bounds.alpha, ply, in_check, static_eval)
+        {
             return (score, Vec::new());
         }
 
@@ -236,8 +237,7 @@ impl Engine {
             node,
             depth,
             ply,
-            alpha,
-            beta,
+            bounds,
             in_check,
             null_move_allowed,
             Some(static_eval),
@@ -252,9 +252,8 @@ impl Engine {
             depth,
             in_check,
             static_eval,
-            beta,
+            bounds,
             ply,
-            alpha,
             is_improving,
         ) {
             return (score, Vec::new());
@@ -322,8 +321,7 @@ impl Engine {
                 node,
                 depth,
                 ply,
-                alpha,
-                beta,
+                bounds,
                 in_check,
                 m,
                 move_index,
@@ -348,8 +346,8 @@ impl Engine {
                     }
                 }
 
-                alpha = alpha.max(best_value);
-                if alpha >= beta {
+                bounds.raise_alpha(best_value);
+                if bounds.is_cutoff(bounds.alpha) {
                     self.on_fail_high(
                         node,
                         m,
@@ -389,8 +387,8 @@ impl Engine {
             best_move_depth,
             best_value,
             Some(static_eval),
-            original_alpha,
-            beta,
+            original_bounds.alpha,
+            bounds.beta,
             best_move,
         );
         (best_value, best_line)
@@ -404,8 +402,7 @@ impl Engine {
         node: &Node,
         depth: u8,
         ply: u8,
-        alpha: i16,
-        beta: i16,
+        bounds: Bounds,
         in_check: bool,
         m: Move,
         move_index: i32,
@@ -426,7 +423,7 @@ impl Engine {
             depth,
             in_check,
             is_pv_move,
-            alpha,
+            bounds.alpha,
             static_eval,
         ) {
             return None;
@@ -440,7 +437,7 @@ impl Engine {
         let gives_check = child.in_check();
         let is_tactical = in_check || gives_check || is_cap || is_promotion;
 
-        if self.try_futility_prune(depth, in_check, is_tactical, alpha, static_eval) {
+        if self.try_futility_prune(depth, in_check, is_tactical, bounds.alpha, static_eval) {
             return None;
         }
 
@@ -472,35 +469,27 @@ impl Engine {
             .saturating_sub(reduction)
             .max(1);
 
-        let alpha_child = alpha;
-        let beta_child = if is_pv_move { beta } else { alpha + 1 };
+        // Build child bounds: full window for PV move, null window otherwise
+        let child_bounds = if is_pv_move {
+            bounds.invert()
+        } else {
+            Bounds::null(bounds.alpha).invert()
+        };
 
         // Initial search (reduced if LMR, null window if not first move)
         self.search_stack.push_move(&child, m, moved_piece);
-        let (child_value, pv_line) = self.search_node(
-            &child,
-            reduced_child_depth,
-            ply + 1,
-            -beta_child,
-            -alpha_child,
-            true,
-        );
+        let (child_value, pv_line) =
+            self.search_node(&child, reduced_child_depth, ply + 1, child_bounds, true);
         self.search_stack.pop();
         let mut value = -child_value;
         let mut line = pv_line;
 
         // Re-search at full depth (if LMR was used and value > alpha)
-        if reduction > 0 && value > alpha {
+        if reduction > 0 && value > bounds.alpha {
             child.set_type(child.node_type().inverted());
             self.search_stack.push_move(&child, m, moved_piece);
-            let (re_child_value, re_line) = self.search_node(
-                &child,
-                extended_child_depth,
-                ply + 1,
-                -beta_child,
-                -alpha_child,
-                true,
-            );
+            let (re_child_value, re_line) =
+                self.search_node(&child, extended_child_depth, ply + 1, child_bounds, true);
             self.search_stack.pop();
             value = -re_child_value;
             line = re_line;
@@ -508,11 +497,11 @@ impl Engine {
         }
 
         // Re-search with full window (if null window failed high in a PV node)
-        if value > alpha && value < beta && !is_pv_move && is_pv_node {
+        if value > bounds.alpha && value < bounds.beta && !is_pv_move && is_pv_node {
             child.set_type(NodeType::Pv);
             self.search_stack.push_move(&child, m, moved_piece);
             let (full_child_value, full_line) =
-                self.search_node(&child, extended_child_depth, ply + 1, -beta, -alpha, true);
+                self.search_node(&child, extended_child_depth, ply + 1, bounds.invert(), true);
             self.search_stack.pop();
             value = -full_child_value;
             line = full_line;
