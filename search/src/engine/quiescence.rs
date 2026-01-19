@@ -10,7 +10,7 @@ use crate::{
     move_ordering::QMoveGenerator,
     pruning::{can_delta_prune, mate_distance_prune},
     transposition::Bound,
-    utils::see::see,
+    utils::{see::see, Bounds},
     MAX_DEPTH,
 };
 
@@ -24,8 +24,7 @@ impl Engine {
     pub(super) fn quiescence_search(
         &mut self,
         node: &Node,
-        mut alpha: i16,
-        mut beta: i16,
+        mut bounds: Bounds,
         ply: u8,
     ) -> (i16, Vec<Move>) {
         // Check if we should stop searching
@@ -46,23 +45,22 @@ impl Engine {
         }
 
         let hash = node.hash();
-        if mate_distance_prune(&mut alpha, &mut beta, ply) {
-            return (alpha, Vec::new());
+        if mate_distance_prune(&mut bounds, ply) {
+            return (bounds.alpha, Vec::new());
         }
 
         let board = node.board();
         let in_check = node.in_check();
 
-        let original_alpha = alpha;
-        let original_beta = beta;
+        let original_bounds = bounds;
 
         // QS entries don't track depth. All quiescence searches explore the same
         // tactical horizon, so any hit is trustworthy for cutoffs
         if let Some(tt) = self.qs_tt.probe(hash, in_check) {
             match tt.bound {
                 Bound::Exact => return (tt.value, Vec::new()),
-                Bound::Lower if tt.value >= beta => return (tt.value, Vec::new()),
-                Bound::Upper if tt.value <= alpha => return (tt.value, Vec::new()),
+                Bound::Lower if bounds.is_cutoff(tt.value) => return (tt.value, Vec::new()),
+                Bound::Upper if tt.value <= bounds.alpha => return (tt.value, Vec::new()),
                 _ => {}
             }
         }
@@ -79,9 +77,14 @@ impl Engine {
 
         // Do a "stand-pat" evaluation if not in check
         if !in_check {
-            if stand_pat >= beta {
-                self.qs_tt
-                    .store(hash, stand_pat, original_alpha, original_beta, in_check);
+            if bounds.is_cutoff(stand_pat) {
+                self.qs_tt.store(
+                    hash,
+                    stand_pat,
+                    original_bounds.alpha,
+                    original_bounds.beta,
+                    in_check,
+                );
                 return (stand_pat, Vec::new());
             }
 
@@ -100,14 +103,19 @@ impl Engine {
                     big_delta += QUEEN_VALUE - piece_value(Piece::Pawn);
                 }
 
-                if stand_pat + big_delta < alpha {
-                    self.qs_tt
-                        .store(hash, stand_pat, original_alpha, original_beta, in_check);
+                if stand_pat + big_delta < bounds.alpha {
+                    self.qs_tt.store(
+                        hash,
+                        stand_pat,
+                        original_bounds.alpha,
+                        original_bounds.beta,
+                        in_check,
+                    );
                     return (stand_pat, Vec::new());
                 }
             }
 
-            alpha = alpha.max(stand_pat);
+            bounds.raise_alpha(stand_pat);
         }
 
         let mut best_line = Vec::new();
@@ -125,7 +133,7 @@ impl Engine {
                         delta += piece_value(promotion) - piece_value(Piece::Pawn);
                         // promotion bonus
                     }
-                    if stand_pat + delta < alpha {
+                    if stand_pat + delta < bounds.alpha {
                         continue;
                     }
                 } else {
@@ -157,7 +165,7 @@ impl Engine {
 
             self.search_stack.push_node(&child);
             let (child_score, mut child_line) =
-                self.quiescence_search(&child, -beta, -alpha, ply + 1);
+                self.quiescence_search(&child, bounds.invert(), ply + 1);
             self.search_stack.pop();
 
             let value = -child_score;
@@ -171,10 +179,10 @@ impl Engine {
                 best_eval = value;
                 child_line.insert(0, mv);
                 best_line = child_line;
-                alpha = alpha.max(best_eval);
+                bounds.raise_alpha(best_eval);
             }
 
-            if alpha >= beta {
+            if bounds.is_cutoff(bounds.alpha) {
                 break; // Beta cutoff
             }
         }
@@ -184,8 +192,13 @@ impl Engine {
             return (-(MATE_VALUE - ply as i16), Vec::new());
         }
 
-        self.qs_tt
-            .store(hash, best_eval, original_alpha, original_beta, in_check);
+        self.qs_tt.store(
+            hash,
+            best_eval,
+            original_bounds.alpha,
+            original_bounds.beta,
+            in_check,
+        );
         (best_eval, best_line)
     }
 }
