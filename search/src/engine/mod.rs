@@ -49,7 +49,7 @@ pub struct Engine {
     /// Principal variation - the current best line we have found
     current_pv: Vec<Move>,
     /// Selective depth (max ply reached including quiescence - deepest we have gotten)
-    max_depth_reached: u8,
+    max_ply_reached: u8,
 
     /// Main transposition table
     tt: TranspositionTable,
@@ -92,7 +92,7 @@ impl Engine {
             nodes: 0,
             killer_moves: [[None; 2]; MAX_DEPTH],
             current_pv: Vec::new(),
-            max_depth_reached: 1,
+            max_ply_reached: 1,
 
             tt: TranspositionTable::new(1),
             qs_tt: QSTable::new(1),
@@ -182,7 +182,7 @@ impl Engine {
         output
             .send(UciOutput::Info(Info {
                 depth: current_depth,
-                sel_depth: self.max_depth_reached,
+                sel_depth: self.max_ply_reached,
                 nodes: self.nodes,
                 nodes_per_second: nps,
                 hashfull: self.tt.hashfull(),

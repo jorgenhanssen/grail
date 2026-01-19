@@ -68,11 +68,11 @@ impl CaptureHistory {
         attacker_idx * Square::NUM * Piece::NUM + to_idx * Piece::NUM + victim_idx
     }
 
-    pub fn get_bonus(&self, remaining_depth: u8) -> i32 {
-        self.bonus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
+    pub fn get_bonus(&self, depth: u8) -> i32 {
+        self.bonus_multiplier * depth.min(MAX_DEPTH as u8) as i32
     }
 
-    pub fn get_malus(&self, remaining_depth: u8) -> i32 {
-        -self.malus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
+    pub fn get_malus(&self, depth: u8) -> i32 {
+        -self.malus_multiplier * depth.min(MAX_DEPTH as u8) as i32
     }
 }

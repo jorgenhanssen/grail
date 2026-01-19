@@ -17,8 +17,8 @@ impl Engine {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn get_reduction(
         &self,
+        ply: u8,
         depth: u8,
-        remaining_depth: u8,
         is_pv_move: bool,
         is_tactical: bool,
         is_improving: bool,
@@ -27,7 +27,6 @@ impl Engine {
         parent: &Node,
         child: &Node,
         m: Move,
-        max_depth: u8,
         lmr_table: &LmrTable,
     ) -> Reduction {
         if is_pv_move {
@@ -42,7 +41,7 @@ impl Engine {
                 .get(parent.side_to_move(), m.from, m.to, parent.threats());
 
         // Late move reductions - later moves in ordering are less likely to be best
-        let mut reduction = lmr_table.get(remaining_depth, move_index);
+        let mut reduction = lmr_table.get(depth, move_index);
 
         // Reduce more
         if parent.is_cut() {
@@ -58,7 +57,7 @@ impl Engine {
 
         // Reduce less
         if reduction > 0 {
-            if near_root(depth, remaining_depth) {
+            if near_root(ply, depth) {
                 reduction = reduction.saturating_sub(1);
             }
             if parent.is_pv() {
@@ -67,19 +66,19 @@ impl Engine {
             if is_tactical || creates_threat(parent, child) || evades_threat(parent, child) {
                 reduction = reduction.saturating_sub(1);
             }
-            if self.killer_moves[depth as usize].contains(&Some(m)) {
+            if self.killer_moves[ply as usize].contains(&Some(m)) {
                 reduction = reduction.saturating_sub(1);
             }
         }
 
-        reduction = cap_reduction(reduction, remaining_depth);
+        reduction = cap_reduction(reduction, depth);
 
         // Prune when bad history if it would barely search anyway
-        let reduced_depth = max_depth.saturating_sub(reduction);
+        let reduced_depth = depth.saturating_sub(reduction);
         if !is_capture
             && !is_improving
             && hist < self.history_heuristic.prune_threshold()
-            && reduced_depth <= depth + 1
+            && reduced_depth <= 1
         {
             return Reduction::Prune;
         }

@@ -17,21 +17,17 @@ impl Engine {
     /// <https://www.chessprogramming.org/Futility_Pruning>
     pub(super) fn try_futility_prune(
         &self,
-        remaining_depth: u8,
+        depth: u8,
         in_check: bool,
         is_tactical: bool,
         alpha: i16,
         static_eval: i16,
     ) -> bool {
-        if !can_futility_prune(
-            remaining_depth,
-            in_check,
-            self.config.futility_max_depth.value,
-        ) {
+        if !can_futility_prune(depth, in_check, self.config.futility_max_depth.value) {
             return false;
         }
         let margin = futility_margin(
-            remaining_depth,
+            depth,
             self.config.futility_base_margin.value,
             self.config.futility_depth_multiplier.value,
         );
@@ -44,18 +40,18 @@ impl Engine {
     pub(super) fn try_razor_prune(
         &mut self,
         node: &Node,
-        remaining_depth: u8,
-        alpha: i16,
         depth: u8,
+        alpha: i16,
+        ply: u8,
         in_check: bool,
         static_eval: i16,
     ) -> Option<i16> {
-        if !can_razor_prune(remaining_depth, in_check, self.config.razor_max_depth.value) {
+        if !can_razor_prune(depth, in_check, self.config.razor_max_depth.value) {
             return None;
         }
         // If static eval already near/above alpha threshold, do not razor
         let margin = razor_margin(
-            remaining_depth,
+            depth,
             self.config.razor_base_margin.value,
             self.config.razor_depth_coefficient.value,
         );
@@ -63,7 +59,7 @@ impl Engine {
             return None;
         }
         // Q search with null window
-        let (value, _) = self.quiescence_search(node, alpha - 1, alpha, depth);
+        let (value, _) = self.quiescence_search(node, alpha - 1, alpha, ply);
         if value < alpha && value.abs() < RAZOR_NEAR_MATE {
             Some(value)
         } else {
@@ -84,7 +80,7 @@ impl Engine {
         m: Move,
         moved_piece: Piece,
         is_capture: bool,
-        remaining_depth: u8,
+        depth: u8,
         in_check: bool,
         is_pv_move: bool,
         alpha: i16,
@@ -99,8 +95,8 @@ impl Engine {
         if in_check
             || node.is_pv()
             || is_pv_move
-            || remaining_depth < self.config.see_prune_min_remaining_depth.value
-            || remaining_depth > self.config.see_prune_max_depth.value
+            || depth < self.config.see_prune_min_remaining_depth.value
+            || depth > self.config.see_prune_max_depth.value
         {
             return false;
         }
@@ -130,7 +126,7 @@ impl Engine {
         // - depth_margin: at higher depths, be more conservative (less pruning)
         // A negative threshold means we can afford to lose some material
         let eval_gap = alpha - static_eval;
-        let depth_margin = self.config.see_prune_depth_margin.value * (remaining_depth as i16);
+        let depth_margin = self.config.see_prune_depth_margin.value * (depth as i16);
         let see_threshold = -(eval_gap.max(0) + depth_margin);
 
         !see(board, m, see_threshold)
@@ -145,31 +141,24 @@ impl Engine {
         &mut self,
         node: &Node,
         depth: u8,
-        max_depth: u8,
+        ply: u8,
         alpha: i16,
         beta: i16,
-        remaining_depth: u8,
         in_check: bool,
         try_null_move: bool,
         static_eval: Option<i16>,
     ) -> Option<i16> {
         if !(try_null_move
-            && can_null_move_prune(
-                node,
-                remaining_depth,
-                in_check,
-                self.config.nmp_min_depth.value,
-            ))
+            && can_null_move_prune(node, depth, in_check, self.config.nmp_min_depth.value))
         {
             return None;
         }
 
         let nm_child = node.create_null_move_child()?;
-        let base_remaining = max_depth - depth;
 
         // Calculate reduction based on remaining depth and static eval
         let reduction: u8 = null_move_reduction(
-            base_remaining,
+            depth,
             static_eval,
             beta,
             self.config.nmp_base_reduction.value,
@@ -179,10 +168,11 @@ impl Engine {
 
         // Do a reduced depth null search to check if our position is still good enough
         self.search_stack.push_node(&nm_child);
+        let reduced_child_depth = depth.saturating_sub(reduction + 1);
         let (score, _) = self.search_subtree(
             &nm_child,
-            depth + 1,
-            max_depth - reduction,
+            reduced_child_depth,
+            ply + 1,
             -beta,
             -beta + 1,
             false,
@@ -193,13 +183,13 @@ impl Engine {
         if -score >= beta {
             // Zugzwang check: at shallow depths, verify with a real search.
             // In zugzwang, passing is better than any legal move, so null move gives false positive.
-            if base_remaining <= 6 {
+            if depth <= 6 {
                 self.search_stack.push_node(&nm_child);
-                let verify_depth = max_depth - reduction.saturating_sub(1);
+                let verify_child_depth = depth.saturating_sub(reduction);
                 let (v_score, _) = self.search_subtree(
                     &nm_child,
-                    depth + 1,
-                    verify_depth,
+                    verify_child_depth,
+                    ply + 1,
                     -beta,
                     -beta + 1,
                     false,
@@ -210,11 +200,10 @@ impl Engine {
                 }
             }
 
-            let null_move_depth = max_depth - reduction;
             self.tt.store(
                 node.hash(),
-                depth,
-                null_move_depth,
+                ply,
+                depth.saturating_sub(reduction),
                 beta,
                 None,
                 alpha,
@@ -234,16 +223,16 @@ impl Engine {
     pub(super) fn try_reverse_futility_prune(
         &mut self,
         node: &Node,
-        remaining_depth: u8,
+        depth: u8,
         in_check: bool,
         static_eval: i16,
         beta: i16,
-        depth: u8,
+        ply: u8,
         alpha: i16,
         is_improving: bool,
     ) -> Option<i16> {
         if !can_reverse_futility_prune(
-            remaining_depth,
+            depth,
             in_check,
             node.node_type(),
             self.config.rfp_max_depth.value,
@@ -252,18 +241,17 @@ impl Engine {
         }
 
         let margin = rfp_margin(
-            remaining_depth,
+            depth,
             self.config.rfp_base_margin.value,
             self.config.rfp_depth_multiplier.value,
             is_improving,
             self.config.rfp_improving_bonus.value,
         );
         if static_eval - margin >= beta && static_eval.abs() < RAZOR_NEAR_MATE {
-            let rfp_depth = depth;
             self.tt.store(
                 node.hash(),
-                depth,
-                rfp_depth,
+                ply,
+                0,
                 beta,
                 Some(static_eval),
                 alpha,

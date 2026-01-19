@@ -13,8 +13,8 @@ pub fn razor_margin(depth: u8, base_margin: i16, depth_coefficient: i16) -> i16 
     }
 }
 
-pub fn can_razor_prune(remaining_depth: u8, in_check: bool, max_depth: u8) -> bool {
-    remaining_depth <= max_depth && remaining_depth > 0 && !in_check
+pub fn can_razor_prune(depth: u8, in_check: bool, max_depth: u8) -> bool {
+    depth <= max_depth && depth > 0 && !in_check
 }
 
 // Forward Futility Pruning
@@ -27,8 +27,8 @@ pub fn futility_margin(depth: u8, base_margin: i16, depth_multiplier: i16) -> i1
     }
 }
 
-pub fn can_futility_prune(remaining_depth: u8, in_check: bool, max_depth: u8) -> bool {
-    remaining_depth <= max_depth && !in_check
+pub fn can_futility_prune(depth: u8, in_check: bool, max_depth: u8) -> bool {
+    depth <= max_depth && !in_check
 }
 
 // Reverse Futility Pruning (static beta pruning)
@@ -54,12 +54,12 @@ pub fn rfp_margin(
 }
 
 pub fn can_reverse_futility_prune(
-    remaining_depth: u8,
+    depth: u8,
     in_check: bool,
     node_type: NodeType,
     max_depth: u8,
 ) -> bool {
-    remaining_depth <= max_depth && remaining_depth > 0 && !in_check && !node_type.is_pv()
+    depth <= max_depth && depth > 0 && !in_check && !node_type.is_pv()
 }
 
 // Delta Pruning (for quiescence search)

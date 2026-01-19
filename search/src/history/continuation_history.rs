@@ -87,12 +87,12 @@ impl ContinuationHistory {
         score
     }
 
-    pub fn get_bonus(&self, remaining_depth: u8) -> i32 {
-        self.bonus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
+    pub fn get_bonus(&self, depth: u8) -> i32 {
+        self.bonus_multiplier * depth.min(MAX_DEPTH as u8) as i32
     }
 
-    pub fn get_malus(&self, remaining_depth: u8) -> i32 {
-        -self.malus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
+    pub fn get_malus(&self, depth: u8) -> i32 {
+        -self.malus_multiplier * depth.min(MAX_DEPTH as u8) as i32
     }
 
     pub fn get_prev_to_squares(&self, search_stack: &[SearchNode]) -> Vec<Option<Square>> {

@@ -126,7 +126,7 @@ impl Engine {
         self.stop.store(false, Ordering::Relaxed);
 
         self.nodes = 0;
-        self.max_depth_reached = 1;
+        self.max_ply_reached = 1;
         self.current_pv.clear();
 
         self.search_stack.clear();
@@ -166,7 +166,7 @@ impl Engine {
         let mut current_best_move = None;
 
         let in_check = root.in_check();
-        let remaining_depth = iteration.saturating_sub(1);
+        let depth = iteration.saturating_sub(1);
         let mut move_index: i32 = -1;
         while let Some(m) = moves.next(
             root,
@@ -190,7 +190,7 @@ impl Engine {
 
             let reduction = match self.get_reduction(
                 0,
-                remaining_depth,
+                depth,
                 is_pv_move,
                 is_tactical,
                 true,
@@ -199,7 +199,6 @@ impl Engine {
                 root,
                 &child,
                 m,
-                iteration,
                 &self.lmr,
             ) {
                 Reduction::Reduction(r) => r,
@@ -215,11 +214,10 @@ impl Engine {
             };
 
             // Initial search (possibly reduced depth, null window for non-PV moves)
-            let reduced_max_depth = iteration.saturating_sub(reduction);
             let (child_value, mut pv) = self.search_subtree(
                 &child,
+                depth.saturating_sub(reduction),
                 1,
-                reduced_max_depth,
                 -beta_child,
                 -alpha_child,
                 true,
@@ -230,7 +228,7 @@ impl Engine {
             if reduction > 0 && score > alpha_child {
                 child.set_type(child.node_type().inverted());
                 let (re_child_value, re_pv) =
-                    self.search_subtree(&child, 1, iteration, -beta_child, -alpha_child, true);
+                    self.search_subtree(&child, depth, 1, -beta_child, -alpha_child, true);
                 score = -re_child_value;
                 pv = re_pv;
             }
@@ -239,7 +237,7 @@ impl Engine {
             if !is_pv_move && score > alpha_child && score < beta {
                 child.set_type(NodeType::Pv);
                 let (full_child_value, full_pv) =
-                    self.search_subtree(&child, 1, iteration, -beta, -alpha_child, true);
+                    self.search_subtree(&child, depth, 1, -beta, -alpha_child, true);
                 score = -full_child_value;
                 pv = full_pv;
             }
@@ -271,14 +269,17 @@ impl Engine {
 
     /// Recursive alpha-beta search with PVS.
     ///
-    /// Applies pruning, reductions, and searches child nodes.
+    /// # Parameters
+    /// - `depth`: remaining depth to search (decreases each level, qsearch at 0)
+    /// - `ply`: distance from root (0 at root, increases each level)
+    ///
     /// Returns (score, pv).
     #[allow(clippy::too_many_arguments)]
     pub(super) fn search_subtree(
         &mut self,
         node: &Node,
         depth: u8,
-        max_depth: u8,
+        ply: u8,
         mut alpha: i16,
         mut beta: i16,
         null_move_allowed: bool,
@@ -292,18 +293,18 @@ impl Engine {
             return (self.draw_value(), Vec::new());
         }
 
-        // Depth limit - return static eval if we've hit max depth
-        if depth as usize >= MAX_DEPTH {
+        // Ply limit - return static eval if we've hit max ply
+        if ply as usize >= MAX_DEPTH {
             return (self.static_eval(node), Vec::new());
         }
 
         let hash = node.hash();
-        if mate_distance_prune(&mut alpha, &mut beta, depth) {
+        if mate_distance_prune(&mut alpha, &mut beta, ply) {
             return (alpha, Vec::new());
         }
 
-        if depth >= max_depth {
-            return self.quiescence_search(node, alpha, beta, depth);
+        if depth == 0 {
+            return self.quiescence_search(node, alpha, beta, ply);
         }
 
         // Transposition table probe
@@ -313,15 +314,14 @@ impl Engine {
 
         let is_pv_node = node.is_pv();
 
-        if let Some(tt) = self.tt.probe(hash, depth) {
+        if let Some(tt) = self.tt.probe(hash, ply) {
             // Only trust value/bound for cutoffs if the TT entry comes from a
             // search at least as deep as we need. Shallow results may have
             // missed tactics and can't safely prune the current search.
             //
             // Don't do TT cutoffs in PV nodes - TT only stores one move,
             // so cutting off here could truncate the PV to just that move.
-            let needed_depth = max_depth - depth;
-            if !is_pv_node && tt.depth >= needed_depth {
+            if !is_pv_node && tt.depth >= depth {
                 match tt.bound {
                     // Exact: previous search found true minimax value
                     Bound::Exact => {
@@ -351,12 +351,10 @@ impl Engine {
         }
 
         let in_check = node.in_check();
-        let remaining_depth = max_depth - depth;
 
         // Internal Iterative Reductions
-        let (max_depth, remaining_depth) = iir(
-            max_depth,
-            remaining_depth,
+        let depth = iir(
+            depth,
             maybe_tt_move.is_some(),
             self.config.iir_min_depth.value,
             self.config.iir_reduction.value,
@@ -367,19 +365,16 @@ impl Engine {
         self.search_stack
             .current_mut(|n| n.static_eval = Some(static_eval));
 
-        if let Some(score) =
-            self.try_razor_prune(node, remaining_depth, alpha, depth, in_check, static_eval)
-        {
+        if let Some(score) = self.try_razor_prune(node, depth, alpha, ply, in_check, static_eval) {
             return (score, Vec::new());
         }
 
         if let Some(score) = self.try_null_move_prune(
             node,
             depth,
-            max_depth,
+            ply,
             alpha,
             beta,
-            remaining_depth,
             in_check,
             null_move_allowed,
             Some(static_eval),
@@ -391,24 +386,24 @@ impl Engine {
 
         if let Some(score) = self.try_reverse_futility_prune(
             node,
-            remaining_depth,
+            depth,
             in_check,
             static_eval,
             beta,
-            depth,
+            ply,
             alpha,
             is_improving,
         ) {
             return (score, Vec::new());
         }
 
-        self.max_depth_reached = self.max_depth_reached.max(depth);
+        self.max_ply_reached = self.max_ply_reached.max(ply);
 
         let mut best_value = -SCORE_INF;
         let mut best_move = None;
         let mut best_line = Vec::new();
 
-        let mut best_move_depth = depth;
+        let mut best_move_depth = 0;
 
         let threats = node.threats();
 
@@ -418,7 +413,7 @@ impl Engine {
 
         let mut movegen = MainMoveGenerator::new(
             maybe_tt_move,
-            self.killer_moves[depth as usize],
+            self.killer_moves[ply as usize],
             prev_to,
             self.config.quiet_check_bonus.value,
             threats,
@@ -442,7 +437,7 @@ impl Engine {
                 node,
                 m,
                 in_check,
-                remaining_depth,
+                depth,
                 move_index,
                 is_improving,
                 self.config.lmp_max_depth.value,
@@ -456,11 +451,10 @@ impl Engine {
             if let Some((value, mut line, is_quiet, searched_depth)) = self.search_move(
                 node,
                 depth,
-                max_depth,
+                ply,
                 alpha,
                 beta,
                 in_check,
-                remaining_depth,
                 m,
                 move_index,
                 is_improving,
@@ -483,8 +477,8 @@ impl Engine {
                     self.on_fail_high(
                         node,
                         m,
-                        remaining_depth,
-                        depth as usize,
+                        depth,
+                        ply as usize,
                         is_quiet,
                         &quiets_searched,
                         &captures_searched,
@@ -508,7 +502,7 @@ impl Engine {
         if move_index == -1 {
             // No moves were found - either checkmate or stalemate
             return if in_check {
-                (-(MATE_VALUE - depth as i16), Vec::new()) // Checkmate
+                (-(MATE_VALUE - ply as i16), Vec::new()) // Checkmate
             } else {
                 (0, Vec::new()) // Stalemate
             };
@@ -517,7 +511,7 @@ impl Engine {
         // Store TT entry with the depth actually searched for the best move
         self.tt.store(
             hash,
-            depth,
+            ply,
             best_move_depth,
             best_value,
             Some(static_eval),
@@ -535,11 +529,10 @@ impl Engine {
         &mut self,
         node: &Node,
         depth: u8,
-        max_depth: u8,
+        ply: u8,
         alpha: i16,
         beta: i16,
         in_check: bool,
-        remaining_depth: u8,
         m: Move,
         move_index: i32,
         is_improving: bool,
@@ -556,7 +549,7 @@ impl Engine {
             m,
             moved_piece,
             is_cap,
-            remaining_depth,
+            depth,
             in_check,
             is_pv_move,
             alpha,
@@ -573,13 +566,13 @@ impl Engine {
         let gives_check = child.in_check();
         let is_tactical = in_check || gives_check || is_cap || is_promotion;
 
-        if self.try_futility_prune(remaining_depth, in_check, is_tactical, alpha, static_eval) {
+        if self.try_futility_prune(depth, in_check, is_tactical, alpha, static_eval) {
             return None;
         }
 
         let reduction = match self.get_reduction(
+            ply,
             depth,
-            remaining_depth,
             is_pv_move,
             is_tactical,
             is_improving,
@@ -588,7 +581,6 @@ impl Engine {
             node,
             &child,
             m,
-            max_depth,
             &self.lmr,
         ) {
             Reduction::Reduction(r) => r,
@@ -597,9 +589,14 @@ impl Engine {
 
         let extension = self.get_extension(node, &m, moved_piece, is_cap);
 
-        let extended_max_depth = max_depth + extension;
-        let reduced_max_depth = extended_max_depth.saturating_sub(reduction).max(depth + 1);
-        let mut searched_depth = reduced_max_depth;
+        // Child's remaining depth after extension/reduction
+        let extended_child_depth = depth.saturating_sub(1).saturating_add(extension);
+        let reduced_child_depth = extended_child_depth.saturating_sub(reduction);
+        // Effective depth we searched
+        let mut searched_depth = depth
+            .saturating_add(extension)
+            .saturating_sub(reduction)
+            .max(1);
 
         let alpha_child = alpha;
         let beta_child = if is_pv_move { beta } else { alpha + 1 };
@@ -608,8 +605,8 @@ impl Engine {
         self.search_stack.push_move(&child, m, moved_piece);
         let (child_value, pv_line) = self.search_subtree(
             &child,
-            depth + 1,
-            reduced_max_depth,
+            reduced_child_depth,
+            ply + 1,
             -beta_child,
             -alpha_child,
             true,
@@ -624,8 +621,8 @@ impl Engine {
             self.search_stack.push_move(&child, m, moved_piece);
             let (re_child_value, re_line) = self.search_subtree(
                 &child,
-                depth + 1,
-                extended_max_depth,
+                extended_child_depth,
+                ply + 1,
                 -beta_child,
                 -alpha_child,
                 true,
@@ -633,7 +630,7 @@ impl Engine {
             self.search_stack.pop();
             value = -re_child_value;
             line = re_line;
-            searched_depth = extended_max_depth;
+            searched_depth = depth.saturating_add(extension).max(1);
         }
 
         // Re-search with full window (if null window failed high in a PV node)
@@ -641,11 +638,11 @@ impl Engine {
             child.set_type(NodeType::Pv);
             self.search_stack.push_move(&child, m, moved_piece);
             let (full_child_value, full_line) =
-                self.search_subtree(&child, depth + 1, extended_max_depth, -beta, -alpha, true);
+                self.search_subtree(&child, extended_child_depth, ply + 1, -beta, -alpha, true);
             self.search_stack.pop();
             value = -full_child_value;
             line = full_line;
-            searched_depth = extended_max_depth;
+            searched_depth = depth.saturating_add(extension).max(1);
         }
 
         let is_quiet = !is_cap && !is_promotion;
@@ -658,8 +655,8 @@ impl Engine {
         &mut self,
         node: &Node,
         mv: Move,
-        remaining_depth: u8,
-        depth: usize,
+        depth: u8,
+        ply: usize,
         is_quiet: bool,
         quiets_searched: &[Move],
         captures_searched: &[Move],
@@ -672,36 +669,36 @@ impl Engine {
             .get_prev_to_squares(self.search_stack.as_slice());
         if is_quiet {
             // Add killer move for quiet moves
-            let killers = &mut self.killer_moves[depth];
+            let killers = &mut self.killer_moves[ply];
             if killers[0] != Some(mv) {
                 killers[1] = killers[0];
                 killers[0] = Some(mv);
             }
 
             // Boost the quiet move that caused the cutoff
-            let bonus = self.history_heuristic.get_bonus(remaining_depth);
+            let bonus = self.history_heuristic.get_bonus(depth);
             self.history_heuristic.update(board, mv, bonus, threats);
 
             // Continuation history bonus for quiet cutoff move
-            let cont_bonus = self.continuation_history.get_bonus(remaining_depth);
+            let cont_bonus = self.continuation_history.get_bonus(depth);
             self.continuation_history
                 .update_quiet_all(board, &prev_to, mv, cont_bonus);
         } else {
             // Boost the capture that caused the cutoff
-            let bonus = self.capture_history.get_bonus(remaining_depth);
+            let bonus = self.capture_history.get_bonus(depth);
             self.capture_history.update_capture(board, mv, bonus);
         }
 
         if !quiets_searched.is_empty() {
             // Apply malus to all previously searched quiet moves
-            let quiet_malus = self.history_heuristic.get_malus(remaining_depth);
+            let quiet_malus = self.history_heuristic.get_malus(depth);
             for &q in quiets_searched {
                 self.history_heuristic
                     .update(board, q, quiet_malus, threats);
             }
 
             // Continuation history malus for previously searched quiets
-            let cont_malus = self.continuation_history.get_malus(remaining_depth);
+            let cont_malus = self.continuation_history.get_malus(depth);
             for &q in quiets_searched {
                 self.continuation_history
                     .update_quiet_all(board, &prev_to, q, cont_malus);
@@ -710,7 +707,7 @@ impl Engine {
 
         if !captures_searched.is_empty() {
             // Apply malus to all previously searched captures
-            let capture_malus = self.capture_history.get_malus(remaining_depth);
+            let capture_malus = self.capture_history.get_malus(depth);
             for &c in captures_searched {
                 self.capture_history.update_capture(board, c, capture_malus);
             }

@@ -18,7 +18,7 @@ pub fn should_lmp_prune(
     node: &Node,
     mv: Move,
     in_check: bool,
-    remaining_depth: u8,
+    depth: u8,
     move_index: i32,
     is_improving: bool,
     max_depth: u8,
@@ -29,11 +29,11 @@ pub fn should_lmp_prune(
     let is_cap = node.is_capture(mv);
     let is_promotion = mv.promotion == Some(Piece::Queen);
 
-    if in_check || node.is_pv() || is_cap || is_promotion || remaining_depth > max_depth {
+    if in_check || node.is_pv() || is_cap || is_promotion || depth > max_depth {
         return false;
     }
 
-    let mut limit = lmp_move_limit(remaining_depth, base_moves, depth_multiplier);
+    let mut limit = lmp_move_limit(depth, base_moves, depth_multiplier);
 
     // Be more aggressive (prune earlier) when position isn't improving
     if !is_improving {

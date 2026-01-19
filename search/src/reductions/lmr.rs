@@ -7,24 +7,24 @@ pub struct LmrTable {
 impl LmrTable {
     pub fn new(divisor: f32) -> Self {
         let mut table = [0; MAX_DEPTH * MAX_DEPTH];
-        for remaining_depth in 1..MAX_DEPTH {
+        for depth in 1..MAX_DEPTH {
             for move_index in 1..MAX_DEPTH {
-                let depth_factor = (remaining_depth as f32).ln();
+                let depth_factor = (depth as f32).ln();
                 let move_factor = (move_index as f32 / divisor).ln();
                 let value = (0.5 + (depth_factor * move_factor)) as u8;
-                table[Self::index(remaining_depth as u8, move_index as i32)] = value;
+                table[Self::index(depth as u8, move_index as i32)] = value;
             }
         }
 
         Self { table }
     }
 
-    pub fn get(&self, remaining_depth: u8, move_index: i32) -> u8 {
-        self.table[Self::index(remaining_depth, move_index)]
+    pub fn get(&self, depth: u8, move_index: i32) -> u8 {
+        self.table[Self::index(depth, move_index)]
     }
 
-    fn index(remaining_depth: u8, move_index: i32) -> usize {
-        let rd = (remaining_depth as usize).min(MAX_DEPTH - 1);
+    fn index(depth: u8, move_index: i32) -> usize {
+        let rd = (depth as usize).min(MAX_DEPTH - 1);
         let mi = (move_index as usize).min(MAX_DEPTH - 1);
         rd * MAX_DEPTH + mi
     }

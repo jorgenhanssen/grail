@@ -26,7 +26,7 @@ impl Engine {
         node: &Node,
         mut alpha: i16,
         mut beta: i16,
-        depth: u8,
+        ply: u8,
     ) -> (i16, Vec<Move>) {
         // Check if we should stop searching
         if self.stop.load(Ordering::Relaxed) {
@@ -34,19 +34,19 @@ impl Engine {
         }
 
         self.nodes += 1;
-        self.max_depth_reached = self.max_depth_reached.max(depth);
+        self.max_ply_reached = self.max_ply_reached.max(ply);
 
         if self.is_forced_draw(node) {
             return (self.draw_value(), Vec::new());
         }
 
-        // Depth limit - return static eval if we've hit max depth
-        if depth as usize >= MAX_DEPTH {
+        // Ply limit - return static eval if we've hit max ply
+        if ply as usize >= MAX_DEPTH {
             return (self.static_eval(node), Vec::new());
         }
 
         let hash = node.hash();
-        if mate_distance_prune(&mut alpha, &mut beta, depth) {
+        if mate_distance_prune(&mut alpha, &mut beta, ply) {
             return (alpha, Vec::new());
         }
 
@@ -157,7 +157,7 @@ impl Engine {
 
             self.search_stack.push_node(&child);
             let (child_score, mut child_line) =
-                self.quiescence_search(&child, -beta, -alpha, depth + 1);
+                self.quiescence_search(&child, -beta, -alpha, ply + 1);
             self.search_stack.pop();
 
             let value = -child_score;
@@ -181,7 +181,7 @@ impl Engine {
 
         // If in check and no legal moves improved the position, it's checkmate
         if in_check && best_eval == -SCORE_INF {
-            return (-(MATE_VALUE - depth as i16), Vec::new());
+            return (-(MATE_VALUE - ply as i16), Vec::new());
         }
 
         self.qs_tt
