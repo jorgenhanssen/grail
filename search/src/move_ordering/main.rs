@@ -203,8 +203,10 @@ impl MainMoveGenerator {
                         Some(Piece::Queen) => i16::MAX,
                         Some(_) => i16::MIN,
                         None => {
+                            let piece = board.piece_on(mov.from).unwrap();
                             let hist = history_heuristic.get(
                                 board.side_to_move(),
+                                piece,
                                 mov.from,
                                 mov.to,
                                 self.threats,

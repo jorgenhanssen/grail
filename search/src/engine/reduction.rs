@@ -36,9 +36,14 @@ impl Engine {
             return Reduction::Reduction(0);
         }
 
-        let hist =
-            self.history_heuristic
-                .get(parent.side_to_move(), m.from, m.to, parent.threats());
+        let piece = parent.board().piece_on(m.from).unwrap();
+        let hist = self.history_heuristic.get(
+            parent.side_to_move(),
+            piece,
+            m.from,
+            m.to,
+            parent.threats(),
+        );
 
         // Late move reductions - later moves in ordering are less likely to be best
         let mut reduction = lmr_table.get(depth, move_index);
