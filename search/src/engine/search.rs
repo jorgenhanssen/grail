@@ -269,9 +269,9 @@ impl Engine {
 
         let threats = node.threats();
 
-        let prev_to = self
+        let prev_moves = self
             .continuation_history
-            .get_prev_to_squares(self.search_stack.as_slice());
+            .get_prev_moves(self.search_stack.as_slice());
 
         let best_move_hint = if ply == 0 {
             // At root we can use the currently best move (pv[0]) for ordering
@@ -284,7 +284,7 @@ impl Engine {
         let mut movegen = MainMoveGenerator::new(
             best_move_hint,
             killers,
-            prev_to,
+            prev_moves,
             self.config.quiet_check_bonus.value,
             threats,
         );
@@ -527,9 +527,9 @@ impl Engine {
         let board = node.board();
         let threats = node.threats();
 
-        let prev_to = self
+        let prev_moves = self
             .continuation_history
-            .get_prev_to_squares(self.search_stack.as_slice());
+            .get_prev_moves(self.search_stack.as_slice());
         if is_quiet {
             // Add killer move for quiet moves
             let killers = &mut self.killer_moves[ply];
@@ -545,7 +545,7 @@ impl Engine {
             // Continuation history bonus for quiet cutoff move
             let cont_bonus = self.continuation_history.get_bonus(depth);
             self.continuation_history
-                .update_quiet_all(board, &prev_to, mv, cont_bonus);
+                .update_quiet_all(board, &prev_moves, mv, cont_bonus);
         } else {
             // Boost the capture that caused the cutoff
             let bonus = self.capture_history.get_bonus(depth);
@@ -564,7 +564,7 @@ impl Engine {
             let cont_malus = self.continuation_history.get_malus(depth);
             for &q in quiets_searched {
                 self.continuation_history
-                    .update_quiet_all(board, &prev_to, q, cont_malus);
+                    .update_quiet_all(board, &prev_moves, q, cont_malus);
             }
         }
 
