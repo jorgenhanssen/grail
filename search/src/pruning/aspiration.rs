@@ -19,15 +19,17 @@ pub struct AspirationWindow {
     start_half: i16,
     widen: i16,
     enabled_from: u8,
+    score_divisor: i32,
 }
 
 impl AspirationWindow {
-    pub fn new(start_half: i16, widen: i16, enabled_from: u8) -> Self {
+    pub fn new(start_half: i16, widen: i16, enabled_from: u8, score_divisor: i32) -> Self {
         Self {
             bounds: Bounds::FULL,
             start_half,
             widen,
             enabled_from,
+            score_divisor,
         }
     }
 
@@ -39,10 +41,11 @@ impl AspirationWindow {
             return;
         }
 
-        // Score-based adjustment: larger scores get wider windows.
-        // Inspired by 4ku: window = 28 + (score² >> 14)
-        // Adds ~0 at score=0, ~6 at score=300, ~15 at score=500
-        let score_adjustment = ((prev_score as i32 * prev_score as i32) >> 14) as i16;
+        // Score-based adjustment: larger scores get wider windows (inspired by 4ku).
+        // Quadratic scaling: with divisor=16384: adds ish 0 at score=0, 5 at score=300, 15 at score=500
+        let score_squared = (prev_score as i32) * (prev_score as i32);
+        let score_adjustment = (score_squared / self.score_divisor) as i16;
+
         let half = (self.start_half + 10 * depth as i16 + score_adjustment).min(SCORE_INF);
 
         self.bounds = Bounds::new(

@@ -83,6 +83,7 @@ define_config!(
     (aspiration_window_widen: i16, "Aspiration Window Widening", UciOptionType::Spin { min: 2, max: 4 }, 2, cfg!(feature = "tuning")),
     (aspiration_window_depth: u8, "Aspiration Window Depth", UciOptionType::Spin { min: 1, max: 10 }, 5, cfg!(feature = "tuning")),
     (aspiration_window_retries: i16, "Aspiration Window Retries", UciOptionType::Spin { min: 1, max: 5 }, 3, cfg!(feature = "tuning")),
+    (aspiration_score_divisor: i32, "Aspiration Score Divisor", UciOptionType::Spin { min: 1024, max: 65536 }, 16384, cfg!(feature = "tuning")),
 
     (history_max_value: i32, "History Max Value", UciOptionType::Spin { min: 128, max: 1024 }, 512, cfg!(feature = "tuning")),
     (history_reduction_threshold: i16, "History Reduction Threshold", UciOptionType::Spin { min: -512, max: 512 }, -8, cfg!(feature = "tuning")),

@@ -50,6 +50,7 @@ impl Engine {
             self.config.aspiration_window_size.value,
             self.config.aspiration_window_widen.value,
             self.config.aspiration_window_depth.value,
+            self.config.aspiration_score_divisor.value,
         );
 
         let mut controller =
