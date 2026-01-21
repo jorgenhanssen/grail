@@ -1,8 +1,8 @@
 use arrayvec::ArrayVec;
-use cozy_chess::{BitBoard, Move, Piece, Square};
+use cozy_chess::{BitBoard, Move, Piece};
 use utils::{gives_check, is_capture, piece_value};
 
-use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic};
+use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic, PieceTo};
 use crate::utils::see::see;
 use utils::Node;
 
@@ -40,7 +40,7 @@ pub struct MainMoveGenerator {
     best_move: Option<Move>,
 
     // Continuation history context
-    prev_to: Vec<Option<Square>>,
+    prev_moves: Vec<Option<PieceTo>>,
 
     killer_moves: [Option<Move>; 2],
     killer_index: usize,
@@ -57,7 +57,7 @@ impl MainMoveGenerator {
     pub fn new(
         best_move: Option<Move>,
         killer_moves: [Option<Move>; 2],
-        prev_to: Vec<Option<Square>>,
+        prev_moves: Vec<Option<PieceTo>>,
         quiet_check_bonus: i16,
         threats: BitBoard,
     ) -> Self {
@@ -65,7 +65,7 @@ impl MainMoveGenerator {
             gen_phase: Phase::BestMove,
             best_move,
 
-            prev_to,
+            prev_moves,
 
             killer_moves,
             killer_index: 0,
@@ -203,19 +203,12 @@ impl MainMoveGenerator {
                         Some(Piece::Queen) => i16::MAX,
                         Some(_) => i16::MIN,
                         None => {
-                            let hist = history_heuristic.get(
-                                board.side_to_move(),
-                                mov.from,
-                                mov.to,
-                                self.threats,
-                            );
+                            let color = board.side_to_move();
+                            let piece = board.piece_on(mov.from).unwrap();
+                            let hist = history_heuristic.get(color, mov.from, mov.to, self.threats);
 
-                            let cont = continuation_history.get(
-                                board.side_to_move(),
-                                &self.prev_to,
-                                mov.from,
-                                mov.to,
-                            );
+                            let curr = PieceTo::new(color, piece, mov.to);
+                            let cont = continuation_history.get(&self.prev_moves, curr);
 
                             let check_bonus = if gives_check(board, mov) {
                                 self.quiet_check_bonus
