@@ -19,26 +19,35 @@ pub struct AspirationWindow {
     start_half: i16,
     widen: i16,
     enabled_from: u8,
+    score_divisor: i32,
 }
 
 impl AspirationWindow {
-    pub fn new(start_half: i16, widen: i16, enabled_from: u8) -> Self {
+    pub fn new(start_half: i16, widen: i16, enabled_from: u8, score_divisor: i32) -> Self {
         Self {
             bounds: Bounds::FULL,
             start_half,
             widen,
             enabled_from,
+            score_divisor,
         }
     }
 
     /// Sets up window for new depth based on previous score.
+    /// Window size increases with score magnitude - winning positions are more volatile.
     pub fn begin_depth(&mut self, depth: u8, prev_score: i16) {
         if depth < self.enabled_from {
             self.bounds = Bounds::FULL;
             return;
         }
 
-        let half = (self.start_half + 10 * depth as i16).min(SCORE_INF);
+        // Score-based adjustment: larger scores get wider windows (inspired by 4ku).
+        // Quadratic scaling: with divisor=16384: adds ish 0 at score=0, 5 at score=300, 15 at score=500
+        let score_squared = (prev_score as i32) * (prev_score as i32);
+        let score_adjustment = (score_squared / self.score_divisor) as i16;
+
+        let half = (self.start_half + 10 * depth as i16 + score_adjustment).min(SCORE_INF);
+
         self.bounds = Bounds::new(
             prev_score.saturating_sub(half),
             prev_score.saturating_add(half),
