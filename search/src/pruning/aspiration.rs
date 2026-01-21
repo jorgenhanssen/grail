@@ -32,13 +32,19 @@ impl AspirationWindow {
     }
 
     /// Sets up window for new depth based on previous score.
+    /// Window size increases with score magnitude - winning positions are more volatile.
     pub fn begin_depth(&mut self, depth: u8, prev_score: i16) {
         if depth < self.enabled_from {
             self.bounds = Bounds::FULL;
             return;
         }
 
-        let half = (self.start_half + 10 * depth as i16).min(SCORE_INF);
+        // Score-based adjustment: larger scores get wider windows.
+        // Inspired by 4ku: window = 28 + (score² >> 14)
+        // Adds ~0 at score=0, ~6 at score=300, ~15 at score=500
+        let score_adjustment = ((prev_score as i32 * prev_score as i32) >> 14) as i16;
+        let half = (self.start_half + 10 * depth as i16 + score_adjustment).min(SCORE_INF);
+
         self.bounds = Bounds::new(
             prev_score.saturating_sub(half),
             prev_score.saturating_add(half),
