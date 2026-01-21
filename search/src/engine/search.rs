@@ -409,6 +409,7 @@ impl Engine {
         is_improving: bool,
         static_eval: i16,
     ) -> Option<(i16, Vec<Move>, bool, u8)> {
+        let moved_color = node.board().side_to_move();
         let moved_piece = node.piece_on(m.from).unwrap();
         let is_cap = node.is_capture(m);
         let is_promotion = m.promotion == Some(Piece::Queen);
@@ -477,7 +478,8 @@ impl Engine {
         };
 
         // Initial search (reduced if LMR, null window if not first move)
-        self.search_stack.push_move(&child, m, moved_piece);
+        self.search_stack
+            .push_move(&child, m, moved_piece, moved_color);
         let (child_value, pv_line) =
             self.search_node(&child, reduced_child_depth, ply + 1, child_bounds, true);
         self.search_stack.pop();
@@ -487,7 +489,8 @@ impl Engine {
         // Re-search at full depth (if LMR was used and value > alpha)
         if reduction > 0 && value > bounds.alpha {
             child.set_type(child.node_type().inverted());
-            self.search_stack.push_move(&child, m, moved_piece);
+            self.search_stack
+                .push_move(&child, m, moved_piece, moved_color);
             let (re_child_value, re_line) =
                 self.search_node(&child, extended_child_depth, ply + 1, child_bounds, true);
             self.search_stack.pop();
@@ -499,7 +502,8 @@ impl Engine {
         // Re-search with full window (if null window failed high in a PV node)
         if value > bounds.alpha && value < bounds.beta && !is_pv_move && is_pv_node {
             child.set_type(NodeType::Pv);
-            self.search_stack.push_move(&child, m, moved_piece);
+            self.search_stack
+                .push_move(&child, m, moved_piece, moved_color);
             let (full_child_value, full_line) =
                 self.search_node(&child, extended_child_depth, ply + 1, bounds.invert(), true);
             self.search_stack.pop();

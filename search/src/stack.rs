@@ -1,4 +1,4 @@
-use cozy_chess::{Move, Piece};
+use cozy_chess::{Color, Move, Piece};
 use utils::Node;
 
 /// A node in the search stack, tracking state at each ply.
@@ -10,6 +10,8 @@ pub struct SearchNode {
     pub last_move: Option<Move>,
     /// Piece that moved (for continuation history)
     pub piece: Option<Piece>,
+    /// Color of the piece that moved (for continuation history)
+    pub color: Option<Color>,
     /// Cached static eval (for improving detection)
     pub static_eval: Option<i16>,
 }
@@ -20,15 +22,17 @@ impl SearchNode {
             hash,
             last_move: None,
             piece: None,
+            color: None,
             static_eval: None,
         }
     }
 
-    pub fn with_move(hash: u64, mv: Move, piece: Piece) -> Self {
+    pub fn with_move(hash: u64, mv: Move, piece: Piece, color: Color) -> Self {
         Self {
             hash,
             last_move: Some(mv),
             piece: Some(piece),
+            color: Some(color),
             static_eval: None,
         }
     }
@@ -57,8 +61,8 @@ impl SearchStack {
         self.push(SearchNode::new(node.hash()));
     }
 
-    pub fn push_move(&mut self, node: &Node, mv: Move, piece: Piece) {
-        self.push(SearchNode::with_move(node.hash(), mv, piece));
+    pub fn push_move(&mut self, node: &Node, mv: Move, piece: Piece, color: Color) {
+        self.push(SearchNode::with_move(node.hash(), mv, piece, color));
     }
 
     pub fn pop(&mut self) -> Option<SearchNode> {
