@@ -78,7 +78,7 @@ impl Engine {
                         self.send_search_info(out, depth, &pv, controller.elapsed());
                     }
 
-                    self.multi_pv.pvs[pv_index].result = pv;
+                    self.multi_pv.lines[pv_index].result = pv;
                 } else {
                     break; // No more moves for additional PVs
                 }
@@ -119,7 +119,7 @@ impl Engine {
         let mut retries = 0;
 
         loop {
-            let bounds = self.multi_pv.pvs[pv_index].window.bounds();
+            let bounds = self.multi_pv.lines[pv_index].window.bounds();
 
             let (score, pv) = self.search_node(root, depth, 0, bounds, true);
             if pv.is_empty() {
@@ -130,7 +130,7 @@ impl Engine {
                 return Some(PvLine::new(pv, score, pv_index));
             }
 
-            match self.multi_pv.pvs[pv_index].window.analyse_pass(score) {
+            match self.multi_pv.lines[pv_index].window.analyse_pass(score) {
                 Pass::Hit(s) => {
                     return Some(PvLine::new(pv, s, pv_index));
                 }
@@ -138,7 +138,7 @@ impl Engine {
                     controller.on_aspiration_failure();
                     retries += 1;
                     if retries >= self.config.aspiration_window_retries.value {
-                        self.multi_pv.pvs[pv_index].window.fully_extend();
+                        self.multi_pv.lines[pv_index].window.fully_extend();
                         retries = 0;
                     }
                 }

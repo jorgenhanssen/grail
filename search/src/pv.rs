@@ -59,8 +59,8 @@ impl PvSearchContext {
 /// Manages all PV search contexts, move exclusions, and tracking of which PV
 /// is currently being searched.
 pub struct MultiPvSearchContext {
-    /// PV search contexts (one per MultiPV setting)
-    pub pvs: Vec<PvSearchContext>,
+    /// Search context for each PV line
+    pub lines: Vec<PvSearchContext>,
     /// Root moves excluded at current depth (moves already found for higher PV ranks)
     excluded: Vec<Move>,
     /// Index of the PV currently being searched
@@ -70,7 +70,7 @@ pub struct MultiPvSearchContext {
 impl MultiPvSearchContext {
     pub fn new() -> Self {
         Self {
-            pvs: Vec::new(),
+            lines: Vec::new(),
             excluded: Vec::new(),
             current_pv_index: None,
         }
@@ -85,21 +85,21 @@ impl MultiPvSearchContext {
         window_depth: u8,
         score_divisor: i32,
     ) {
-        self.pvs.clear();
+        self.lines.clear();
         self.excluded.clear();
 
         for _ in 0..count {
             let window =
                 AspirationWindow::new(window_size, window_widen, window_depth, score_divisor);
-            self.pvs.push(PvSearchContext::new(window));
+            self.lines.push(PvSearchContext::new(window));
         }
     }
 
     /// Begin searching a specific PV rank.
     pub fn begin_pv_search(&mut self, pv_index: usize, depth: u8) {
         self.current_pv_index = Some(pv_index);
-        let prev_score = self.pvs[pv_index].result.score;
-        self.pvs[pv_index].window.begin_depth(depth, prev_score);
+        let prev_score = self.lines[pv_index].result.score;
+        self.lines[pv_index].window.begin_depth(depth, prev_score);
     }
 
     /// Reset exclusions for a new depth iteration.
@@ -124,12 +124,12 @@ impl MultiPvSearchContext {
     /// Returns the best move from the current PV's previous search.
     pub fn best_move_hint(&self) -> Option<Move> {
         let pv_index = self.current_pv_index?;
-        self.pvs.get(pv_index)?.result.best_move()
+        self.lines.get(pv_index)?.result.best_move()
     }
 
     /// Get the primary (first) PV result.
     pub fn primary(&self) -> Option<&PvLine> {
-        self.pvs
+        self.lines
             .first()
             .map(|pv| &pv.result)
             .filter(|pv| !pv.is_empty())
