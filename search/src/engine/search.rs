@@ -69,7 +69,7 @@ impl Engine {
 
             for pv_index in 0..pv_count {
                 if let Some(pv) = self.search_pv(&root, depth, pv_index, &mut controller) {
-                    // Exclude this move for subsequent PVs to not search it twice
+                    // Exclude this move for subsequent PVs to not search it multiple times
                     if let Some(mv) = pv.best_move() {
                         self.multi_pv.add_excluded(mv);
                     }
