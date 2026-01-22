@@ -14,9 +14,10 @@ impl Encoder {
             UciOutput::BestMove(best_move) => format!("bestmove {}", best_move),
             UciOutput::Info(info) => {
                 format!(
-                    "info depth {} seldepth {} multipv 1 score {} nodes {} nps {} hashfull {} time {} pv {}",
+                    "info depth {} seldepth {} multipv {} score {} nodes {} nps {} hashfull {} time {} pv {}",
                     info.depth,
                     info.sel_depth,
+                    info.multipv,
                     match info.score {
                         Score::Centipawns(cp) => format!("cp {}", cp),
                         Score::Mate(moves) => format!("mate {}", moves),

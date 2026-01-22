@@ -9,6 +9,8 @@ use cozy_chess::{Board, Move};
 use evaluation::{HCE, NNUE};
 use uci::{commands::Info, pv_to_uci, UciOutput};
 
+use crate::pv::{MultiPvSearchContext, PvLine};
+
 use crate::{
     history::{CaptureHistory, ContinuationHistory, HistoryHeuristic},
     reductions::LmrTable,
@@ -39,6 +41,9 @@ pub struct Engine {
     /// Neural network evaluation
     nnue: Option<Box<dyn NNUE>>,
 
+    /// Multi-PV search context (exclusions, PVs, etc)
+    multi_pv: MultiPvSearchContext,
+
     /// The position we are finding the best move for (root position)
     board: Board,
     /// Position hashes for repetition detection - all positions up until the search.
@@ -46,8 +51,7 @@ pub struct Engine {
 
     /// Number of nodes searched
     nodes: u32,
-    /// Principal variation - the current best line we have found
-    current_pv: Vec<Move>,
+
     /// Selective depth (max ply reached including quiescence - deepest we have gotten)
     max_ply_reached: u8,
 
@@ -87,11 +91,12 @@ impl Engine {
             hce,
             nnue,
 
+            multi_pv: MultiPvSearchContext::new(),
+
             board: Board::default(),
             game_history: AHashSet::new(),
             nodes: 0,
             killer_moves: [[None; 2]; MAX_DEPTH],
-            current_pv: Vec::new(),
             max_ply_reached: 1,
 
             tt: TranspositionTable::new(1),
@@ -173,26 +178,27 @@ impl Engine {
         &self,
         output: &Sender<UciOutput>,
         current_depth: u8,
-        best_score: i16,
+        pv: &PvLine,
         elapsed: std::time::Duration,
     ) {
-        let found_checkmate = best_score.abs() >= evaluation::scores::MATE_VALUE - MAX_DEPTH as i16;
+        let found_checkmate = pv.score.abs() >= evaluation::scores::MATE_VALUE - MAX_DEPTH as i16;
         let nps = (self.nodes as f32 / elapsed.as_secs_f32()) as u32;
 
         output
             .send(UciOutput::Info(Info {
                 depth: current_depth,
                 sel_depth: self.max_ply_reached,
+                multipv: (pv.pv_index + 1) as u8, // UCI uses 1-based indexing
                 nodes: self.nodes,
                 nodes_per_second: nps,
                 hashfull: self.tt.hashfull(),
                 time: elapsed.as_millis() as u32,
                 score: if found_checkmate {
-                    convert_mate_score(best_score)
+                    convert_mate_score(pv.score)
                 } else {
-                    convert_centipawn_score(best_score)
+                    convert_centipawn_score(pv.score)
                 },
-                pv: pv_to_uci(&self.board, &self.current_pv),
+                pv: pv_to_uci(&self.board, &pv.line),
             }))
             .unwrap();
     }

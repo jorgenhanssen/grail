@@ -77,6 +77,7 @@ define_config!(
     // --- Core UCI options (always exposed) ---
     (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 16384 }, 256, true),
     (move_overhead: i32, "Move Overhead", UciOptionType::Spin { min: 0, max: 5000 }, 10, true),
+    (multi_pv: u8, "MultiPV", UciOptionType::Spin { min: 1, max: 64 }, 1, true),
     (nnue: bool, "NNUE", UciOptionType::Check, true, true),
 
     (aspiration_window_size: i16, "Aspiration Window Size", UciOptionType::Spin { min: 10, max: 100 }, 40, cfg!(feature = "tuning")),
