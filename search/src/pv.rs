@@ -10,17 +10,16 @@ use crate::pruning::AspirationWindow;
 pub struct PvLine {
     pub line: Vec<Move>,
     pub score: i16,
-    /// PV number in UCI format (1-based). For single-PV mode or primary PV, this is 1.
-    pub pv_number: usize,
+    pub pv_index: usize,
 }
 
 impl PvLine {
-    /// Creates a new PV line with the given moves, score, and PV number.
-    pub fn new(line: Vec<Move>, score: i16, pv_number: usize) -> Self {
+    /// Creates a new PV line with the given moves, score, and PV index.
+    pub fn new(line: Vec<Move>, score: i16, pv_index: usize) -> Self {
         Self {
             line,
             score,
-            pv_number,
+            pv_index,
         }
     }
 
@@ -96,9 +95,11 @@ impl MultiPvSearchContext {
         }
     }
 
-    /// Set the current PV index being searched.
-    pub fn set_current_pv_index(&mut self, pv_index: usize) {
+    /// Begin searching a specific PV rank.
+    pub fn begin_pv_search(&mut self, pv_index: usize, depth: u8) {
         self.current_pv_index = Some(pv_index);
+        let prev_score = self.pvs[pv_index].result.score;
+        self.pvs[pv_index].window.begin_depth(depth, prev_score);
     }
 
     /// Reset exclusions for a new depth iteration.

@@ -137,12 +137,12 @@ impl SearchController {
         depth: u8,
         score: i16,
         best_move: Option<Move>,
-        multi_pv: u8,
+        pv_count: u8,
     ) {
         self.stats.add_iteration(depth, score, best_move);
 
         if let Some(ref mut budget) = self.time_budget {
-            budget.adjust_for_search_behavior(&self.stats, multi_pv);
+            budget.adjust_for_search_behavior(&self.stats, pv_count);
         }
     }
 

@@ -188,7 +188,7 @@ impl Engine {
             .send(UciOutput::Info(Info {
                 depth: current_depth,
                 sel_depth: self.max_ply_reached,
-                multipv: pv.pv_number as u8,
+                multipv: (pv.pv_index + 1) as u8, // UCI uses 1-based indexing
                 nodes: self.nodes,
                 nodes_per_second: nps,
                 hashfull: self.tt.hashfull(),

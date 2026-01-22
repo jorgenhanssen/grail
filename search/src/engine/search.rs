@@ -114,17 +114,9 @@ impl Engine {
         pv_index: usize,
         controller: &mut SearchController,
     ) -> Option<PvLine> {
-        // Setup aspiration window based on previous result at this PV rank
-        let prev_score = self.multi_pv.pvs[pv_index].result.score;
-        self.multi_pv.pvs[pv_index]
-            .window
-            .begin_depth(depth, prev_score);
-
-        // Set current PV so search_node knows which PV's hint to use at root
-        self.multi_pv.set_current_pv_index(pv_index);
+        self.multi_pv.begin_pv_search(pv_index, depth);
 
         let mut retries = 0;
-        let pv_number = pv_index + 1; // UCI uses 1-based indexing
 
         loop {
             let bounds = self.multi_pv.pvs[pv_index].window.bounds();
@@ -135,12 +127,12 @@ impl Engine {
             }
 
             if self.stop.load(Ordering::Relaxed) {
-                return Some(PvLine::new(pv, score, pv_number));
+                return Some(PvLine::new(pv, score, pv_index));
             }
 
             match self.multi_pv.pvs[pv_index].window.analyse_pass(score) {
                 Pass::Hit(s) => {
-                    return Some(PvLine::new(pv, s, pv_number));
+                    return Some(PvLine::new(pv, s, pv_index));
                 }
                 _ => {
                     controller.on_aspiration_failure();
