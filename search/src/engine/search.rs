@@ -12,7 +12,8 @@ use utils::{has_legal_moves, Node, NodeType};
 use crate::{
     engine::reduction::Reduction,
     move_ordering::{MainMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
-    pruning::{mate_distance_prune, should_lmp_prune, AspirationWindow, Pass},
+    pruning::{mate_distance_prune, should_lmp_prune, Pass},
+    pv::PvLine,
     reductions::iir,
     stack::SearchNode,
     time_control::SearchController,
@@ -23,9 +24,9 @@ use crate::{
 use super::{Engine, MAX_DEPTH};
 
 impl Engine {
-    /// Iterative deepening search with aspiration windows.
+    /// Multi-PV search with iterative deepening.
     ///
-    /// Returns the best move and score, or `None` if already in checkmate.
+    /// Returns `None` if already in checkmate.
     pub fn search(
         &mut self,
         params: &GoParams,
@@ -46,96 +47,131 @@ impl Engine {
 
         self.init_search();
 
-        let mut window = AspirationWindow::new(
-            self.config.aspiration_window_size.value,
-            self.config.aspiration_window_widen.value,
-            self.config.aspiration_window_depth.value,
-            self.config.aspiration_score_divisor.value,
-        );
-
         let mut controller =
             SearchController::new(params, &self.board, self.config.move_overhead.value as u64);
         let stop = Arc::clone(&self.stop);
         controller.on_stop(move || stop.store(true, Ordering::Relaxed));
         controller.start_timer();
 
-        let mut iteration = 1;
-        let mut best_move = None;
-        let mut best_score = 0;
-
-        // Root node is always PV
+        let pv_count = self.config.multi_pv.value as usize;
         let root = Node::new(self.board.clone(), NodeType::Pv);
+        let mut depth = 1u8;
 
-        while !self.stop.load(Ordering::Relaxed) && iteration < MAX_DEPTH as u8 {
+        // Iterative deepening
+        while !self.stop.load(Ordering::Relaxed) && depth < MAX_DEPTH as u8 {
             controller.on_iteration_start();
 
-            if !controller.should_continue_to_next_depth(iteration) {
+            if !controller.should_continue_to_next_depth(depth) {
                 break;
             }
 
-            window.begin_depth(iteration, best_score);
-            let mut retries = 0;
+            self.multi_pv.reset_excluded();
 
-            loop {
-                let bounds = window.bounds();
-                let (score, pv) = self.search_node(&root, iteration, 0, bounds, true);
-                let mv = pv.first().cloned();
+            for pv_index in 0..pv_count {
+                if let Some(pv) = self.search_pv(&root, depth, pv_index, &mut controller) {
+                    // Exclude this move for subsequent PVs to not search it twice
+                    if let Some(mv) = pv.best_move() {
+                        self.multi_pv.add_excluded(mv);
+                    }
 
-                if mv.is_none() {
-                    break;
+                    if let Some(out) = output {
+                        self.send_search_info(out, depth, &pv, controller.elapsed());
+                    }
+
+                    self.multi_pv.pvs[pv_index].result = pv;
+                } else {
+                    break; // No more moves for additional PVs
                 }
 
-                // If stopped during search, use partial results from current iteration
-                // This is often better than using the known best from the previous iteration
                 if self.stop.load(Ordering::Relaxed) {
-                    best_move = mv;
-                    best_score = score;
                     break;
-                }
-
-                match window.analyse_pass(score) {
-                    Pass::Hit(s) => {
-                        best_move = mv;
-                        best_score = s;
-
-                        controller.on_iteration_complete(iteration, s, mv);
-
-                        if let Some(out) = output {
-                            self.send_search_info(out, iteration, s, controller.elapsed());
-                        }
-                        break;
-                    }
-                    _ => {
-                        controller.on_aspiration_failure();
-
-                        retries += 1;
-
-                        if retries >= self.config.aspiration_window_retries.value {
-                            window.fully_extend();
-                            retries = 0;
-                        }
-                    }
                 }
             }
 
-            iteration += 1;
+            if let Some(pv) = self.multi_pv.primary() {
+                controller.on_iteration_complete(
+                    depth,
+                    pv.score,
+                    pv.best_move(),
+                    self.config.multi_pv.value,
+                );
+            }
+
+            depth += 1;
         }
 
-        best_move.map(|mv| (mv, best_score))
+        // TODO: Consider returning the PvLine instead of the best move and score (for better NNUE generation later)
+        self.multi_pv
+            .primary()
+            .and_then(|pv| pv.best_move().map(|mv| (mv, pv.score)))
     }
 
-    /// Initializes the search - resets all state for a new search.
+    /// Search for a single PV.
+    fn search_pv(
+        &mut self,
+        root: &Node,
+        depth: u8,
+        pv_index: usize,
+        controller: &mut SearchController,
+    ) -> Option<PvLine> {
+        // Setup aspiration window based on previous result at this PV rank
+        let prev_score = self.multi_pv.pvs[pv_index].result.score;
+        self.multi_pv.pvs[pv_index]
+            .window
+            .begin_depth(depth, prev_score);
+
+        // Set current PV so search_node knows which PV's hint to use at root
+        self.multi_pv.set_current_pv_index(pv_index);
+
+        let mut retries = 0;
+        let pv_number = pv_index + 1; // UCI uses 1-based indexing
+
+        loop {
+            let bounds = self.multi_pv.pvs[pv_index].window.bounds();
+
+            let (score, pv) = self.search_node(root, depth, 0, bounds, true);
+            if pv.is_empty() {
+                return None;
+            }
+
+            if self.stop.load(Ordering::Relaxed) {
+                return Some(PvLine::new(pv, score, pv_number));
+            }
+
+            match self.multi_pv.pvs[pv_index].window.analyse_pass(score) {
+                Pass::Hit(s) => {
+                    return Some(PvLine::new(pv, s, pv_number));
+                }
+                _ => {
+                    controller.on_aspiration_failure();
+                    retries += 1;
+                    if retries >= self.config.aspiration_window_retries.value {
+                        self.multi_pv.pvs[pv_index].window.fully_extend();
+                        retries = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Initializes state for a new search.
     fn init_search(&mut self) {
         self.stop.store(false, Ordering::Relaxed);
-
         self.nodes = 0;
         self.max_ply_reached = 1;
-        self.current_pv.clear();
 
         self.search_stack.clear();
         self.search_stack.push(SearchNode::new(self.board.hash()));
 
         self.tt.age();
+
+        self.multi_pv.init(
+            self.config.multi_pv.value as usize,
+            self.config.aspiration_window_size.value,
+            self.config.aspiration_window_widen.value,
+            self.config.aspiration_window_depth.value,
+            self.config.aspiration_score_divisor.value,
+        );
     }
 
     /// Alpha-beta search with principal variation search (PVS) and late move reductions.
@@ -275,8 +311,8 @@ impl Engine {
             .get_prev_moves(self.search_stack.as_slice());
 
         let best_move_hint = if ply == 0 {
-            // At root we can use the currently best move (pv[0]) for ordering
-            self.current_pv.first().cloned()
+            // At root we can use the currently best move for ordering
+            self.multi_pv.best_move_hint()
         } else {
             maybe_tt_move
         };
@@ -301,6 +337,11 @@ impl Engine {
             &self.capture_history,
             &self.continuation_history,
         ) {
+            // Let's not search the same move twice in different PVs
+            if ply == 0 && self.multi_pv.is_excluded(m) {
+                continue;
+            }
+
             move_index += 1;
 
             if should_lmp_prune(
@@ -339,12 +380,6 @@ impl Engine {
                     line.insert(0, m);
                     best_line = line.clone();
                     best_move_depth = searched_depth;
-
-                    // If we are at root and this is a great move,
-                    // then let's use this move as the current PV.
-                    if ply == 0 {
-                        self.current_pv = line;
-                    }
                 }
 
                 bounds.raise_alpha(best_value);

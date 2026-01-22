@@ -109,8 +109,8 @@ impl TimeBudget {
         }
     }
 
-    // Stockfish-style time adjustment based on search behavior (Managed only)
-    pub fn adjust_for_search_behavior(&mut self, stats: &TimeControlStats) {
+    // Time adjustment based on search behavior (inspired by Stockfish)
+    pub fn adjust_for_search_behavior(&mut self, stats: &TimeControlStats, multi_pv: u8) {
         match self {
             TimeBudget::Exact { .. } => {
                 // Do not adjust in exact mode
@@ -133,8 +133,16 @@ impl TimeBudget {
                     target_factor *= SCORE_DROP_PENALTY; // +30% time
                 }
 
-                if stats.aspiration_failures > 2 {
-                    // Position is complex, so verify
+                // TODO: Look into if this is a reasonable approach.
+                // I don't think multi-pv is common in time-critical usages.
+                // But this is what I think is an ok approach for now:
+
+                // Scale aspiration failure threshold by MultiPV count.
+                // With MultiPV=N, we expect roughly N times more failures in simple positions,
+                // so we only treat it as complex if failures exceed what's expected.
+                let failure_threshold = 2 * (multi_pv as u32);
+                if stats.aspiration_failures > failure_threshold {
+                    // Position is genuinely complex across multiple PVs, so verify
                     target_factor *= 1.2; // +20% time
                 }
 

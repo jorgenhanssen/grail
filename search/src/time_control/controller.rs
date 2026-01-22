@@ -132,11 +132,17 @@ impl SearchController {
         self.current_iteration_start_ms = Some(now_ms);
     }
 
-    pub fn on_iteration_complete(&mut self, depth: u8, score: i16, best_move: Option<Move>) {
+    pub fn on_iteration_complete(
+        &mut self,
+        depth: u8,
+        score: i16,
+        best_move: Option<Move>,
+        multi_pv: u8,
+    ) {
         self.stats.add_iteration(depth, score, best_move);
 
         if let Some(ref mut budget) = self.time_budget {
-            budget.adjust_for_search_behavior(&self.stats);
+            budget.adjust_for_search_behavior(&self.stats, multi_pv);
         }
     }
 
