@@ -17,7 +17,7 @@ use crate::{
     reductions::iir,
     stack::SearchNode,
     time_control::SearchController,
-    transposition::Bound,
+    transposition::{Bound, ProbeResult},
     utils::Bounds,
 };
 
@@ -175,6 +175,8 @@ impl Engine {
         mut bounds: Bounds,
         null_move_allowed: bool,
     ) -> (i16, Vec<Move>) {
+        let singular = self.search_stack.current().and_then(|n| n.singular);
+
         if self.stop.load(Ordering::Relaxed) {
             return (0, Vec::new());
         }
@@ -198,25 +200,20 @@ impl Engine {
         }
 
         let hash = node.hash();
-
-        // Transposition table probe
         let original_bounds = bounds;
-        let mut maybe_tt_move = None;
-        let mut tt_static_eval = None;
-
         let is_pv_node = node.is_pv();
 
-        if let Some(tt) = self.tt.probe(hash, ply) {
+        let tt_info: Option<ProbeResult> = if let Some(tt) = self.tt.probe(hash, ply) {
             // Only trust value/bound for cutoffs if the TT entry comes from a
             // search at least as deep as we need. Shallow results may have
             // missed tactics and can't safely prune the current search.
             //
-            // Don't do TT cutoffs in PV nodes.
-            if !is_pv_node && tt.depth >= depth {
+            // Don't do TT cutoffs in PV nodes or during singular search.
+            if !is_pv_node && singular.is_none() && tt.depth >= depth {
                 match tt.bound {
                     // Exact: previous search found true minimax value
                     Bound::Exact => {
-                        return (tt.value, tt.best_move.map_or(Vec::new(), |m| vec![m]))
+                        return (tt.value, tt.best_move.map_or(Vec::new(), |m| vec![m]));
                     }
                     // Lower: previous search failed high (value >= beta), so value is at least this good
                     Bound::Lower => {
@@ -235,23 +232,27 @@ impl Engine {
                 }
             }
 
-            // However, we can use the TT move for ordering and static eval for caching,
-            // even from shallow searches - these are still valuable hints!
-            maybe_tt_move = tt.best_move;
-            tt_static_eval = tt.static_eval;
-        }
+            // Even if we are not able to return the TT move,
+            // it is still valuable for cached static eval as hint for move ordering, etc.
+            Some(tt)
+        } else {
+            None
+        };
 
         let in_check = node.in_check();
+        let tt_move = tt_info.and_then(|t| t.best_move);
 
         let depth = iir(
             ply,
             depth,
-            maybe_tt_move.is_some(),
+            tt_move.is_some(),
             self.config.iir_min_depth.value,
             self.config.iir_reduction.value,
         );
 
-        let static_eval = tt_static_eval.unwrap_or_else(|| self.static_eval(node));
+        let static_eval = tt_info
+            .and_then(|t| t.static_eval)
+            .unwrap_or_else(|| self.static_eval(node));
 
         self.search_stack
             .current_mut(|n| n.static_eval = Some(static_eval));
@@ -262,16 +263,21 @@ impl Engine {
             return (score, Vec::new());
         }
 
-        if let Some(score) = self.try_null_move_prune(
-            node,
-            depth,
-            ply,
-            bounds,
-            in_check,
-            null_move_allowed,
-            Some(static_eval),
-        ) {
-            return (score, Vec::new());
+        // Stockfish skips NMP during singular searches.
+        // Likely because NMP can raise beta without searching any actual moves,
+        // so the "are all other moves worse?" test becomes unreliable.
+        if singular.is_none() {
+            if let Some(score) = self.try_null_move_prune(
+                node,
+                depth,
+                ply,
+                bounds,
+                in_check,
+                null_move_allowed,
+                Some(static_eval),
+            ) {
+                return (score, Vec::new());
+            }
         }
 
         let is_improving = !in_check && self.search_stack.is_improving();
@@ -306,7 +312,7 @@ impl Engine {
             // At root we can use the currently best move for ordering
             self.multi_pv.best_move_hint()
         } else {
-            maybe_tt_move
+            tt_move
         };
         let killers = self.killer_moves[ply as usize];
 
@@ -329,6 +335,10 @@ impl Engine {
             &self.capture_history,
             &self.continuation_history,
         ) {
+            if singular.is_some_and(|s| s.excluded == m) {
+                continue;
+            }
+
             // Let's not search the same move twice in different PVs
             if ply == 0 && self.multi_pv.is_excluded(m) {
                 continue;
@@ -351,16 +361,21 @@ impl Engine {
                 continue;
             }
 
+            // Singular extension: when TT move is clearly best, extend its search
+            let singular_extension =
+                self.get_singular_extension(node, m, tt_info, depth, ply, singular.is_some());
+
             if let Some((value, mut line, is_quiet, searched_depth)) = self.search_move(
                 node,
+                m,
                 depth,
                 ply,
                 bounds,
                 in_check,
-                m,
                 move_index,
                 is_improving,
                 static_eval,
+                singular_extension,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
                     break;
@@ -423,19 +438,20 @@ impl Engine {
     }
 
     /// Searches a single move with per-move pruning and LMR.
-    /// Returns `None` if the move was pruned, otherwise (score, pv, is_quiet, depth).
+    /// Returns `None` if pruned, otherwise (score, pv, is_quiet, searched_depth).
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn search_move(
+    fn search_move(
         &mut self,
         node: &Node,
+        m: Move,
         depth: u8,
         ply: u8,
         bounds: Bounds,
         in_check: bool,
-        m: Move,
         move_index: i32,
         is_improving: bool,
         static_eval: i16,
+        singular_extension: u8,
     ) -> Option<(i16, Vec<Move>, bool, u8)> {
         let moved_color = node.board().side_to_move();
         let moved_piece = node.piece_on(m.from).unwrap();
@@ -487,7 +503,8 @@ impl Engine {
             Reduction::Prune => return None,
         };
 
-        let extension = self.get_extension(node, &m, moved_piece, is_cap);
+        // Combine regular extension with singular extension
+        let extension = self.get_extension(node, &m, moved_piece, is_cap) + singular_extension;
 
         // Child's remaining depth after extension/reduction
         let extended_child_depth = depth.saturating_sub(1).saturating_add(extension);
