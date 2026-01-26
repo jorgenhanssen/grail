@@ -1,6 +1,13 @@
 use cozy_chess::{Color, Move, Piece};
 use utils::Node;
 
+/// Context for singular extension search.
+#[derive(Clone, Copy)]
+pub struct SingularSearch {
+    /// The TT move to exclude from this ply
+    pub excluded: Move,
+}
+
 /// A node in the search stack, tracking state at each ply.
 #[derive(Clone, Copy)]
 pub struct SearchNode {
@@ -14,6 +21,8 @@ pub struct SearchNode {
     pub color: Option<Color>,
     /// Cached static eval (for improving detection)
     pub static_eval: Option<i16>,
+    /// Singular extension context (if in singular search)
+    pub singular: Option<SingularSearch>,
 }
 
 impl SearchNode {
@@ -24,6 +33,7 @@ impl SearchNode {
             piece: None,
             color: None,
             static_eval: None,
+            singular: None,
         }
     }
 
@@ -34,6 +44,7 @@ impl SearchNode {
             piece: Some(piece),
             color: Some(color),
             static_eval: None,
+            singular: None,
         }
     }
 }
@@ -76,6 +87,11 @@ impl SearchStack {
         if let Some(node) = self.nodes.last_mut() {
             f(node);
         }
+    }
+
+    /// Returns the current node (if any).
+    pub fn current(&self) -> Option<&SearchNode> {
+        self.nodes.last()
     }
 
     /// Returns true if eval improved vs 2 plies ago (same side to move).

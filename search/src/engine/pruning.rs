@@ -176,19 +176,6 @@ impl Engine {
 
         // If opponent couldn't beat beta even with a free move, position is strong enough to prune
         if -score >= bounds.beta {
-            // Zugzwang check: at shallow depths, verify with a real search.
-            // In zugzwang, passing is better than any legal move, so null move gives false positive.
-            if depth <= 6 {
-                self.search_stack.push_node(&nm_child);
-                let verify_child_depth = depth.saturating_sub(reduction);
-                let (v_score, _) =
-                    self.search_node(&nm_child, verify_child_depth, ply + 1, null_bounds, false);
-                self.search_stack.pop();
-                if -v_score < bounds.beta {
-                    return None; // fail verification; do not prune
-                }
-            }
-
             self.tt.store(
                 node.hash(),
                 ply,
