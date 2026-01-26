@@ -36,6 +36,9 @@ impl SelfPlayWorker {
         // Reduced hash size to reduce RAM usage
         config.hash_size.value = WORKER_HASH_SIZE_MB;
 
+        // Set MultiPV for the engine
+        config.multi_pv.value = SelfPlayGame::pv_lines();
+
         let hce = Box::new(hce::Evaluator::new(config.get_hce_config()));
 
         // Engine stop flag (not used in data generation, but required by Engine)
@@ -59,8 +62,8 @@ impl SelfPlayWorker {
             let game_id = self.game_id_counter.fetch_add(1, Ordering::Relaxed);
             let opening_fen = self.opening_book.random_position();
 
-            let mut game = SelfPlayGame::new(game_id, opening_fen);
-            game.play(&mut self.engine, self.depth);
+            let mut game = SelfPlayGame::new(game_id, opening_fen, self.depth);
+            game.play(&mut self.engine);
 
             let (samples, scores) = game.drain_samples();
             self.record_statistics(&samples, scores);

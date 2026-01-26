@@ -1710,6 +1710,7 @@ dependencies = [
  "evaluation",
  "hce",
  "log",
+ "rand 0.8.5",
  "uci",
  "utils",
 ]

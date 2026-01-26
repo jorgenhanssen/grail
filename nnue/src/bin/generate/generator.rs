@@ -1,4 +1,5 @@
 use crate::book::Book;
+use crate::game::SelfPlayGame;
 use crate::histogram::ScoreHistogram;
 use crate::worker::SelfPlayWorker;
 use candle_core::Device;
@@ -53,8 +54,10 @@ impl Generator {
 
     pub fn run(&self, depth: u8, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, usize)> {
         log::info!(
-            "Generating samples using {} threads - Press Ctrl+C to stop",
+            "Generating samples using {} threads (depth={}, multi_pv={}) - Press Ctrl+C to stop",
             self.threads,
+            depth,
+            SelfPlayGame::pv_lines(),
         );
 
         let sample_counter = Arc::new(AtomicUsize::new(0));

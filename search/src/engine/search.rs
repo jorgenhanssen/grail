@@ -15,6 +15,7 @@ use crate::{
     pruning::{mate_distance_prune, should_lmp_prune, Pass},
     pv::PvLine,
     reductions::iir,
+    result::SearchResult,
     stack::SearchNode,
     time_control::SearchController,
     transposition::Bound,
@@ -26,12 +27,12 @@ use super::{Engine, MAX_DEPTH};
 impl Engine {
     /// Multi-PV search with iterative deepening.
     ///
-    /// Returns `None` if already in checkmate.
+    /// Returns `None` if already in checkmate, otherwise returns all PV lines found.
     pub fn search(
         &mut self,
         params: &GoParams,
         output: Option<&Sender<UciOutput>>,
-    ) -> Option<(Move, i16)> {
+    ) -> Option<SearchResult> {
         // Check for checkmate (no legal moves when in check)
         if !has_legal_moves(&self.board) && !self.board.checkers().is_empty() {
             if let Some(output) = output {
@@ -100,10 +101,20 @@ impl Engine {
             depth += 1;
         }
 
-        // TODO: Consider returning the PvLine instead of the best move and score (for better NNUE generation later)
-        self.multi_pv
-            .primary()
-            .and_then(|pv| pv.best_move().map(|mv| (mv, pv.score)))
+        // Collect all non-empty PV lines into the result
+        let lines: Vec<PvLine> = self
+            .multi_pv
+            .lines
+            .iter()
+            .map(|ctx| ctx.result.clone())
+            .filter(|pv| !pv.is_empty())
+            .collect();
+
+        if lines.is_empty() {
+            None
+        } else {
+            Some(SearchResult::new(lines))
+        }
     }
 
     /// Search for a single PV.

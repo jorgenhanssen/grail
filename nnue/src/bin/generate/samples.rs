@@ -26,7 +26,7 @@ impl Samples {
     }
 
     pub fn write<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-        writeln!(writer, "fen,score,game_id")?; // Header
+        writeln!(writer, "fen,score,game_id")?;
 
         for i in 0..self.fens.len() {
             writeln!(
