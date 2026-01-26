@@ -257,16 +257,17 @@ impl Engine {
         self.search_stack
             .current_mut(|n| n.static_eval = Some(static_eval));
 
-        if let Some(score) =
-            self.try_razor_prune(node, depth, bounds.alpha, ply, in_check, static_eval)
-        {
-            return (score, Vec::new());
-        }
-
         // Stockfish skips NMP during singular searches.
         // Likely because NMP can raise beta without searching any actual moves,
         // so the "are all other moves worse?" test becomes unreliable.
+        // I also saw success skipping razoring.
         if singular.is_none() {
+            if let Some(score) =
+                self.try_razor_prune(node, depth, bounds.alpha, ply, in_check, static_eval)
+            {
+                return (score, Vec::new());
+            }
+
             if let Some(score) = self.try_null_move_prune(
                 node,
                 depth,

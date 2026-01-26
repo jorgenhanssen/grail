@@ -66,15 +66,21 @@ impl Engine {
             return 0;
         }
 
-        let singular_beta =
-            tt.value.saturating_sub((self.config.singular_beta_margin.value * depth as i16).max(1));
+        let singular_beta = tt
+            .value
+            .saturating_sub((self.config.singular_beta_margin.value * depth as i16).max(1));
         let singular_depth = (depth - 1) / 2;
 
         // Reduced search excluding TT move
         self.search_stack
             .current_mut(|n| n.singular = Some(SingularSearch { excluded: m }));
-        let (singular_value, _) =
-            self.search_node(node, singular_depth, ply, Bounds::null(singular_beta - 1), false);
+        let (singular_value, _) = self.search_node(
+            node,
+            singular_depth,
+            ply,
+            Bounds::null(singular_beta - 1),
+            false,
+        );
         self.search_stack.current_mut(|n| n.singular = None);
 
         if singular_value < singular_beta {
