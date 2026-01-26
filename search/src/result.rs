@@ -17,12 +17,11 @@ pub struct SearchResult {
 }
 
 impl SearchResult {
-    /// Creates a new search result from PV lines.
     pub fn new(lines: Vec<PvLine>) -> Self {
         Self { lines }
     }
 
-    /// Returns the primary (best) PV line, if any.
+    /// Returns the primary (best) PV line.
     pub fn primary(&self) -> Option<&PvLine> {
         self.lines.first()
     }
@@ -30,11 +29,6 @@ impl SearchResult {
     /// Returns all PV lines.
     pub fn lines(&self) -> &[PvLine] {
         &self.lines
-    }
-
-    /// Returns true if no PV lines were found.
-    pub fn is_empty(&self) -> bool {
-        self.lines.is_empty()
     }
 
     /// Select a PV line using softmax over scores.
@@ -61,15 +55,10 @@ impl SearchResult {
             .map(|pv| pv.score as f32 / SOFTMAX_SCALE)
             .collect();
 
-        // Find max for numerical stability
         let max_score = scores.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-
-        // Compute softmax weights
         let weights: Vec<f32> = scores.iter().map(|&s| (s - max_score).exp()).collect();
-
         let total: f32 = weights.iter().sum();
 
-        // Sample from the distribution
         let mut r = rng.gen::<f32>() * total;
         for (i, &w) in weights.iter().enumerate() {
             r -= w;
