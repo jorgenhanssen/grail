@@ -2,10 +2,9 @@ use cozy_chess::{Color, Move, Piece};
 use utils::Node;
 
 /// Context for singular extension search.
-/// When present, we're searching to verify if a TT move is singular.
 #[derive(Clone, Copy)]
 pub struct SingularSearch {
-    /// The TT move to exclude from this search
+    /// The TT move to exclude from this ply
     pub excluded: Move,
 }
 

@@ -504,7 +504,6 @@ impl Engine {
             Reduction::Prune => return None,
         };
 
-        // Combine regular extension with singular extension
         let extension = self.get_extension(node, &m, moved_piece, is_cap) + singular_extension;
 
         // Child's remaining depth after extension/reduction
