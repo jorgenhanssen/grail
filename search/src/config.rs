@@ -141,6 +141,12 @@ define_config!(
     (see_prune_depth_margin: i16, "SEE Prune Depth Margin", UciOptionType::Spin { min: 10, max: 150 }, 75, cfg!(feature = "tuning")),
     (see_prune_min_attacker_value: i16, "SEE Prune Min Attacker Value", UciOptionType::Spin { min: 0, max: 500 }, 200, cfg!(feature = "tuning")),
 
+    // Singular Extensions
+    (singular_min_depth: u8, "Singular Min Depth", UciOptionType::Spin { min: 4, max: 12 }, 6, cfg!(feature = "tuning")),
+    (singular_depth_margin: u8, "Singular Depth Margin", UciOptionType::Spin { min: 1, max: 5 }, 3, cfg!(feature = "tuning")),
+    (singular_beta_margin: i16, "Singular Beta Margin", UciOptionType::Spin { min: 1, max: 5 }, 2, cfg!(feature = "tuning")),
+    (double_ext_margin: i16, "Double Extension Margin", UciOptionType::Spin { min: 10, max: 100 }, 50, cfg!(feature = "tuning")),
+
     (hce_tempo_bonus: i16, "HCE Tempo Bonus", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
 
     (hce_doubled_pawn_penalty: i16, "HCE Doubled Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 30, cfg!(feature = "tuning")),
