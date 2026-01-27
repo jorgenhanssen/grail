@@ -242,14 +242,6 @@ impl Engine {
         let in_check = node.in_check();
         let tt_move = tt_info.and_then(|t| t.best_move);
 
-        let depth = iir(
-            ply,
-            depth,
-            tt_move.is_some(),
-            self.config.iir_min_depth.value,
-            self.config.iir_reduction.value,
-        );
-
         let static_eval = tt_info
             .and_then(|t| t.static_eval)
             .unwrap_or_else(|| self.static_eval(node));
@@ -294,6 +286,14 @@ impl Engine {
         ) {
             return (score, Vec::new());
         }
+
+        let depth = iir(
+            ply,
+            depth,
+            tt_move.is_some(),
+            self.config.iir_min_depth.value,
+            self.config.iir_reduction.value,
+        );
 
         self.max_ply_reached = self.max_ply_reached.max(ply);
 
