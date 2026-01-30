@@ -33,9 +33,7 @@ impl SearchResult {
 
     /// Select a PV line using softmax over scores.
     ///
-    /// Higher-scoring lines are more likely to be selected.
-    /// Scores are scaled down so typical differences give reasonable probabilities.
-    /// Returns None if no lines available.
+    /// Returns None if no lines are available.
     pub fn select_softmax(&self) -> Option<&PvLine> {
         if self.lines.is_empty() {
             return None;
