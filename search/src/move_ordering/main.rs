@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 use cozy_chess::{BitBoard, Move, Piece};
-use utils::{gives_check, is_capture, piece_value};
+use utils::{captured_piece, gives_check, is_capture, piece_value};
 
 use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic, PieceTo};
 use crate::utils::see::see;
@@ -133,7 +133,7 @@ impl MainMoveGenerator {
                 }
 
                 // Use MVV-LVA for quick filtering before expensive SEE
-                let victim = board.piece_on(scored_move.mov.to).unwrap();
+                let victim = captured_piece(board, scored_move.mov).unwrap();
                 let attacker = board.piece_on(scored_move.mov.from).unwrap();
                 let victim_value = piece_value(victim);
                 let attacker_value = piece_value(attacker);

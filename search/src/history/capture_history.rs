@@ -1,4 +1,5 @@
 use cozy_chess::{Board, Move, Piece, Square};
+use utils::captured_piece;
 
 use super::utils::apply_gravity;
 use crate::{EngineConfig, MAX_DEPTH};
@@ -46,15 +47,16 @@ impl CaptureHistory {
 
     pub fn get(&self, board: &Board, mv: Move) -> i16 {
         let attacker = board.piece_on(mv.from).unwrap();
-        let victim = board.piece_on(mv.to).unwrap();
+        let Some(victim) = captured_piece(board, mv) else {
+            return 0;
+        };
         self.history[Self::index(attacker, mv.to, victim)]
     }
 
     pub fn update_capture(&mut self, board: &Board, mv: Move, delta: i32) {
         let attacker = board.piece_on(mv.from).unwrap();
-        let victim = match board.piece_on(mv.to) {
-            Some(v) => v,
-            None => return, // Not a capture
+        let Some(victim) = captured_piece(board, mv) else {
+            return;
         };
 
         let idx = Self::index(attacker, mv.to, victim);

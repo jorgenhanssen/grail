@@ -19,6 +19,12 @@ impl Engine {
         flip_eval_perspective(node.side_to_move(), score)
     }
 
+    /// Get the static evaluation with correction history applied.
+    pub(super) fn corrected_static_eval(&mut self, node: &Node) -> i16 {
+        let eval = self.static_eval(node);
+        self.correction_history.adjust(node.board(), eval)
+    }
+
     fn apply_penalties(&self, score: i16, phase: f32) -> i16 {
         let mut adjusted_score = score;
 

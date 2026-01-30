@@ -257,8 +257,10 @@ impl Engine {
             .and_then(|t| t.static_eval)
             .unwrap_or_else(|| self.static_eval(node));
 
+        let corrected_eval = self.correction_history.adjust(node.board(), static_eval);
+
         self.search_stack
-            .current_mut(|n| n.static_eval = Some(static_eval));
+            .current_mut(|n| n.static_eval = Some(corrected_eval));
 
         // Stockfish skips NMP during singular searches.
         // Likely because NMP can raise beta without searching any actual moves,
@@ -266,7 +268,7 @@ impl Engine {
         // I also saw success skipping razoring.
         if singular.is_none() {
             if let Some(score) =
-                self.try_razor_prune(node, depth, bounds.alpha, ply, in_check, static_eval)
+                self.try_razor_prune(node, depth, bounds.alpha, ply, in_check, corrected_eval)
             {
                 return (score, Vec::new());
             }
@@ -278,7 +280,7 @@ impl Engine {
                 bounds,
                 in_check,
                 null_move_allowed,
-                Some(static_eval),
+                Some(corrected_eval),
             ) {
                 return (score, Vec::new());
             }
@@ -290,7 +292,7 @@ impl Engine {
             node,
             depth,
             in_check,
-            static_eval,
+            corrected_eval,
             bounds,
             ply,
             is_improving,
@@ -386,7 +388,7 @@ impl Engine {
                 in_check,
                 move_index,
                 is_improving,
-                static_eval,
+                corrected_eval,
                 singular_extension,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
@@ -436,6 +438,10 @@ impl Engine {
             };
         }
 
+        // Use original alpha when storing in tables, since the bound type depends on the original expectation.
+        // Alpha may have been raised during search, but the bound type depends on
+        // whether we improved.
+
         self.tt.store(
             hash,
             ply,
@@ -446,6 +452,18 @@ impl Engine {
             bounds.beta,
             best_move,
         );
+
+        self.correction_history.update(
+            node.board(),
+            in_check,
+            best_move,
+            best_value,
+            corrected_eval,
+            original_bounds.alpha,
+            bounds.beta,
+            best_move_depth,
+        );
+
         (best_value, best_line)
     }
 
