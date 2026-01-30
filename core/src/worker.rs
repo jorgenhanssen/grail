@@ -46,7 +46,10 @@ impl EngineWorker {
 
                     // UCI requires bestmove for every "go" command, even in checkmate positions
                     let uci_move = result
-                        .map(|(mv, _)| move_to_uci(self.engine.board(), mv))
+                        .as_ref()
+                        .and_then(|r| r.primary())
+                        .and_then(|pv| pv.best_move())
+                        .map(|mv| move_to_uci(self.engine.board(), mv))
                         .unwrap_or_else(|| NULL_MOVE.to_string());
 
                     let _ = self.output.send(UciOutput::BestMove(uci_move));

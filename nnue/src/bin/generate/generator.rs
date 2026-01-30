@@ -14,6 +14,9 @@ use std::time::Duration;
 const DEFAULT_NNUE_PATH: &str = "nnue/model.safetensors";
 const PROGRESS_UPDATE_INTERVAL_MS: u64 = 200;
 
+/// Number of PV lines to search at each decision point.
+const PV_LINES: u8 = 3;
+
 /// Coordinates multi-threaded self-play data generation.
 /// Spawns worker threads that play games and collect (FEN, score, game_id) samples.
 pub struct Generator {
@@ -53,8 +56,10 @@ impl Generator {
 
     pub fn run(&self, depth: u8, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, usize)> {
         log::info!(
-            "Generating samples using {} threads - Press Ctrl+C to stop",
+            "Generating samples using {} threads (depth={}, multi_pv={}) - Press Ctrl+C to stop",
             self.threads,
+            depth,
+            PV_LINES,
         );
 
         let sample_counter = Arc::new(AtomicUsize::new(0));
@@ -81,6 +86,7 @@ impl Generator {
                         sample_counter,
                         game_id_counter,
                         depth,
+                        PV_LINES,
                         nnue,
                         opening_book,
                         histogram_handle,

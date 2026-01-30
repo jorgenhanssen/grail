@@ -14,6 +14,6 @@ pub struct Args {
     pub book: String,
 
     /// Use existing NNUE for evaluation instead of HCE.
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = false)]
     pub nnue: bool,
 }
