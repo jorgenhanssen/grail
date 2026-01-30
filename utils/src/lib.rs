@@ -5,8 +5,8 @@ mod attacks;
 pub mod bitset;
 pub mod board_metrics;
 mod eval;
-mod math;
 mod material;
+mod math;
 pub mod memory;
 mod moves;
 mod node;
@@ -18,8 +18,8 @@ pub use material::{
     piece_value, side_has_insufficient_material, total_material, BISHOP_VALUE, KNIGHT_VALUE,
     PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE,
 };
+pub use math::select_softmax;
 pub use moves::{
     collect_legal_moves, gives_check, has_check, has_legal_moves, is_capture, make_move, only_move,
 };
-pub use math::select_softmax;
 pub use node::{creates_threat, evades_threat, Node, NodeType};
