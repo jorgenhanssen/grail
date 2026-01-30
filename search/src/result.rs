@@ -2,10 +2,10 @@ use utils::select_softmax;
 
 use crate::pv::PvLine;
 
-/// Scale factor for softmax over centipawn scores.
-/// Dividing by this makes typical move differences (~20-50cp) produce
-/// reasonable probabilities rather than near-deterministic selection.
-const SOFTMAX_SCALE: f32 = 100.0;
+/// Softmax temperature: higher = more exploration, lower = best move.
+/// Examples at T=100 with 3 moves: [20,21,21]cp => [33,33,33]%, [484,427,422]cp => [48,27,26]%.
+/// See: https://www.baeldung.com/cs/softmax-temperature
+const SOFTMAX_TEMPERATURE: f32 = 100.0;
 
 /// Result of a search containing all PV lines found.
 ///
@@ -45,12 +45,10 @@ impl SearchResult {
             return self.primary();
         }
 
-        // Scale scores down so centipawn differences give reasonable probabilities
-        // e.g., 50cp difference -> 0.5 units -> exp(-0.5) ≈ 0.6
         let scores: Vec<f32> = self
             .lines
             .iter()
-            .map(|pv| pv.score as f32 / SOFTMAX_SCALE)
+            .map(|pv| pv.score as f32 / SOFTMAX_TEMPERATURE)
             .collect();
 
         let idx = select_softmax(&scores, &mut rand::thread_rng());
