@@ -55,7 +55,7 @@ mod tests {
 
     #[test]
     fn equal_scores_produce_equal_weights() {
-        // With equal scores, all weights should be equal (all exp(0) = 1)xw
+        // With equal scores, all weights should be equal (all exp(0) = 1)
         let scores = [5.0, 5.0, 5.0];
 
         let max = scores.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
@@ -70,10 +70,8 @@ mod tests {
     #[test]
     fn numerically_stable_with_large_values() {
         let mut rng = seeded_rng();
-        // Large values that would overflow naive exp()
         let scores = [1000.0, 999.0, 998.0];
 
-        // Should not panic or return NaN-influenced results
         for _ in 0..100 {
             let idx = select_softmax(&scores, &mut rng);
             assert!(idx < 3);
