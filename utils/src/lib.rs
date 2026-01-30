@@ -5,6 +5,7 @@ mod attacks;
 pub mod bitset;
 pub mod board_metrics;
 mod eval;
+mod math;
 mod material;
 pub mod memory;
 mod moves;
@@ -20,4 +21,5 @@ pub use material::{
 pub use moves::{
     collect_legal_moves, gives_check, has_check, has_legal_moves, is_capture, make_move, only_move,
 };
+pub use math::select_softmax;
 pub use node::{creates_threat, evades_threat, Node, NodeType};

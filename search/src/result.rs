@@ -1,4 +1,4 @@
-use rand::Rng;
+use utils::select_softmax;
 
 use crate::pv::PvLine;
 
@@ -45,8 +45,6 @@ impl SearchResult {
             return self.primary();
         }
 
-        let mut rng = rand::thread_rng();
-
         // Scale scores down so centipawn differences give reasonable probabilities
         // e.g., 50cp difference -> 0.5 units -> exp(-0.5) ≈ 0.6
         let scores: Vec<f32> = self
@@ -55,19 +53,7 @@ impl SearchResult {
             .map(|pv| pv.score as f32 / SOFTMAX_SCALE)
             .collect();
 
-        let max_score = scores.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-        let weights: Vec<f32> = scores.iter().map(|&s| (s - max_score).exp()).collect();
-        let total: f32 = weights.iter().sum();
-
-        let mut r = rng.gen::<f32>() * total;
-        for (i, &w) in weights.iter().enumerate() {
-            r -= w;
-            if r <= 0.0 {
-                return Some(&self.lines[i]);
-            }
-        }
-
-        // Fallback (shouldn't happen with valid weights)
-        self.lines.last()
+        let idx = select_softmax(&scores, &mut rand::thread_rng());
+        Some(&self.lines[idx])
     }
 }
