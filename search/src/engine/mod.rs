@@ -12,7 +12,7 @@ use uci::{commands::Info, pv_to_uci, UciOutput};
 use crate::pv::{MultiPvSearchContext, PvLine};
 
 use crate::{
-    history::{CaptureHistory, ContinuationHistory, HistoryHeuristic},
+    history::{CaptureHistory, ContinuationHistory, CorrectionHistory, HistoryHeuristic},
     reductions::LmrTable,
     stack::SearchStack,
     transposition::{QSTable, TranspositionTable},
@@ -72,6 +72,8 @@ pub struct Engine {
     capture_history: CaptureHistory,
     /// Scores based on move sequences
     continuation_history: Box<ContinuationHistory>,
+    /// Correction history for static eval adjustment
+    correction_history: CorrectionHistory,
 
     /// Late Move Reductions table
     lmr: LmrTable,
@@ -107,6 +109,7 @@ impl Engine {
             history_heuristic: HistoryHeuristic::new(1, 1, 1, 1, 1, 1),
             capture_history: CaptureHistory::new(1, 1, 1),
             continuation_history: Box::new(ContinuationHistory::new(1, 1, 1, 1)),
+            correction_history: CorrectionHistory::new(1, 1, 1),
 
             lmr: LmrTable::new(config.lmr_divisor.value as f32 / 100.0),
         };
@@ -137,6 +140,10 @@ impl Engine {
 
         if init || !self.continuation_history.matches_config(config) {
             self.continuation_history.configure(config);
+        }
+
+        if init || !self.correction_history.matches_config(config) {
+            self.correction_history.configure(config);
         }
     }
 
@@ -171,6 +178,7 @@ impl Engine {
         self.history_heuristic.reset();
         self.capture_history.reset();
         self.continuation_history.reset();
+        self.correction_history.reset();
         self.search_stack.clear();
     }
 

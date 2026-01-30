@@ -189,6 +189,10 @@ define_config!(
 
     (piece_repetition_base_penalty: i16, "Piece Repetition Base Penalty", UciOptionType::Spin { min: 0, max: 100 }, 10, cfg!(feature = "tuning")),
     (piece_repetition_min_phase: f32, "Piece Repetition Min Phase", UciOptionType::Spin { min: 0, max: 100 }, 50.0, cfg!(feature = "tuning")),
+
+    (correction_history_max_value: i32, "Correction History Max Value", UciOptionType::Spin { min: 128, max: 2048 }, 1024, cfg!(feature = "tuning")),
+    (correction_history_weight: i32, "Correction History Weight", UciOptionType::Spin { min: 0, max: 256 }, 66, cfg!(feature = "tuning")),
+    (correction_history_divisor: i32, "Correction History Divisor", UciOptionType::Spin { min: 64, max: 1024 }, 512, cfg!(feature = "tuning")),
 );
 
 impl EngineConfig {

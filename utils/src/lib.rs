@@ -10,6 +10,7 @@ mod math;
 pub mod memory;
 mod moves;
 mod node;
+mod zobrist;
 
 pub use attacks::{get_attackers_to, get_discovered_attacks};
 pub use eval::flip_eval_perspective;
@@ -20,6 +21,8 @@ pub use material::{
 };
 pub use math::select_softmax;
 pub use moves::{
-    collect_legal_moves, gives_check, has_check, has_legal_moves, is_capture, make_move, only_move,
+    captured_piece, collect_legal_moves, gives_check, has_check, has_legal_moves, is_capture,
+    is_en_passant, make_move, only_move,
 };
 pub use node::{creates_threat, evades_threat, Node, NodeType};
+pub use zobrist::pawn_key;

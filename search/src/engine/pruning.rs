@@ -1,5 +1,5 @@
 use cozy_chess::{Move, Piece};
-use utils::{piece_value, Node};
+use utils::{captured_piece, piece_value, Node};
 
 use crate::{
     pruning::{
@@ -101,14 +101,14 @@ impl Engine {
             return false;
         }
 
-        let captured_piece = board.piece_on(m.to).unwrap();
+        let captured = captured_piece(board, m).unwrap();
 
         // Promotion capture is likely good
         if m.promotion.is_some() {
             return false;
         }
 
-        let captured_value = piece_value(captured_piece);
+        let captured_value = piece_value(captured);
         let attacker_value = piece_value(moved_piece);
 
         // Only run SEE on questionable captures (expensive):

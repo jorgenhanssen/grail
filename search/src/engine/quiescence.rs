@@ -41,7 +41,7 @@ impl Engine {
 
         // Ply limit - return static eval if we've hit max ply
         if ply as usize >= MAX_DEPTH {
-            return (self.static_eval(node), Vec::new());
+            return (self.corrected_static_eval(node), Vec::new());
         }
 
         let hash = node.hash();
@@ -65,7 +65,7 @@ impl Engine {
             }
         }
 
-        let stand_pat = self.static_eval(node);
+        let stand_pat = self.corrected_static_eval(node);
 
         let board_material = node.total_material();
 
