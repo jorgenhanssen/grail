@@ -17,7 +17,7 @@ pub use eval::flip_eval_perspective;
 pub use material::{
     cap_eval_by_material, game_phase, has_insufficient_material, is_zugzwang, majors, minors,
     piece_value, side_has_insufficient_material, total_material, BISHOP_VALUE, KNIGHT_VALUE,
-    PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE,
+    MAJOR_PIECES, MINOR_PIECES, NON_PAWN_PIECES, PAWN_PIECES, PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE,
 };
 pub use math::select_softmax;
 pub use moves::{
@@ -25,4 +25,4 @@ pub use moves::{
     is_en_passant, make_move, only_move,
 };
 pub use node::{creates_threat, evades_threat, Node, NodeType};
-pub use zobrist::pawn_key;
+pub use zobrist::generate_zobrist_table;

@@ -191,8 +191,15 @@ define_config!(
     (piece_repetition_min_phase: f32, "Piece Repetition Min Phase", UciOptionType::Spin { min: 0, max: 100 }, 50.0, cfg!(feature = "tuning")),
 
     (correction_history_max_value: i32, "Correction History Max Value", UciOptionType::Spin { min: 128, max: 2048 }, 1024, cfg!(feature = "tuning")),
-    (correction_history_weight: i32, "Correction History Weight", UciOptionType::Spin { min: 0, max: 256 }, 66, cfg!(feature = "tuning")),
-    (correction_history_divisor: i32, "Correction History Divisor", UciOptionType::Spin { min: 64, max: 1024 }, 512, cfg!(feature = "tuning")),
+    (correction_table_size: usize, "Correction Table Size", UciOptionType::Spin { min: 1024, max: 65536 }, 16384, cfg!(feature = "tuning")),
+
+    // Correction weights based on Stockfish.
+    (correction_pawn_weight: i32, "Correction Pawn Weight", UciOptionType::Spin { min: 0, max: 20000 }, 10347, cfg!(feature = "tuning")),
+    (correction_minor_weight: i32, "Correction Minor Weight", UciOptionType::Spin { min: 0, max: 20000 }, 8821, cfg!(feature = "tuning")),
+    (correction_nonpawn_weight: i32, "Correction NonPawn Weight", UciOptionType::Spin { min: 0, max: 20000 }, 11665, cfg!(feature = "tuning")),
+    (correction_combined_divisor: i32, "Correction Combined Divisor", UciOptionType::Spin { min: 1024, max: 262144 }, 131072, cfg!(feature = "tuning")),
+    (correction_minor_update_weight: i32, "Correction Minor Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 156, cfg!(feature = "tuning")),
+    (correction_nonpawn_update_weight: i32, "Correction NonPawn Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 178, cfg!(feature = "tuning")),
 );
 
 impl EngineConfig {

@@ -18,6 +18,18 @@ pub const BISHOP_VALUE: i16 = PIECE_VALUES[Piece::Bishop as usize];
 pub const ROOK_VALUE: i16 = PIECE_VALUES[Piece::Rook as usize];
 pub const QUEEN_VALUE: i16 = PIECE_VALUES[Piece::Queen as usize];
 
+// Piece groups
+pub const PAWN_PIECES: [Piece; 1] = [Piece::Pawn];
+pub const MINOR_PIECES: [Piece; 2] = [Piece::Knight, Piece::Bishop];
+pub const MAJOR_PIECES: [Piece; 2] = [Piece::Rook, Piece::Queen];
+pub const NON_PAWN_PIECES: [Piece; 5] = [
+    Piece::King,
+    Piece::Knight,
+    Piece::Bishop,
+    Piece::Rook,
+    Piece::Queen,
+];
+
 /// Get the value of a piece in centipawns.
 #[inline]
 pub fn piece_value(piece: Piece) -> i16 {
