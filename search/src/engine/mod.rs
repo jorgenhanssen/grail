@@ -109,7 +109,7 @@ impl Engine {
             history_heuristic: HistoryHeuristic::new(1, 1, 1, 1, 1, 1),
             capture_history: CaptureHistory::new(1, 1, 1),
             continuation_history: Box::new(ContinuationHistory::new(1, 1, 1, 1)),
-            correction_history: CorrectionHistory::new(1, 1, 1),
+            correction_history: CorrectionHistory::new(1, 1, 1, 1, 1, 1, 1, 1),
 
             lmr: LmrTable::new(config.lmr_divisor.value as f32 / 100.0),
         };
