@@ -21,7 +21,7 @@ const NON_PAWN_ZOBRIST: [u64; Square::NUM * NON_PAWN_PIECES.len()] =
 /// indexed by board features. Used to adjust future static evaluations
 /// in positions with similar features.
 ///
-/// Based on Stockfish's implementation:
+/// Based on Stockfish's implementation.
 /// <https://www.chessprogramming.org/Static_Evaluation_Correction_History>
 #[derive(Clone)]
 pub struct CorrectionHistory {
