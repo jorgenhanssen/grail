@@ -47,6 +47,7 @@ and you should be able to run it! 🍎
 Once added to your GUI, you can configure the engine via the UCI options:
 
 - **Hash**: Size of the transposition table in MB (Default: 256).
+- **MultiPV**: Number of principal variations to search (Default: 1).
 - **NNUE**: Toggle between Neural Network (NNUE) and Hand-Crafted (HCE) evaluation (Default: true).
 - **Move Overhead**: Time buffer in milliseconds to account for communication lag (Default: 10).
 
@@ -114,7 +115,7 @@ make generate
 
 - `--book`: Path to an opening book in EPD format (required).
 - `--depth`: Search depth for each move (default: 10).
-- `--nnue`: Use NNUE for generation (default: true, else HCE).
+- `--nnue`: Use NNUE for generation (default: false, else HCE).
 
 Generated data is saved to `nnue/data/YYYY-MM-DD-HH:MM.csv`.
 
@@ -138,7 +139,8 @@ The trainer loads all CSV files from `nnue/data/` and saves the best model to `n
 - `--val-ratio`: Fraction of data to use for validation (default: 0.1).
 - `--test-ratio`: Fraction of data to use for testing (default: 0.01).
 - `--lr-decay`: Learning rate decay factor (default: 0.95).
-- `--patience`: Epochs to wait for improvement before stopping (default: 2).
+- `--patience`: Epochs without improvement before early stopping (default: 2).
+- `--shard-size-mb`: Size of each data shard in megabytes (default: 500).
 
 ## Acknowledgements
 
