@@ -7,13 +7,11 @@ use utils::{
 use super::utils::apply_gravity;
 use crate::EngineConfig;
 
-
 // Zobrist tables for correction history indexing.
 const PAWN_ZOBRIST: [u64; Square::NUM * Color::NUM * PAWN_PIECES.len()] =
     generate_zobrist_table(0xE2E4_D7D5_E4D5_D8D5);
 const MINOR_ZOBRIST: [u64; Square::NUM * Color::NUM * MINOR_PIECES.len()] =
     generate_zobrist_table(0xE2E4_C7C5_D2D4_C5D4);
-// NonPawn table is per-color (no Color::NUM dimension).
 const NON_PAWN_ZOBRIST: [u64; Square::NUM * NON_PAWN_PIECES.len()] =
     generate_zobrist_table(0xD2D4_D7D5_C2C4_E7E6);
 
@@ -44,7 +42,7 @@ pub struct CorrectionHistory {
     nonpawn_weight: i32,
     combined_divisor: i32,
 
-    // Weights for updating corrections (relative to 128)
+    // Weights for updating corrections
     minor_update_weight: i32,
     nonpawn_update_weight: i32,
 }
