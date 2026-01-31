@@ -146,4 +146,4 @@ The trainer loads all CSV files from `nnue/data/` and saves the best model to `n
 
 - [Chess Programming Wiki](https://www.chessprogramming.org/) - A very helpful resource for chess programming concepts and techniques.
 - Thanks to various engine testers, such as the [CCRL](https://computerchess.org.uk/ccrl/), for testing and ranking Grail.
-- Opening books in `/books` sourced from the computer chess community via [TalkChess](https://talkchess.com/viewtopic.php?t=50619).
+- Opening books in `/books` sourced from the [Stockfish opening books](https://github.com/official-stockfish/books) and the computer chess community.
