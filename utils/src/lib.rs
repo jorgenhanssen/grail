@@ -10,6 +10,7 @@ mod math;
 pub mod memory;
 mod moves;
 mod node;
+mod ply;
 mod zobrist;
 
 pub use attacks::{get_attackers_to, get_discovered_attacks};
@@ -25,4 +26,5 @@ pub use moves::{
     is_en_passant, make_move, only_move,
 };
 pub use node::{creates_threat, evades_threat, Node, NodeType};
+pub use ply::FracPly;
 pub use zobrist::generate_zobrist_table;
