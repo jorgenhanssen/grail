@@ -529,7 +529,7 @@ impl Engine {
             m,
             &self.lmr,
         ) {
-            Reduction::Reduction(r) => r,
+            Reduction::Reduce(r) => r,
             Reduction::Prune => return None,
         };
 

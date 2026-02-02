@@ -16,6 +16,9 @@ grail-tuning:
 generate:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin generate
 
+test:
+	RUSTFLAGS="$(RUSTFLAGS)" cargo test
+
 train:
 	@GPU_FEATURES=$$([ "$$(uname -s)" = "Darwin" ] && echo metal || (command -v nvcc >/dev/null 2>&1 && echo cuda || true)); \
 	if [ -n "$$GPU_FEATURES" ]; then \
