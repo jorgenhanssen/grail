@@ -10,7 +10,6 @@ impl FracPly {
     pub const ONE: u16 = 1024;
 
     /// Number of whole plies.
-    #[inline]
     pub const fn whole(self) -> u8 {
         (self.0 / Self::ONE) as u8
     }
@@ -19,14 +18,12 @@ impl FracPly {
 impl Add for FracPly {
     type Output = FracPly;
 
-    #[inline]
     fn add(self, rhs: FracPly) -> FracPly {
         FracPly(self.0.saturating_add(rhs.0))
     }
 }
 
 impl AddAssign for FracPly {
-    #[inline]
     fn add_assign(&mut self, rhs: FracPly) {
         self.0 = self.0.saturating_add(rhs.0);
     }
@@ -35,14 +32,12 @@ impl AddAssign for FracPly {
 impl Sub for FracPly {
     type Output = FracPly;
 
-    #[inline]
     fn sub(self, rhs: FracPly) -> FracPly {
         FracPly(self.0.saturating_sub(rhs.0))
     }
 }
 
 impl SubAssign for FracPly {
-    #[inline]
     fn sub_assign(&mut self, rhs: FracPly) {
         self.0 = self.0.saturating_sub(rhs.0);
     }
