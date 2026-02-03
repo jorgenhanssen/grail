@@ -25,7 +25,14 @@ pub(super) fn select_highest(array: &[ScoredMove]) -> Option<usize> {
 
 pub(super) fn capture_score(board: &Board, mv: Move, capture_history: &CaptureHistory) -> i16 {
     let victim = captured_piece(board, mv).unwrap();
-    let hist = capture_history.get(board, mv);
+    let attacker = board.piece_on(mv.from).unwrap();
 
-    piece_value(victim) + hist
+    // Prefer capturing high value with low-value attacker
+    // https://www.chessprogramming.org/MVV-LVA
+    let mvv_lva = 6 * piece_value(victim) - piece_value(attacker);
+
+    // Up-scale history to compensate for 6x victim value
+    let hist = 5 * capture_history.get(board, mv);
+
+    mvv_lva + hist
 }
