@@ -103,6 +103,8 @@ define_config!(
     (continuation_malus_multiplier: i32, "Continuation Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
 
     (quiet_check_bonus: i16, "Quiet Check Bonus", UciOptionType::Spin { min: 0, max: 2000 }, 1000, cfg!(feature = "tuning")),
+    (escape_threat_divisor: i16, "Escape Threat Divisor", UciOptionType::Spin { min: 1, max: 100 }, 10, cfg!(feature = "tuning")),
+    (safe_square_bonus: i16, "Safe Square Bonus", UciOptionType::Spin { min: 0, max: 200 }, 50, cfg!(feature = "tuning")),
 
     (lmr_divisor: i32, "LMR Divisor", UciOptionType::Spin { min: 100, max: 400 }, 220, cfg!(feature = "tuning")),
 

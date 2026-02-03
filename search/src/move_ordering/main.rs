@@ -50,16 +50,23 @@ pub struct MainMoveGenerator {
     quiets: ArrayVec<ScoredMove, MAX_QUIETS>,
 
     quiet_check_bonus: i16,
+    escape_threat_divisor: i16,
+    safe_square_bonus: i16,
     threats: BitBoard,
+    enemy_attacks: BitBoard,
 }
 
 impl MainMoveGenerator {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         best_move: Option<Move>,
         killer_moves: [Option<Move>; 2],
         prev_moves: Vec<Option<PieceTo>>,
         quiet_check_bonus: i16,
+        escape_threat_divisor: i16,
+        safe_square_bonus: i16,
         threats: BitBoard,
+        enemy_attacks: BitBoard,
     ) -> Self {
         Self {
             gen_phase: Phase::BestMove,
@@ -75,7 +82,10 @@ impl MainMoveGenerator {
             quiets: ArrayVec::new(),
 
             quiet_check_bonus,
+            escape_threat_divisor,
+            safe_square_bonus,
             threats,
+            enemy_attacks,
         }
     }
 
@@ -210,13 +220,28 @@ impl MainMoveGenerator {
                             let curr = PieceTo::new(color, piece, mov.to);
                             let cont = continuation_history.get(&self.prev_moves, curr);
 
+                            // Bonus for giving a check
                             let check_bonus = if gives_check(board, mov) {
                                 self.quiet_check_bonus
                             } else {
                                 0
                             };
 
-                            hist + cont + check_bonus
+                            // Bonus for escaping a threat
+                            let escape_bonus = if self.threats.has(mov.from) {
+                                piece_value(piece) / self.escape_threat_divisor
+                            } else {
+                                0
+                            };
+
+                            // Bonus for moving to a safe square
+                            let safe_bonus = if !self.enemy_attacks.has(mov.to) {
+                                self.safe_square_bonus
+                            } else {
+                                0
+                            };
+
+                            hist + cont + check_bonus + escape_bonus + safe_bonus
                         }
                     };
 
