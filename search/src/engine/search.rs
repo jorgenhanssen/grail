@@ -336,8 +336,8 @@ impl Engine {
             killers,
             prev_moves,
             self.config.quiet_check_bonus.value,
-            self.config.escape_threat_divisor.value,
-            self.config.safe_square_bonus.value,
+            self.config.escape_divisor.value,
+            self.config.unsafe_square_divisor.value,
             threats,
             enemy_attacks,
         );
