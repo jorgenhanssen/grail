@@ -330,12 +330,16 @@ impl Engine {
         };
         let killers = self.killer_moves[ply as usize];
 
+        let enemy_attacks = node.attacks_for(!node.side_to_move());
         let mut movegen = MainMoveGenerator::new(
             best_move_hint,
             killers,
             prev_moves,
             self.config.quiet_check_bonus.value,
+            self.config.escape_divisor.value,
+            self.config.unsafe_square_divisor.value,
             threats,
+            enemy_attacks,
         );
 
         // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff

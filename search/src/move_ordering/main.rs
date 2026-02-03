@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 use cozy_chess::{BitBoard, Move, Piece};
-use utils::{captured_piece, gives_check, is_capture, piece_value};
+use utils::{captured_piece, gives_check, is_capture, piece_value, PAWN_VALUE};
 
 use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic, PieceTo};
 use crate::utils::see::see;
@@ -50,16 +50,23 @@ pub struct MainMoveGenerator {
     quiets: ArrayVec<ScoredMove, MAX_QUIETS>,
 
     quiet_check_bonus: i16,
+    escape_divisor: i16,
+    unsafe_square_divisor: i16,
     threats: BitBoard,
+    enemy_attacks: BitBoard,
 }
 
 impl MainMoveGenerator {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         best_move: Option<Move>,
         killer_moves: [Option<Move>; 2],
         prev_moves: Vec<Option<PieceTo>>,
         quiet_check_bonus: i16,
+        escape_divisor: i16,
+        unsafe_square_divisor: i16,
         threats: BitBoard,
+        enemy_attacks: BitBoard,
     ) -> Self {
         Self {
             gen_phase: Phase::BestMove,
@@ -75,7 +82,10 @@ impl MainMoveGenerator {
             quiets: ArrayVec::new(),
 
             quiet_check_bonus,
+            escape_divisor,
+            unsafe_square_divisor,
             threats,
+            enemy_attacks,
         }
     }
 
@@ -203,20 +213,33 @@ impl MainMoveGenerator {
                         Some(Piece::Queen) => i16::MAX,
                         Some(_) => i16::MIN,
                         None => {
+                            let mut score = 0;
+
                             let color = board.side_to_move();
                             let piece = board.piece_on(mov.from).unwrap();
-                            let hist = history_heuristic.get(color, mov.from, mov.to, self.threats);
+
+                            score += history_heuristic.get(color, mov.from, mov.to, self.threats);
 
                             let curr = PieceTo::new(color, piece, mov.to);
-                            let cont = continuation_history.get(&self.prev_moves, curr);
+                            score += continuation_history.get(&self.prev_moves, curr);
 
-                            let check_bonus = if gives_check(board, mov) {
-                                self.quiet_check_bonus
-                            } else {
-                                0
-                            };
+                            if gives_check(board, mov) {
+                                score += self.quiet_check_bonus;
+                            }
 
-                            hist + cont + check_bonus
+                            let value = piece_value(piece);
+
+                            // Escapes threat = good
+                            if self.threats.has(mov.from) {
+                                score += value / self.escape_divisor;
+                            }
+
+                            // A valuable piece moving to an attacked square = bad
+                            if self.enemy_attacks.has(mov.to) && value > PAWN_VALUE {
+                                score -= value / self.unsafe_square_divisor;
+                            }
+
+                            score
                         }
                     };
 

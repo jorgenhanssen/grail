@@ -191,7 +191,7 @@ impl Node {
     }
 
     /// Get or compute the board metrics.
-    fn metrics(&self) -> &BoardMetrics {
+    pub fn metrics(&self) -> &BoardMetrics {
         self.metrics.get_or_init(|| BoardMetrics::new(&self.board))
     }
 
