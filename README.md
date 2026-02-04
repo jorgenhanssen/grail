@@ -79,7 +79,7 @@ This builds the release binary at `target/release/grail`.
 The project includes a `Makefile` for convenience:
 
 - **`make grail`** (default): Builds the release binary.
-- **`make grail-tuning`**: Builds with exposed parameters for SPSA tuning.
+- **`make tunable`**: Builds with exposed parameters for SPSA tuning.
 - **`make generate`**: Builds the data generation tool for NNUE training.
 - **`make train`**: Builds the NNUE trainer (auto-detects CUDA/Metal).
 - **`make clean`**: Cleans the build directory.
