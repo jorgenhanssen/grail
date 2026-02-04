@@ -65,9 +65,6 @@ impl Engine {
             if is_tactical || creates_threat(parent, child) || evades_threat(parent, child) {
                 reduction -= FracPly(FracPly::ONE);
             }
-            if self.killer_moves[ply as usize].contains(&Some(m)) {
-                reduction -= FracPly(FracPly::ONE);
-            }
         }
 
         let r = cap_reduction(reduction.whole(), depth);
