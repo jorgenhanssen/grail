@@ -53,6 +53,7 @@ pub struct MainMoveGenerator {
     bad_quiets: ArrayVec<ScoredMove, MAX_QUIETS>,
 
     quiet_check_bonus: i16,
+    quiet_check_see_margin: i16,
     bad_quiet_threshold: i16,
     escape_divisor: i16,
     unsafe_square_divisor: i16,
@@ -67,6 +68,7 @@ impl MainMoveGenerator {
         killer_moves: [Option<Move>; 2],
         prev_moves: Vec<Option<PieceTo>>,
         quiet_check_bonus: i16,
+        quiet_check_see_margin: i16,
         bad_quiet_threshold: i16,
         escape_divisor: i16,
         unsafe_square_divisor: i16,
@@ -88,6 +90,7 @@ impl MainMoveGenerator {
             bad_quiets: ArrayVec::new(),
 
             quiet_check_bonus,
+            quiet_check_see_margin,
             bad_quiet_threshold,
             escape_divisor,
             unsafe_square_divisor,
@@ -230,11 +233,16 @@ impl MainMoveGenerator {
                             let curr = PieceTo::new(color, piece, mov.to);
                             score += continuation_history.get(&self.prev_moves, curr);
 
-                            if gives_check(board, mov) {
+                            let value = piece_value(piece);
+                            let to_unsafe = self.enemy_attacks.has(mov.to);
+
+                            // Gives check = great (sometimes)
+                            if gives_check(board, mov)
+                                // Try to filter out "junk checks" that just hang material
+                                && (!to_unsafe || see(board, mov, -self.quiet_check_see_margin))
+                            {
                                 score += self.quiet_check_bonus;
                             }
-
-                            let value = piece_value(piece);
 
                             // Escapes threat = good
                             if self.threats.has(mov.from) {
@@ -242,7 +250,7 @@ impl MainMoveGenerator {
                             }
 
                             // A valuable piece moving to an attacked square = bad
-                            if self.enemy_attacks.has(mov.to) && value > PAWN_VALUE {
+                            if to_unsafe && value > PAWN_VALUE {
                                 score -= value / self.unsafe_square_divisor;
                             }
 
