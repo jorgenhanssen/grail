@@ -18,8 +18,9 @@ enum Phase {
     GoodCaptures,
     GenQuiets,
     Killers,
-    Quiets,
+    GoodQuiets,
     BadCaptures,
+    BadQuiets,
 }
 
 /// Staged move generator for main search. Based on Black Marlin.
@@ -28,8 +29,9 @@ enum Phase {
 /// 1. BestMove (TT/PV move) - most likely to cause cutoff
 /// 2. GoodCaptures - winning/equal captures by SEE (includes capture promotions)
 /// 3. Killers - quiet moves that caused cutoffs at this ply before
-/// 4. Quiets - remaining quiet moves, scored by history (queen promos first, underpromos last)
-/// 5. BadCaptures - losing captures, tried last
+/// 4. GoodQuiets - quiet moves with good score (queen promos first)
+/// 5. BadCaptures - losing captures, tried late
+/// 6. BadQuiets - quiet moves with bad score (underpromos last)
 ///
 /// <https://www.chessprogramming.org/Move_Ordering>
 /// <https://www.chessprogramming.org/Killer_Heuristic>
@@ -47,9 +49,11 @@ pub struct MainMoveGenerator {
 
     good_captures: ArrayVec<ScoredMove, MAX_CAPTURES>,
     bad_captures: ArrayVec<ScoredMove, MAX_CAPTURES>,
-    quiets: ArrayVec<ScoredMove, MAX_QUIETS>,
+    good_quiets: ArrayVec<ScoredMove, MAX_QUIETS>,
+    bad_quiets: ArrayVec<ScoredMove, MAX_QUIETS>,
 
     quiet_check_bonus: i16,
+    bad_quiet_threshold: i16,
     escape_divisor: i16,
     unsafe_square_divisor: i16,
     threats: BitBoard,
@@ -63,6 +67,7 @@ impl MainMoveGenerator {
         killer_moves: [Option<Move>; 2],
         prev_moves: Vec<Option<PieceTo>>,
         quiet_check_bonus: i16,
+        bad_quiet_threshold: i16,
         escape_divisor: i16,
         unsafe_square_divisor: i16,
         threats: BitBoard,
@@ -79,9 +84,11 @@ impl MainMoveGenerator {
 
             good_captures: ArrayVec::new(),
             bad_captures: ArrayVec::new(),
-            quiets: ArrayVec::new(),
+            good_quiets: ArrayVec::new(),
+            bad_quiets: ArrayVec::new(),
 
             quiet_check_bonus,
+            bad_quiet_threshold,
             escape_divisor,
             unsafe_square_divisor,
             threats,
@@ -187,7 +194,7 @@ impl MainMoveGenerator {
         }
 
         if self.gen_phase == Phase::GenQuiets {
-            self.gen_phase = Phase::Quiets;
+            self.gen_phase = Phase::GoodQuiets;
 
             let empty_squares = !board.occupied();
             let our_pieces = board.colors(board.side_to_move());
@@ -205,7 +212,7 @@ impl MainMoveGenerator {
                     if self.killer_moves.contains(&Some(mov)) {
                         continue;
                     }
-                    if self.quiets.len() >= MAX_QUIETS {
+                    if self.good_quiets.len() + self.bad_quiets.len() >= MAX_QUIETS {
                         return true;
                     }
 
@@ -243,15 +250,19 @@ impl MainMoveGenerator {
                         }
                     };
 
-                    self.quiets.push(ScoredMove { mov, score });
+                    if score >= self.bad_quiet_threshold {
+                        self.good_quiets.push(ScoredMove { mov, score });
+                    } else {
+                        self.bad_quiets.push(ScoredMove { mov, score });
+                    }
                 }
                 false
             });
         }
 
-        if self.gen_phase == Phase::Quiets {
-            if let Some(index) = select_highest(&self.quiets) {
-                let scored_move = self.quiets.swap_remove(index);
+        if self.gen_phase == Phase::GoodQuiets {
+            if let Some(index) = select_highest(&self.good_quiets) {
+                let scored_move = self.good_quiets.swap_remove(index);
                 return Some(scored_move.mov);
             }
             self.gen_phase = Phase::BadCaptures;
@@ -260,6 +271,14 @@ impl MainMoveGenerator {
         if self.gen_phase == Phase::BadCaptures {
             if let Some(index) = select_highest(&self.bad_captures) {
                 let scored_move = self.bad_captures.swap_remove(index);
+                return Some(scored_move.mov);
+            }
+            self.gen_phase = Phase::BadQuiets;
+        }
+
+        if self.gen_phase == Phase::BadQuiets {
+            if let Some(index) = select_highest(&self.bad_quiets) {
+                let scored_move = self.bad_quiets.swap_remove(index);
                 return Some(scored_move.mov);
             }
         }
