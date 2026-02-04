@@ -44,26 +44,26 @@ impl Engine {
 
         // Reduce more
         if parent.is_cut() {
-            reduction += FracPly(FracPly::ONE);
+            reduction += FracPly(self.config.lmr_cut_node_bonus.value);
         }
         if !is_improving {
-            reduction += FracPly(FracPly::ONE);
+            reduction += FracPly(self.config.lmr_not_improving_bonus.value);
 
             if !is_capture && hist < self.history_heuristic.reduction_threshold() {
-                reduction += FracPly(FracPly::ONE);
+                reduction += FracPly(self.config.lmr_bad_history_bonus.value);
             }
         }
 
         // Reduce less
         if reduction > FracPly(0) {
             if near_root(ply, depth) {
-                reduction -= FracPly(FracPly::ONE);
+                reduction -= FracPly(self.config.lmr_near_root_reduction.value);
             }
             if parent.is_pv() {
-                reduction -= FracPly(FracPly::ONE);
+                reduction -= FracPly(self.config.lmr_pv_node_reduction.value);
             }
             if is_tactical || creates_threat(parent, child) || evades_threat(parent, child) {
-                reduction -= FracPly(FracPly::ONE);
+                reduction -= FracPly(self.config.lmr_tactical_reduction.value);
             }
         }
 

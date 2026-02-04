@@ -110,6 +110,13 @@ define_config!(
 
     (lmr_divisor: i32, "LMR Divisor", UciOptionType::Spin { min: 100, max: 400 }, 220, cfg!(feature = "tuning")),
 
+    (lmr_cut_node_bonus: u16, "LMR Cut Node Bonus", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (lmr_not_improving_bonus: u16, "LMR Not Improving Bonus", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (lmr_bad_history_bonus: u16, "LMR Bad History Bonus", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (lmr_near_root_reduction: u16, "LMR Near Root Reduction", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (lmr_pv_node_reduction: u16, "LMR PV Node Reduction", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (lmr_tactical_reduction: u16, "LMR Tactical Reduction", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+
     (nmp_min_depth: u8, "NMP Min Depth", UciOptionType::Spin { min: 2, max: 10 }, 4, cfg!(feature = "tuning")),
     (nmp_base_reduction: u8, "NMP Base Reduction", UciOptionType::Spin { min: 1, max: 10 }, 2, cfg!(feature = "tuning")),
     (nmp_depth_divisor: u8, "NMP Depth Divisor", UciOptionType::Spin { min: 1, max: 10 }, 3, cfg!(feature = "tuning")),
