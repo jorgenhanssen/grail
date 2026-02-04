@@ -110,12 +110,12 @@ define_config!(
 
     (lmr_divisor: i32, "LMR Divisor", UciOptionType::Spin { min: 100, max: 400 }, 220, cfg!(feature = "tuning")),
 
-    (lmr_cut_node_bonus: u16, "LMR Cut Node Bonus", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
-    (lmr_not_improving_bonus: u16, "LMR Not Improving Bonus", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
-    (lmr_bad_history_bonus: u16, "LMR Bad History Bonus", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
-    (lmr_near_root_reduction: u16, "LMR Near Root Reduction", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
-    (lmr_pv_node_reduction: u16, "LMR PV Node Reduction", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
-    (lmr_tactical_reduction: u16, "LMR Tactical Reduction", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (reduction_cut_node: u16, "Reduction Cut Node", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (reduction_not_improving: u16, "Reduction Not Improving", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (reduction_bad_history: u16, "Reduction Bad History", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (anti_reduction_near_root: u16, "Anti Reduction Near Root", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (anti_reduction_pv_node: u16, "Anti Reduction PV Node", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (anti_reduction_tactical: u16, "Anti Reduction Tactical", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
 
     (nmp_min_depth: u8, "NMP Min Depth", UciOptionType::Spin { min: 2, max: 10 }, 4, cfg!(feature = "tuning")),
     (nmp_base_reduction: u8, "NMP Base Reduction", UciOptionType::Spin { min: 1, max: 10 }, 2, cfg!(feature = "tuning")),

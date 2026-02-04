@@ -44,26 +44,26 @@ impl Engine {
 
         // Reduce more
         if parent.is_cut() {
-            reduction += FracPly(self.config.lmr_cut_node_bonus.value);
+            reduction += FracPly(self.config.reduction_cut_node.value);
         }
         if !is_improving {
-            reduction += FracPly(self.config.lmr_not_improving_bonus.value);
+            reduction += FracPly(self.config.reduction_not_improving.value);
 
             if !is_capture && hist < self.history_heuristic.reduction_threshold() {
-                reduction += FracPly(self.config.lmr_bad_history_bonus.value);
+                reduction += FracPly(self.config.reduction_bad_history.value);
             }
         }
 
         // Reduce less
         if reduction > FracPly(0) {
             if near_root(ply, depth) {
-                reduction -= FracPly(self.config.lmr_near_root_reduction.value);
+                reduction -= FracPly(self.config.anti_reduction_near_root.value);
             }
             if parent.is_pv() {
-                reduction -= FracPly(self.config.lmr_pv_node_reduction.value);
+                reduction -= FracPly(self.config.anti_reduction_pv_node.value);
             }
             if is_tactical || creates_threat(parent, child) || evades_threat(parent, child) {
-                reduction -= FracPly(self.config.lmr_tactical_reduction.value);
+                reduction -= FracPly(self.config.anti_reduction_tactical.value);
             }
         }
 
