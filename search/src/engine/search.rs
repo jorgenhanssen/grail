@@ -328,14 +328,13 @@ impl Engine {
         } else {
             tt_move
         };
-        let killers = self.killer_moves[ply as usize];
 
         let enemy_attacks = node.attacks_for(!node.side_to_move());
         let mut movegen = MainMoveGenerator::new(
             best_move_hint,
-            killers,
             prev_moves,
             self.config.quiet_check_bonus.value,
+            self.config.quiet_check_see_margin.value,
             self.config.bad_quiet_threshold.value,
             self.config.escape_divisor.value,
             self.config.unsafe_square_divisor.value,
@@ -414,7 +413,6 @@ impl Engine {
                         node,
                         m,
                         depth,
-                        ply as usize,
                         is_quiet,
                         &quiets_searched,
                         &captures_searched,
@@ -595,14 +593,13 @@ impl Engine {
         Some((value, line, is_quiet, searched_depth))
     }
 
-    /// Handler called if a search fails high - updates history tables, killers, etc.
+    /// Handler called if a search fails high - updates history tables.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn on_fail_high(
         &mut self,
         node: &Node,
         mv: Move,
         depth: u8,
-        ply: usize,
         is_quiet: bool,
         quiets_searched: &[Move],
         captures_searched: &[Move],
@@ -614,13 +611,6 @@ impl Engine {
             .continuation_history
             .get_prev_moves(self.search_stack.as_slice());
         if is_quiet {
-            // Add killer move for quiet moves
-            let killers = &mut self.killer_moves[ply];
-            if killers[0] != Some(mv) {
-                killers[1] = killers[0];
-                killers[0] = Some(mv);
-            }
-
             // Boost the quiet move that caused the cutoff
             let bonus = self.history_heuristic.get_bonus(depth);
             self.history_heuristic.update(board, mv, bonus, threats);

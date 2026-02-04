@@ -103,6 +103,7 @@ define_config!(
     (continuation_malus_multiplier: i32, "Continuation Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
 
     (quiet_check_bonus: i16, "Quiet Check Bonus", UciOptionType::Spin { min: 0, max: 2000 }, 1000, cfg!(feature = "tuning")),
+    (quiet_check_see_margin: i16, "Quiet Check SEE Margin", UciOptionType::Spin { min: 0, max: 300 }, 75, cfg!(feature = "tuning")),
     (bad_quiet_threshold: i16, "Bad Quiet Threshold", UciOptionType::Spin { min: -512, max: 0 }, -150, cfg!(feature = "tuning")),
     (escape_divisor: i16, "Escape Divisor", UciOptionType::Spin { min: 1, max: 100 }, 10, cfg!(feature = "tuning")),
     (unsafe_square_divisor: i16, "Unsafe Square Divisor", UciOptionType::Spin { min: 1, max: 100 }, 20, cfg!(feature = "tuning")),

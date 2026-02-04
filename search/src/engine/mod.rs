@@ -5,7 +5,7 @@ use std::sync::{
 };
 
 use ahash::AHashSet;
-use cozy_chess::{Board, Move};
+use cozy_chess::Board;
 use evaluation::{HCE, NNUE};
 use uci::{commands::Info, pv_to_uci, UciOutput};
 
@@ -63,9 +63,6 @@ pub struct Engine {
     /// Tracks active search path - used for repetition, improving, etc.
     search_stack: SearchStack,
 
-    /// Quiet moves that caused beta cutoffs (2 per ply, FIFO).
-    /// <https://www.chessprogramming.org/Killer_Heuristic>
-    killer_moves: [[Option<Move>; 2]; MAX_DEPTH],
     /// Scores quiet moves by search success
     history_heuristic: HistoryHeuristic,
     /// Scores captures by search success
@@ -98,7 +95,6 @@ impl Engine {
             board: Board::default(),
             game_history: AHashSet::new(),
             nodes: 0,
-            killer_moves: [[None; 2]; MAX_DEPTH],
             max_ply_reached: 1,
 
             tt: TranspositionTable::new(1),

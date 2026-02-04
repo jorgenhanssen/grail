@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 use cozy_chess::{BitBoard, Move, Piece};
-use utils::{captured_piece, gives_check, is_capture, piece_value, PAWN_VALUE};
+use utils::{captured_piece, gives_check, piece_value, PAWN_VALUE};
 
 use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic, PieceTo};
 use crate::utils::see::see;
@@ -17,7 +17,6 @@ enum Phase {
     GenCaptures,
     GoodCaptures,
     GenQuiets,
-    Killers,
     GoodQuiets,
     BadCaptures,
     BadQuiets,
@@ -28,13 +27,11 @@ enum Phase {
 /// Generates and sorts moves lazily in phases to avoid doing it all upfront:
 /// 1. BestMove (TT/PV move) - most likely to cause cutoff
 /// 2. GoodCaptures - winning/equal captures by SEE (includes capture promotions)
-/// 3. Killers - quiet moves that caused cutoffs at this ply before
-/// 4. GoodQuiets - quiet moves with good score (queen promos first)
-/// 5. BadCaptures - losing captures, tried late
-/// 6. BadQuiets - quiet moves with bad score (underpromos last)
+/// 3. GoodQuiets - quiet moves with good score (queen promos first)
+/// 4. BadCaptures - losing captures, tried late
+/// 5. BadQuiets - quiet moves with bad score (underpromos last)
 ///
 /// <https://www.chessprogramming.org/Move_Ordering>
-/// <https://www.chessprogramming.org/Killer_Heuristic>
 /// <https://github.com/jnlt3/blackmarlin>
 pub struct MainMoveGenerator {
     gen_phase: Phase,
@@ -44,15 +41,13 @@ pub struct MainMoveGenerator {
     // Continuation history context
     prev_moves: Vec<Option<PieceTo>>,
 
-    killer_moves: [Option<Move>; 2],
-    killer_index: usize,
-
     good_captures: ArrayVec<ScoredMove, MAX_CAPTURES>,
     bad_captures: ArrayVec<ScoredMove, MAX_CAPTURES>,
     good_quiets: ArrayVec<ScoredMove, MAX_QUIETS>,
     bad_quiets: ArrayVec<ScoredMove, MAX_QUIETS>,
 
     quiet_check_bonus: i16,
+    quiet_check_see_margin: i16,
     bad_quiet_threshold: i16,
     escape_divisor: i16,
     unsafe_square_divisor: i16,
@@ -64,9 +59,9 @@ impl MainMoveGenerator {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         best_move: Option<Move>,
-        killer_moves: [Option<Move>; 2],
         prev_moves: Vec<Option<PieceTo>>,
         quiet_check_bonus: i16,
+        quiet_check_see_margin: i16,
         bad_quiet_threshold: i16,
         escape_divisor: i16,
         unsafe_square_divisor: i16,
@@ -79,15 +74,13 @@ impl MainMoveGenerator {
 
             prev_moves,
 
-            killer_moves,
-            killer_index: 0,
-
             good_captures: ArrayVec::new(),
             bad_captures: ArrayVec::new(),
             good_quiets: ArrayVec::new(),
             bad_quiets: ArrayVec::new(),
 
             quiet_check_bonus,
+            quiet_check_see_margin,
             bad_quiet_threshold,
             escape_divisor,
             unsafe_square_divisor,
@@ -168,28 +161,6 @@ impl MainMoveGenerator {
 
                 return Some(scored_move.mov);
             }
-            self.gen_phase = Phase::Killers;
-        }
-
-        if self.gen_phase == Phase::Killers {
-            while self.killer_index < 2 {
-                let killer = self.killer_moves[self.killer_index];
-                self.killer_index += 1;
-
-                if let Some(killer) = killer {
-                    if Some(killer) == self.best_move {
-                        continue;
-                    }
-                    if !board.is_legal(killer) {
-                        continue;
-                    }
-                    // Skip if it's a capture (already searched in capture phases)
-                    if is_capture(board, killer) {
-                        continue;
-                    }
-                    return Some(killer);
-                }
-            }
             self.gen_phase = Phase::GenQuiets;
         }
 
@@ -207,9 +178,6 @@ impl MainMoveGenerator {
                         continue;
                     }
                     if Some(mov) == self.best_move {
-                        continue;
-                    }
-                    if self.killer_moves.contains(&Some(mov)) {
                         continue;
                     }
                     if self.good_quiets.len() + self.bad_quiets.len() >= MAX_QUIETS {
@@ -230,11 +198,16 @@ impl MainMoveGenerator {
                             let curr = PieceTo::new(color, piece, mov.to);
                             score += continuation_history.get(&self.prev_moves, curr);
 
-                            if gives_check(board, mov) {
+                            let value = piece_value(piece);
+                            let to_unsafe = self.enemy_attacks.has(mov.to);
+
+                            // Gives check = great (sometimes)
+                            if gives_check(board, mov)
+                                // Try to filter out "junk checks" that just hang material
+                                && (!to_unsafe || see(board, mov, -self.quiet_check_see_margin))
+                            {
                                 score += self.quiet_check_bonus;
                             }
-
-                            let value = piece_value(piece);
 
                             // Escapes threat = good
                             if self.threats.has(mov.from) {
@@ -242,7 +215,7 @@ impl MainMoveGenerator {
                             }
 
                             // A valuable piece moving to an attacked square = bad
-                            if self.enemy_attacks.has(mov.to) && value > PAWN_VALUE {
+                            if to_unsafe && value > PAWN_VALUE {
                                 score -= value / self.unsafe_square_divisor;
                             }
 
