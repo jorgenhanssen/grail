@@ -11,6 +11,12 @@ use crate::{
 
 use super::Engine;
 
+#[derive(Default)]
+pub(super) struct SingularProbeResult {
+    pub extension: u8,
+    pub multi_cut: Option<i16>,
+}
+
 impl Engine {
     pub(super) fn get_extension(
         &self,
@@ -22,56 +28,50 @@ impl Engine {
         passed_pawn::extension(node, m, moved_piece, is_capture)
     }
 
-    /// Singular extension: extend search if TT move is clearly best.
+    /// Singular probe: evaluate TT move for extension or multi-cut prune.
     ///
-    /// Based on Stockfish's restricted/modern singular extensions.
+    /// Based on Stockfish's restricted/modern singular extension logic.
     /// <https://www.chessprogramming.org/Singular_Extensions>
-    pub(super) fn get_singular_extension(
+    /// <https://www.chessprogramming.org/Multi-Cut>
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn probe_singular(
         &mut self,
         node: &Node,
         m: Move,
         tt: Option<ProbeResult>,
         depth: u8,
         ply: u8,
-        is_singular_search: bool,
-    ) -> u8 {
-        // Need TT info with matching move
-        let tt = match tt {
-            Some(t) if t.best_move == Some(m) => t,
-            _ => return 0,
-        };
+        singular_active: bool,
+        beta: i16,
+    ) -> SingularProbeResult {
+        let mut result = SingularProbeResult::default();
 
         // Don't nest singular searches
-        if is_singular_search {
-            return 0;
+        if singular_active {
+            return result;
         }
 
-        // Need sufficient depth
-        if depth < self.config.singular_min_depth.value {
-            return 0;
+        // Only probe a matching TT move with usable data.
+        let tt = match tt {
+            Some(t) => t,
+            None => return result,
+        };
+        if !is_sufficient_singular_tt_entry(
+            tt,
+            m,
+            depth,
+            self.config.singular_min_depth.value,
+            self.config.singular_depth_margin.value,
+        ) {
+            return result;
         }
 
-        // TT entry must be deep enough (depth >= tt_depth - margin)
-        if tt.depth + self.config.singular_depth_margin.value < depth {
-            return 0;
-        }
-
-        // Only for lower bound or exact (move was good)
-        if !matches!(tt.bound, Bound::Lower | Bound::Exact) {
-            return 0;
-        }
-
-        // Skip mate scores
-        if tt.value.abs() >= MATE_SCORE_BOUND {
-            return 0;
-        }
-
+        let singular_depth = (depth - 1) / 2;
         let singular_beta = tt
             .value
             .saturating_sub((self.config.singular_beta_margin.value * depth as i16).max(1));
-        let singular_depth = (depth - 1) / 2;
 
-        // Reduced search excluding TT move
+        // Reduced null-window search excluding TT move.
         self.search_stack
             .current_mut(|n| n.singular = Some(SingularSearch { excluded: m }));
         let (singular_value, _) = self.search_node(
@@ -84,13 +84,40 @@ impl Engine {
         self.search_stack.current_mut(|n| n.singular = None);
 
         if singular_value < singular_beta {
-            // Double extend if very singular
+            // TT move is uniquely strong: extend (double if very singular).
             if singular_value < singular_beta.saturating_sub(self.config.double_ext_margin.value) {
-                return 2;
+                result.extension = 2;
+                return result;
             }
-            return 1;
+            result.extension = 1;
+            return result;
         }
 
-        0
+        // If the reduced search fails high even without the TT/best move,
+        // the position is so good that another move also beats beta, so we can prune.
+        // <https://www.chessprogramming.org/Multi-Cut>
+        if !node.is_pv()
+            && beta.abs() < MATE_SCORE_BOUND
+            && singular_value >= beta
+            && singular_value.abs() < MATE_SCORE_BOUND
+        {
+            result.multi_cut = Some(singular_value);
+        }
+
+        result
     }
+}
+
+fn is_sufficient_singular_tt_entry(
+    tt: ProbeResult,
+    m: Move,
+    depth: u8,
+    min_depth: u8,
+    depth_margin: u8,
+) -> bool {
+    tt.best_move == Some(m)
+        && depth >= min_depth
+        && tt.depth + depth_margin >= depth
+        && matches!(tt.bound, Bound::Lower | Bound::Exact)
+        && tt.value.abs() < MATE_SCORE_BOUND
 }

@@ -379,9 +379,20 @@ impl Engine {
                 continue;
             }
 
-            // Singular extension: when TT move is clearly best, extend its search
-            let singular_extension =
-                self.get_singular_extension(node, m, tt_info, depth, ply, singular.is_some());
+            // Probe TT move for singular extension or multi-cut prune.
+            let singular_result = self.probe_singular(
+                node,
+                m,
+                tt_info,
+                depth,
+                ply,
+                singular.is_some(),
+                bounds.beta,
+            );
+            if let Some(value) = singular_result.multi_cut {
+                return (value, Vec::new());
+            }
+            let singular_extension = singular_result.extension;
 
             if let Some((value, mut line, is_quiet, searched_depth)) = self.search_move(
                 node,
