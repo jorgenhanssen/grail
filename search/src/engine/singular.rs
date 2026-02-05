@@ -88,11 +88,7 @@ impl Engine {
         // Multi-cut pruning: if the reduced search (excluding TT move) still beats
         // beta, multiple moves are good enough to cause a cutoff and we can prune.
         // <https://www.chessprogramming.org/Multi-Cut>
-        if !node.is_pv()
-            && beta.abs() < MATE_SCORE_BOUND
-            && singular_value >= beta
-            && singular_value.abs() < MATE_SCORE_BOUND
-        {
+        if singular_value >= beta && singular_value.abs() < MATE_SCORE_BOUND {
             result.multi_cut = Some(singular_value);
         }
 
