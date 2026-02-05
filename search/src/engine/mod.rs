@@ -26,6 +26,7 @@ mod pruning;
 mod quiescence;
 mod reduction;
 mod search;
+mod singular;
 
 use crate::MAX_DEPTH;
 
