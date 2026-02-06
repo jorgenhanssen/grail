@@ -38,8 +38,8 @@ impl Book {
     }
 
     pub fn random_position(&self) -> &str {
-        let mut rng = rand::thread_rng();
-        let index = rng.gen_range(0..self.positions.len());
+        let mut rng = rand::rng();
+        let index = rng.random_range(0..self.positions.len());
         &self.positions[index]
     }
 }

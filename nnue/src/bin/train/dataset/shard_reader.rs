@@ -31,7 +31,7 @@ impl ShardReader {
             .filter(|p| p.extension().is_some_and(|ext| ext == "csv"))
             .collect();
 
-        paths.shuffle(&mut rand::thread_rng());
+        paths.shuffle(&mut rand::rng());
 
         let to_load = paths.len().min(initial_shards);
         let mut shards = Vec::with_capacity(to_load);
@@ -56,7 +56,7 @@ impl ShardReader {
             return None;
         }
 
-        let start = rand::thread_rng().gen_range(0..num_shards);
+        let start = rand::rng().random_range(0..num_shards);
 
         for i in 0..num_shards {
             let idx = (start + i) % num_shards;

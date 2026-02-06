@@ -247,7 +247,7 @@ fn process_file(
 ) -> WorkerStats {
     let mut stats = WorkerStats::new();
     let mut game_assignments: AHashMap<u32, Split> = AHashMap::new();
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     let file = match File::open(path) {
         Ok(f) => f,
@@ -313,7 +313,7 @@ fn parse_csv_line(line: &str) -> Option<(&str, i16, u32)> {
 }
 
 fn pick_split<R: rand::Rng>(rng: &mut R, val_ratio: f64, test_ratio: f64) -> Split {
-    let r: f64 = rng.r#gen();
+    let r: f64 = rng.random();
     if r < test_ratio {
         Split::Test
     } else if r < test_ratio + val_ratio {
