@@ -9,7 +9,7 @@ pub fn select_softmax(scores: &[f32], rng: &mut impl Rng) -> usize {
     let weights: Vec<f32> = scores.iter().map(|&s| (s - max).exp()).collect();
     let total: f32 = weights.iter().sum();
 
-    let mut r = rng.gen::<f32>() * total;
+    let mut r = rng.r#gen::<f32>() * total;
     for (i, &w) in weights.iter().enumerate() {
         r -= w;
         if r <= 0.0 {
