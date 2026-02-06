@@ -1,7 +1,7 @@
 use super::HCEConfig;
 use crate::context::EvalContext;
 use arrayvec::ArrayVec;
-use cozy_chess::{get_pawn_attacks, BitBoard, Color, File, Piece, Rank, Square};
+use cozy_chess::{BitBoard, Color, File, Piece, Rank, Square, get_pawn_attacks};
 
 pub(super) fn evaluate(ctx: &EvalContext, color: Color, config: &HCEConfig) -> i16 {
     let board = ctx.node.board();

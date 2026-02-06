@@ -1,7 +1,7 @@
 use super::HCEConfig;
 use crate::context::EvalContext;
 use cozy_chess::{
-    get_bishop_moves, get_knight_moves, get_rook_moves, BitBoard, Color, File, Piece, Rank, Square,
+    BitBoard, Color, File, Piece, Rank, Square, get_bishop_moves, get_knight_moves, get_rook_moves,
 };
 
 // Sum the king-safety bits: shield, files, ring pressure, center, activity.

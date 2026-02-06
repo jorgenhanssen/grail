@@ -2,5 +2,5 @@ mod main;
 mod quiescence;
 mod utils;
 
-pub use main::{MainMoveGenerator, MAX_CAPTURES, MAX_QUIETS};
+pub use main::{MAX_CAPTURES, MAX_QUIETS, MainMoveGenerator};
 pub use quiescence::QMoveGenerator;

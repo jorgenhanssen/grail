@@ -1,8 +1,8 @@
 use std::io::BufRead;
 use std::sync::{
+    Arc,
     atomic::{AtomicBool, Ordering},
     mpsc::{self, Sender},
-    Arc,
 };
 use std::thread::{self, JoinHandle};
 

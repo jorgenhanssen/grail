@@ -9,7 +9,7 @@ use cozy_chess::{Board, Color};
 use uci::commands::GoParams;
 use utils::only_move;
 
-use super::stats::{TimeControlStats, MIN_DEPTH_FOR_ADJUSTMENTS};
+use super::stats::{MIN_DEPTH_FOR_ADJUSTMENTS, TimeControlStats};
 
 // Time management constants
 // Estimated moves remaining - intentionally conservative since the target

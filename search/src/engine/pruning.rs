@@ -1,12 +1,12 @@
 use cozy_chess::{Move, Piece};
-use utils::{captured_piece, piece_value, Node};
+use utils::{Node, captured_piece, piece_value};
 
 use crate::{
     pruning::{
-        can_futility_prune, can_null_move_prune, can_razor_prune, can_reverse_futility_prune,
-        futility_margin, null_move_reduction, razor_margin, rfp_margin, RAZOR_NEAR_MATE,
+        RAZOR_NEAR_MATE, can_futility_prune, can_null_move_prune, can_razor_prune,
+        can_reverse_futility_prune, futility_margin, null_move_reduction, razor_margin, rfp_margin,
     },
-    utils::{see::see, Bounds},
+    utils::{Bounds, see::see},
 };
 
 use super::Engine;

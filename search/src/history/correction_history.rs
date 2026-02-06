@@ -1,7 +1,7 @@
 use cozy_chess::{Board, Color, Move, Square};
 use evaluation::scores::MATE_VALUE;
 use utils::{
-    generate_zobrist_table, is_capture, zobrist_key, MINOR_PIECES, NON_PAWN_PIECES, PAWN_PIECES,
+    MINOR_PIECES, NON_PAWN_PIECES, PAWN_PIECES, generate_zobrist_table, is_capture, zobrist_key,
 };
 
 use super::utils::apply_gravity;

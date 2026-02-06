@@ -1,5 +1,5 @@
-use candle_core::safetensors::SliceSafetensors;
 use candle_core::Device;
+use candle_core::safetensors::SliceSafetensors;
 use candle_nn::VarMap;
 use evaluation::NNUE;
 

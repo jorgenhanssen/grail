@@ -92,9 +92,9 @@ impl SelfPlayGame {
             return;
         }
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let max_len = pv.line.len().min(self.depth as usize);
-        let teleport_len = rng.gen_range(1..=max_len);
+        let teleport_len = rng.random_range(1..=max_len);
 
         for mv in pv.line.iter().take(teleport_len) {
             self.play_move(*mv);

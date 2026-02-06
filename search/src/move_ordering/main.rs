@@ -1,12 +1,12 @@
 use arrayvec::ArrayVec;
 use cozy_chess::{BitBoard, Move, Piece};
-use utils::{captured_piece, gives_check, piece_value, PAWN_VALUE};
+use utils::{PAWN_VALUE, captured_piece, gives_check, piece_value};
 
 use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic, PieceTo};
 use crate::utils::see::see;
 use utils::Node;
 
-use super::utils::{capture_score, select_highest, ScoredMove};
+use super::utils::{ScoredMove, capture_score, select_highest};
 
 pub const MAX_CAPTURES: usize = 32;
 pub const MAX_QUIETS: usize = 96;

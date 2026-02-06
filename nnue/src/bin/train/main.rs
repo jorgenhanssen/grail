@@ -9,8 +9,8 @@ use dataset::ShardedDataset;
 use simplelog::{Config, LevelFilter, SimpleLogger};
 use std::error::Error;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use training::Trainer;
 
 const DATA_DIR: &str = "nnue/data";

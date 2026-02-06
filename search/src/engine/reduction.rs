@@ -1,8 +1,8 @@
 use cozy_chess::Move;
-use utils::{creates_threat, evades_threat, FracPly, Node};
+use utils::{FracPly, Node, creates_threat, evades_threat};
 
 use crate::{
-    reductions::{cap_reduction, LmrTable},
+    reductions::{LmrTable, cap_reduction},
     utils::near_root,
 };
 
