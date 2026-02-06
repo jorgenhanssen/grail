@@ -49,7 +49,7 @@ impl SearchResult {
             .map(|pv| pv.score as f32 / SOFTMAX_TEMPERATURE)
             .collect();
 
-        let idx = select_softmax(&scores, &mut rand::thread_rng());
+        let idx = select_softmax(&scores, &mut rand::rng());
         Some(&self.lines[idx])
     }
 }
