@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use ahash::AHashSet;
-use cozy_chess::{util::parse_uci_move, Board};
+use cozy_chess::{Board, util::parse_uci_move};
 
 use super::commands::{GoParams, UciInput};
 

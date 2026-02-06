@@ -1,23 +1,23 @@
 use std::sync::{
+    Arc,
     atomic::{AtomicBool, Ordering},
     mpsc::Sender,
-    Arc,
 };
 
 use ahash::AHashSet;
 use cozy_chess::Board;
 use evaluation::{HCE, NNUE};
-use uci::{commands::Info, pv_to_uci, UciOutput};
+use uci::{UciOutput, commands::Info, pv_to_uci};
 
 use crate::pv::{MultiPvSearchContext, PvLine};
 
 use crate::{
+    EngineConfig,
     history::{CaptureHistory, ContinuationHistory, CorrectionHistory, HistoryHeuristic},
     reductions::LmrTable,
     stack::SearchStack,
     transposition::{QSTable, TranspositionTable},
     utils::{convert_centipawn_score, convert_mate_score},
-    EngineConfig,
 };
 
 mod eval;

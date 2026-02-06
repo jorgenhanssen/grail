@@ -2,16 +2,16 @@ use std::sync::atomic::Ordering;
 
 use cozy_chess::{Color, Move, Piece, Rank};
 use evaluation::scores::{MATE_VALUE, SCORE_INF};
-use utils::{make_move, piece_value, QUEEN_VALUE};
+use utils::{QUEEN_VALUE, make_move, piece_value};
 
 use utils::Node;
 
 use crate::{
+    MAX_DEPTH,
     move_ordering::QMoveGenerator,
     pruning::{can_delta_prune, mate_distance_prune},
     transposition::Bound,
-    utils::{see::see, Bounds},
-    MAX_DEPTH,
+    utils::{Bounds, see::see},
 };
 
 use super::Engine;

@@ -1,5 +1,5 @@
-use rand::seq::SliceRandom;
 use rand::Rng;
+use rand::seq::SliceRandom;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};

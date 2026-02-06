@@ -17,8 +17,8 @@ use std::{
     error::Error,
     fs::{self, File},
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
 };
 

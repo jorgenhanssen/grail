@@ -13,7 +13,7 @@ members = [
 [workspace.package]
 version = "1.0.4"
 authors = ["Jørgen Hanssen"]
-edition = "2021"
+edition = "2024"
 license = "GPL-3.0"
 description = "A UCI chess engine written in Rust"
 repository = "https://github.com/jorgenhanssen/grail"

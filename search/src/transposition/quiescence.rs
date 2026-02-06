@@ -151,9 +151,5 @@ impl QSTable {
 
 fn mix_key(hash: u64, in_check: bool) -> u32 {
     let key32 = hash as u32;
-    if in_check {
-        key32 ^ 0x1
-    } else {
-        key32
-    }
+    if in_check { key32 ^ 0x1 } else { key32 }
 }
