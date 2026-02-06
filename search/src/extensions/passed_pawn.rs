@@ -12,9 +12,5 @@ pub fn extension(node: &Node, m: &Move, moved_piece: Piece, is_capture: bool) ->
         Color::White => m.to.rank() == Rank::Seventh,
         Color::Black => m.to.rank() == Rank::Second,
     };
-    if is_seventh {
-        1
-    } else {
-        0
-    }
+    if is_seventh { 1 } else { 0 }
 }

@@ -1,18 +1,18 @@
-use std::sync::{atomic::Ordering, mpsc::Sender, Arc};
+use std::sync::{Arc, atomic::Ordering, mpsc::Sender};
 
 use arrayvec::ArrayVec;
 use cozy_chess::{Move, Piece};
 use evaluation::scores::{MATE_VALUE, SCORE_INF};
 use uci::{
-    commands::{GoParams, Info, Score},
     UciOutput,
+    commands::{GoParams, Info, Score},
 };
-use utils::{has_legal_moves, Node, NodeType};
+use utils::{Node, NodeType, has_legal_moves};
 
 use crate::{
     engine::reduction::Reduction,
-    move_ordering::{MainMoveGenerator, MAX_CAPTURES, MAX_QUIETS},
-    pruning::{mate_distance_prune, should_lmp_prune, Pass},
+    move_ordering::{MAX_CAPTURES, MAX_QUIETS, MainMoveGenerator},
+    pruning::{Pass, mate_distance_prune, should_lmp_prune},
     pv::PvLine,
     reductions::iir,
     result::SearchResult,

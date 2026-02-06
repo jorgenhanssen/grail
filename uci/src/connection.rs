@@ -1,6 +1,6 @@
 use super::commands::UciOutput;
 use super::encoder::Encoder;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread;
 
 /// Handles UCI output communication.

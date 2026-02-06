@@ -4,8 +4,8 @@ use nnue::encoding::NUM_FEATURES;
 use nnue::network::Network;
 use std::error::Error;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::args::Args;
 use crate::dataset::{DataLoader, ShardReader, ShardedDataset};

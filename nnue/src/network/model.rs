@@ -1,5 +1,5 @@
 use candle_core::{Result, Tensor};
-use candle_nn::{linear, Linear, VarBuilder};
+use candle_nn::{Linear, VarBuilder, linear};
 
 use crate::encoding::NUM_FEATURES;
 

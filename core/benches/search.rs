@@ -1,10 +1,10 @@
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{Arc, atomic::AtomicBool};
 
-use candle_core::safetensors::SliceSafetensors;
 use candle_core::Device;
+use candle_core::safetensors::SliceSafetensors;
 use candle_nn::VarMap;
 use cozy_chess::Board;
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode};
+use criterion::{BenchmarkId, Criterion, SamplingMode, black_box, criterion_group, criterion_main};
 use search::{Engine, EngineConfig};
 use uci::commands::GoParams;
 

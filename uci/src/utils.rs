@@ -1,7 +1,7 @@
 // cozy-chess uses "king captures rook" notation for castling internally (e.g., e1h1),
 // but UCI expects standard notation (e.g., e1g1). These utils handle some common conversions.
 
-use cozy_chess::{util::display_uci_move, Board, Move};
+use cozy_chess::{Board, Move, util::display_uci_move};
 
 #[inline]
 pub fn move_to_uci(board: &Board, mv: Move) -> String {

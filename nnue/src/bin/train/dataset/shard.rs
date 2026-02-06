@@ -4,8 +4,8 @@ use std::path::Path;
 use std::str::FromStr;
 
 use cozy_chess::{Board, Color};
-use nnue::encoding::{encode_board, NUM_FEATURES};
-use nnue::network::{output_bucket, FV_SCALE};
+use nnue::encoding::{NUM_FEATURES, encode_board};
+use nnue::network::{FV_SCALE, output_bucket};
 use utils::board_metrics::BoardMetrics;
 
 /// A single sample from a shard file.

@@ -3,8 +3,8 @@ use crate::game::SelfPlayGame;
 use crate::histogram::HistogramHandle;
 use evaluation::NNUE;
 use search::{Engine, EngineConfig};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 // TT Hash size per worker.
 const WORKER_HASH_SIZE_MB: i32 = 256;

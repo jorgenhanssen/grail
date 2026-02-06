@@ -5,7 +5,7 @@ use utils::Node;
 
 use crate::{
     encoding::encode_board_bitset,
-    network::{output_bucket, NNUENetwork, Network},
+    network::{NNUENetwork, Network, output_bucket},
 };
 use candle_core::{DType, Device};
 

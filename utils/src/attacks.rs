@@ -1,6 +1,6 @@
 use cozy_chess::{
-    get_bishop_moves, get_king_moves, get_knight_moves, get_pawn_attacks, get_rook_moves, BitBoard,
-    Board, Color, Piece, Square,
+    BitBoard, Board, Color, Piece, Square, get_bishop_moves, get_king_moves, get_knight_moves,
+    get_pawn_attacks, get_rook_moves,
 };
 
 /// Returns a bitboard of all pieces attacking the given square.

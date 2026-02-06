@@ -3,7 +3,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use ahash::AHashSet;
 use cozy_chess::Board;
 use search::{Engine, EngineConfig};
-use uci::{move_to_uci, UciOutput, NULL_MOVE};
+use uci::{NULL_MOVE, UciOutput, move_to_uci};
 
 /// Commands sent from the UCI thread to the engine worker.
 pub enum EngineCommand {
