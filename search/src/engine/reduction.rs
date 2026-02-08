@@ -32,9 +32,6 @@ impl Engine {
         if is_pv_move {
             return Reduction::Reduce(0);
         }
-        if parent.in_check() || child.in_check() {
-            return Reduction::Reduce(0);
-        }
 
         let hist =
             self.history_heuristic
@@ -61,6 +58,9 @@ impl Engine {
             }
             if parent.is_pv() {
                 reduction -= FracPly(self.config.anti_reduction_pv_node.value);
+            }
+            if parent.in_check() || child.in_check() {
+                reduction -= FracPly(self.config.anti_reduction_check.value);
             }
             if is_capture || is_promotion {
                 reduction -= FracPly(self.config.anti_reduction_tactical.value);
