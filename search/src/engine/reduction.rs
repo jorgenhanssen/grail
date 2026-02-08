@@ -20,9 +20,9 @@ impl Engine {
         ply: u8,
         depth: u8,
         is_pv_move: bool,
-        is_tactical: bool,
         is_improving: bool,
         is_capture: bool,
+        is_promotion: bool,
         move_index: i32,
         parent: &Node,
         child: &Node,
@@ -32,7 +32,7 @@ impl Engine {
         if is_pv_move {
             return Reduction::Reduce(0);
         }
-        if is_tactical && is_improving {
+        if parent.in_check() || child.in_check() {
             return Reduction::Reduce(0);
         }
 
@@ -62,8 +62,11 @@ impl Engine {
             if parent.is_pv() {
                 reduction -= FracPly(self.config.anti_reduction_pv_node.value);
             }
-            if is_tactical || creates_threat(parent, child) || evades_threat(parent, child) {
+            if is_capture || is_promotion {
                 reduction -= FracPly(self.config.anti_reduction_tactical.value);
+            }
+            if creates_threat(parent, child) || evades_threat(parent, child) {
+                reduction -= FracPly(self.config.anti_reduction_threat.value);
             }
         }
 
