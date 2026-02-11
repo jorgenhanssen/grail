@@ -70,8 +70,10 @@ impl Engine {
             }
         }
 
+        // Scale up reductions for all-nodes — every move is expected to fail low.
+        // Based on Stockfish's approach, which applies stronger reduction near leaves.
         if parent.is_all() {
-            reduction += reduction / (depth as u16 + 1);
+            reduction += reduction / (depth as u16);
         }
 
         let r = reduction.whole().min(depth.saturating_sub(2));
