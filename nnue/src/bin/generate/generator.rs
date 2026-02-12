@@ -14,13 +14,11 @@ use std::time::Duration;
 const DEFAULT_NNUE_PATH: &str = "nnue/model.safetensors";
 const PROGRESS_UPDATE_INTERVAL_MS: u64 = 200;
 
-/// Number of PV lines to search at each decision point.
-const PV_LINES: u8 = 3;
-
 /// Coordinates multi-threaded self-play data generation.
-/// Spawns worker threads that play games and collect (FEN, score, game_id) samples.
+/// Spawns worker threads that play games and collect training samples.
 pub struct Generator {
     threads: usize,
+    multi_pv: u8,
     nnue_path: Option<PathBuf>,
     opening_book: Arc<Book>,
 }
@@ -30,6 +28,7 @@ impl Generator {
         threads: usize,
         use_nnue: bool,
         opening_book_path: String,
+        multi_pv: u8,
     ) -> Result<Self, Box<dyn Error>> {
         let opening_book = Arc::new(Book::load(&opening_book_path)?);
 
@@ -49,17 +48,18 @@ impl Generator {
 
         Ok(Self {
             threads,
+            multi_pv,
             nnue_path,
             opening_book,
         })
     }
 
-    pub fn run(&self, depth: u8, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, usize)> {
+    pub fn run(&self, depth: u8, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, String, usize)> {
         log::info!(
             "Generating samples using {} threads (depth={}, multi_pv={}) - Press Ctrl+C to stop",
             self.threads,
             depth,
-            PV_LINES,
+            self.multi_pv,
         );
 
         let sample_counter = Arc::new(AtomicUsize::new(0));
@@ -70,6 +70,7 @@ impl Generator {
         let histogram = ScoreHistogram::new(&multi_progress);
 
         // Spawn worker threads
+        let multi_pv = self.multi_pv;
         let worker_handles: Vec<_> = (0..self.threads)
             .map(|tid| {
                 let nnue_path = self.nnue_path.clone();
@@ -86,7 +87,7 @@ impl Generator {
                         sample_counter,
                         game_id_counter,
                         depth,
-                        PV_LINES,
+                        multi_pv,
                         nnue,
                         opening_book,
                         histogram_handle,

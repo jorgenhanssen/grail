@@ -40,4 +40,8 @@ pub struct Args {
     /// Size of each shard in megabytes.
     #[arg(long, default_value_t = 500)]
     pub shard_size_mb: usize,
+
+    /// Piece head loss weight. Total loss = eval_loss + piece_weight * piece_loss.
+    #[arg(long, default_value_t = 0.5)]
+    pub piece_weight: f64,
 }

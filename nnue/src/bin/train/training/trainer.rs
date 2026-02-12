@@ -13,7 +13,7 @@ use crate::training::evaluation::evaluate;
 use crate::training::metrics::MetricsTracker;
 use crate::training::progress::TrainingProgressBar;
 use crate::utils::device::get_device;
-use crate::utils::loss::huber;
+use crate::utils::loss::{cross_entropy, huber};
 
 /// Number of shards to keep loaded for training.
 const TRAIN_SHARDS: usize = 10;
@@ -32,6 +32,7 @@ pub struct Trainer {
     lr_decay: f64,
     patience: u64,
     model_path: String,
+    piece_weight: f64,
 }
 
 impl Trainer {
@@ -61,6 +62,7 @@ impl Trainer {
             lr_decay: args.lr_decay,
             patience: args.patience,
             model_path: model_path.to_string(),
+            piece_weight: args.piece_weight,
         })
     }
 
@@ -119,22 +121,33 @@ impl Trainer {
         let mut total_loss = 0.0;
         let mut train_loss = 0.0;
 
-        for (features, scores, buckets) in loader {
+        for batch in loader {
             // Check for shutdown
             if shutdown.load(Ordering::Relaxed) {
                 return Ok(None);
             }
 
-            let batch_len = scores.len();
+            let batch_len = batch.scores.len();
             if batch_len == 0 {
                 continue;
             }
 
-            let x = Tensor::from_vec(features, (batch_len, NUM_FEATURES), &self.device)?;
-            let y = Tensor::from_vec(scores, (batch_len, 1), &self.device)?;
+            let x = Tensor::from_vec(batch.features, (batch_len, NUM_FEATURES), &self.device)?;
+            let y = Tensor::from_vec(batch.scores, (batch_len, 1), &self.device)?;
+            let piece_y = Tensor::from_vec(
+                batch
+                    .piece_targets
+                    .iter()
+                    .map(|&t| t as u32)
+                    .collect::<Vec<_>>(),
+                batch_len,
+                &self.device,
+            )?;
 
-            let preds = self.network.forward(&x, &buckets)?;
-            let loss = huber(&preds, &y)?;
+            let (eval_preds, piece_logits) = self.network.forward(&x, &batch.buckets)?;
+            let eval_loss = huber(&eval_preds, &y)?;
+            let piece_loss = cross_entropy(&piece_logits, &piece_y)?;
+            let loss = (eval_loss + (piece_loss * self.piece_weight)?)?;
 
             self.optimizer.backward_step(&loss)?;
 
@@ -153,7 +166,7 @@ impl Trainer {
             self.workers,
             Arc::clone(shutdown),
         );
-        let val_loss = evaluate(&self.network, val_loader, &self.device)?;
+        let val_loss = evaluate(&self.network, val_loader, &self.device, self.piece_weight)?;
 
         progress.finish(val_loss, train_loss);
 
@@ -182,7 +195,7 @@ impl Trainer {
             self.workers,
             Arc::clone(shutdown),
         );
-        let test_loss = evaluate(&self.network, test_loader, &self.device)?;
+        let test_loss = evaluate(&self.network, test_loader, &self.device, self.piece_weight)?;
         log::info!("Test Loss: {:.6}", test_loss);
 
         Ok(test_loss)

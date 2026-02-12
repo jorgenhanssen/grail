@@ -38,6 +38,11 @@ pub struct MainMoveGenerator {
 
     best_move: Option<Move>,
 
+    /// Piece head's predicted best piece type. When set, moves of this piece type
+    /// get a small score bonus to be tried earlier in each phase.
+    piece_hint: Option<Piece>,
+    piece_hint_bonus: i16,
+
     // Continuation history context
     prev_moves: Vec<Option<PieceTo>>,
 
@@ -59,6 +64,8 @@ impl MainMoveGenerator {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         best_move: Option<Move>,
+        piece_hint: Option<Piece>,
+        piece_hint_bonus: i16,
         prev_moves: Vec<Option<PieceTo>>,
         quiet_check_bonus: i16,
         quiet_check_see_margin: i16,
@@ -71,6 +78,8 @@ impl MainMoveGenerator {
         Self {
             gen_phase: Phase::BestMove,
             best_move,
+            piece_hint,
+            piece_hint_bonus,
 
             prev_moves,
 
@@ -124,10 +133,16 @@ impl MainMoveGenerator {
                         return true;
                     }
 
-                    self.good_captures.push(ScoredMove {
-                        mov,
-                        score: capture_score(board, mov, capture_history),
-                    });
+                    let mut score = capture_score(board, mov, capture_history);
+
+                    // Piece head says this piece type is best to move
+                    if let Some(hint) = self.piece_hint {
+                        if board.piece_on(mov.from) == Some(hint) {
+                            score = score.saturating_add(self.piece_hint_bonus);
+                        }
+                    }
+
+                    self.good_captures.push(ScoredMove { mov, score });
                 }
                 false
             });
@@ -217,6 +232,11 @@ impl MainMoveGenerator {
                             // A valuable piece moving to an attacked square = bad
                             if to_unsafe && value > PAWN_VALUE {
                                 score -= value / self.unsafe_square_divisor;
+                            }
+
+                            // Piece head says this piece type is best to move
+                            if self.piece_hint == Some(piece) {
+                                score = score.saturating_add(self.piece_hint_bonus);
                             }
 
                             score
