@@ -24,7 +24,11 @@ pub fn evaluate(
         let x = Tensor::from_vec(batch.features, (batch_len, NUM_FEATURES), device)?;
         let y = Tensor::from_vec(batch.scores, (batch_len, 1), device)?;
         let piece_y = Tensor::from_vec(
-            batch.piece_targets.iter().map(|&t| t as u32).collect::<Vec<_>>(),
+            batch
+                .piece_targets
+                .iter()
+                .map(|&t| t as u32)
+                .collect::<Vec<_>>(),
             batch_len,
             device,
         )?;

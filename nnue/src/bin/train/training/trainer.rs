@@ -135,7 +135,11 @@ impl Trainer {
             let x = Tensor::from_vec(batch.features, (batch_len, NUM_FEATURES), &self.device)?;
             let y = Tensor::from_vec(batch.scores, (batch_len, 1), &self.device)?;
             let piece_y = Tensor::from_vec(
-                batch.piece_targets.iter().map(|&t| t as u32).collect::<Vec<_>>(),
+                batch
+                    .piece_targets
+                    .iter()
+                    .map(|&t| t as u32)
+                    .collect::<Vec<_>>(),
                 batch_len,
                 &self.device,
             )?;

@@ -31,7 +31,8 @@ impl DataLoader {
         num_workers: usize,
         shutdown: Arc<AtomicBool>,
     ) -> Self {
-        let (sender, receiver) = mpsc::sync_channel::<Batch>(num_workers * CHANNEL_BUFFER_MULTIPLIER);
+        let (sender, receiver) =
+            mpsc::sync_channel::<Batch>(num_workers * CHANNEL_BUFFER_MULTIPLIER);
 
         let workers: Vec<_> = (0..num_workers)
             .map(|_| {
@@ -91,7 +92,12 @@ impl DataLoader {
             }
         }
 
-        Batch { features, scores, buckets, piece_targets }
+        Batch {
+            features,
+            scores,
+            buckets,
+            piece_targets,
+        }
     }
 }
 
