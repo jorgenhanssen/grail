@@ -8,8 +8,8 @@ use super::linear::LinearLayer;
 use super::model::Network;
 use super::simd::{simd_add, simd_relu};
 use super::{
-    CP_BOUND, EMBEDDING_SIZE, EVAL_HIDDEN_SIZE, FV_SCALE, OUTPUT_BUCKETS, POLICY_HIDDEN_SIZE,
-    POLICY_OUTPUT_SIZE,
+    CP_BOUND, EMBEDDING_SIZE, EVAL_HIDDEN_SIZE, FV_SCALE, OUTPUT_BUCKETS, PIECE_HIDDEN_SIZE,
+    PIECE_OUTPUT_SIZE,
 };
 
 /// NNUE inference engine with quantized weights.
@@ -18,7 +18,7 @@ use super::{
 pub struct NNUENetwork {
     accumulator: Accumulator,
     eval_heads: [EvalHead; OUTPUT_BUCKETS],
-    policy_head: PolicyHead,
+    piece_head: PieceHead,
     embedding_buffer: [f32; EMBEDDING_SIZE],
 }
 
@@ -41,19 +41,19 @@ impl NNUENetwork {
             }
         });
 
-        let policy_head = PolicyHead {
-            hidden1: LinearLayer::from_candle_linear(&network.policy_head.hidden1).unwrap(),
-            hidden2: LinearLayer::from_candle_linear(&network.policy_head.hidden2).unwrap(),
-            output: LinearLayer::from_candle_linear(&network.policy_head.output).unwrap(),
-            h1_buffer: [0.0; POLICY_HIDDEN_SIZE],
-            h2_buffer: [0.0; POLICY_HIDDEN_SIZE],
-            out_buffer: [0.0; POLICY_OUTPUT_SIZE],
+        let piece_head = PieceHead {
+            hidden1: LinearLayer::from_candle_linear(&network.piece_head.hidden1).unwrap(),
+            hidden2: LinearLayer::from_candle_linear(&network.piece_head.hidden2).unwrap(),
+            output: LinearLayer::from_candle_linear(&network.piece_head.output).unwrap(),
+            h1_buffer: [0.0; PIECE_HIDDEN_SIZE],
+            h2_buffer: [0.0; PIECE_HIDDEN_SIZE],
+            out_buffer: [0.0; PIECE_OUTPUT_SIZE],
         };
 
         Ok(Self {
             accumulator,
             eval_heads,
-            policy_head,
+            piece_head,
             embedding_buffer: [0.0; EMBEDDING_SIZE],
         })
     }
@@ -75,12 +75,12 @@ impl NNUENetwork {
         (output * FV_SCALE).clamp(-CP_BOUND as f32, CP_BOUND as f32)
     }
 
-    /// Runs the policy head on the current embedding, returning piece-type logits.
+    /// Runs the piece head on the current embedding, returning piece-type logits.
     /// Call after `forward()` — reuses the embedding buffer populated there.
     #[inline]
-    pub fn policy(&mut self) -> &[f32; POLICY_OUTPUT_SIZE] {
-        self.policy_head.forward(&self.embedding_buffer);
-        &self.policy_head.out_buffer
+    pub fn piece_logits(&mut self) -> &[f32; PIECE_OUTPUT_SIZE] {
+        self.piece_head.forward(&self.embedding_buffer);
+        &self.piece_head.out_buffer
     }
 }
 
@@ -110,18 +110,17 @@ impl EvalHead {
     }
 }
 
-/// Policy head: predicts moved piece type from the shared embedding.
-/// Arch same as for eval, more or less.
-struct PolicyHead {
+/// Piece head: predicts the best piece type to move from the shared embedding.
+struct PieceHead {
     hidden1: LinearLayer,
     hidden2: LinearLayer,
     output: LinearLayer,
-    h1_buffer: [f32; POLICY_HIDDEN_SIZE],
-    h2_buffer: [f32; POLICY_HIDDEN_SIZE],
-    out_buffer: [f32; POLICY_OUTPUT_SIZE],
+    h1_buffer: [f32; PIECE_HIDDEN_SIZE],
+    h2_buffer: [f32; PIECE_HIDDEN_SIZE],
+    out_buffer: [f32; PIECE_OUTPUT_SIZE],
 }
 
-impl PolicyHead {
+impl PieceHead {
     #[inline]
     fn forward(&mut self, input: &[f32]) {
         self.hidden1.forward(input, &mut self.h1_buffer);

@@ -32,7 +32,7 @@ pub struct Trainer {
     lr_decay: f64,
     patience: u64,
     model_path: String,
-    policy_weight: f64,
+    piece_weight: f64,
 }
 
 impl Trainer {
@@ -62,7 +62,7 @@ impl Trainer {
             lr_decay: args.lr_decay,
             patience: args.patience,
             model_path: model_path.to_string(),
-            policy_weight: args.policy_weight,
+            piece_weight: args.piece_weight,
         })
     }
 
@@ -134,16 +134,16 @@ impl Trainer {
 
             let x = Tensor::from_vec(batch.features, (batch_len, NUM_FEATURES), &self.device)?;
             let y = Tensor::from_vec(batch.scores, (batch_len, 1), &self.device)?;
-            let policy_y = Tensor::from_vec(
-                batch.policy_targets.iter().map(|&t| t as u32).collect::<Vec<_>>(),
+            let piece_y = Tensor::from_vec(
+                batch.piece_targets.iter().map(|&t| t as u32).collect::<Vec<_>>(),
                 batch_len,
                 &self.device,
             )?;
 
-            let (eval_preds, policy_logits) = self.network.forward(&x, &batch.buckets)?;
+            let (eval_preds, piece_logits) = self.network.forward(&x, &batch.buckets)?;
             let eval_loss = huber(&eval_preds, &y)?;
-            let policy_loss = cross_entropy(&policy_logits, &policy_y)?;
-            let loss = (eval_loss + (policy_loss * self.policy_weight)?)?;
+            let piece_loss = cross_entropy(&piece_logits, &piece_y)?;
+            let loss = (eval_loss + (piece_loss * self.piece_weight)?)?;
 
             self.optimizer.backward_step(&loss)?;
 
@@ -162,7 +162,7 @@ impl Trainer {
             self.workers,
             Arc::clone(shutdown),
         );
-        let val_loss = evaluate(&self.network, val_loader, &self.device, self.policy_weight)?;
+        let val_loss = evaluate(&self.network, val_loader, &self.device, self.piece_weight)?;
 
         progress.finish(val_loss, train_loss);
 
@@ -191,7 +191,7 @@ impl Trainer {
             self.workers,
             Arc::clone(shutdown),
         );
-        let test_loss = evaluate(&self.network, test_loader, &self.device, self.policy_weight)?;
+        let test_loss = evaluate(&self.network, test_loader, &self.device, self.piece_weight)?;
         log::info!("Test Loss: {:.6}", test_loss);
 
         Ok(test_loss)

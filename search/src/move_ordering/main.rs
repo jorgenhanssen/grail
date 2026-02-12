@@ -38,10 +38,10 @@ pub struct MainMoveGenerator {
 
     best_move: Option<Move>,
 
-    /// Policy head's predicted piece type. When set, moves of this piece type
+    /// Piece head's predicted best piece type. When set, moves of this piece type
     /// get a small score bonus to be tried earlier in each phase.
-    policy_piece: Option<Piece>,
-    policy_piece_bonus: i16,
+    piece_hint: Option<Piece>,
+    piece_hint_bonus: i16,
 
     // Continuation history context
     prev_moves: Vec<Option<PieceTo>>,
@@ -64,8 +64,8 @@ impl MainMoveGenerator {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         best_move: Option<Move>,
-        policy_piece: Option<Piece>,
-        policy_piece_bonus: i16,
+        piece_hint: Option<Piece>,
+        piece_hint_bonus: i16,
         prev_moves: Vec<Option<PieceTo>>,
         quiet_check_bonus: i16,
         quiet_check_see_margin: i16,
@@ -78,8 +78,8 @@ impl MainMoveGenerator {
         Self {
             gen_phase: Phase::BestMove,
             best_move,
-            policy_piece,
-            policy_piece_bonus,
+            piece_hint,
+            piece_hint_bonus,
 
             prev_moves,
 
@@ -135,10 +135,10 @@ impl MainMoveGenerator {
 
                     let mut score = capture_score(board, mov, capture_history);
 
-                    // Policy/piece head says this piece type is good
-                    if let Some(pp) = self.policy_piece {
-                        if board.piece_on(mov.from) == Some(pp) {
-                            score = score.saturating_add(self.policy_piece_bonus);
+                    // Piece head says this piece type is best to move
+                    if let Some(hint) = self.piece_hint {
+                        if board.piece_on(mov.from) == Some(hint) {
+                            score = score.saturating_add(self.piece_hint_bonus);
                         }
                     }
 
@@ -234,9 +234,9 @@ impl MainMoveGenerator {
                                 score -= value / self.unsafe_square_divisor;
                             }
 
-                            // Policy/piece head says this piece type is good
-                            if self.policy_piece == Some(piece) {
-                                score = score.saturating_add(self.policy_piece_bonus);
+                            // Piece head says this piece type is best to move
+                            if self.piece_hint == Some(piece) {
+                                score = score.saturating_add(self.piece_hint_bonus);
                             }
 
                             score

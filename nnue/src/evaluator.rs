@@ -70,10 +70,10 @@ impl NNUE for Evaluator {
             .clamp(i16::MIN as f32, i16::MAX as f32) as i16
     }
 
-    /// Argmax of the policy head logits = best piece type to move.
+    /// Argmax of the piece head logits = best piece type to move.
     /// Relies on the embedding buffer from the last evaluate() call.
-    fn policy_piece(&mut self) -> Option<Piece> {
-        let logits = self.nnue.as_mut()?.policy();
+    fn best_piece(&mut self) -> Option<Piece> {
+        let logits = self.nnue.as_mut()?.piece_logits();
 
         let (best_idx, _) = logits
             .iter()

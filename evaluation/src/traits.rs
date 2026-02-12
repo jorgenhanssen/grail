@@ -25,5 +25,6 @@ pub trait NNUE: Send {
     /// Evaluate position from White's perspective.
     fn evaluate(&mut self, node: &Node) -> i16;
     /// Best piece type to move in the current position.
-    fn policy_piece(&mut self) -> Option<Piece>;
+    /// Call after evaluate() (reuses the embedding from the last forward pass).
+    fn best_piece(&mut self) -> Option<Piece>;
 }

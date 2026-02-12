@@ -10,7 +10,7 @@ pub fn evaluate(
     network: &Network,
     loader: DataLoader,
     device: &Device,
-    policy_weight: f64,
+    piece_weight: f64,
 ) -> Result<f32, Box<dyn Error>> {
     let mut total_loss = 0.0;
     let mut batches = 0;
@@ -23,16 +23,16 @@ pub fn evaluate(
 
         let x = Tensor::from_vec(batch.features, (batch_len, NUM_FEATURES), device)?;
         let y = Tensor::from_vec(batch.scores, (batch_len, 1), device)?;
-        let policy_y = Tensor::from_vec(
-            batch.policy_targets.iter().map(|&t| t as u32).collect::<Vec<_>>(),
+        let piece_y = Tensor::from_vec(
+            batch.piece_targets.iter().map(|&t| t as u32).collect::<Vec<_>>(),
             batch_len,
             device,
         )?;
 
-        let (eval_preds, policy_logits) = network.forward(&x, &batch.buckets)?;
+        let (eval_preds, piece_logits) = network.forward(&x, &batch.buckets)?;
         let eval_loss = huber(&eval_preds, &y)?;
-        let policy_loss = cross_entropy(&policy_logits, &policy_y)?;
-        let loss = (eval_loss + (policy_loss * policy_weight)?)?;
+        let piece_loss = cross_entropy(&piece_logits, &piece_y)?;
+        let loss = (eval_loss + (piece_loss * piece_weight)?)?;
 
         total_loss += loss.to_vec0::<f32>()?;
         batches += 1;

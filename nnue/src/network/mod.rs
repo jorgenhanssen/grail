@@ -15,11 +15,11 @@ pub const EMBEDDING_SIZE: usize = 1024;
 /// Size of the eval head hidden layers (per output bucket).
 pub const EVAL_HIDDEN_SIZE: usize = 16;
 
-/// Size of the policy head hidden layer.
-pub const POLICY_HIDDEN_SIZE: usize = 16;
+/// Size of the piece head hidden layer.
+pub const PIECE_HIDDEN_SIZE: usize = 16;
 
-/// Number of policy outputs (one per piece type).
-pub const POLICY_OUTPUT_SIZE: usize = 6;
+/// Number of piece head outputs (one per piece type).
+pub const PIECE_OUTPUT_SIZE: usize = 6;
 
 /// Evaluation clipping bound (centipawns). Output is clamped to [-CP_BOUND, CP_BOUND].
 pub const CP_BOUND: i16 = 5000;

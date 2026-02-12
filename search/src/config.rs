@@ -79,7 +79,7 @@ define_config!(
     (move_overhead: i32, "Move Overhead", UciOptionType::Spin { min: 0, max: 5000 }, 10, true),
     (multi_pv: u8, "MultiPV", UciOptionType::Spin { min: 1, max: 64 }, 1, true),
     (nnue: bool, "NNUE", UciOptionType::Check, true, true),
-    (policy_piece_bonus: i16, "Policy Piece Bonus", UciOptionType::Spin { min: 0, max: 1000 }, 100, true),
+    (piece_head_bonus: i16, "Piece Head Bonus", UciOptionType::Spin { min: 0, max: 1000 }, 100, true),
 
     // Tuning options
     (aspiration_window_size: i16, "Aspiration Window Size", UciOptionType::Spin { min: 10, max: 100 }, 40, cfg!(feature = "tuning")),

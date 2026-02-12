@@ -1,4 +1,4 @@
-use cozy_chess::{Board, Move};
+use cozy_chess::Board;
 use nnue::network::CP_BOUND;
 use rand::Rng;
 use search::{Engine, PvLine, SearchResult};

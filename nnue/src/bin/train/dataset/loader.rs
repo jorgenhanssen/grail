@@ -12,7 +12,7 @@ pub struct Batch {
     pub features: Vec<f32>,
     pub scores: Vec<f32>,
     pub buckets: Vec<usize>,
-    pub policy_targets: Vec<usize>,
+    pub piece_targets: Vec<usize>,
 }
 
 /// Multi-threaded data loader that reads samples from shards.
@@ -71,7 +71,7 @@ impl DataLoader {
         let mut features = Vec::with_capacity(batch_size * NUM_FEATURES);
         let mut scores = Vec::with_capacity(batch_size);
         let mut buckets = Vec::with_capacity(batch_size);
-        let mut policy_targets = Vec::with_capacity(batch_size);
+        let mut piece_targets = Vec::with_capacity(batch_size);
 
         for _ in 0..batch_size {
             if shutdown.load(Ordering::Relaxed) {
@@ -84,14 +84,14 @@ impl DataLoader {
                         features.extend_from_slice(&encoded.features);
                         scores.push(encoded.score);
                         buckets.push(encoded.bucket);
-                        policy_targets.push(encoded.policy_target);
+                        piece_targets.push(encoded.piece_target);
                     }
                 }
                 None => break,
             }
         }
 
-        Batch { features, scores, buckets, policy_targets }
+        Batch { features, scores, buckets, piece_targets }
     }
 }
 

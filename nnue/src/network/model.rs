@@ -4,15 +4,15 @@ use candle_nn::{Linear, VarBuilder, linear};
 use crate::encoding::NUM_FEATURES;
 
 use super::{
-    EMBEDDING_SIZE, EVAL_HIDDEN_SIZE, OUTPUT_BUCKETS, POLICY_HIDDEN_SIZE, POLICY_OUTPUT_SIZE,
+    EMBEDDING_SIZE, EVAL_HIDDEN_SIZE, OUTPUT_BUCKETS, PIECE_HIDDEN_SIZE, PIECE_OUTPUT_SIZE,
 };
 
 /// Full-precision network for training and weight loading.
-/// Shared embedding feeds into phase-specific eval heads and a policy/piece head.
+/// Shared embedding feeds into phase-specific eval heads and a piece head.
 pub struct Network {
     pub embedding: Linear,
     pub eval_heads: [EvalHead; OUTPUT_BUCKETS],
-    pub policy_head: PolicyHead,
+    pub piece_head: PieceHead,
 }
 
 impl Network {
@@ -27,20 +27,20 @@ impl Network {
         });
 
         let pvs = vs.pp("policy");
-        let policy_head = PolicyHead {
-            hidden1: linear(EMBEDDING_SIZE, POLICY_HIDDEN_SIZE, pvs.pp("hidden1")).unwrap(),
-            hidden2: linear(POLICY_HIDDEN_SIZE, POLICY_HIDDEN_SIZE, pvs.pp("hidden2")).unwrap(),
-            output: linear(POLICY_HIDDEN_SIZE, POLICY_OUTPUT_SIZE, pvs.pp("output")).unwrap(),
+        let piece_head = PieceHead {
+            hidden1: linear(EMBEDDING_SIZE, PIECE_HIDDEN_SIZE, pvs.pp("hidden1")).unwrap(),
+            hidden2: linear(PIECE_HIDDEN_SIZE, PIECE_HIDDEN_SIZE, pvs.pp("hidden2")).unwrap(),
+            output: linear(PIECE_HIDDEN_SIZE, PIECE_OUTPUT_SIZE, pvs.pp("output")).unwrap(),
         };
 
         Ok(Self {
             embedding: linear(NUM_FEATURES, EMBEDDING_SIZE, vs.pp("embedding"))?,
             eval_heads,
-            policy_head,
+            piece_head,
         })
     }
 
-    /// Forward pass for training. Returns (eval [batch, 1], policy_logits [batch, 6]).
+    /// Forward pass for training. Returns (eval [batch, 1], piece_logits [batch, 6]).
     ///
     /// Computes all bucket outputs then gathers the correct one per sample.
     /// `gather` scatters gradients only to each sample's selected bucket.
@@ -64,9 +64,9 @@ impl Network {
         )?;
         let eval = stacked.gather(&indices, 1)?;
 
-        let policy = self.policy_head.forward(&embedding_out)?;
+        let piece_logits = self.piece_head.forward(&embedding_out)?;
 
-        Ok((eval, policy))
+        Ok((eval, piece_logits))
     }
 }
 
@@ -85,14 +85,14 @@ impl EvalHead {
     }
 }
 
-/// Policy head: predicts the best move's piece type from the shared embedding.
-pub struct PolicyHead {
+/// Piece head: predicts the best piece type to move from the shared embedding.
+pub struct PieceHead {
     pub hidden1: Linear,
     pub hidden2: Linear,
     pub output: Linear,
 }
 
-impl PolicyHead {
+impl PieceHead {
     fn forward(&self, embedding: &Tensor) -> Result<Tensor> {
         let h1 = embedding.apply(&self.hidden1)?.relu()?;
         let h2 = (h1.apply(&self.hidden2)? + &h1)?.relu()?;

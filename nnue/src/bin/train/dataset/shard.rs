@@ -21,7 +21,7 @@ pub struct EncodedSample {
     pub features: [f32; NUM_FEATURES],
     pub score: f32,
     pub bucket: usize,
-    pub policy_target: usize,
+    pub piece_target: usize,
 }
 
 impl Sample {
@@ -43,13 +43,13 @@ impl Sample {
 
         let mv = parse_uci_move(&board, &self.best_move).ok()?;
         let piece = board.piece_on(mv.from)?;
-        let policy_target = piece as usize;
+        let piece_target = piece as usize;
 
         Some(EncodedSample {
             score,
             bucket,
             features,
-            policy_target,
+            piece_target,
         })
     }
 }
