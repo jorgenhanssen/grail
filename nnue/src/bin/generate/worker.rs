@@ -55,7 +55,7 @@ impl SelfPlayWorker {
         }
     }
 
-    pub fn play_games(&mut self, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, usize)> {
+    pub fn play_games(&mut self, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, String, usize)> {
         let mut evaluations = Vec::new();
 
         while !stop_flag.load(Ordering::Relaxed) {
@@ -74,7 +74,7 @@ impl SelfPlayWorker {
         evaluations
     }
 
-    fn record_statistics(&self, samples: &[(String, i16, usize)], scores: Vec<i16>) {
+    fn record_statistics(&self, samples: &[(String, i16, String, usize)], scores: Vec<i16>) {
         let num_samples = samples.len();
 
         self.histogram.record_scores(&scores);

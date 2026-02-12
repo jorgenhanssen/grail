@@ -71,7 +71,7 @@ impl ShardWriter {
             let path = dir.join(format!("shard_{}.csv", i));
             let file = File::create(&path)?;
             let mut writer = BufWriter::new(file);
-            writeln!(writer, "fen,score")?;
+            writeln!(writer, "fen,score,move")?;
             writers.push(Mutex::new(writer));
         }
 
@@ -81,11 +81,11 @@ impl ShardWriter {
         })
     }
 
-    fn write(&self, fen: &str, score: i16) {
+    fn write(&self, fen: &str, score: i16, mv: &str) {
         // Round-robin to spread correlated samples
         let idx = self.next_idx.fetch_add(1, Ordering::Relaxed) % self.writers.len();
         let mut writer = self.writers[idx].lock().unwrap();
-        if let Err(e) = writeln!(writer, "{},{}", fen, score) {
+        if let Err(e) = writeln!(writer, "{},{},{}", fen, score, mv) {
             log::error!("Failed to write to shard: {}", e);
         }
     }
@@ -272,7 +272,7 @@ fn process_file(
         let line_len = line.len() as u64;
         let trimmed = line.trim();
 
-        if let Some((fen, score, game_id)) = parse_csv_line(trimmed) {
+        if let Some((fen, score, mv, game_id)) = parse_csv_line(trimmed) {
             let split = *game_assignments.entry(game_id).or_insert_with(|| {
                 stats.register_game();
                 pick_split(&mut rng, val_ratio, test_ratio)
@@ -281,9 +281,9 @@ fn process_file(
             stats.register_sample(fen, split);
 
             match split {
-                Split::Train => train_writer.write(fen, score),
-                Split::Val => val_writer.write(fen, score),
-                Split::Test => test_writer.write(fen, score),
+                Split::Train => train_writer.write(fen, score, mv),
+                Split::Val => val_writer.write(fen, score, mv),
+                Split::Test => test_writer.write(fen, score, mv),
             }
 
             samples_since_update += 1;
@@ -304,12 +304,13 @@ fn process_file(
     stats
 }
 
-fn parse_csv_line(line: &str) -> Option<(&str, i16, u32)> {
+fn parse_csv_line(line: &str) -> Option<(&str, i16, &str, u32)> {
     let mut parts = line.split(',');
     let fen = parts.next()?;
     let score: i16 = parts.next()?.parse().ok()?;
+    let mv = parts.next()?;
     let game_id: u32 = parts.next()?.parse().ok()?;
-    Some((fen, score, game_id))
+    Some((fen, score, mv, game_id))
 }
 
 fn pick_split<R: rand::Rng>(rng: &mut R, val_ratio: f64, test_ratio: f64) -> Split {

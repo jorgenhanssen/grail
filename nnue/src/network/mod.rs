@@ -12,13 +12,19 @@ pub use model::Network;
 /// Size of the accumulator that input features are embedded into.
 pub const EMBEDDING_SIZE: usize = 1024;
 
-/// Size of the hidden layers after the embedding.
-pub const HIDDEN_SIZE: usize = 16;
+/// Size of the eval head hidden layers (per output bucket).
+pub const EVAL_HIDDEN_SIZE: usize = 16;
+
+/// Size of the policy head hidden layer.
+pub const POLICY_HIDDEN_SIZE: usize = 16;
+
+/// Number of policy outputs (one per piece type).
+pub const POLICY_OUTPUT_SIZE: usize = 6;
 
 /// Evaluation clipping bound (centipawns). Output is clamped to [-CP_BOUND, CP_BOUND].
 pub const CP_BOUND: i16 = 5000;
 
-/// Scale factor for network I/O.
+/// Scale factor between net and real space.
 /// Training targets are divided by this, inference output is multiplied back.
 /// Keeps network values in a small range for stable gradients during training.
 pub const FV_SCALE: f32 = 400.0;

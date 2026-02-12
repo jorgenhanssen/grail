@@ -3,7 +3,7 @@ use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 use std::str::FromStr;
 
-use cozy_chess::{Board, Color};
+use cozy_chess::{Board, Color, util::parse_uci_move};
 use nnue::encoding::{NUM_FEATURES, encode_board};
 use nnue::network::{FV_SCALE, output_bucket};
 use utils::board_metrics::BoardMetrics;
@@ -13,17 +13,18 @@ use utils::board_metrics::BoardMetrics;
 pub struct Sample {
     pub fen: String,
     pub score: i16,
+    pub best_move: String,
 }
 
-/// Encoded sample ready for training: features, normalized score, and bucket index.
+/// Sample encoded as tensors for training.
 pub struct EncodedSample {
     pub features: [f32; NUM_FEATURES],
     pub score: f32,
     pub bucket: usize,
+    pub policy_target: usize,
 }
 
 impl Sample {
-    /// Encodes the sample into features, normalized score, and bucket index.
     pub fn encode(&self) -> Option<EncodedSample> {
         let board = Board::from_str(&self.fen).ok()?;
         let metrics = BoardMetrics::new(&board);
@@ -40,10 +41,15 @@ impl Sample {
             metrics.threats[Color::Black as usize],
         );
 
+        let mv = parse_uci_move(&board, &self.best_move).ok()?;
+        let piece = board.piece_on(mv.from)?;
+        let policy_target = piece as usize;
+
         Some(EncodedSample {
             score,
             bucket,
             features,
+            policy_target,
         })
     }
 }
@@ -91,6 +97,11 @@ fn parse_line(line: &str) -> Option<Sample> {
     let mut parts = line.split(',');
     let fen = parts.next()?.to_string();
     let score: i16 = parts.next()?.parse().ok()?;
+    let best_move = parts.next()?.to_string();
 
-    Some(Sample { fen, score })
+    Some(Sample {
+        fen,
+        score,
+        best_move,
+    })
 }

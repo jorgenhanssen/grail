@@ -29,3 +29,5 @@ pub fn huber(
     let loss = (term1 + term2)?;
     loss.mean_all()
 }
+
+pub use candle_nn::loss::cross_entropy;

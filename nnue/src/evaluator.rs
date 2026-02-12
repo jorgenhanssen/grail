@@ -1,5 +1,5 @@
 use candle_nn::{VarBuilder, VarMap};
-use cozy_chess::Color;
+use cozy_chess::{Color, Piece};
 use evaluation::NNUE;
 use utils::Node;
 
@@ -42,7 +42,6 @@ impl NNUE for Evaluator {
         "NNUE".to_string()
     }
 
-    /// Evaluates the position using the neural network.
     fn evaluate(&mut self, node: &Node) -> i16 {
         let board = node.board();
         let white_attacks = node.attacks_for(Color::White);
@@ -69,5 +68,18 @@ impl NNUE for Evaluator {
             .expect("NNUE network not initialized - call enable_nnue() first")
             .forward(&bitset, bucket)
             .clamp(i16::MIN as f32, i16::MAX as f32) as i16
+    }
+
+    /// Argmax of the policy head logits = best piece type to move.
+    /// Relies on the embedding buffer from the last evaluate() call.
+    fn policy_piece(&mut self) -> Option<Piece> {
+        let logits = self.nnue.as_mut()?.policy();
+
+        let (best_idx, _) = logits
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())?;
+
+        Piece::ALL.get(best_idx).copied()
     }
 }

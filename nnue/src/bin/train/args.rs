@@ -40,4 +40,8 @@ pub struct Args {
     /// Size of each shard in megabytes.
     #[arg(long, default_value_t = 500)]
     pub shard_size_mb: usize,
+
+    /// Policy loss weight. Total loss = eval_loss + policy_weight * policy_loss.
+    #[arg(long, default_value_t = 0.5)]
+    pub policy_weight: f64,
 }

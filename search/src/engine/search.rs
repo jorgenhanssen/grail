@@ -329,9 +329,20 @@ impl Engine {
             tt_move
         };
 
+        // Policy piece: when NNUE was evaluated this node (no cached TT eval),
+        // ask the policy head which piece type is best to move. Gives a small
+        // score bonus to all moves of that piece type in both capture and quiet phases.
+        let policy_piece: Option<Piece> = if tt_info.is_none() && self.config.nnue.value {
+            self.nnue.as_mut().and_then(|nnue| nnue.policy_piece())
+        } else {
+            None
+        };
+
         let enemy_attacks = node.attacks_for(!node.side_to_move());
         let mut movegen = MainMoveGenerator::new(
             best_move_hint,
+            policy_piece,
+            self.config.policy_piece_bonus.value,
             prev_moves,
             self.config.quiet_check_bonus.value,
             self.config.quiet_check_see_margin.value,
