@@ -220,6 +220,11 @@ impl Node {
         self.threats_for(self.side_to_move())
     }
 
+    /// Get attacks for the side to move (convenience method).
+    pub fn attacks(&self) -> BitBoard {
+        self.attacks_for(self.side_to_move())
+    }
+
     /// Create a child node by playing a move.
     pub fn create_child(&self, mv: Move, mv_index: i32) -> Self {
         let mut board = self.board.clone();

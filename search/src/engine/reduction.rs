@@ -50,6 +50,10 @@ impl Engine {
                 reduction += FracPly(self.config.reduction_bad_history.value);
             }
         }
+        if !parent.attacks().has(m.to) {
+            // If we are not moving to a defended square
+            reduction += FracPly(self.config.reduction_not_supported.value);
+        }
 
         // Reduce less
         if reduction > FracPly(0) {

@@ -114,6 +114,7 @@ define_config!(
     (reduction_cut_node: u16, "Reduction Cut Node", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (reduction_not_improving: u16, "Reduction Not Improving", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (reduction_bad_history: u16, "Reduction Bad History", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (reduction_not_supported: u16, "Reduction Not Supported", UciOptionType::Spin { min: 0, max: 4096 }, 256, cfg!(feature = "tuning")),
     (anti_reduction_near_root: u16, "Anti Reduction Near Root", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_pv_node: u16, "Anti Reduction PV Node", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_tactical: u16, "Anti Reduction Tactical", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
