@@ -15,7 +15,7 @@ const DEFAULT_NNUE_PATH: &str = "nnue/model.safetensors";
 const PROGRESS_UPDATE_INTERVAL_MS: u64 = 200;
 
 /// Number of PV lines to search at each decision point.
-const PV_LINES: u8 = 3;
+const PV_LINES: u8 = 1;
 
 /// Coordinates multi-threaded self-play data generation.
 /// Spawns worker threads that play games and collect (FEN, score, game_id) samples.
