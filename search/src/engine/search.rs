@@ -534,9 +534,9 @@ impl Engine {
             ply,
             depth,
             is_pv_move,
-            is_tactical,
             is_improving,
             is_cap,
+            is_promotion,
             move_index,
             node,
             &child,
@@ -616,7 +616,6 @@ impl Engine {
         captures_searched: &[Move],
     ) {
         let board = node.board();
-        let threats = node.threats();
 
         let prev_moves = self
             .continuation_history
@@ -624,7 +623,7 @@ impl Engine {
         if is_quiet {
             // Boost the quiet move that caused the cutoff
             let bonus = self.history_heuristic.get_bonus(depth);
-            self.history_heuristic.update(board, mv, bonus, threats);
+            self.history_heuristic.update(board, mv, bonus);
 
             // Continuation history bonus for quiet cutoff move
             let cont_bonus = self.continuation_history.get_bonus(depth);
@@ -640,8 +639,7 @@ impl Engine {
             // Apply malus to all previously searched quiet moves
             let quiet_malus = self.history_heuristic.get_malus(depth);
             for &q in quiets_searched {
-                self.history_heuristic
-                    .update(board, q, quiet_malus, threats);
+                self.history_heuristic.update(board, q, quiet_malus);
             }
 
             // Continuation history malus for previously searched quiets

@@ -193,7 +193,7 @@ impl MainMoveGenerator {
                             let color = board.side_to_move();
                             let piece = board.piece_on(mov.from).unwrap();
 
-                            score += history_heuristic.get(color, mov.from, mov.to, self.threats);
+                            score += history_heuristic.get(color, mov.from, mov.to);
 
                             let curr = PieceTo::new(color, piece, mov.to);
                             score += continuation_history.get(&self.prev_moves, curr);

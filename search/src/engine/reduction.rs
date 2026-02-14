@@ -20,9 +20,9 @@ impl Engine {
         ply: u8,
         depth: u8,
         is_pv_move: bool,
-        is_tactical: bool,
         is_improving: bool,
         is_capture: bool,
+        is_promotion: bool,
         move_index: i32,
         parent: &Node,
         child: &Node,
@@ -32,13 +32,10 @@ impl Engine {
         if is_pv_move {
             return Reduction::Reduce(0);
         }
-        if is_tactical && is_improving {
-            return Reduction::Reduce(0);
-        }
 
-        let hist =
-            self.history_heuristic
-                .get(parent.side_to_move(), m.from, m.to, parent.threats());
+        let hist = self
+            .history_heuristic
+            .get(parent.side_to_move(), m.from, m.to);
 
         let mut reduction = lmr_table.get(depth, move_index);
 
@@ -62,8 +59,14 @@ impl Engine {
             if parent.is_pv() {
                 reduction -= FracPly(self.config.anti_reduction_pv_node.value);
             }
-            if is_tactical || creates_threat(parent, child) || evades_threat(parent, child) {
+            if parent.in_check() || child.in_check() {
+                reduction -= FracPly(self.config.anti_reduction_check.value);
+            }
+            if is_capture || is_promotion {
                 reduction -= FracPly(self.config.anti_reduction_tactical.value);
+            }
+            if creates_threat(parent, child) || evades_threat(parent, child) {
+                reduction -= FracPly(self.config.anti_reduction_threat.value);
             }
         }
 
