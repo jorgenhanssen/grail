@@ -76,7 +76,7 @@ impl Engine {
         self.search_stack.current_mut(|n| n.singular = None);
 
         if singular_value < singular_beta {
-            // TT move is uniquely strong: extend (double if very singular).
+            // TT move is uniquely strong: extend (extra if very singular).
             if singular_value < singular_beta.saturating_sub(self.config.double_ext_margin.value) {
                 result.extension = 2;
                 return result;
@@ -85,11 +85,11 @@ impl Engine {
             return result;
         }
 
-        // Multi-cut pruning: if the reduced search (excluding TT move) still beats
-        // beta, multiple moves are good enough to cause a cutoff and we can prune.
+        // Multi-cut pruning: if singular_beta already exceeds beta, multiple
+        // moves are likely good enough to cause a cutoff and we can prune.
         // <https://www.chessprogramming.org/Multi-Cut>
-        if singular_value >= beta && singular_value.abs() < MATE_SCORE_BOUND {
-            result.multi_cut = Some(singular_value);
+        if singular_beta >= beta {
+            result.multi_cut = Some(singular_beta);
         }
 
         result
