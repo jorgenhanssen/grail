@@ -392,8 +392,6 @@ impl Engine {
             if let Some(value) = singular_result.multi_cut {
                 return (value, Vec::new());
             }
-            let singular_extension = singular_result.extension;
-
             if let Some((value, mut line, is_quiet, searched_depth)) = self.search_move(
                 node,
                 m,
@@ -404,7 +402,7 @@ impl Engine {
                 move_index,
                 is_improving,
                 corrected_eval,
-                singular_extension,
+                singular_result.extension,
             ) {
                 if self.stop.load(Ordering::Relaxed) {
                     break;
@@ -495,7 +493,7 @@ impl Engine {
         move_index: i32,
         is_improving: bool,
         static_eval: i16,
-        singular_extension: u8,
+        extra_extension: i8,
     ) -> Option<(i16, Vec<Move>, bool, u8)> {
         let moved_color = node.board().side_to_move();
         let moved_piece = node.piece_on(m.from).unwrap();
@@ -547,7 +545,9 @@ impl Engine {
             Reduction::Prune => return None,
         };
 
-        let extension = self.get_extension(node, &m, moved_piece, is_cap) + singular_extension;
+        let mut extension = self.get_extension(node, &m, moved_piece, is_cap) as i8;
+        extension += extra_extension;
+        let extension = extension.max(0) as u8;
 
         // Child's remaining depth after extension/reduction
         let extended_child_depth = depth.saturating_sub(1).saturating_add(extension);

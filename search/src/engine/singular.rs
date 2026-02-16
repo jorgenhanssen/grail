@@ -13,8 +13,8 @@ use super::Engine;
 /// Result of probing for singular extension or multi-cut.
 #[derive(Default)]
 pub(super) struct SingularProbeResult {
-    /// Extension to apply to the TT move (0, 1, or 2).
-    pub extension: u8,
+    /// Extension to apply to the TT move (-1, 0, 1, or 2).
+    pub extension: i8,
     /// If Some, prune the node and return this value.
     pub multi_cut: Option<i16>,
 }
@@ -90,6 +90,13 @@ impl Engine {
         // <https://www.chessprogramming.org/Multi-Cut>
         if singular_beta >= beta {
             result.multi_cut = Some(singular_beta);
+            return result;
+        }
+
+        // Negative extension: the TT move wasn't singular and its score beats beta,
+        // so a beta cutoff is expected without deep search.
+        if tt.value >= beta {
+            result.extension = -1;
         }
 
         result
