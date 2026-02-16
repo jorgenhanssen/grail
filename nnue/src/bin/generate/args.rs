@@ -5,6 +5,10 @@ use clap::Parser;
 #[command(author = "Jørgen Hanssen <jorgen@hanssen.io>")]
 #[command(version = "0.1.0")]
 pub struct Args {
+    /// Number of threads. Defaults to the number of logical CPUs.
+    #[arg(long)]
+    pub threads: Option<usize>,
+
     /// Search depth for position evaluation.
     #[arg(long, default_value_t = 10)]
     pub depth: u8,

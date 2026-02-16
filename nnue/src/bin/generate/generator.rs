@@ -56,10 +56,10 @@ impl Generator {
 
     pub fn run(&self, depth: u8, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, usize)> {
         log::info!(
-            "Generating samples using {} threads (depth={}, multi_pv={}) - Press Ctrl+C to stop",
-            self.threads,
+            "Generating samples (depth={}, multi_pv={}, threads={}) - Press Ctrl+C to stop",
             depth,
             self.pv_lines,
+            self.threads,
         );
 
         let sample_counter = Arc::new(AtomicUsize::new(0));
