@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+CONCURRENCY=${1:-15}
+
 mkdir -p sprt
 
 COMMON=(
@@ -14,7 +16,7 @@ COMMON=(
   -engine cmd=./target/release/grail-next name=grail-next
   -sprt elo0=0 elo1=10 alpha=0.05 beta=0.05
   -rounds 10000
-  -concurrency 15
+  -concurrency $CONCURRENCY
 )
 
 echo "SPRT: STC (10+0.1)"
