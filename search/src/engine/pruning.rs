@@ -67,12 +67,10 @@ impl Engine {
         }
     }
 
-    /// SEE pruning: skip bad captures based on static exchange evaluation.
-    /// Only runs expensive SEE on questionable captures (victim < attacker), using a dynamic
-    /// threshold based on depth and eval gap. Inspired by Black Marlin.
+    /// SEE pruning: skip moves where the resulting exchange sequence loses material.
+    /// Applies near the leaves where there's not enough depth to discover this naturally.
     ///
     /// <https://www.chessprogramming.org/Static_Exchange_Evaluation>
-    /// <https://github.com/jnlt3/blackmarlin>
     #[allow(clippy::too_many_arguments)]
     pub(super) fn try_see_prune(
         &self,
@@ -86,50 +84,47 @@ impl Engine {
         alpha: i16,
         static_eval: i16,
     ) -> bool {
+        if is_pv_move || in_check || node.is_pv() || m.promotion.is_some() {
+            return false;
+        }
+
         let board = node.board();
 
-        if !is_capture {
-            return false;
+        if is_capture {
+            if depth > self.config.see_capture_max_depth.value {
+                return false;
+            }
+
+            let captured = captured_piece(board, m).unwrap();
+            let captured_value = piece_value(captured);
+            let attacker_value = piece_value(moved_piece);
+
+            // Only run it on questionable captures (SEE is expensive):
+            // Skip if victim >= attacker (looks good) or attacker is trivial/invaluable
+            if captured_value >= attacker_value
+                || attacker_value < self.config.see_capture_min_attacker_value.value
+            {
+                return false;
+            }
+
+            // When we're behind on eval we need captures to actually win material,
+            // but tolerate more at higher depths since there's room to recover.
+            let eval_gap = alpha - static_eval;
+            let depth_margin = self.config.see_capture_depth_margin.value * (depth as i16);
+            let threshold = -(eval_gap.max(0) + depth_margin);
+
+            !see(board, m, threshold)
+        } else {
+            if depth > self.config.see_quiet_max_depth.value {
+                return false;
+            }
+
+            // Catch quiet moves that walk into losing exchanges (hanging, etc)
+            // Tolerate more at higher depths since the search can correct mistakes.
+            let threshold = -(self.config.see_quiet_depth_multiplier.value * depth as i16);
+
+            !see(board, m, threshold)
         }
-
-        if in_check
-            || node.is_pv()
-            || is_pv_move
-            || depth < self.config.see_prune_min_remaining_depth.value
-            || depth > self.config.see_prune_max_depth.value
-        {
-            return false;
-        }
-
-        let captured = captured_piece(board, m).unwrap();
-
-        // Promotion capture is likely good
-        if m.promotion.is_some() {
-            return false;
-        }
-
-        let captured_value = piece_value(captured);
-        let attacker_value = piece_value(moved_piece);
-
-        // Only run SEE on questionable captures (expensive):
-        // Skip if: victim >= attacker (looks good)
-        if captured_value >= attacker_value {
-            return false;
-        }
-        // OR if attacker is not worth checking SEE for
-        if attacker_value < self.config.see_prune_min_attacker_value.value {
-            return false;
-        }
-
-        // Dynamic SEE threshold: how much material loss is acceptable?
-        // - eval_gap: if we're far below alpha, we need the capture to work out
-        // - depth_margin: at higher depths, be more conservative (less pruning)
-        // A negative threshold means we can afford to lose some material
-        let eval_gap = alpha - static_eval;
-        let depth_margin = self.config.see_prune_depth_margin.value * (depth as i16);
-        let see_threshold = -(eval_gap.max(0) + depth_margin);
-
-        !see(board, m, see_threshold)
     }
 
     /// Null move pruning: give opponent a free move; if we still beat beta, prune the subtree.
