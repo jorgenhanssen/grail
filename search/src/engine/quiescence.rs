@@ -1,6 +1,7 @@
 use std::sync::atomic::Ordering;
 
-use cozy_chess::{Color, Move, Piece, Rank};
+use arrayvec::ArrayVec;
+use cozy_chess::{Board, Color, Move, Piece, Rank};
 use evaluation::scores::{MATE_VALUE, SCORE_INF};
 use utils::{QUEEN_VALUE, make_move, piece_value};
 
@@ -120,6 +121,7 @@ impl Engine {
 
         let mut best_line = Vec::new();
         let mut best_eval = if in_check { -SCORE_INF } else { stand_pat };
+        let mut captures_searched: ArrayVec<Move, 32> = ArrayVec::new();
 
         let mut moves = QMoveGenerator::new(node, &self.capture_history);
 
@@ -183,8 +185,11 @@ impl Engine {
             }
 
             if bounds.is_cutoff(bounds.alpha) {
-                break; // Beta cutoff
+                self.on_qs_fail_high(board, mv, &captures_searched);
+                break;
             }
+
+            let _ = captures_searched.try_push(mv);
         }
 
         // If in check and no legal moves improved the position, it's checkmate
@@ -200,5 +205,17 @@ impl Engine {
             in_check,
         );
         (best_eval, best_line)
+    }
+
+    /// Handler called if QS search fails high - updates capture history.
+    /// Uses depth 1 to keep updates small relative to main search.
+    fn on_qs_fail_high(&mut self, board: &Board, mv: Move, captures_searched: &[Move]) {
+        let bonus = self.capture_history.get_bonus(1);
+        self.capture_history.update_capture(board, mv, bonus);
+
+        let malus = self.capture_history.get_malus(1);
+        for &c in captures_searched {
+            self.capture_history.update_capture(board, c, malus);
+        }
     }
 }
