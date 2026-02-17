@@ -3,6 +3,7 @@ set -e
 
 CONCURRENCY=${1:-15}
 
+rm -rf sprt
 mkdir -p sprt
 
 COMMON=(
