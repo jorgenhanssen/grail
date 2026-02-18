@@ -1,5 +1,6 @@
 use crate::book::Book;
 use crate::histogram::ScoreHistogram;
+use crate::samples::Sample;
 use crate::worker::SelfPlayWorker;
 use candle_core::Device;
 use candle_nn::VarMap;
@@ -15,7 +16,6 @@ const DEFAULT_NNUE_PATH: &str = "nnue/model.safetensors";
 const PROGRESS_UPDATE_INTERVAL_MS: u64 = 200;
 
 /// Coordinates multi-threaded self-play data generation.
-/// Spawns worker threads that play games and collect (FEN, score, game_id) samples.
 pub struct Generator {
     threads: usize,
     pv_lines: u8,
@@ -54,7 +54,7 @@ impl Generator {
         })
     }
 
-    pub fn run(&self, depth: u8, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, usize)> {
+    pub fn run(&self, depth: u8, stop_flag: Arc<AtomicBool>) -> Vec<Sample> {
         log::info!(
             "Generating samples (depth={}, multi_pv={}, threads={}) - Press Ctrl+C to stop",
             depth,
@@ -102,14 +102,14 @@ impl Generator {
             Self::spawn_progress_updater(sample_counter.clone(), histogram, stop_flag.clone());
 
         // Wait for all workers to complete
-        let evaluations: Vec<_> = worker_handles
+        let samples: Vec<_> = worker_handles
             .into_iter()
             .flat_map(|h| h.join().unwrap())
             .collect();
 
         progress_handle.join().unwrap();
 
-        evaluations
+        samples
     }
 
     fn load_nnue(nnue_path: Option<PathBuf>) -> Option<Box<dyn NNUE>> {
