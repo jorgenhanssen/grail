@@ -34,7 +34,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         stop_flag_handler.store(true, Ordering::Relaxed);
     })?;
 
-    let generator = Generator::new(num_cpus::get(), args.nnue, args.book)?;
+    let threads = args.threads.unwrap_or_else(num_cpus::get);
+    let generator = Generator::new(threads, args.pv_lines, args.nnue, args.book)?;
     let evaluations = generator.run(args.depth, stop_flag);
 
     let samples = Samples::from_evaluations(&evaluations);
