@@ -33,9 +33,9 @@ impl Engine {
             return Reduction::Reduce(0);
         }
 
-        let hist =
-            self.history_heuristic
-                .get(parent.side_to_move(), m.from, m.to, parent.threats());
+        let hist = self
+            .history_heuristic
+            .get(parent.side_to_move(), m.from, m.to);
 
         let mut reduction = lmr_table.get(depth, move_index);
 
