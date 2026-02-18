@@ -40,13 +40,6 @@ impl Trainer {
         let device = get_device()?;
         let wdl = args.wdl.clamp(0.0, 1.0);
 
-        log::info!("Using device: {:?}", device);
-        log::info!(
-            "WDL blending: {:.0}% WDL / {:.0}% eval",
-            wdl * 100.0,
-            (1.0 - wdl) * 100.0
-        );
-
         let varmap = VarMap::new();
         let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
         let network = Network::new(&vs)?;
@@ -78,6 +71,13 @@ impl Trainer {
         dataset: &ShardedDataset,
         shutdown: Arc<AtomicBool>,
     ) -> Result<(), Box<dyn Error>> {
+        log::info!("Using device: {:?}", self.device);
+        log::info!(
+            "WDL blending: {:.0}% WDL / {:.0}% eval",
+            self.wdl * 100.0,
+            (1.0 - self.wdl) * 100.0
+        );
+
         let mut metrics = MetricsTracker::new(self.patience);
 
         for epoch in 1..=self.epochs {
