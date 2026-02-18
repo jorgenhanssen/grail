@@ -308,6 +308,8 @@ fn parse_csv_line(line: &str) -> Option<(&str, i16, u32)> {
     let mut parts = line.split(',');
     let fen = parts.next()?;
     let score: i16 = parts.next()?.parse().ok()?;
+    let _best_move = parts.next()?;
+    let _outcome = parts.next()?;
     let game_id: u32 = parts.next()?.parse().ok()?;
     Some((fen, score, game_id))
 }
