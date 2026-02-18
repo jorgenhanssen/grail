@@ -66,7 +66,7 @@ impl SelfPlayWorker {
             let mut game = SelfPlayGame::new(game_id, opening_fen, self.depth);
             game.play(&mut self.engine);
 
-            let (samples, scores) = game.drain_samples();
+            let (samples, scores) = game.get_samples();
             self.record_statistics(&samples, scores);
 
             evaluations.extend(samples);

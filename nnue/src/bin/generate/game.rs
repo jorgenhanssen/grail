@@ -1,6 +1,5 @@
 use crate::samples::{GameOutcome, Sample};
 use cozy_chess::{Board, Color, Move};
-use nnue::network::CP_BOUND;
 use rand::Rng;
 use search::{Engine, PvLine, SearchResult};
 use std::collections::HashMap;
@@ -18,7 +17,6 @@ pub struct SelfPlayGame {
     position_counts: HashMap<u64, usize>,
     positions: Vec<(String, i16, Move)>, // FEN, eval, best move
     depth: u8,
-    outcome: GameOutcome,
 }
 
 impl SelfPlayGame {
@@ -31,7 +29,6 @@ impl SelfPlayGame {
             position_counts: HashMap::new(),
             positions: Vec::new(),
             depth,
-            outcome: GameOutcome::Draw,
         }
     }
 
@@ -58,18 +55,12 @@ impl SelfPlayGame {
             };
 
             if let Some(mv) = pv.best_move() {
-                // Testing showed that focusing the network on
-                // less extreme scores resulted in better generalization.
-                if pv.score.abs() < CP_BOUND {
-                    self.record_position(pv.score, mv);
-                }
+                self.record_position(pv.score, mv);
             }
 
             let chosen_pv = result.select_softmax().expect("has lines");
             self.teleport(chosen_pv);
         }
-
-        self.outcome = self.determine_outcome();
     }
 
     fn search(&self, engine: &mut Engine) -> Option<SearchResult> {
@@ -89,7 +80,7 @@ impl SelfPlayGame {
             .push((format!("{}", self.board), white_score, best_move));
     }
 
-    fn determine_outcome(&self) -> GameOutcome {
+    fn outcome(&self) -> GameOutcome {
         if !has_legal_moves(&self.board) && has_check(&self.board) {
             return if self.board.side_to_move() == Color::White {
                 GameOutcome::Black
@@ -153,7 +144,8 @@ impl SelfPlayGame {
             .collect()
     }
 
-    pub fn drain_samples(&mut self) -> (Vec<Sample>, Vec<i16>) {
+    pub fn get_samples(&mut self) -> (Vec<Sample>, Vec<i16>) {
+        let outcome = self.outcome();
         let (samples, scores): (Vec<_>, Vec<_>) = self
             .positions
             .drain(..)
@@ -163,7 +155,7 @@ impl SelfPlayGame {
                     score,
                     game_id: self.game_id,
                     best_move,
-                    outcome: self.outcome,
+                    outcome,
                 };
                 (sample, score)
             })

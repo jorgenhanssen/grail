@@ -102,14 +102,14 @@ impl Generator {
             Self::spawn_progress_updater(sample_counter.clone(), histogram, stop_flag.clone());
 
         // Wait for all workers to complete
-        let evaluations: Vec<_> = worker_handles
+        let samples: Vec<_> = worker_handles
             .into_iter()
             .flat_map(|h| h.join().unwrap())
             .collect();
 
         progress_handle.join().unwrap();
 
-        evaluations
+        samples
     }
 
     fn load_nnue(nnue_path: Option<PathBuf>) -> Option<Box<dyn NNUE>> {
