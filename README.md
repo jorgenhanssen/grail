@@ -115,7 +115,9 @@ make generate
 
 - `--book`: Path to an opening book in EPD format (required).
 - `--depth`: Search depth for each move (default: 10).
-- `--nnue`: Use NNUE for generation (default: false, else HCE).
+- `--pv-lines`: Number of PV lines to search at each decision point (default: 1).
+- `--threads`: Number of threads (default: number of logical CPUs).
+- `--nnue`: Use NNUE for evaluation instead of HCE (default: false).
 
 Generated data is saved to `nnue/data/YYYY-MM-DD-HH:MM.csv`.
 
