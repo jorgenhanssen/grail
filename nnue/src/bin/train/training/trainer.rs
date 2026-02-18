@@ -197,7 +197,7 @@ impl Trainer {
         Ok(test_loss)
     }
 
-    fn save_model(&self, path: &Path) -> Result<(), Box<dyn Error>> {
+    pub fn save_model(&self, path: &Path) -> Result<(), Box<dyn Error>> {
         self.varmap.save(path)?;
         Ok(())
     }

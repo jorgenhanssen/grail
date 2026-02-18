@@ -44,4 +44,8 @@ pub struct Args {
     /// WDL blending weight (0.0 = pure eval, 1.0 = pure WDL).
     #[arg(long, default_value_t = 0.3)]
     pub wdl: f64,
+
+    /// Save a randomly initialized model and exit.
+    #[arg(long)]
+    pub init_model: bool,
 }

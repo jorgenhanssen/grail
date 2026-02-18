@@ -141,6 +141,8 @@ The trainer loads all CSV files from `nnue/data/` and saves the best model to `n
 - `--lr-decay`: Learning rate decay factor (default: 0.95).
 - `--patience`: Epochs without improvement before early stopping (default: 2).
 - `--shard-size-mb`: Size of each data shard in megabytes (default: 500).
+- `--wdl`: WDL blending weight, 0.0 = pure eval, 1.0 = pure WDL (default: 0.3).
+- `--init-model`: Save a randomly initialized model and exit.
 
 ## Acknowledgements
 
