@@ -13,17 +13,17 @@ use utils::board_metrics::BoardMetrics;
 pub struct Sample {
     pub fen: String,
     pub score: i16,
+    pub outcome: f32,
 }
 
-/// Encoded sample ready for training: features, normalized score, and bucket index.
 pub struct EncodedSample {
     pub features: [f32; NUM_FEATURES],
     pub score: f32,
+    pub outcome: f32,
     pub bucket: usize,
 }
 
 impl Sample {
-    /// Encodes the sample into features, normalized score, and bucket index.
     pub fn encode(&self) -> Option<EncodedSample> {
         let board = Board::from_str(&self.fen).ok()?;
         let metrics = BoardMetrics::new(&board);
@@ -42,6 +42,7 @@ impl Sample {
 
         Some(EncodedSample {
             score,
+            outcome: self.outcome,
             bucket,
             features,
         })
@@ -55,7 +56,7 @@ pub struct Shard {
 
 impl Shard {
     /// Opens a shard file for reading.
-    /// Skips the header line (fen,score).
+    /// Skips the CSV header line.
     pub fn open(path: &Path) -> io::Result<Self> {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
@@ -92,5 +93,17 @@ fn parse_line(line: &str) -> Option<Sample> {
     let fen = parts.next()?.to_string();
     let score: i16 = parts.next()?.parse().ok()?;
 
-    Some(Sample { fen, score })
+    // Map game outcomes to white perspective probabilities.
+    let outcome = match parts.next()? {
+        "W" => 1.0,
+        "D" => 0.5,
+        "B" => 0.0,
+        _ => return None,
+    };
+
+    Some(Sample {
+        fen,
+        score,
+        outcome,
+    })
 }
