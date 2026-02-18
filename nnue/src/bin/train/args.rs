@@ -40,4 +40,8 @@ pub struct Args {
     /// Size of each shard in megabytes.
     #[arg(long, default_value_t = 500)]
     pub shard_size_mb: usize,
+
+    /// WDL blending weight (0.0 = pure eval, 1.0 = pure WDL).
+    #[arg(long, default_value_t = 0.3)]
+    pub wdl: f64,
 }
