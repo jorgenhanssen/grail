@@ -1,31 +1,21 @@
-// Huber loss transition point: L2 for small errors, L1 for large errors.
-const HUBER_DELTA: f64 = 1.0;
+use candle_core::{Result, Tensor};
+use candle_nn::loss::mse;
+use candle_nn::ops::sigmoid;
 
-/// Huber loss: smooth L1 that's less sensitive to outliers than MSE.
+/// Sigmoid MSE loss blending eval and game outcome in win-probability space.
 ///
-/// For |error| < delta: uses L2 (quadratic), giving strong gradients for small errors.
-/// For |error| >= delta: uses L1 (linear), preventing large outliers from dominating.
-///
-/// Good for chess eval because some positions have extreme scores (near-mate)
-/// that shouldn't dominate the loss compared to typical positions.
-pub fn huber(
-    pred: &candle_core::Tensor,
-    target: &candle_core::Tensor,
-) -> candle_core::Result<candle_core::Tensor> {
-    let diff = (pred - target)?.abs()?;
+/// target = wdl * outcome + (1 - wdl) * sigmoid(eval)
+/// loss   = mean((sigmoid(output) - target)²)
+pub fn wdl_eval_loss(
+    net_output: &Tensor,
+    target_eval: &Tensor,
+    target_outcome: &Tensor,
+    wdl: f64,
+) -> Result<Tensor> {
+    let sigmoid_output = sigmoid(net_output)?;
+    let sigmoid_eval = sigmoid(target_eval)?;
 
-    let mask = diff.lt(HUBER_DELTA)?;
-    let mask = mask.to_dtype(candle_core::DType::F32)?;
+    let target = ((target_outcome * wdl)? + (sigmoid_eval * (1.0 - wdl))?)?;
 
-    // L2 region: 0.5 * x^2
-    let l2 = (diff.sqr()? * 0.5)?;
-    // L1 region: delta * |x| - 0.5 * delta^2
-    let l1 = ((diff * HUBER_DELTA)? - (0.5 * HUBER_DELTA * HUBER_DELTA))?;
-
-    let inverted_mask = (1.0 - &mask)?;
-    let term1 = mask.broadcast_mul(&l2)?;
-    let term2 = inverted_mask.broadcast_mul(&l1)?;
-
-    let loss = (term1 + term2)?;
-    loss.mean_all()
+    mse(&sigmoid_output, &target)
 }

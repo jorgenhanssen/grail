@@ -115,7 +115,9 @@ make generate
 
 - `--book`: Path to an opening book in EPD format (required).
 - `--depth`: Search depth for each move (default: 10).
-- `--nnue`: Use NNUE for generation (default: false, else HCE).
+- `--pv-lines`: Number of PV lines to search at each decision point (default: 1).
+- `--threads`: Number of threads (default: number of logical CPUs).
+- `--nnue`: Use NNUE for evaluation instead of HCE (default: false).
 
 Generated data is saved to `nnue/data/YYYY-MM-DD-HH:MM.csv`.
 
@@ -141,6 +143,8 @@ The trainer loads all CSV files from `nnue/data/` and saves the best model to `n
 - `--lr-decay`: Learning rate decay factor (default: 0.95).
 - `--patience`: Epochs without improvement before early stopping (default: 2).
 - `--shard-size-mb`: Size of each data shard in megabytes (default: 500).
+- `--wdl`: WDL blending weight, 0.0 = pure eval, 1.0 = pure WDL (default: 0.3).
+- `--init-model`: Save a randomly initialized model and exit.
 
 ## Acknowledgements
 

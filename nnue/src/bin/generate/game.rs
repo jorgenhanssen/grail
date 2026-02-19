@@ -1,13 +1,13 @@
-use cozy_chess::Board;
-use nnue::network::CP_BOUND;
+use crate::samples::{GameOutcome, Sample};
+use cozy_chess::{Board, Color, Move};
 use rand::Rng;
 use search::{Engine, PvLine, SearchResult};
 use std::collections::HashMap;
 use std::str::FromStr;
 use uci::commands::GoParams;
-use utils::{flip_eval_perspective, has_insufficient_material, has_legal_moves};
+use utils::{flip_eval_perspective, has_check, has_insufficient_material, has_legal_moves};
 
-/// A self-play game that generates training samples: (FEN, score, game_id) tuples.
+/// A self-play game that generates training samples.
 ///
 /// Uses MultiPV search at decision points and teleports along chosen PV lines
 /// to reduce sample correlation and increase game diversity.
@@ -15,7 +15,7 @@ pub struct SelfPlayGame {
     board: Board,
     game_id: usize,
     position_counts: HashMap<u64, usize>,
-    samples: Vec<(String, i16)>,
+    positions: Vec<(String, i16, Move)>, // FEN, eval, best move
     depth: u8,
 }
 
@@ -27,7 +27,7 @@ impl SelfPlayGame {
             board,
             game_id,
             position_counts: HashMap::new(),
-            samples: Vec::new(),
+            positions: Vec::new(),
             depth,
         }
     }
@@ -49,18 +49,14 @@ impl SelfPlayGame {
                 None => break,
             };
 
-            let eval = match result.primary() {
-                Some(pv) => pv.score,
+            let pv = match result.primary() {
+                Some(pv) => pv,
                 None => break,
             };
 
-            // Early testing showed that focusing the network on
-            // less extreme scores resulted in better generalization.
-            if eval.abs() >= CP_BOUND {
-                break;
+            if let Some(mv) = pv.best_move() {
+                self.record_position(pv.score, mv);
             }
-
-            self.record_sample(eval);
 
             let chosen_pv = result.select_softmax().expect("has lines");
             self.teleport(chosen_pv);
@@ -78,9 +74,22 @@ impl SelfPlayGame {
         engine.search(&params, None)
     }
 
-    fn record_sample(&mut self, eval: i16) {
+    fn record_position(&mut self, eval: i16, best_move: Move) {
         let white_score = flip_eval_perspective(self.board.side_to_move(), eval);
-        self.samples.push((format!("{}", self.board), white_score));
+        self.positions
+            .push((format!("{}", self.board), white_score, best_move));
+    }
+
+    fn outcome(&self) -> GameOutcome {
+        if !has_legal_moves(&self.board) && has_check(&self.board) {
+            return if self.board.side_to_move() == Color::White {
+                GameOutcome::Black
+            } else {
+                GameOutcome::White
+            };
+        }
+
+        GameOutcome::Draw
     }
 
     /// Teleport along a PV line by playing moves without searching.
@@ -105,7 +114,7 @@ impl SelfPlayGame {
     }
 
     /// Play a single move, updating all game state.
-    fn play_move(&mut self, mv: cozy_chess::Move) {
+    fn play_move(&mut self, mv: Move) {
         self.board.play_unchecked(mv);
 
         // Track position for repetition detection
@@ -135,11 +144,21 @@ impl SelfPlayGame {
             .collect()
     }
 
-    pub fn drain_samples(&mut self) -> (Vec<(String, i16, usize)>, Vec<i16>) {
+    pub fn get_samples(&mut self) -> (Vec<Sample>, Vec<i16>) {
+        let outcome = self.outcome();
         let (samples, scores): (Vec<_>, Vec<_>) = self
-            .samples
+            .positions
             .drain(..)
-            .map(|(fen, score)| ((fen, score, self.game_id), score))
+            .map(|(fen, score, best_move)| {
+                let sample = Sample {
+                    fen,
+                    score,
+                    game_id: self.game_id,
+                    best_move,
+                    outcome,
+                };
+                (sample, score)
+            })
             .unzip();
         (samples, scores)
     }

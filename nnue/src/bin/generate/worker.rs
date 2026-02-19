@@ -1,6 +1,7 @@
 use crate::book::Book;
 use crate::game::SelfPlayGame;
 use crate::histogram::HistogramHandle;
+use crate::samples::Sample;
 use evaluation::NNUE;
 use search::{Engine, EngineConfig};
 use std::sync::Arc;
@@ -55,7 +56,7 @@ impl SelfPlayWorker {
         }
     }
 
-    pub fn play_games(&mut self, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, usize)> {
+    pub fn play_games(&mut self, stop_flag: Arc<AtomicBool>) -> Vec<Sample> {
         let mut evaluations = Vec::new();
 
         while !stop_flag.load(Ordering::Relaxed) {
@@ -65,7 +66,7 @@ impl SelfPlayWorker {
             let mut game = SelfPlayGame::new(game_id, opening_fen, self.depth);
             game.play(&mut self.engine);
 
-            let (samples, scores) = game.drain_samples();
+            let (samples, scores) = game.get_samples();
             self.record_statistics(&samples, scores);
 
             evaluations.extend(samples);
@@ -74,7 +75,7 @@ impl SelfPlayWorker {
         evaluations
     }
 
-    fn record_statistics(&self, samples: &[(String, i16, usize)], scores: Vec<i16>) {
+    fn record_statistics(&self, samples: &[Sample], scores: Vec<i16>) {
         let num_samples = samples.len();
 
         self.histogram.record_scores(&scores);

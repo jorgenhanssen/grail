@@ -13,7 +13,7 @@ use crate::training::evaluation::evaluate;
 use crate::training::metrics::MetricsTracker;
 use crate::training::progress::TrainingProgressBar;
 use crate::utils::device::get_device;
-use crate::utils::loss::huber;
+use crate::utils::loss::wdl_eval_loss;
 
 /// Number of shards to keep loaded for training.
 const TRAIN_SHARDS: usize = 10;
@@ -31,13 +31,14 @@ pub struct Trainer {
     epochs: usize,
     lr_decay: f64,
     patience: u64,
+    wdl: f64,
     model_path: String,
 }
 
 impl Trainer {
     pub fn new(args: &Args, model_path: &str) -> Result<Self, Box<dyn Error>> {
         let device = get_device()?;
-        log::info!("Using device: {:?}", device);
+        let wdl = args.wdl.clamp(0.0, 1.0);
 
         let varmap = VarMap::new();
         let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
@@ -60,6 +61,7 @@ impl Trainer {
             epochs: args.epochs,
             lr_decay: args.lr_decay,
             patience: args.patience,
+            wdl,
             model_path: model_path.to_string(),
         })
     }
@@ -69,6 +71,13 @@ impl Trainer {
         dataset: &ShardedDataset,
         shutdown: Arc<AtomicBool>,
     ) -> Result<(), Box<dyn Error>> {
+        log::info!("Using device: {:?}", self.device);
+        log::info!(
+            "WDL blending: {:.0}% WDL / {:.0}% eval",
+            self.wdl * 100.0,
+            (1.0 - self.wdl) * 100.0
+        );
+
         let mut metrics = MetricsTracker::new(self.patience);
 
         for epoch in 1..=self.epochs {
@@ -119,22 +128,22 @@ impl Trainer {
         let mut total_loss = 0.0;
         let mut train_loss = 0.0;
 
-        for (features, scores, buckets) in loader {
-            // Check for shutdown
+        for batch in loader {
             if shutdown.load(Ordering::Relaxed) {
                 return Ok(None);
             }
 
-            let batch_len = scores.len();
+            let batch_len = batch.scores.len();
             if batch_len == 0 {
                 continue;
             }
 
-            let x = Tensor::from_vec(features, (batch_len, NUM_FEATURES), &self.device)?;
-            let y = Tensor::from_vec(scores, (batch_len, 1), &self.device)?;
+            let x = Tensor::from_vec(batch.features, (batch_len, NUM_FEATURES), &self.device)?;
+            let y_eval = Tensor::from_vec(batch.scores, (batch_len, 1), &self.device)?;
+            let y_outcome = Tensor::from_vec(batch.outcomes, (batch_len, 1), &self.device)?;
 
-            let preds = self.network.forward(&x, &buckets)?;
-            let loss = huber(&preds, &y)?;
+            let preds = self.network.forward(&x, &batch.buckets)?;
+            let loss = wdl_eval_loss(&preds, &y_eval, &y_outcome, self.wdl)?;
 
             self.optimizer.backward_step(&loss)?;
 
@@ -153,7 +162,7 @@ impl Trainer {
             self.workers,
             Arc::clone(shutdown),
         );
-        let val_loss = evaluate(&self.network, val_loader, &self.device)?;
+        let val_loss = evaluate(&self.network, val_loader, &self.device, self.wdl)?;
 
         progress.finish(val_loss, train_loss);
 
@@ -182,13 +191,13 @@ impl Trainer {
             self.workers,
             Arc::clone(shutdown),
         );
-        let test_loss = evaluate(&self.network, test_loader, &self.device)?;
+        let test_loss = evaluate(&self.network, test_loader, &self.device, self.wdl)?;
         log::info!("Test Loss: {:.6}", test_loss);
 
         Ok(test_loss)
     }
 
-    fn save_model(&self, path: &Path) -> Result<(), Box<dyn Error>> {
+    pub fn save_model(&self, path: &Path) -> Result<(), Box<dyn Error>> {
         self.varmap.save(path)?;
         Ok(())
     }

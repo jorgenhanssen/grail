@@ -1,5 +1,6 @@
 use crate::book::Book;
 use crate::histogram::ScoreHistogram;
+use crate::samples::Sample;
 use crate::worker::SelfPlayWorker;
 use candle_core::Device;
 use candle_nn::VarMap;
@@ -14,13 +15,10 @@ use std::time::Duration;
 const DEFAULT_NNUE_PATH: &str = "nnue/model.safetensors";
 const PROGRESS_UPDATE_INTERVAL_MS: u64 = 200;
 
-/// Number of PV lines to search at each decision point.
-const PV_LINES: u8 = 3;
-
 /// Coordinates multi-threaded self-play data generation.
-/// Spawns worker threads that play games and collect (FEN, score, game_id) samples.
 pub struct Generator {
     threads: usize,
+    pv_lines: u8,
     nnue_path: Option<PathBuf>,
     opening_book: Arc<Book>,
 }
@@ -28,6 +26,7 @@ pub struct Generator {
 impl Generator {
     pub fn new(
         threads: usize,
+        pv_lines: u8,
         use_nnue: bool,
         opening_book_path: String,
     ) -> Result<Self, Box<dyn Error>> {
@@ -49,17 +48,18 @@ impl Generator {
 
         Ok(Self {
             threads,
+            pv_lines,
             nnue_path,
             opening_book,
         })
     }
 
-    pub fn run(&self, depth: u8, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, usize)> {
+    pub fn run(&self, depth: u8, stop_flag: Arc<AtomicBool>) -> Vec<Sample> {
         log::info!(
-            "Generating samples using {} threads (depth={}, multi_pv={}) - Press Ctrl+C to stop",
-            self.threads,
+            "Generating samples (depth={}, multi_pv={}, threads={}) - Press Ctrl+C to stop",
             depth,
-            PV_LINES,
+            self.pv_lines,
+            self.threads,
         );
 
         let sample_counter = Arc::new(AtomicUsize::new(0));
@@ -72,6 +72,7 @@ impl Generator {
         // Spawn worker threads
         let worker_handles: Vec<_> = (0..self.threads)
             .map(|tid| {
+                let pv_lines = self.pv_lines;
                 let nnue_path = self.nnue_path.clone();
                 let sample_counter = Arc::clone(&sample_counter);
                 let game_id_counter = Arc::clone(&game_id_counter);
@@ -86,7 +87,7 @@ impl Generator {
                         sample_counter,
                         game_id_counter,
                         depth,
-                        PV_LINES,
+                        pv_lines,
                         nnue,
                         opening_book,
                         histogram_handle,
@@ -101,14 +102,14 @@ impl Generator {
             Self::spawn_progress_updater(sample_counter.clone(), histogram, stop_flag.clone());
 
         // Wait for all workers to complete
-        let evaluations: Vec<_> = worker_handles
+        let samples: Vec<_> = worker_handles
             .into_iter()
             .flat_map(|h| h.join().unwrap())
             .collect();
 
         progress_handle.join().unwrap();
 
-        evaluations
+        samples
     }
 
     fn load_nnue(nnue_path: Option<PathBuf>) -> Option<Box<dyn NNUE>> {

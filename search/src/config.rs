@@ -149,10 +149,12 @@ define_config!(
     (iir_reduction: u8, "IIR Reduction", UciOptionType::Spin { min: 0, max: 4 }, 1, cfg!(feature = "tuning")),
     (iir_min_depth: u8, "IIR Min Depth", UciOptionType::Spin { min: 2, max: 10 }, 4, cfg!(feature = "tuning")),
 
-    (see_prune_min_remaining_depth: u8, "SEE Prune Min Remaining Depth", UciOptionType::Spin { min: 0, max: 10 }, 1, cfg!(feature = "tuning")),
-    (see_prune_max_depth: u8, "SEE Prune Max Depth", UciOptionType::Spin { min: 1, max: 10 }, 6, cfg!(feature = "tuning")),
-    (see_prune_depth_margin: i16, "SEE Prune Depth Margin", UciOptionType::Spin { min: 10, max: 150 }, 75, cfg!(feature = "tuning")),
-    (see_prune_min_attacker_value: i16, "SEE Prune Min Attacker Value", UciOptionType::Spin { min: 0, max: 500 }, 200, cfg!(feature = "tuning")),
+    (see_capture_max_depth: u8, "SEE Capture Max Depth", UciOptionType::Spin { min: 1, max: 10 }, 6, cfg!(feature = "tuning")),
+    (see_capture_depth_margin: i16, "SEE Capture Depth Margin", UciOptionType::Spin { min: 10, max: 150 }, 75, cfg!(feature = "tuning")),
+    (see_capture_min_attacker_value: i16, "SEE Capture Min Attacker Value", UciOptionType::Spin { min: 0, max: 500 }, 200, cfg!(feature = "tuning")),
+
+    (see_quiet_max_depth: u8, "SEE Quiet Max Depth", UciOptionType::Spin { min: 1, max: 12 }, 8, cfg!(feature = "tuning")),
+    (see_quiet_depth_multiplier: i16, "SEE Quiet Depth Multiplier", UciOptionType::Spin { min: 10, max: 150 }, 64, cfg!(feature = "tuning")),
 
     (singular_min_depth: u8, "Singular Min Depth", UciOptionType::Spin { min: 4, max: 12 }, 6, cfg!(feature = "tuning")),
     (singular_depth_margin: u8, "Singular Depth Margin", UciOptionType::Spin { min: 1, max: 5 }, 3, cfg!(feature = "tuning")),
