@@ -493,7 +493,7 @@ impl Engine {
         move_index: i32,
         is_improving: bool,
         static_eval: i16,
-        extra_extension: i8,
+        extra_extension: u8,
     ) -> Option<(i16, Vec<Move>, bool, u8)> {
         let moved_color = node.board().side_to_move();
         let moved_piece = node.piece_on(m.from).unwrap();
@@ -545,9 +545,8 @@ impl Engine {
             Reduction::Prune => return None,
         };
 
-        let mut extension = self.get_extension(node, &m, moved_piece, is_cap) as i8;
-        extension += extra_extension;
-        let extension = extension.max(0) as u8;
+        let mut extension = self.get_extension(node, &m, moved_piece, is_cap);
+        extension = extension.saturating_add(extra_extension);
 
         // Child's remaining depth after extension/reduction
         let extended_child_depth = depth.saturating_sub(1).saturating_add(extension);
