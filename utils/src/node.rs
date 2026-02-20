@@ -49,6 +49,11 @@ impl NodeType {
         matches!(self, Self::Cut)
     }
 
+    /// Returns if this is an expected all-node.
+    pub fn is_all(self) -> bool {
+        matches!(self, Self::All)
+    }
+
     /// Determines the child node type based on move index.
     ///
     /// First move (index 0):
@@ -182,6 +187,11 @@ impl Node {
     /// Check if this is a Cut node.
     pub fn is_cut(&self) -> bool {
         self.node_type.is_cut()
+    }
+
+    /// Check if this is an All node.
+    pub fn is_all(&self) -> bool {
+        self.node_type.is_all()
     }
 
     /// Change the node type without cloning the board.

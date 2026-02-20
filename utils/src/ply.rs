@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, Sub, SubAssign};
 
 /// A fractional ply for fine-grained reduction calculations.
 /// Internal units: 1024 = 1 ply.
@@ -40,6 +40,14 @@ impl Sub for FracPly {
 impl SubAssign for FracPly {
     fn sub_assign(&mut self, rhs: FracPly) {
         self.0 = self.0.saturating_sub(rhs.0);
+    }
+}
+
+impl Div<u16> for FracPly {
+    type Output = FracPly;
+
+    fn div(self, rhs: u16) -> FracPly {
+        FracPly(self.0 / rhs)
     }
 }
 

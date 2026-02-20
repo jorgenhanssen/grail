@@ -70,6 +70,10 @@ impl Engine {
             }
         }
 
+        if parent.is_all() {
+            reduction += reduction / (depth as u16 + 1);
+        }
+
         let r = reduction.whole().min(depth.saturating_sub(2));
 
         // Prune when bad history if it would barely search anyway
