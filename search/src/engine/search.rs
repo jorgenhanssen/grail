@@ -139,12 +139,12 @@ impl Engine {
             }
 
             if self.stop.load(Ordering::Relaxed) {
-                return Some(PvLine::new(self.pv_table.get_pv(0), score, pv_index));
+                return Some(PvLine::new(self.pv_table.get(0), score, pv_index));
             }
 
             match self.multi_pv.lines[pv_index].window.analyse_pass(score) {
                 Pass::Hit(s) => {
-                    return Some(PvLine::new(self.pv_table.get_pv(0), s, pv_index));
+                    return Some(PvLine::new(self.pv_table.get(0), s, pv_index));
                 }
                 _ => {
                     controller.on_aspiration_failure();
@@ -412,7 +412,7 @@ impl Engine {
                 if value > best_value {
                     best_value = value;
                     best_move = Some(m);
-                    self.pv_table.update_pv(ply, m);
+                    self.pv_table.update(ply, m);
                     best_move_depth = searched_depth;
                 }
 

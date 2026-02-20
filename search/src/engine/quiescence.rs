@@ -171,7 +171,7 @@ impl Engine {
 
             if value > best_eval {
                 best_eval = value;
-                self.pv_table.update_pv(ply, mv);
+                self.pv_table.update(ply, mv);
                 bounds.raise_alpha(best_eval);
             }
 

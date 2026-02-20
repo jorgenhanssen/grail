@@ -164,31 +164,31 @@ impl PvTable {
     }
 
     /// Starting index of the PV row for a given ply.
-    fn pv_index(ply: usize) -> usize {
+    fn index(ply: usize) -> usize {
         ply * MAX_DEPTH
     }
 
     /// `pvArray[pvIndex] = 0` (no PV at this ply yet)
     pub fn init_ply(&mut self, ply: u8) {
-        self.pv_array[Self::pv_index(ply as usize)] = None;
+        self.pv_array[Self::index(ply as usize)] = None;
     }
 
     /// Write `mv` at this ply with no continuation (e.g. TT cutoff).
     pub fn set_move(&mut self, ply: u8, mv: Move) {
         let p = ply as usize;
-        let pv_index = Self::pv_index(p);
+        let pv_index = Self::index(p);
         self.pv_array[pv_index] = Some(mv);
         self.pv_array[pv_index + 1] = None;
     }
 
     /// Write `mv` at this ply and append the child's PV from `ply + 1`.
-    pub fn update_pv(&mut self, ply: u8, mv: Move) {
+    pub fn update(&mut self, ply: u8, mv: Move) {
         let p = ply as usize;
-        let pv_index = Self::pv_index(p);
+        let pv_index = Self::index(p);
         self.pv_array[pv_index] = Some(mv);
 
         if p + 1 < MAX_DEPTH {
-            let pv_next_index = Self::pv_index(p + 1);
+            let pv_next_index = Self::index(p + 1);
             self.pv_array.copy_within(
                 pv_next_index..pv_next_index + MAX_DEPTH - p - 1,
                 pv_index + 1,
@@ -197,8 +197,8 @@ impl PvTable {
     }
 
     /// Read the PV at a specific ply
-    pub fn get_pv(&self, ply: u8) -> Vec<Move> {
-        let pv_index = Self::pv_index(ply as usize);
+    pub fn get(&self, ply: u8) -> Vec<Move> {
+        let pv_index = Self::index(ply as usize);
         self.pv_array[pv_index..pv_index + MAX_DEPTH]
             .iter()
             .take_while(|m| m.is_some())
@@ -207,6 +207,6 @@ impl PvTable {
     }
 
     pub fn is_empty(&self, ply: u8) -> bool {
-        self.pv_array[Self::pv_index(ply as usize)].is_none()
+        self.pv_array[Self::index(ply as usize)].is_none()
     }
 }
