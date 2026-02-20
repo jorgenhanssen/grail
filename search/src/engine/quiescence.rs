@@ -21,32 +21,29 @@ impl Engine {
     /// for a reliable static evaluation.
     ///
     /// <https://www.chessprogramming.org/Quiescence_Search>
-    pub(super) fn quiescence_search(
-        &mut self,
-        node: &Node,
-        mut bounds: Bounds,
-        ply: u8,
-    ) -> (i16, Vec<Move>) {
+    pub(super) fn quiescence_search(&mut self, node: &Node, mut bounds: Bounds, ply: u8) -> i16 {
+        self.pv_table.init_ply(ply);
+
         // Check if we should stop searching
         if self.stop.load(Ordering::Relaxed) {
-            return (0, Vec::new());
+            return 0;
         }
 
         self.nodes += 1;
         self.max_ply_reached = self.max_ply_reached.max(ply);
 
         if self.is_forced_draw(node) {
-            return (self.draw_value(), Vec::new());
+            return self.draw_value();
         }
 
         // Ply limit - return static eval if we've hit max ply
         if ply as usize >= MAX_DEPTH {
-            return (self.corrected_static_eval(node), Vec::new());
+            return self.corrected_static_eval(node);
         }
 
         let hash = node.hash();
         if mate_distance_prune(&mut bounds, ply) {
-            return (bounds.alpha, Vec::new());
+            return bounds.alpha;
         }
 
         let board = node.board();
@@ -58,9 +55,9 @@ impl Engine {
         // tactical horizon, so any hit is trustworthy for cutoffs
         if let Some(tt) = self.qs_tt.probe(hash, in_check) {
             match tt.bound {
-                Bound::Exact => return (tt.value, Vec::new()),
-                Bound::Lower if bounds.is_cutoff(tt.value) => return (tt.value, Vec::new()),
-                Bound::Upper if tt.value <= bounds.alpha => return (tt.value, Vec::new()),
+                Bound::Exact => return tt.value,
+                Bound::Lower if bounds.is_cutoff(tt.value) => return tt.value,
+                Bound::Upper if tt.value <= bounds.alpha => return tt.value,
                 _ => {}
             }
         }
@@ -84,7 +81,7 @@ impl Engine {
                     original_bounds.beta,
                     in_check,
                 );
-                return (stand_pat, Vec::new());
+                return stand_pat;
             }
 
             // Node-level delta pruning (big delta)
@@ -110,14 +107,13 @@ impl Engine {
                         original_bounds.beta,
                         in_check,
                     );
-                    return (stand_pat, Vec::new());
+                    return stand_pat;
                 }
             }
 
             bounds.raise_alpha(stand_pat);
         }
 
-        let mut best_line = Vec::new();
         let mut best_eval = if in_check { -SCORE_INF } else { stand_pat };
         let mut captures_searched: ArrayVec<Move, 32> = ArrayVec::new();
 
@@ -131,7 +127,6 @@ impl Engine {
                     let mut delta = piece_value(piece) + self.config.qs_delta_margin.value;
                     if let Some(promotion) = mv.promotion {
                         delta += piece_value(promotion) - piece_value(Piece::Pawn);
-                        // promotion bonus
                     }
                     if stand_pat + delta < bounds.alpha {
                         continue;
@@ -164,8 +159,7 @@ impl Engine {
             let child = Node::new(new_board, node.node_type());
 
             self.search_stack.push_node(&child);
-            let (child_score, mut child_line) =
-                self.quiescence_search(&child, bounds.invert(), ply + 1);
+            let child_score = self.quiescence_search(&child, bounds.invert(), ply + 1);
             self.search_stack.pop();
 
             let value = -child_score;
@@ -177,8 +171,7 @@ impl Engine {
 
             if value > best_eval {
                 best_eval = value;
-                child_line.insert(0, mv);
-                best_line = child_line;
+                self.pv_table.update_pv(ply, mv);
                 bounds.raise_alpha(best_eval);
             }
 
@@ -192,7 +185,7 @@ impl Engine {
 
         // If in check and no legal moves improved the position, it's checkmate
         if in_check && best_eval == -SCORE_INF {
-            return (-(MATE_VALUE - ply as i16), Vec::new());
+            return -(MATE_VALUE - ply as i16);
         }
 
         self.qs_tt.store(
@@ -202,7 +195,7 @@ impl Engine {
             original_bounds.beta,
             in_check,
         );
-        (best_eval, best_line)
+        best_eval
     }
 
     /// Handler called if QS search fails high - updates capture history.

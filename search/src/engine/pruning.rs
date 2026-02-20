@@ -66,7 +66,7 @@ impl Engine {
         if static_eval >= alpha - margin {
             return None;
         }
-        let (value, _) = self.quiescence_search(node, Bounds::null(alpha - 1), ply);
+        let value = self.quiescence_search(node, Bounds::null(alpha - 1), ply);
         if value < alpha && value.abs() < NEAR_MATE_VALUE {
             Some(value)
         } else {
@@ -184,8 +184,7 @@ impl Engine {
         // Do a reduced depth null search to check if our position is still good enough
         self.search_stack.push_node(&nm_child);
         let reduced_child_depth = depth.saturating_sub(r + 1);
-        let (score, _) =
-            self.search_node(&nm_child, reduced_child_depth, ply + 1, null_bounds, false);
+        let score = self.search_node(&nm_child, reduced_child_depth, ply + 1, null_bounds, false);
         self.search_stack.pop();
 
         // If opponent couldn't beat beta even with a free move, position is strong enough to prune

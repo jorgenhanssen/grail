@@ -133,18 +133,18 @@ impl Engine {
         loop {
             let bounds = self.multi_pv.lines[pv_index].window.bounds();
 
-            let (score, pv) = self.search_node(root, depth, 0, bounds, true);
-            if pv.is_empty() {
+            let score = self.search_node(root, depth, 0, bounds, true);
+            if self.pv_table.is_empty(0) {
                 return None;
             }
 
             if self.stop.load(Ordering::Relaxed) {
-                return Some(PvLine::new(pv, score, pv_index));
+                return Some(PvLine::new(self.pv_table.get_pv(0), score, pv_index));
             }
 
             match self.multi_pv.lines[pv_index].window.analyse_pass(score) {
                 Pass::Hit(s) => {
-                    return Some(PvLine::new(pv, s, pv_index));
+                    return Some(PvLine::new(self.pv_table.get_pv(0), s, pv_index));
                 }
                 _ => {
                     controller.on_aspiration_failure();
@@ -188,25 +188,27 @@ impl Engine {
         ply: u8,
         mut bounds: Bounds,
         null_move_allowed: bool,
-    ) -> (i16, Vec<Move>) {
+    ) -> i16 {
+        self.pv_table.init_ply(ply);
+
         let singular = self.search_stack.current().and_then(|n| n.singular);
 
         if self.stop.load(Ordering::Relaxed) {
-            return (0, Vec::new());
+            return 0;
         }
         self.nodes += 1;
 
         if ply > 0 && self.is_forced_draw(node) {
-            return (self.draw_value(), Vec::new());
+            return self.draw_value();
         }
 
         // As deep as we can go, so return static eval
         if ply as usize >= MAX_DEPTH {
-            return (self.static_eval(node), Vec::new());
+            return self.static_eval(node);
         }
 
         if mate_distance_prune(&mut bounds, ply) {
-            return (bounds.alpha, Vec::new());
+            return bounds.alpha;
         }
 
         if depth == 0 {
@@ -227,20 +229,29 @@ impl Engine {
                 match tt.bound {
                     // Exact: previous search found true minimax value
                     Bound::Exact => {
-                        return (tt.value, tt.best_move.map_or(Vec::new(), |m| vec![m]));
+                        if let Some(m) = tt.best_move {
+                            self.pv_table.set_move(ply, m);
+                        }
+                        return tt.value;
                     }
                     // Lower: previous search failed high (value >= beta), so value is at least this good
                     Bound::Lower => {
                         bounds.raise_alpha(tt.value);
                         if bounds.is_cutoff(bounds.alpha) {
-                            return (tt.value, tt.best_move.map_or(Vec::new(), |m| vec![m]));
+                            if let Some(m) = tt.best_move {
+                                self.pv_table.set_move(ply, m);
+                            }
+                            return tt.value;
                         }
                     }
                     // Upper: previous search failed low (value <= alpha), so value is at most this bad
                     Bound::Upper => {
                         bounds.beta = bounds.beta.min(tt.value);
                         if bounds.beta <= bounds.alpha {
-                            return (bounds.beta, tt.best_move.map_or(Vec::new(), |m| vec![m]));
+                            if let Some(m) = tt.best_move {
+                                self.pv_table.set_move(ply, m);
+                            }
+                            return bounds.beta;
                         }
                     }
                 }
@@ -273,7 +284,7 @@ impl Engine {
             if let Some(score) =
                 self.try_razor_prune(node, depth, bounds.alpha, ply, in_check, corrected_eval)
             {
-                return (score, Vec::new());
+                return score;
             }
 
             if let Some(score) = self.try_null_move_prune(
@@ -285,7 +296,7 @@ impl Engine {
                 null_move_allowed,
                 Some(corrected_eval),
             ) {
-                return (score, Vec::new());
+                return score;
             }
         }
 
@@ -300,7 +311,7 @@ impl Engine {
             ply,
             is_improving,
         ) {
-            return (score, Vec::new());
+            return score;
         }
 
         // Internal Iterative Reduction: reduce depth when no TT move is found.
@@ -315,8 +326,6 @@ impl Engine {
 
         let mut best_value = -SCORE_INF;
         let mut best_move = None;
-        let mut best_line = Vec::new();
-
         let mut best_move_depth = 0;
 
         let threats = node.threats();
@@ -382,9 +391,9 @@ impl Engine {
                 bounds.beta,
             );
             if let Some(value) = singular_result.multi_cut {
-                return (value, Vec::new());
+                return value;
             }
-            if let Some((value, mut line, is_quiet, searched_depth)) = self.search_move(
+            if let Some((value, is_quiet, searched_depth)) = self.search_move(
                 node,
                 m,
                 depth,
@@ -403,8 +412,7 @@ impl Engine {
                 if value > best_value {
                     best_value = value;
                     best_move = Some(m);
-                    line.insert(0, m);
-                    best_line = line.clone();
+                    self.pv_table.update_pv(ply, m);
                     best_move_depth = searched_depth;
                 }
 
@@ -434,11 +442,10 @@ impl Engine {
 
         // Check for terminal position (no legal moves)
         if move_index == -1 {
-            // No moves were found - either checkmate or stalemate
             return if in_check {
-                (-(MATE_VALUE - ply as i16), Vec::new()) // Checkmate
+                -(MATE_VALUE - ply as i16) // Checkmate
             } else {
-                (0, Vec::new()) // Stalemate
+                0 // Stalemate
             };
         }
 
@@ -468,11 +475,11 @@ impl Engine {
             best_move_depth,
         );
 
-        (best_value, best_line)
+        best_value
     }
 
     /// Searches a single move with per-move pruning and LMR.
-    /// Returns `None` if pruned, otherwise (score, pv, is_quiet, searched_depth).
+    /// Returns `None` if pruned, otherwise (score, is_quiet, searched_depth).
     #[allow(clippy::too_many_arguments)]
     fn search_move(
         &mut self,
@@ -486,7 +493,7 @@ impl Engine {
         is_improving: bool,
         static_eval: i16,
         extra_extension: u8,
-    ) -> Option<(i16, Vec<Move>, bool, u8)> {
+    ) -> Option<(i16, bool, u8)> {
         let moved_color = node.board().side_to_move();
         let moved_piece = node.piece_on(m.from).unwrap();
         let is_cap = node.is_capture(m);
@@ -559,22 +566,20 @@ impl Engine {
         // Initial search (reduced if LMR, null window if not first move)
         self.search_stack
             .push_move(&child, m, moved_piece, moved_color);
-        let (child_value, pv_line) =
+        let child_value =
             self.search_node(&child, reduced_child_depth, ply + 1, child_bounds, true);
         self.search_stack.pop();
         let mut value = -child_value;
-        let mut line = pv_line;
 
         // Re-search at full depth (if LMR was used and value > alpha)
         if reduction > 0 && value > bounds.alpha {
             child.set_type(child.node_type().inverted());
             self.search_stack
                 .push_move(&child, m, moved_piece, moved_color);
-            let (re_child_value, re_line) =
+            let re_child_value =
                 self.search_node(&child, extended_child_depth, ply + 1, child_bounds, true);
             self.search_stack.pop();
             value = -re_child_value;
-            line = re_line;
             searched_depth = depth.saturating_add(extension).max(1);
         }
 
@@ -583,16 +588,15 @@ impl Engine {
             child.set_type(NodeType::Pv);
             self.search_stack
                 .push_move(&child, m, moved_piece, moved_color);
-            let (full_child_value, full_line) =
+            let full_child_value =
                 self.search_node(&child, extended_child_depth, ply + 1, bounds.invert(), true);
             self.search_stack.pop();
             value = -full_child_value;
-            line = full_line;
             searched_depth = depth.saturating_add(extension).max(1);
         }
 
         let is_quiet = !is_cap && !is_promotion;
-        Some((value, line, is_quiet, searched_depth))
+        Some((value, is_quiet, searched_depth))
     }
 
     /// Handler called if a search fails high - updates history tables.
