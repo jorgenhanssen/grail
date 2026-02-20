@@ -66,7 +66,7 @@ impl Engine {
         // Reduced null-window search excluding TT move.
         self.search_stack
             .current_mut(|n| n.singular = Some(SingularSearch { excluded: m }));
-        let (singular_value, _) = self.search_node(
+        let singular_value = self.search_node(
             node,
             singular_depth,
             ply,

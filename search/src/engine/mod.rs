@@ -9,7 +9,7 @@ use cozy_chess::Board;
 use evaluation::{HCE, NNUE};
 use uci::{UciOutput, commands::Info, pv_to_uci};
 
-use crate::pv::{MultiPvSearchContext, PvLine};
+use crate::pv::{MultiPvSearchContext, PvLine, PvTable};
 
 use crate::{
     EngineConfig,
@@ -75,6 +75,9 @@ pub struct Engine {
 
     /// Late Move Reductions table
     lmr: LmrTable,
+
+    /// Triangular PV table for the principal variation
+    pv_table: PvTable,
 }
 
 impl Engine {
@@ -109,6 +112,8 @@ impl Engine {
             correction_history: CorrectionHistory::new(1, 1, 1, 1, 1, 1, 1, 1),
 
             lmr: LmrTable::new(config.lmr_divisor.value as f32 / 100.0),
+
+            pv_table: PvTable::new(),
         };
 
         instance.configure(config, true);

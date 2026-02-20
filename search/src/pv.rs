@@ -1,5 +1,6 @@
 use cozy_chess::Move;
 
+use crate::MAX_DEPTH;
 use crate::aspiration::AspirationWindow;
 
 /// A principal variation line with its exact score.
@@ -139,5 +140,73 @@ impl MultiPvSearchContext {
 impl Default for MultiPvSearchContext {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Triangular PV-table: collects the principal variation during search.
+/// https://www.chessprogramming.org/Triangular_PV-Table
+///
+/// Uses the "Quadratic PV-Table" layout for cheaper indexing.
+///
+/// ply 0: [e2e4, e7e5, g1f3, b8c6, None]
+/// ply 1: [e7e5, g1f3, b8c6, None]
+/// ply 2: [g1f3, b8c6, None]
+/// ply 3: [b8c6, None]
+pub struct PvTable {
+    pv_array: Vec<Option<Move>>,
+}
+
+impl PvTable {
+    pub fn new() -> Self {
+        Self {
+            pv_array: vec![None; MAX_DEPTH * MAX_DEPTH],
+        }
+    }
+
+    /// Starting index of the PV row for a given ply.
+    fn index(ply: usize) -> usize {
+        ply * MAX_DEPTH
+    }
+
+    /// `pvArray[pvIndex] = 0` (no PV at this ply yet)
+    pub fn init_ply(&mut self, ply: u8) {
+        self.pv_array[Self::index(ply as usize)] = None;
+    }
+
+    /// Write `mv` at this ply with no continuation (e.g. TT cutoff).
+    pub fn set_move(&mut self, ply: u8, mv: Move) {
+        let p = ply as usize;
+        let pv_index = Self::index(p);
+        self.pv_array[pv_index] = Some(mv);
+        self.pv_array[pv_index + 1] = None;
+    }
+
+    /// Write `mv` at this ply and append the child's PV from `ply + 1`.
+    pub fn update(&mut self, ply: u8, mv: Move) {
+        let p = ply as usize;
+        let pv_index = Self::index(p);
+        self.pv_array[pv_index] = Some(mv);
+
+        if p + 1 < MAX_DEPTH {
+            let pv_next_index = Self::index(p + 1);
+            self.pv_array.copy_within(
+                pv_next_index..pv_next_index + MAX_DEPTH - p - 1,
+                pv_index + 1,
+            );
+        }
+    }
+
+    /// Read the PV at a specific ply
+    pub fn get(&self, ply: u8) -> Vec<Move> {
+        let pv_index = Self::index(ply as usize);
+        self.pv_array[pv_index..pv_index + MAX_DEPTH]
+            .iter()
+            .take_while(|m| m.is_some())
+            .map(|m| m.unwrap())
+            .collect()
+    }
+
+    pub fn is_empty(&self, ply: u8) -> bool {
+        self.pv_array[Self::index(ply as usize)].is_none()
     }
 }
