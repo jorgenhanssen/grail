@@ -170,7 +170,10 @@ impl PvTable {
 
     /// `pvArray[pvIndex] = 0` (no PV at this ply yet)
     pub fn init_ply(&mut self, ply: u8) {
-        self.pv_array[Self::index(ply as usize)] = None;
+        let p = ply as usize;
+        if p < MAX_DEPTH {
+            self.pv_array[Self::index(p)] = None;
+        }
     }
 
     /// Write `mv` at this ply with no continuation (e.g. TT cutoff).
