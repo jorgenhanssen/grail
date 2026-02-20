@@ -1,10 +1,7 @@
 use cozy_chess::Move;
 use utils::{FracPly, Node, creates_threat, evades_threat};
 
-use crate::{
-    reductions::{LmrTable, cap_reduction},
-    utils::near_root,
-};
+use crate::{lmr::LmrTable, utils::near_root};
 
 use super::Engine;
 
@@ -14,6 +11,9 @@ pub enum Reduction {
 }
 
 impl Engine {
+    /// Late move reductions: reduce search depth for moves unlikely to be best.
+    ///
+    /// <https://www.chessprogramming.org/Late_Move_Reductions>
     #[allow(clippy::too_many_arguments)]
     pub(super) fn get_reduction(
         &self,
@@ -70,7 +70,7 @@ impl Engine {
             }
         }
 
-        let r = cap_reduction(reduction.whole(), depth);
+        let r = reduction.whole().min(depth.saturating_sub(2));
 
         // Prune when bad history if it would barely search anyway
         let reduced_depth = depth.saturating_sub(r);

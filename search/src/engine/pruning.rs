@@ -1,15 +1,30 @@
 use cozy_chess::{Move, Piece};
+use evaluation::scores::MATE_VALUE;
 use utils::{Node, captured_piece, piece_value};
 
-use crate::{
-    pruning::{
-        RAZOR_NEAR_MATE, can_futility_prune, can_null_move_prune, can_razor_prune,
-        can_reverse_futility_prune, futility_margin, null_move_reduction, razor_margin, rfp_margin,
-    },
-    utils::{Bounds, see::see},
-};
+use crate::utils::{Bounds, see::see};
 
 use super::Engine;
+
+const NEAR_MATE_VALUE: i16 = MATE_VALUE - 200;
+
+/// Mate distance pruning: adjusts alpha-beta bounds based on the maximum
+/// possible mate score at current ply. Returns true if the search can be pruned.
+///
+/// Example: A mate found at ply P is at least P plies from root, so:
+/// - Best possible score: MATE_VALUE - ply (mate-in-P)
+/// - Worst possible score: -(MATE_VALUE - ply) (mated-in-P)
+///
+/// <https://www.chessprogramming.org/Mate_Distance_Pruning>
+pub(super) fn mate_distance_prune(bounds: &mut Bounds, ply: u8) -> bool {
+    let mate_in_ply = MATE_VALUE - ply as i16;
+    let mated_in_ply = -(MATE_VALUE - ply as i16);
+
+    bounds.alpha = bounds.alpha.max(mated_in_ply);
+    bounds.beta = bounds.beta.min(mate_in_ply);
+
+    bounds.alpha >= bounds.beta
+}
 
 impl Engine {
     /// Futility pruning: skip moves unlikely to raise alpha based on static eval + margin.
@@ -23,14 +38,11 @@ impl Engine {
         alpha: i16,
         static_eval: i16,
     ) -> bool {
-        if !can_futility_prune(depth, in_check, self.config.futility_max_depth.value) {
+        if depth > self.config.futility_max_depth.value || in_check {
             return false;
         }
-        let margin = futility_margin(
-            depth,
-            self.config.futility_base_margin.value,
-            self.config.futility_depth_multiplier.value,
-        );
+        let margin = self.config.futility_base_margin.value
+            + depth.saturating_sub(1) as i16 * self.config.futility_depth_multiplier.value;
         !is_tactical && static_eval + margin <= alpha
     }
 
@@ -46,21 +58,16 @@ impl Engine {
         in_check: bool,
         static_eval: i16,
     ) -> Option<i16> {
-        if !can_razor_prune(depth, in_check, self.config.razor_max_depth.value) {
+        if depth == 0 || depth > self.config.razor_max_depth.value || in_check {
             return None;
         }
-        // If static eval already near/above alpha threshold, do not razor
-        let margin = razor_margin(
-            depth,
-            self.config.razor_base_margin.value,
-            self.config.razor_depth_coefficient.value,
-        );
+        let margin = self.config.razor_base_margin.value
+            + self.config.razor_depth_coefficient.value * (depth as i16 * depth as i16);
         if static_eval >= alpha - margin {
             return None;
         }
-        // Q search with null window
         let (value, _) = self.quiescence_search(node, Bounds::null(alpha - 1), ply);
-        if value < alpha && value.abs() < RAZOR_NEAR_MATE {
+        if value < alpha && value.abs() < NEAR_MATE_VALUE {
             Some(value)
         } else {
             None
@@ -141,30 +148,42 @@ impl Engine {
         try_null_move: bool,
         static_eval: Option<i16>,
     ) -> Option<i16> {
-        if !(try_null_move
-            && can_null_move_prune(node, depth, in_check, self.config.nmp_min_depth.value))
+        if !try_null_move
+            || in_check
+            || !node.is_cut()
+            || depth < self.config.nmp_min_depth.value
+            || node.is_zugzwang()
         {
             return None;
         }
 
         let nm_child = node.create_null_move_child()?;
 
-        // Calculate reduction based on remaining depth and static eval
-        let reduction: u8 = null_move_reduction(
-            depth,
-            static_eval,
-            bounds.beta,
-            self.config.nmp_base_reduction.value,
-            self.config.nmp_depth_divisor.value,
-            self.config.nmp_eval_margin.value,
-        );
+        // Deeper positions get more reduction
+        let base_r = self.config.nmp_base_reduction.value;
+        let mut r = base_r + (depth / self.config.nmp_depth_divisor.value);
+
+        if let Some(se) = static_eval {
+            let margin = self.config.nmp_eval_margin.value;
+            if se >= bounds.beta + margin {
+                // Strong positions get extra reduction
+                r = r.saturating_add(1);
+            } else if se <= bounds.beta - margin {
+                // Weak positions get less reduction
+                r = r.saturating_sub(1).max(base_r);
+            }
+        }
+
+        if r >= depth {
+            r = depth.saturating_sub(1).max(base_r);
+        }
 
         // Null window around beta for the null move search
         let null_bounds = Bounds::null(-bounds.beta);
 
         // Do a reduced depth null search to check if our position is still good enough
         self.search_stack.push_node(&nm_child);
-        let reduced_child_depth = depth.saturating_sub(reduction + 1);
+        let reduced_child_depth = depth.saturating_sub(r + 1);
         let (score, _) =
             self.search_node(&nm_child, reduced_child_depth, ply + 1, null_bounds, false);
         self.search_stack.pop();
@@ -174,7 +193,7 @@ impl Engine {
             self.tt.store(
                 node.hash(),
                 ply,
-                depth.saturating_sub(reduction),
+                depth.saturating_sub(r),
                 bounds.beta,
                 None,
                 bounds.alpha,
@@ -200,23 +219,17 @@ impl Engine {
         ply: u8,
         is_improving: bool,
     ) -> Option<i16> {
-        if !can_reverse_futility_prune(
-            depth,
-            in_check,
-            node.node_type(),
-            self.config.rfp_max_depth.value,
-        ) {
+        if depth == 0 || depth > self.config.rfp_max_depth.value || in_check || node.is_pv() {
             return None;
         }
 
-        let margin = rfp_margin(
-            depth,
-            self.config.rfp_base_margin.value,
-            self.config.rfp_depth_multiplier.value,
-            is_improving,
-            self.config.rfp_improving_bonus.value,
-        );
-        if static_eval - margin >= bounds.beta && static_eval.abs() < RAZOR_NEAR_MATE {
+        let mut margin = self.config.rfp_base_margin.value
+            + (depth as i16 - 1) * self.config.rfp_depth_multiplier.value;
+        if is_improving {
+            margin -= self.config.rfp_improving_bonus.value;
+        }
+
+        if static_eval - margin >= bounds.beta && static_eval.abs() < NEAR_MATE_VALUE {
             self.tt.store(
                 node.hash(),
                 ply,
@@ -230,5 +243,44 @@ impl Engine {
             return Some(bounds.beta);
         }
         None
+    }
+
+    /// Late move pruning: near the horizon, skip quiet moves beyond a count threshold.
+    /// As iterative deepening extends the horizon, nodes that were at the frontier open up
+    /// to search more moves. This forms a right-triangle search shape, narrow tip at the
+    /// current horizon, widening toward the root.
+    ///
+    /// <https://www.chessprogramming.org/Futility_Pruning#MoveCountBasedPruning>
+    pub(super) fn should_lmp_prune(
+        &self,
+        node: &Node,
+        mv: Move,
+        in_check: bool,
+        depth: u8,
+        move_index: i32,
+        is_improving: bool,
+    ) -> bool {
+        let is_cap = node.is_capture(mv);
+        let is_promotion = mv.promotion == Some(Piece::Queen);
+
+        if in_check
+            || node.is_pv()
+            || is_cap
+            || is_promotion
+            || depth > self.config.lmp_max_depth.value
+        {
+            return false;
+        }
+
+        let base = self.config.lmp_base_moves.value;
+        let mult = self.config.lmp_depth_multiplier.value;
+        let mut limit = base + (depth as i32 * (depth as i32 + mult)) / 2;
+
+        // Be more aggressive (prune earlier) when position isn't improving
+        if !is_improving {
+            limit = (limit * self.config.lmp_improving_reduction.value) / 100;
+        }
+
+        move_index > limit
     }
 }

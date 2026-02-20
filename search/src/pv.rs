@@ -1,6 +1,6 @@
 use cozy_chess::Move;
 
-use crate::pruning::AspirationWindow;
+use crate::aspiration::AspirationWindow;
 
 /// A principal variation line with its exact score.
 ///

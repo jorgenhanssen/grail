@@ -1,8 +1,8 @@
 use cozy_chess::Move;
+use evaluation::scores::MATE_SCORE_BOUND;
 use utils::Node;
 
 use crate::{
-    pruning::MATE_SCORE_BOUND,
     stack::SingularSearch,
     transposition::{Bound, ProbeResult},
     utils::Bounds,

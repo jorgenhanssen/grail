@@ -1,13 +1,12 @@
 #![feature(portable_simd)]
 
+mod aspiration;
 mod config;
 pub mod engine;
-mod extensions;
 mod history;
+mod lmr;
 mod move_ordering;
-mod pruning;
 mod pv;
-mod reductions;
 mod result;
 mod stack;
 mod time_control;

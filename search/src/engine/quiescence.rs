@@ -10,12 +10,11 @@ use utils::Node;
 use crate::{
     MAX_DEPTH,
     move_ordering::QMoveGenerator,
-    pruning::{can_delta_prune, mate_distance_prune},
     transposition::Bound,
     utils::{Bounds, see::see},
 };
 
-use super::Engine;
+use super::{Engine, pruning::mate_distance_prune};
 
 impl Engine {
     /// Quiescence search: continues searching captures until the position is stable enough
@@ -70,11 +69,10 @@ impl Engine {
 
         let board_material = node.total_material();
 
-        let can_delta = can_delta_prune(
-            in_check,
-            self.config.qs_delta_material_threshold.value,
-            board_material,
-        );
+        // Delta pruning: skip captures that can't possibly improve alpha
+        // https://www.chessprogramming.org/Delta_Pruning
+        let can_delta =
+            !in_check && board_material >= self.config.qs_delta_material_threshold.value;
 
         // Do a "stand-pat" evaluation if not in check
         if !in_check {

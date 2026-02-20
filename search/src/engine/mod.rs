@@ -14,7 +14,7 @@ use crate::pv::{MultiPvSearchContext, PvLine};
 use crate::{
     EngineConfig,
     history::{CaptureHistory, ContinuationHistory, CorrectionHistory, HistoryHeuristic},
-    reductions::LmrTable,
+    lmr::LmrTable,
     stack::SearchStack,
     transposition::{QSTable, TranspositionTable},
     utils::{convert_centipawn_score, convert_mate_score},

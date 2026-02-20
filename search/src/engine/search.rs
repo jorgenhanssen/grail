@@ -10,11 +10,10 @@ use uci::{
 use utils::{Node, NodeType, has_legal_moves};
 
 use crate::{
+    aspiration::Pass,
     engine::reduction::Reduction,
     move_ordering::{MAX_CAPTURES, MAX_QUIETS, MainMoveGenerator},
-    pruning::{Pass, mate_distance_prune, should_lmp_prune},
     pv::PvLine,
-    reductions::iir,
     result::SearchResult,
     stack::SearchNode,
     time_control::SearchController,
@@ -22,12 +21,14 @@ use crate::{
     utils::Bounds,
 };
 
-use super::{Engine, MAX_DEPTH};
+use super::{Engine, MAX_DEPTH, pruning::mate_distance_prune};
 
 impl Engine {
     /// Multi-PV search with iterative deepening.
     ///
     /// Returns `None` if already in checkmate, otherwise returns all PV lines found.
+    ///
+    /// <https://www.chessprogramming.org/Iterative_Deepening>
     pub fn search(
         &mut self,
         params: &GoParams,
@@ -178,6 +179,8 @@ impl Engine {
     }
 
     /// Alpha-beta search with principal variation search (PVS) and late move reductions.
+    ///
+    /// <https://www.chessprogramming.org/Principal_Variation_Search>
     pub(super) fn search_node(
         &mut self,
         node: &Node,
@@ -300,13 +303,13 @@ impl Engine {
             return (score, Vec::new());
         }
 
-        let depth = iir(
-            ply,
-            depth,
-            tt_move.is_some(),
-            self.config.iir_min_depth.value,
-            self.config.iir_reduction.value,
-        );
+        // Internal Iterative Reduction: reduce depth when no TT move is found.
+        // https://www.chessprogramming.org/Internal_Iterative_Reductions
+        let depth = if ply > 0 && tt_move.is_none() && depth >= self.config.iir_min_depth.value {
+            depth.saturating_sub(self.config.iir_reduction.value)
+        } else {
+            depth
+        };
 
         self.max_ply_reached = self.max_ply_reached.max(ply);
 
@@ -364,18 +367,7 @@ impl Engine {
 
             move_index += 1;
 
-            if should_lmp_prune(
-                node,
-                m,
-                in_check,
-                depth,
-                move_index,
-                is_improving,
-                self.config.lmp_max_depth.value,
-                self.config.lmp_base_moves.value,
-                self.config.lmp_depth_multiplier.value,
-                self.config.lmp_improving_reduction.value,
-            ) {
+            if self.should_lmp_prune(node, m, in_check, depth, move_index, is_improving) {
                 continue;
             }
 

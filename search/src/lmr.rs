@@ -2,6 +2,7 @@ use utils::FracPly;
 
 use crate::MAX_DEPTH;
 
+/// <https://www.chessprogramming.org/Late_Move_Reductions>
 pub struct LmrTable {
     table: [FracPly; MAX_DEPTH * MAX_DEPTH],
 }
