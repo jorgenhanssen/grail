@@ -189,8 +189,6 @@ impl Engine {
         mut bounds: Bounds,
         null_move_allowed: bool,
     ) -> i16 {
-        self.pv_table.init_ply(ply);
-
         let singular = self.search_stack.current().and_then(|n| n.singular);
 
         if self.stop.load(Ordering::Relaxed) {
@@ -206,6 +204,8 @@ impl Engine {
         if ply as usize >= MAX_DEPTH {
             return self.static_eval(node);
         }
+
+        self.pv_table.init_ply(ply);
 
         if mate_distance_prune(&mut bounds, ply) {
             return bounds.alpha;

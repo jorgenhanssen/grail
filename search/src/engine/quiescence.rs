@@ -22,8 +22,6 @@ impl Engine {
     ///
     /// <https://www.chessprogramming.org/Quiescence_Search>
     pub(super) fn quiescence_search(&mut self, node: &Node, mut bounds: Bounds, ply: u8) -> i16 {
-        self.pv_table.init_ply(ply);
-
         // Check if we should stop searching
         if self.stop.load(Ordering::Relaxed) {
             return 0;
@@ -40,6 +38,8 @@ impl Engine {
         if ply as usize >= MAX_DEPTH {
             return self.corrected_static_eval(node);
         }
+
+        self.pv_table.init_ply(ply);
 
         let hash = node.hash();
         if mate_distance_prune(&mut bounds, ply) {
