@@ -51,14 +51,14 @@ impl Engine {
 
         let original_bounds = bounds;
 
-        // QS entries don't track depth. All quiescence searches explore the same
-        // tactical horizon, so any hit is trustworthy for cutoffs
-        if let Some(tt) = self.qs_tt.probe(hash, in_check) {
-            match tt.bound {
-                Bound::Exact => return tt.value,
-                Bound::Lower if bounds.is_cutoff(tt.value) => return tt.value,
-                Bound::Upper if tt.value <= bounds.alpha => return tt.value,
-                _ => {}
+        if let Some(tt) = self.tt.probe(hash, ply) {
+            if !node.is_pv() {
+                match tt.bound {
+                    Bound::Exact => return tt.value,
+                    Bound::Lower if bounds.is_cutoff(tt.value) => return tt.value,
+                    Bound::Upper if tt.value <= bounds.alpha => return tt.value,
+                    _ => {}
+                }
             }
         }
 
@@ -74,12 +74,15 @@ impl Engine {
         // Do a "stand-pat" evaluation if not in check
         if !in_check {
             if bounds.is_cutoff(stand_pat) {
-                self.qs_tt.store(
+                self.tt.store(
                     hash,
+                    ply,
+                    0, // Prefer deeper entries rather than QS entries
                     stand_pat,
+                    Some(stand_pat),
                     original_bounds.alpha,
                     original_bounds.beta,
-                    in_check,
+                    None,
                 );
                 return stand_pat;
             }
@@ -100,12 +103,15 @@ impl Engine {
                 }
 
                 if stand_pat + big_delta < bounds.alpha {
-                    self.qs_tt.store(
+                    self.tt.store(
                         hash,
+                        ply,
+                        0, // Prefer deeper entries rather than QS entries
                         stand_pat,
+                        Some(stand_pat),
                         original_bounds.alpha,
                         original_bounds.beta,
-                        in_check,
+                        None,
                     );
                     return stand_pat;
                 }
@@ -154,7 +160,7 @@ impl Engine {
             let new_board = make_move(board, mv);
             let child_hash = new_board.hash();
 
-            self.qs_tt.prefetch(child_hash);
+            self.tt.prefetch(child_hash);
 
             let child = Node::new(new_board, node.node_type());
 
@@ -188,18 +194,21 @@ impl Engine {
             return -(MATE_VALUE - ply as i16);
         }
 
-        self.qs_tt.store(
+        self.tt.store(
             hash,
+            ply,
+            0,
             best_eval,
+            Some(stand_pat),
             original_bounds.alpha,
             original_bounds.beta,
-            in_check,
+            None,
         );
         best_eval
     }
 
-    /// Handler called if QS search fails high - updates capture history.
-    /// Uses depth 1 to keep updates small relative to main search.
+    /// Updates capture history on a QS beta cutoff. Uses depth 1 to keep
+    /// bonus/malus small relative to main search.
     fn on_qs_fail_high(&mut self, board: &Board, mv: Move, captures_searched: &[Move]) {
         let bonus = self.capture_history.get_bonus(1);
         self.capture_history.update_capture(board, mv, bonus);
