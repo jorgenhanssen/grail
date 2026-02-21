@@ -56,7 +56,7 @@ pub struct Engine {
     /// Selective depth (max ply reached including quiescence - deepest we have gotten)
     max_ply_reached: u8,
 
-    /// Transposition table for memoizing search results
+    /// Transposition table
     tt: TranspositionTable,
 
     /// Tracks active search path - used for repetition, improving, etc.
