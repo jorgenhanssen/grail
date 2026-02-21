@@ -16,7 +16,7 @@ use crate::{
     history::{CaptureHistory, ContinuationHistory, CorrectionHistory, HistoryHeuristic},
     lmr::LmrTable,
     stack::SearchStack,
-    transposition::{QSTable, TranspositionTable},
+    transposition::TranspositionTable,
     utils::{convert_centipawn_score, convert_mate_score},
 };
 
@@ -56,10 +56,8 @@ pub struct Engine {
     /// Selective depth (max ply reached including quiescence - deepest we have gotten)
     max_ply_reached: u8,
 
-    /// Main transposition table
+    /// Transposition table
     tt: TranspositionTable,
-    /// Quiescence search transposition table
-    qs_tt: QSTable,
 
     /// Tracks active search path - used for repetition, improving, etc.
     search_stack: SearchStack,
@@ -102,7 +100,6 @@ impl Engine {
             max_ply_reached: 1,
 
             tt: TranspositionTable::new(1),
-            qs_tt: QSTable::new(1),
 
             search_stack: SearchStack::with_capacity(MAX_DEPTH),
 
@@ -129,7 +126,7 @@ impl Engine {
         self.hce = Box::new(hce::Evaluator::new(config.get_hce_config()));
 
         if init || old_config.hash_size.value != config.hash_size.value {
-            self.configure_transposition_tables();
+            self.tt = TranspositionTable::new(config.hash_size.value as usize);
         }
 
         if init || !self.history_heuristic.matches_config(config) {
@@ -176,7 +173,6 @@ impl Engine {
 
     pub(super) fn init_game(&mut self) {
         self.tt.clear();
-        self.qs_tt.clear();
         self.history_heuristic.reset();
         self.capture_history.reset();
         self.continuation_history.reset();
@@ -211,14 +207,5 @@ impl Engine {
                 pv: pv_to_uci(&self.board, &pv.line),
             }))
             .unwrap();
-    }
-
-    fn configure_transposition_tables(&mut self) {
-        let total_size_mb = self.config.hash_size.value;
-        let qs_size_mb = total_size_mb / 3;
-        let main_size_mb = total_size_mb - qs_size_mb;
-
-        self.tt = TranspositionTable::new(main_size_mb as usize);
-        self.qs_tt = QSTable::new(qs_size_mb as usize);
     }
 }
