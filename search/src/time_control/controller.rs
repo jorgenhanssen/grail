@@ -146,8 +146,8 @@ impl SearchController {
         }
     }
 
-    pub fn on_aspiration_failure(&mut self) {
-        self.stats.add_aspiration_failure();
+    pub fn add_aspiration_failures(&mut self, count: u32) {
+        self.stats.add_aspiration_failures(count);
     }
 
     pub fn stop_timer(&mut self) {

@@ -1,4 +1,4 @@
-use std::sync::{Arc, atomic::Ordering, mpsc::Sender};
+use std::sync::{atomic::Ordering, mpsc::Sender};
 
 use arrayvec::ArrayVec;
 use cozy_chess::{Move, Piece};
@@ -11,22 +11,20 @@ use utils::{Node, NodeType, has_legal_moves};
 
 use crate::{
     aspiration::Pass,
-    engine::reduction::Reduction,
     move_ordering::{MAX_CAPTURES, MAX_QUIETS, MainMoveGenerator},
     pv::PvLine,
     result::SearchResult,
+    searcher::reduction::Reduction,
     stack::SearchNode,
     time_control::SearchController,
     transposition::{Bound, ProbeResult},
     utils::Bounds,
 };
 
-use super::{Engine, MAX_DEPTH, pruning::mate_distance_prune};
+use super::{MAX_DEPTH, Searcher, pruning::mate_distance_prune};
 
-impl Engine {
-    /// Multi-PV search with iterative deepening.
-    ///
-    /// Returns `None` if already in checkmate, otherwise returns all PV lines found.
+impl Searcher {
+    /// Main thread: iterative deepening with time control and UCI output.
     ///
     /// <https://www.chessprogramming.org/Iterative_Deepening>
     pub fn search(
@@ -34,7 +32,6 @@ impl Engine {
         params: &GoParams,
         output: Option<&Sender<UciOutput>>,
     ) -> Option<SearchResult> {
-        // Check for checkmate (no legal moves when in check)
         if !has_legal_moves(&self.board) && !self.board.checkers().is_empty() {
             if let Some(output) = output {
                 output
@@ -51,7 +48,7 @@ impl Engine {
 
         let mut controller =
             SearchController::new(params, &self.board, self.config.move_overhead.value as u64);
-        let stop = Arc::clone(&self.stop);
+        let stop = self.shared.stop_flag();
         controller.on_stop(move || stop.store(true, Ordering::Relaxed));
         controller.start_timer();
 
@@ -59,8 +56,7 @@ impl Engine {
         let root = Node::new(self.board.clone(), NodeType::Pv);
         let mut depth = 1u8;
 
-        // Iterative deepening
-        while !self.stop.load(Ordering::Relaxed) && depth < MAX_DEPTH as u8 {
+        while !self.shared.is_stopped() && depth < MAX_DEPTH as u8 {
             controller.on_iteration_start();
 
             if !controller.should_continue_to_next_depth(depth) {
@@ -70,22 +66,22 @@ impl Engine {
             self.multi_pv.reset_excluded();
 
             for pv_index in 0..pv_count {
-                if let Some(pv) = self.search_pv(&root, depth, pv_index, &mut controller) {
-                    // Exclude this move for subsequent PVs to not search it multiple times
+                let (pv, failures) = self.search_pv(&root, depth, pv_index);
+                controller.add_aspiration_failures(failures);
+
+                if let Some(pv) = pv {
                     if let Some(mv) = pv.best_move() {
                         self.multi_pv.add_excluded(mv);
                     }
-
                     if let Some(out) = output {
                         self.send_search_info(out, depth, &pv, controller.elapsed());
                     }
-
                     self.multi_pv.lines[pv_index].result = pv;
                 } else {
-                    break; // No more moves for additional PVs
+                    break;
                 }
 
-                if self.stop.load(Ordering::Relaxed) {
+                if self.shared.is_stopped() {
                     break;
                 }
             }
@@ -102,7 +98,79 @@ impl Engine {
             depth += 1;
         }
 
-        // Collect all non-empty PV lines into the result
+        self.collect_result()
+    }
+
+    /// For Lazy SMP: dumb search until stopped to populate the shared TT and correction history.
+    ///
+    /// <https://www.chessprogramming.org/Lazy_SMP>
+    pub fn search_auxiliary(&mut self) {
+        self.init_search();
+
+        let root = Node::new(self.board.clone(), NodeType::Pv);
+        let mut depth = 1u8;
+
+        while !self.shared.is_stopped() && depth < MAX_DEPTH as u8 {
+            // Each helper skips a different 1/3 of depths to seed TT diversity:
+            //   Thread 1: skips depths 2, 5, 8, 11, ...
+            //   Thread 2: skips depths 1, 4, 7, 10, ...
+            if (depth as usize + self.thread_id).is_multiple_of(3) {
+                depth += 1;
+                continue;
+            }
+
+            let (pv, _) = self.search_pv(&root, depth, 0);
+            if let Some(pv) = pv {
+                self.multi_pv.lines[0].result = pv;
+            }
+
+            depth += 1;
+        }
+    }
+
+    /// Aspiration window search for a single PV line.
+    /// Returns the PV (if any) and the number of aspiration failures.
+    fn search_pv(&mut self, root: &Node, depth: u8, pv_index: usize) -> (Option<PvLine>, u32) {
+        self.multi_pv.begin_pv_search(pv_index, depth);
+
+        let mut retries = 0;
+        let mut failures = 0u32;
+
+        loop {
+            let bounds = self.multi_pv.lines[pv_index].window.bounds();
+
+            let score = self.search_node(root, depth, 0, bounds, true);
+            if self.pv_table.is_empty(0) {
+                return (None, failures);
+            }
+
+            if self.shared.is_stopped() {
+                return (
+                    Some(PvLine::new(self.pv_table.get(0), score, pv_index)),
+                    failures,
+                );
+            }
+
+            match self.multi_pv.lines[pv_index].window.analyse_pass(score) {
+                Pass::Hit(s) => {
+                    return (
+                        Some(PvLine::new(self.pv_table.get(0), s, pv_index)),
+                        failures,
+                    );
+                }
+                _ => {
+                    failures += 1;
+                    retries += 1;
+                    if retries >= self.config.aspiration_window_retries.value {
+                        self.multi_pv.lines[pv_index].window.fully_extend();
+                        retries = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    fn collect_result(&self) -> Option<SearchResult> {
         let lines: Vec<PvLine> = self
             .multi_pv
             .lines
@@ -118,56 +186,13 @@ impl Engine {
         }
     }
 
-    /// Search for a single PV.
-    fn search_pv(
-        &mut self,
-        root: &Node,
-        depth: u8,
-        pv_index: usize,
-        controller: &mut SearchController,
-    ) -> Option<PvLine> {
-        self.multi_pv.begin_pv_search(pv_index, depth);
-
-        let mut retries = 0;
-
-        loop {
-            let bounds = self.multi_pv.lines[pv_index].window.bounds();
-
-            let score = self.search_node(root, depth, 0, bounds, true);
-            if self.pv_table.is_empty(0) {
-                return None;
-            }
-
-            if self.stop.load(Ordering::Relaxed) {
-                return Some(PvLine::new(self.pv_table.get(0), score, pv_index));
-            }
-
-            match self.multi_pv.lines[pv_index].window.analyse_pass(score) {
-                Pass::Hit(s) => {
-                    return Some(PvLine::new(self.pv_table.get(0), s, pv_index));
-                }
-                _ => {
-                    controller.on_aspiration_failure();
-                    retries += 1;
-                    if retries >= self.config.aspiration_window_retries.value {
-                        self.multi_pv.lines[pv_index].window.fully_extend();
-                        retries = 0;
-                    }
-                }
-            }
-        }
-    }
-
     /// Initializes state for a new search.
     fn init_search(&mut self) {
-        self.stop.store(false, Ordering::Relaxed);
         self.nodes = 0;
         self.max_ply_reached = 1;
 
         self.search_stack.clear();
         self.search_stack.push(SearchNode::new(self.board.hash()));
-
-        self.tt.age();
 
         self.multi_pv.init(
             self.config.multi_pv.value as usize,
@@ -193,10 +218,10 @@ impl Engine {
 
         let singular = self.search_stack.current().and_then(|n| n.singular);
 
-        if self.stop.load(Ordering::Relaxed) {
+        if self.shared.is_stopped() {
             return 0;
         }
-        self.nodes += 1;
+        self.increment_nodes();
 
         if ply > 0 && self.is_forced_draw(node) {
             return self.draw_value();
@@ -219,7 +244,7 @@ impl Engine {
         let original_bounds = bounds;
         let is_pv_node = node.is_pv();
 
-        let tt_info: Option<ProbeResult> = if let Some(tt) = self.tt.probe(hash, ply) {
+        let tt_info: Option<ProbeResult> = if let Some(tt) = self.shared.tt().probe(hash, ply) {
             // Only trust value/bound for cutoffs if the TT entry comes from a
             // search at least as deep as we need. Shallow results may have
             // missed tactics and can't safely prune the current search.
@@ -271,7 +296,7 @@ impl Engine {
             .and_then(|t| t.static_eval)
             .unwrap_or_else(|| self.static_eval(node));
 
-        let corrected_eval = self.correction_history.adjust(node.board(), static_eval);
+        let corrected_eval = self.shared.correction().adjust(node.board(), static_eval);
 
         self.search_stack
             .current_mut(|n| n.static_eval = Some(corrected_eval));
@@ -405,7 +430,7 @@ impl Engine {
                 corrected_eval,
                 singular_result.extension,
             ) {
-                if self.stop.load(Ordering::Relaxed) {
+                if self.shared.is_stopped() {
                     break;
                 }
 
@@ -452,8 +477,7 @@ impl Engine {
         // Use original alpha when storing in tables, since the bound type depends on the original expectation.
         // Alpha may have been raised during search, but the bound type depends on
         // whether we improved.
-
-        self.tt.store(
+        self.shared.tt().store(
             hash,
             ply,
             best_move_depth,
@@ -464,7 +488,7 @@ impl Engine {
             best_move,
         );
 
-        self.correction_history.update(
+        self.shared.correction().update(
             node.board(),
             in_check,
             best_move,
@@ -518,7 +542,7 @@ impl Engine {
         let mut child = node.create_child(m, move_index);
         let child_hash = child.hash();
 
-        self.tt.prefetch(child_hash);
+        self.shared.tt().prefetch(child_hash);
 
         let gives_check = child.in_check();
         let is_tactical = in_check || gives_check || is_cap || is_promotion;

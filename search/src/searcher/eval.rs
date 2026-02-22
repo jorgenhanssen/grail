@@ -1,16 +1,15 @@
 use utils::{Node, cap_eval_by_material, flip_eval_perspective};
 
-use super::Engine;
+use super::Searcher;
 
-impl Engine {
+impl Searcher {
     /// Get the static evaluation from the perspective of the side to move.
     pub(super) fn static_eval(&mut self, node: &Node) -> i16 {
         let phase = node.game_phase();
 
-        let mut score = if self.config.nnue.value && self.nnue.is_some() {
-            self.nnue.as_mut().unwrap().evaluate(node)
-        } else {
-            self.hce.evaluate(node, phase)
+        let mut score = match self.nnue.as_mut().filter(|_| self.config.nnue.value) {
+            Some(nnue) => nnue.evaluate(node),
+            None => self.hce.evaluate(node, phase),
         };
 
         score = self.apply_penalties(score, phase);
@@ -22,7 +21,7 @@ impl Engine {
     /// Get the static evaluation with correction history applied.
     pub(super) fn corrected_static_eval(&mut self, node: &Node) -> i16 {
         let eval = self.static_eval(node);
-        self.correction_history.adjust(node.board(), eval)
+        self.shared.correction().adjust(node.board(), eval)
     }
 
     fn apply_penalties(&self, score: i16, phase: f32) -> i16 {

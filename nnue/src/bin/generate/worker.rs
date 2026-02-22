@@ -2,7 +2,7 @@ use crate::book::Book;
 use crate::game::SelfPlayGame;
 use crate::histogram::HistogramHandle;
 use crate::samples::Sample;
-use evaluation::NNUE;
+use evaluation::{HCE, NNUE};
 use search::{Engine, EngineConfig};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -31,7 +31,7 @@ impl SelfPlayWorker {
         game_id_counter: Arc<AtomicUsize>,
         depth: u8,
         multi_pv: u8,
-        nnue: Option<Box<dyn NNUE>>,
+        evaluator_factory: impl FnMut() -> (Box<dyn HCE>, Option<Box<dyn NNUE>>) + Send + 'static,
         opening_book: Arc<Book>,
         histogram: HistogramHandle,
     ) -> Self {
@@ -40,17 +40,15 @@ impl SelfPlayWorker {
         config.hash_size.value = WORKER_HASH_SIZE_MB;
         config.multi_pv.value = multi_pv;
 
-        let hce = Box::new(hce::Evaluator::new(config.get_hce_config()));
-
-        // Engine stop flag (not used in data generation, but required by Engine)
         let stop = Arc::new(AtomicBool::new(false));
+        let engine = Engine::new(&config, stop, evaluator_factory);
 
         Self {
             _tid: tid,
             sample_counter,
             game_id_counter,
             depth,
-            engine: Engine::new(&config, hce, nnue, stop),
+            engine,
             opening_book,
             histogram,
         }

@@ -8,7 +8,7 @@ use crate::{
     utils::Bounds,
 };
 
-use super::Engine;
+use super::Searcher;
 
 /// Result of probing for singular extension or multi-cut.
 #[derive(Default)]
@@ -19,7 +19,7 @@ pub(super) struct SingularProbeResult {
     pub multi_cut: Option<i16>,
 }
 
-impl Engine {
+impl Searcher {
     /// Singular probe: evaluate TT move for extension or multi-cut prune.
     ///
     /// Based on Stockfish's restricted/modern singular extension logic.

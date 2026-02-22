@@ -33,8 +33,8 @@ impl TimeControlStats {
         self.best_moves.push(best_move);
     }
 
-    pub fn add_aspiration_failure(&mut self) {
-        self.aspiration_failures += 1;
+    pub fn add_aspiration_failures(&mut self, count: u32) {
+        self.aspiration_failures += count;
     }
 
     pub fn current_depth(&self) -> u8 {

@@ -1,9 +1,9 @@
 use cozy_chess::{Color, Move, Piece, Rank};
 use utils::Node;
 
-use super::Engine;
+use super::Searcher;
 
-impl Engine {
+impl Searcher {
     /// Non-singular extensions: passed pawn pushes to 7th rank, etc.
     /// Single entry point keeps the search loop lean.
     pub(super) fn get_extension(

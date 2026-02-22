@@ -4,7 +4,7 @@ use utils::{Node, captured_piece, piece_value};
 
 use crate::utils::{Bounds, see::see};
 
-use super::Engine;
+use super::Searcher;
 
 const NEAR_MATE_VALUE: i16 = MATE_VALUE - 200;
 
@@ -26,7 +26,7 @@ pub(super) fn mate_distance_prune(bounds: &mut Bounds, ply: u8) -> bool {
     bounds.alpha >= bounds.beta
 }
 
-impl Engine {
+impl Searcher {
     /// Futility pruning: skip moves unlikely to raise alpha based on static eval + margin.
     ///
     /// <https://www.chessprogramming.org/Futility_Pruning>
@@ -189,7 +189,7 @@ impl Engine {
 
         // If opponent couldn't beat beta even with a free move, position is strong enough to prune
         if -score >= bounds.beta {
-            self.tt.store(
+            self.shared.tt().store(
                 node.hash(),
                 ply,
                 depth.saturating_sub(r),
@@ -229,7 +229,7 @@ impl Engine {
         }
 
         if static_eval - margin >= bounds.beta && static_eval.abs() < NEAR_MATE_VALUE {
-            self.tt.store(
+            self.shared.tt().store(
                 node.hash(),
                 ply,
                 0,

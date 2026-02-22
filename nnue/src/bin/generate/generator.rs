@@ -6,6 +6,7 @@ use candle_core::Device;
 use candle_nn::VarMap;
 use evaluation::NNUE;
 use indicatif::MultiProgress;
+use search::EngineConfig;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -81,14 +82,19 @@ impl Generator {
                 let histogram_handle = histogram.clone_handle();
 
                 std::thread::spawn(move || {
-                    let nnue = Self::load_nnue(nnue_path);
+                    let hce_config = EngineConfig::default().get_hce_config();
                     let mut worker = SelfPlayWorker::new(
                         tid,
                         sample_counter,
                         game_id_counter,
                         depth,
                         pv_lines,
-                        nnue,
+                        move || {
+                            let hce = Box::new(hce::Evaluator::new(hce_config))
+                                as Box<dyn evaluation::HCE>;
+                            let nnue = Self::load_nnue(nnue_path.clone());
+                            (hce, nnue)
+                        },
                         opening_book,
                         histogram_handle,
                     );

@@ -3,14 +3,14 @@ use utils::{FracPly, Node, creates_threat, evades_threat};
 
 use crate::{lmr::LmrTable, utils::near_root};
 
-use super::Engine;
+use super::Searcher;
 
 pub enum Reduction {
     Reduce(u8),
     Prune,
 }
 
-impl Engine {
+impl Searcher {
     /// Late move reductions: reduce search depth for moves unlikely to be best.
     ///
     /// <https://www.chessprogramming.org/Late_Move_Reductions>
