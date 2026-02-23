@@ -40,6 +40,7 @@ impl SelfPlayWorker {
         config.hash_size.value = WORKER_HASH_SIZE_MB;
         config.multi_pv.value = multi_pv;
 
+        // Engine stop flag (not used in data generation, but required by Engine)
         let stop = Arc::new(AtomicBool::new(false));
         let engine = Engine::new(&config, stop, evaluator_factory);
 

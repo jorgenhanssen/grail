@@ -30,6 +30,7 @@ impl Searcher {
         params: &GoParams,
         output: Option<&Sender<UciOutput>>,
     ) -> Option<SearchResult> {
+        // Check for checkmate (no legal moves when in check)
         if !has_legal_moves(&self.board) && !self.board.checkers().is_empty() {
             if let Some(output) = output {
                 output
@@ -54,6 +55,7 @@ impl Searcher {
         let root = Node::new(self.board.clone(), NodeType::Pv);
         let mut depth = 1u8;
 
+        // Iterative deepening
         while !self.shared.is_stopped() && depth < MAX_DEPTH as u8 {
             controller.on_iteration_start();
 
@@ -68,6 +70,7 @@ impl Searcher {
                 controller.add_aspiration_failures(failures);
 
                 if let Some(pv) = pv {
+                    // Exclude this move for subsequent PVs to not search it multiple times
                     if let Some(mv) = pv.best_move() {
                         self.multi_pv.add_excluded(mv);
                     }
@@ -76,7 +79,7 @@ impl Searcher {
                     }
                     self.multi_pv.lines[pv_index].result = pv;
                 } else {
-                    break;
+                    break; // No more moves for additional PVs
                 }
 
                 if self.shared.is_stopped() {
