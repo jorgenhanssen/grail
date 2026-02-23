@@ -76,6 +76,7 @@ macro_rules! define_config {
 define_config!(
     // Public UCI options
     (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 16384 }, 256, true),
+    (threads: usize, "Threads", UciOptionType::Spin { min: 1, max: 256 }, 1, true),
     (move_overhead: i32, "Move Overhead", UciOptionType::Spin { min: 0, max: 5000 }, 10, true),
     (multi_pv: u8, "MultiPV", UciOptionType::Spin { min: 1, max: 64 }, 1, true),
     (nnue: bool, "NNUE", UciOptionType::Check, true, true),

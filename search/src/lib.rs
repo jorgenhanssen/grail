@@ -2,12 +2,13 @@
 
 mod aspiration;
 mod config;
-pub mod engine;
+mod engine;
 mod history;
 mod lmr;
 mod move_ordering;
 mod pv;
 mod result;
+pub(crate) mod searcher;
 mod stack;
 mod time_control;
 mod transposition;

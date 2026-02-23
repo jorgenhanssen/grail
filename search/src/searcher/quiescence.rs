@@ -1,5 +1,3 @@
-use std::sync::atomic::Ordering;
-
 use arrayvec::ArrayVec;
 use cozy_chess::{Board, Color, Move, Piece, Rank};
 use evaluation::scores::{MATE_VALUE, SCORE_INF};
@@ -14,9 +12,9 @@ use crate::{
     utils::{Bounds, see::see},
 };
 
-use super::{Engine, pruning::mate_distance_prune};
+use super::{Searcher, pruning::mate_distance_prune};
 
-impl Engine {
+impl Searcher {
     /// Quiescence search: continues searching captures until the position is stable enough
     /// for a reliable static evaluation.
     ///
@@ -25,11 +23,11 @@ impl Engine {
         self.pv_table.init_ply(ply);
 
         // Check if we should stop searching
-        if self.stop.load(Ordering::Relaxed) {
+        if self.shared.is_stopped() {
             return 0;
         }
 
-        self.nodes += 1;
+        self.increment_nodes();
         self.max_ply_reached = self.max_ply_reached.max(ply);
 
         if self.is_forced_draw(node) {
@@ -51,7 +49,7 @@ impl Engine {
 
         let original_bounds = bounds;
 
-        if let Some(tt) = self.tt.probe(hash, ply) {
+        if let Some(tt) = self.shared.tt().probe(hash, ply) {
             if !node.is_pv() {
                 match tt.bound {
                     Bound::Exact => return tt.value,
@@ -74,7 +72,7 @@ impl Engine {
         // Do a "stand-pat" evaluation if not in check
         if !in_check {
             if bounds.is_cutoff(stand_pat) {
-                self.tt.store(
+                self.shared.tt().store(
                     hash,
                     ply,
                     0, // Prefer deeper entries rather than QS entries
@@ -103,7 +101,7 @@ impl Engine {
                 }
 
                 if stand_pat + big_delta < bounds.alpha {
-                    self.tt.store(
+                    self.shared.tt().store(
                         hash,
                         ply,
                         0, // Prefer deeper entries rather than QS entries
@@ -160,7 +158,7 @@ impl Engine {
             let new_board = make_move(board, mv);
             let child_hash = new_board.hash();
 
-            self.tt.prefetch(child_hash);
+            self.shared.tt().prefetch(child_hash);
 
             let child = Node::new(new_board, node.node_type());
 
@@ -171,7 +169,7 @@ impl Engine {
             let value = -child_score;
 
             // Check if we were stopped during the recursive search
-            if self.stop.load(Ordering::Relaxed) {
+            if self.shared.is_stopped() {
                 break;
             }
 
@@ -194,7 +192,7 @@ impl Engine {
             return -(MATE_VALUE - ply as i16);
         }
 
-        self.tt.store(
+        self.shared.tt().store(
             hash,
             ply,
             0,
