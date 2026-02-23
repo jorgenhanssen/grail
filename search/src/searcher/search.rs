@@ -24,9 +24,7 @@ use crate::{
 use super::{MAX_DEPTH, Searcher, pruning::mate_distance_prune};
 
 impl Searcher {
-    /// Main thread: iterative deepening with time control and UCI output.
-    ///
-    /// <https://www.chessprogramming.org/Iterative_Deepening>
+    /// For main thread: Multi-PV search with iterative deepening, time control and UCI output.
     pub fn search(
         &mut self,
         params: &GoParams,
@@ -98,7 +96,20 @@ impl Searcher {
             depth += 1;
         }
 
-        self.collect_result()
+        // Collect all non-empty PV lines into the result
+        let lines: Vec<PvLine> = self
+            .multi_pv
+            .lines
+            .iter()
+            .map(|ctx| ctx.result.clone())
+            .filter(|pv| !pv.is_empty())
+            .collect();
+
+        if lines.is_empty() {
+            None
+        } else {
+            Some(SearchResult::new(lines))
+        }
     }
 
     /// For Lazy SMP: dumb search until stopped to populate the shared TT and correction history.
@@ -167,22 +178,6 @@ impl Searcher {
                     }
                 }
             }
-        }
-    }
-
-    fn collect_result(&self) -> Option<SearchResult> {
-        let lines: Vec<PvLine> = self
-            .multi_pv
-            .lines
-            .iter()
-            .map(|ctx| ctx.result.clone())
-            .filter(|pv| !pv.is_empty())
-            .collect();
-
-        if lines.is_empty() {
-            None
-        } else {
-            Some(SearchResult::new(lines))
         }
     }
 

@@ -29,14 +29,14 @@ mod singular;
 use crate::MAX_DEPTH;
 
 pub struct Searcher {
-    /// Shared state across all searchers (TT, correction history, stop flag, node counter)
-    pub(crate) shared: Arc<SharedSearcherState>,
+    /// Shared state across all searchers (TT, correction history, stop etc)
+    shared: Arc<SharedSearcherState>,
 
-    /// Searcher index (0 = main, 1.. = helpers)
-    pub(crate) thread_id: usize,
+    /// ID/index for this searcher (0 = main, 1.. = helpers)
+    thread_id: usize,
 
     /// Configuration for the engine
-    pub(crate) config: EngineConfig,
+    config: EngineConfig,
 
     /// Hand-crafted evaluation
     hce: Box<dyn HCE>,
@@ -78,7 +78,7 @@ impl Searcher {
     /// How often (in nodes) to sync the local node count to the shared atomic counter.
     const NODE_SYNC_INTERVAL: u64 = 1024;
 
-    pub(crate) fn new(
+    pub fn new(
         shared: Arc<SharedSearcherState>,
         thread_id: usize,
         config: &EngineConfig,
@@ -115,7 +115,7 @@ impl Searcher {
         instance
     }
 
-    pub(crate) fn configure(&mut self, config: &EngineConfig) {
+    pub fn configure(&mut self, config: &EngineConfig) {
         self.config = config.clone();
         self.hce = Box::new(hce::Evaluator::new(config.get_hce_config()));
 
@@ -130,36 +130,36 @@ impl Searcher {
         }
     }
 
-    pub(crate) fn name(&self) -> String {
+    pub fn name(&self) -> String {
         match &self.nnue {
             Some(nnue) => format!("Negamax ({})", nnue.name()),
             None => format!("Negamax ({})", self.hce.name()),
         }
     }
 
-    pub(crate) fn set_position(&mut self, board: Board, game_history: AHashSet<u64>) {
+    pub fn set_position(&mut self, board: Board, game_history: AHashSet<u64>) {
         self.board = board;
         self.game_history = game_history;
     }
 
-    pub(crate) fn new_game(&mut self) {
+    pub fn new_game(&mut self) {
         self.history_heuristic.reset();
         self.capture_history.reset();
         self.continuation_history.reset();
         self.search_stack.clear();
     }
 
+    pub fn sync_nodes(&mut self) {
+        if self.nodes > 0 {
+            self.shared.add_nodes(self.nodes);
+            self.nodes = 0;
+        }
+    }
+
     fn increment_nodes(&mut self) {
         self.nodes = self.nodes.wrapping_add(1);
         if self.nodes >= Self::NODE_SYNC_INTERVAL {
             self.sync_nodes();
-        }
-    }
-
-    pub(crate) fn sync_nodes(&mut self) {
-        if self.nodes > 0 {
-            self.shared.add_nodes(self.nodes);
-            self.nodes = 0;
         }
     }
 
