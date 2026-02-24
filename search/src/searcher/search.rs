@@ -471,6 +471,12 @@ impl Searcher {
             };
         }
 
+        // All moves were pruned, so no actual score was computed.
+        // Return alpha to avoid propagating -SCORE_INF through the TT.
+        if best_value == -SCORE_INF {
+            return bounds.alpha;
+        }
+
         // Use original alpha when storing in tables, since the bound type depends on the original expectation.
         // Alpha may have been raised during search, but the bound type depends on
         // whether we improved.
@@ -544,7 +550,9 @@ impl Searcher {
         let gives_check = child.in_check();
         let is_tactical = in_check || gives_check || is_cap || is_promotion;
 
-        if self.try_futility_prune(depth, in_check, is_tactical, bounds.alpha, static_eval) {
+        if !is_pv_move
+            && self.try_futility_prune(depth, in_check, is_tactical, bounds.alpha, static_eval)
+        {
             return None;
         }
 
