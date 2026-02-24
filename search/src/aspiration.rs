@@ -1,4 +1,4 @@
-use evaluation::scores::SCORE_INF;
+use evaluation::scores::{MATE_SCORE_BOUND, SCORE_INF};
 
 use crate::utils::Bounds;
 
@@ -37,6 +37,11 @@ impl AspirationWindow {
     /// Window size increases with score magnitude - winning positions are more volatile.
     pub fn begin_depth(&mut self, depth: u8, prev_score: i16) {
         if depth < self.enabled_from {
+            self.bounds = Bounds::FULL;
+            return;
+        }
+        // Mate scores are too large for the quadratic scaling below (i16 overflow).
+        if prev_score.abs() >= MATE_SCORE_BOUND {
             self.bounds = Bounds::FULL;
             return;
         }
