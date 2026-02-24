@@ -137,28 +137,4 @@ impl SearchStack {
         &self.nodes
     }
 
-    /// Penalty for repeatedly moving the same piece (discourages shuffling).
-    pub fn piece_repetition_penalty(&self, base_penalty: i16) -> i16 {
-        let stack_len = self.nodes.len();
-        if stack_len < 2 {
-            return 0;
-        }
-
-        let last_piece = match self.nodes[stack_len - 1].piece {
-            Some(p) => p,
-            None => return 0,
-        };
-
-        let consecutive_count = self.nodes[..stack_len - 1]
-            .iter()
-            .rev()
-            .take_while(|node| node.piece == Some(last_piece))
-            .count();
-
-        if consecutive_count == 0 {
-            return 0;
-        }
-
-        base_penalty * (1 << consecutive_count)
-    }
 }

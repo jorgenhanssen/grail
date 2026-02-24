@@ -202,9 +202,6 @@ define_config!(
 
     (hce_threats_multiplier: i16, "HCE Threats Multiplier", UciOptionType::Spin { min: 0, max: 100 }, 50, cfg!(feature = "tuning")),
 
-    (piece_repetition_base_penalty: i16, "Piece Repetition Base Penalty", UciOptionType::Spin { min: 0, max: 100 }, 10, cfg!(feature = "tuning")),
-    (piece_repetition_min_phase: f32, "Piece Repetition Min Phase", UciOptionType::Spin { min: 0, max: 100 }, 50.0, cfg!(feature = "tuning")),
-
     (correction_history_max_value: i32, "Correction History Max Value", UciOptionType::Spin { min: 128, max: 2048 }, 1024, cfg!(feature = "tuning")),
     (correction_table_size: usize, "Correction Table Size", UciOptionType::Spin { min: 1024, max: 65536 }, 16384, cfg!(feature = "tuning")),
 
