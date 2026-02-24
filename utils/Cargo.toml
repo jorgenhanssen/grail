@@ -10,3 +10,6 @@ repository = { workspace = true }
 [dependencies]
 cozy-chess = { workspace = true }
 rand = { workspace = true }
+
+[lints]
+workspace = true

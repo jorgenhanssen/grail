@@ -64,10 +64,6 @@ impl SharedSearcherState {
         self.stop.store(value, Ordering::Relaxed);
     }
 
-    pub fn stop_flag(&self) -> Arc<AtomicBool> {
-        Arc::clone(&self.stop)
-    }
-
     pub fn add_nodes(&self, count: u64) {
         self.total_nodes.fetch_add(count, Ordering::Relaxed);
     }

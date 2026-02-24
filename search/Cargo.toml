@@ -24,3 +24,6 @@ rand = { workspace = true }
 
 [lib]
 name = "search"
+
+[lints]
+workspace = true
