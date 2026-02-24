@@ -51,3 +51,6 @@ path = "src/bin/generate/main.rs"
 [[bin]]
 name = "train"
 path = "src/bin/train/main.rs"
+
+[lints]
+workspace = true

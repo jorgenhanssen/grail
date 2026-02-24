@@ -1,4 +1,5 @@
 use std::sync::{Arc, mpsc::Sender};
+use std::time::Instant;
 
 use ahash::AHashSet;
 use cozy_chess::Board;
@@ -72,11 +73,17 @@ pub struct Searcher {
 
     /// Triangular PV table for the principal variation
     pv_table: PvTable,
+
+    /// Hard time deadline for the search (main searcher).
+    deadline: Option<Instant>,
 }
 
 impl Searcher {
     /// How often (in nodes) to sync the local node count to the shared atomic counter.
     const NODE_SYNC_INTERVAL: u64 = 1024;
+
+    /// How often (in nodes) to check if the hard time deadline has been reached.
+    const TIME_CHECK_INTERVAL: u64 = 1024;
 
     pub fn new(
         shared: Arc<SharedSearcherState>,
@@ -109,6 +116,8 @@ impl Searcher {
             lmr: LmrTable::new(config.lmr_divisor.value as f32 / 100.0),
 
             pv_table: PvTable::new(),
+
+            deadline: None,
         };
 
         instance.configure(config);
@@ -160,6 +169,15 @@ impl Searcher {
         self.nodes = self.nodes.wrapping_add(1);
         if self.nodes >= Self::NODE_SYNC_INTERVAL {
             self.sync_nodes();
+        }
+    }
+
+    /// Checks if the hard time deadline has been reached.
+    fn check_time(&self) {
+        if let Some(deadline) = self.deadline {
+            if self.nodes.is_multiple_of(Self::TIME_CHECK_INTERVAL) && Instant::now() >= deadline {
+                self.shared.set_stop(true);
+            }
         }
     }
 

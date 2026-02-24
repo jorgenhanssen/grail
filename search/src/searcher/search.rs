@@ -1,4 +1,4 @@
-use std::sync::{atomic::Ordering, mpsc::Sender};
+use std::sync::mpsc::Sender;
 
 use arrayvec::ArrayVec;
 use cozy_chess::{Move, Piece};
@@ -47,9 +47,7 @@ impl Searcher {
 
         let mut controller =
             SearchController::new(params, &self.board, self.config.move_overhead.value as u64);
-        let stop = self.shared.stop_flag();
-        controller.on_stop(move || stop.store(true, Ordering::Relaxed));
-        controller.start_timer();
+        self.deadline = controller.deadline();
 
         let pv_count = self.config.multi_pv.value as usize;
         let root = Node::new(self.board.clone(), NodeType::Pv);
@@ -216,6 +214,7 @@ impl Searcher {
 
         let singular = self.search_stack.current().and_then(|n| n.singular);
 
+        self.check_time();
         if self.shared.is_stopped() {
             return 0;
         }

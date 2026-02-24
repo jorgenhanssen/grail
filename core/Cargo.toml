@@ -24,3 +24,6 @@ rand = { workspace = true }
 rayon = { workspace = true }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
+
+[lints]
+workspace = true
