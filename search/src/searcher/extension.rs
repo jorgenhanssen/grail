@@ -12,7 +12,7 @@ impl Searcher {
         m: &Move,
         moved_piece: Piece,
         is_capture: bool,
-    ) -> u8 {
+    ) -> i8 {
         // Passed pawn extension: extend non-capture pawn pushes to 7th rank.
         // https://www.chessprogramming.org/Passed_Pawn_Extensions
         if moved_piece == Piece::Pawn && !is_capture && m.promotion.is_none() {

@@ -513,7 +513,7 @@ impl Searcher {
         move_index: i32,
         is_improving: bool,
         static_eval: i16,
-        extra_extension: u8,
+        extra_extension: i8,
     ) -> Option<(i16, bool, u8)> {
         let moved_color = node.board().side_to_move();
         let moved_piece = node.piece_on(m.from).unwrap();
@@ -565,59 +565,66 @@ impl Searcher {
             Reduction::Prune => return None,
         };
 
-        let mut extension = self.get_extension(node, &m, moved_piece, is_cap);
-        extension = extension.saturating_add(extra_extension);
+        let extension = self.get_extension(node, &m, moved_piece, is_cap);
+        let extension = (extension + extra_extension).max(0) as u8;
 
-        // Child's remaining depth after extension/reduction
-        let extended_child_depth = depth.saturating_sub(1).saturating_add(extension);
-        let reduced_child_depth = extended_child_depth.saturating_sub(reduction);
-        // Effective depth we searched
-        let mut searched_depth = depth
-            .saturating_add(extension)
-            .saturating_sub(reduction)
-            .max(1);
+        let mut adjusted_depth = depth.saturating_add(extension).saturating_sub(reduction);
 
-        // Build child bounds: full window for PV move, null window otherwise
         let child_bounds = if is_pv_move {
             bounds.invert()
         } else {
             Bounds::null(bounds.alpha).invert()
         };
 
-        // Initial search (reduced if LMR, null window if not first move)
         self.search_stack
             .push_move(&child, m, moved_piece, moved_color);
-        let child_value =
-            self.search_node(&child, reduced_child_depth, ply + 1, child_bounds, true);
+        let mut value = -self.search_node(
+            &child,
+            adjusted_depth.saturating_sub(1),
+            ply.saturating_add(1),
+            child_bounds,
+            true,
+        );
         self.search_stack.pop();
-        let mut value = -child_value;
 
-        // Re-search at full depth (if LMR was used and value > alpha)
+        // Re-search without reduction if reduced search beat alpha
         if reduction > 0 && value > bounds.alpha {
             child.set_type(child.node_type().inverted());
+
+            // Search at full depth
+            adjusted_depth = depth.saturating_add(extension);
+
             self.search_stack
                 .push_move(&child, m, moved_piece, moved_color);
-            let re_child_value =
-                self.search_node(&child, extended_child_depth, ply + 1, child_bounds, true);
+            value = -self.search_node(
+                &child,
+                adjusted_depth.saturating_sub(1),
+                ply.saturating_add(1),
+                child_bounds,
+                true,
+            );
             self.search_stack.pop();
-            value = -re_child_value;
-            searched_depth = depth.saturating_add(extension).max(1);
         }
 
-        // Re-search with full window (if null window failed high in a PV node)
+        // Re-search with full window if null window failed high in a PV node
         if value > bounds.alpha && value < bounds.beta && !is_pv_move && is_pv_node {
             child.set_type(NodeType::Pv);
+
             self.search_stack
                 .push_move(&child, m, moved_piece, moved_color);
-            let full_child_value =
-                self.search_node(&child, extended_child_depth, ply + 1, bounds.invert(), true);
+            value = -self.search_node(
+                &child,
+                adjusted_depth.saturating_sub(1),
+                ply.saturating_add(1),
+                bounds.invert(),
+                true,
+            );
             self.search_stack.pop();
-            value = -full_child_value;
-            searched_depth = depth.saturating_add(extension).max(1);
         }
 
         let is_quiet = !is_cap && !is_promotion;
-        Some((value, is_quiet, searched_depth))
+
+        Some((value, is_quiet, adjusted_depth))
     }
 
     /// Handler called if a search fails high - updates history tables.

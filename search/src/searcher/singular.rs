@@ -13,8 +13,8 @@ use super::Searcher;
 /// Result of probing for singular extension or multi-cut.
 #[derive(Default)]
 pub(super) struct SingularProbeResult {
-    /// Extension to apply to the TT move.
-    pub extension: u8,
+    /// Extension to apply to the TT move (can be negative).
+    pub extension: i8,
     /// If Some, prune the node and return this value.
     pub multi_cut: Option<i16>,
 }
@@ -90,7 +90,11 @@ impl Searcher {
         // <https://www.chessprogramming.org/Multi-Cut>
         if singular_value >= beta && !node.is_pv() && singular_value.abs() < MATE_SCORE_BOUND {
             result.multi_cut = Some(singular_value);
+            return result;
         }
+
+        // TODO: Negative extensions. Infrastructure is now in place
+        // but tested neutral at STC/LTC. Revisit after tuning.
 
         result
     }
