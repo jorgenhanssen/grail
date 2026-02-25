@@ -30,6 +30,9 @@ indicatif = { workspace = true }
 tempfile = { workspace = true }
 hyperloglogplus = { workspace = true }
 
+[target.'cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "bmi2"))'.dependencies]
+cozy-chess = { workspace = true, features = ["pext"] }
+
 [features]
 default = []
 cuda = [
