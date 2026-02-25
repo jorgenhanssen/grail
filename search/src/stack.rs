@@ -136,5 +136,4 @@ impl SearchStack {
     pub fn as_slice(&self) -> &[SearchNode] {
         &self.nodes
     }
-
 }
