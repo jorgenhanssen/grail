@@ -123,7 +123,7 @@ fn compute(
     // Pawns: threaten any non-pawn piece
     if !pawns.is_empty() {
         for sq in pawns {
-            let squares = get_pawn_attacks(sq, color) & all_pieces;
+            let squares = get_pawn_attacks(sq, color);
             space += (squares & !my_pieces).len() as i16;
             attacks |= squares;
             if has_non_pawns {
