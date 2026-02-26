@@ -1,6 +1,8 @@
+mod display;
 mod engine;
 mod grail;
 mod nnue;
+mod search_metadata;
 mod worker;
 
 use std::error::Error;
