@@ -876,6 +876,7 @@ dependencies = [
  "rayon",
  "search",
  "uci",
+ "utils",
 ]
 
 [[package]]

@@ -116,6 +116,9 @@ impl Grail {
             UciInput::Stop => {
                 self.stop.store(true, Ordering::Relaxed);
             }
+            UciInput::Display => {
+                let _ = self.cmd_tx.send(EngineCommand::Display);
+            }
             UciInput::Quit => return false,
             UciInput::Unknown(_) => {} // Ignore unknown commands per UCI spec
         }

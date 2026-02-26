@@ -31,6 +31,9 @@ impl Decoder {
             _ if input.starts_with("stop") => UciInput::Stop,
             _ if input.starts_with("quit") => UciInput::Quit,
 
+            // Non-standard commands
+            "d" => UciInput::Display,
+
             _ => UciInput::Unknown(input.to_string()),
         }
     }

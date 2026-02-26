@@ -13,6 +13,7 @@ tuning = ["uci/tuning", "search/tuning"]
 
 [dependencies]
 search = { path = "../search" }
+utils = { path = "../utils" }
 nnue = { path = "../nnue" }
 hce = { path = "../hce" }
 uci = { path = "../uci" }

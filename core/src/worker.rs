@@ -4,6 +4,7 @@ use ahash::AHashSet;
 use cozy_chess::Board;
 use search::{Engine, EngineConfig};
 use uci::{NULL_MOVE, UciOutput, move_to_uci};
+use utils::board_to_ascii;
 
 /// Commands sent from the UCI thread to the engine worker.
 pub enum EngineCommand {
@@ -18,6 +19,8 @@ pub enum EngineCommand {
     },
     /// Start searching with the given parameters.
     Go(uci::commands::GoParams),
+    /// Display current position.
+    Display,
     /// Shut down the worker thread.
     Quit,
 }
@@ -62,6 +65,9 @@ impl EngineWorker {
                 }
                 EngineCommand::Configure(config) => {
                     self.engine.configure(&config, false);
+                }
+                EngineCommand::Display => {
+                    println!("\n{}\n", board_to_ascii(self.engine.board()));
                 }
                 EngineCommand::Quit => break,
             }

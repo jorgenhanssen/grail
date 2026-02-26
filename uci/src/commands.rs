@@ -22,6 +22,9 @@ pub enum UciInput {
         value: String,
     },
     Unknown(String),
+
+    /// Non-standard commands
+    Display,
 }
 
 /// Commands sent to the UCI GUI.

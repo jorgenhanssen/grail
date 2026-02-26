@@ -4,6 +4,7 @@
 mod attacks;
 pub mod bitset;
 pub mod board_metrics;
+mod display;
 mod eval;
 mod material;
 mod math;
@@ -14,6 +15,7 @@ mod ply;
 mod zobrist;
 
 pub use attacks::{get_attackers_to, get_discovered_attacks};
+pub use display::board_to_ascii;
 pub use eval::flip_eval_perspective;
 pub use material::{
     BISHOP_VALUE, KNIGHT_VALUE, MAJOR_PIECES, MINOR_PIECES, NON_PAWN_PIECES, PAWN_PIECES,
