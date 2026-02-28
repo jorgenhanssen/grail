@@ -7,7 +7,7 @@ use utils::piece_value;
 use crate::history::CaptureHistory;
 use utils::Node;
 
-use super::utils::{capture_score, select_highest, ScoredMove};
+use super::utils::{ScoredMove, capture_score, select_highest};
 
 pub const MAX_FORCING_MOVES: usize = 32;
 

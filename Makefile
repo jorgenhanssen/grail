@@ -2,7 +2,7 @@ SHELL = /bin/bash
 
 .ONESHELL:
 
-.PHONY: grail grail-tuning generate train clean
+.PHONY: grail tunable generate train clean
 
 # Default to native optimization for local development.
 RUSTFLAGS = -C target-cpu=native
@@ -10,11 +10,14 @@ RUSTFLAGS = -C target-cpu=native
 grail:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin grail
 
-grail-tuning:
+tunable:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin grail --features tuning
 
 generate:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin generate
+
+test:
+	RUSTFLAGS="$(RUSTFLAGS)" cargo test
 
 train:
 	@GPU_FEATURES=$$([ "$$(uname -s)" = "Darwin" ] && echo metal || (command -v nvcc >/dev/null 2>&1 && echo cuda || true)); \

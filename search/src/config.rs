@@ -74,15 +74,19 @@ macro_rules! define_config {
 // Format: (field, "UCI Name", type, default, exposed_via_uci)
 // Most tuning params use cfg!(feature = "tuning") so they're hidden in release builds.
 define_config!(
-    // --- Core UCI options (always exposed) ---
+    // Public UCI options
     (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 16384 }, 256, true),
+    (threads: usize, "Threads", UciOptionType::Spin { min: 1, max: 256 }, 1, true),
     (move_overhead: i32, "Move Overhead", UciOptionType::Spin { min: 0, max: 5000 }, 10, true),
+    (multi_pv: u8, "MultiPV", UciOptionType::Spin { min: 1, max: 64 }, 1, true),
     (nnue: bool, "NNUE", UciOptionType::Check, true, true),
 
+    // Tuning options
     (aspiration_window_size: i16, "Aspiration Window Size", UciOptionType::Spin { min: 10, max: 100 }, 40, cfg!(feature = "tuning")),
     (aspiration_window_widen: i16, "Aspiration Window Widening", UciOptionType::Spin { min: 2, max: 4 }, 2, cfg!(feature = "tuning")),
     (aspiration_window_depth: u8, "Aspiration Window Depth", UciOptionType::Spin { min: 1, max: 10 }, 5, cfg!(feature = "tuning")),
     (aspiration_window_retries: i16, "Aspiration Window Retries", UciOptionType::Spin { min: 1, max: 5 }, 3, cfg!(feature = "tuning")),
+    (aspiration_score_divisor: i32, "Aspiration Score Divisor", UciOptionType::Spin { min: 1024, max: 65536 }, 16384, cfg!(feature = "tuning")),
 
     (history_max_value: i32, "History Max Value", UciOptionType::Spin { min: 128, max: 1024 }, 512, cfg!(feature = "tuning")),
     (history_reduction_threshold: i16, "History Reduction Threshold", UciOptionType::Spin { min: -512, max: 512 }, -8, cfg!(feature = "tuning")),
@@ -101,8 +105,21 @@ define_config!(
     (continuation_malus_multiplier: i32, "Continuation Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
 
     (quiet_check_bonus: i16, "Quiet Check Bonus", UciOptionType::Spin { min: 0, max: 2000 }, 1000, cfg!(feature = "tuning")),
+    (quiet_check_see_margin: i16, "Quiet Check SEE Margin", UciOptionType::Spin { min: 0, max: 300 }, 75, cfg!(feature = "tuning")),
+    (bad_quiet_threshold: i16, "Bad Quiet Threshold", UciOptionType::Spin { min: -512, max: 0 }, -150, cfg!(feature = "tuning")),
+    (escape_divisor: i16, "Escape Divisor", UciOptionType::Spin { min: 1, max: 100 }, 10, cfg!(feature = "tuning")),
+    (unsafe_square_divisor: i16, "Unsafe Square Divisor", UciOptionType::Spin { min: 1, max: 100 }, 20, cfg!(feature = "tuning")),
 
     (lmr_divisor: i32, "LMR Divisor", UciOptionType::Spin { min: 100, max: 400 }, 220, cfg!(feature = "tuning")),
+
+    (reduction_cut_node: u16, "Reduction Cut Node", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (reduction_not_improving: u16, "Reduction Not Improving", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (reduction_bad_history: u16, "Reduction Bad History", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (anti_reduction_near_root: u16, "Anti Reduction Near Root", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (anti_reduction_pv_node: u16, "Anti Reduction PV Node", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (anti_reduction_tactical: u16, "Anti Reduction Tactical", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (anti_reduction_threat: u16, "Anti Reduction Threat", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (anti_reduction_check: u16, "Anti Reduction Check", UciOptionType::Spin { min: 0, max: 4096 }, 1500, cfg!(feature = "tuning")),
 
     (nmp_min_depth: u8, "NMP Min Depth", UciOptionType::Spin { min: 2, max: 10 }, 4, cfg!(feature = "tuning")),
     (nmp_base_reduction: u8, "NMP Base Reduction", UciOptionType::Spin { min: 1, max: 10 }, 2, cfg!(feature = "tuning")),
@@ -133,11 +150,17 @@ define_config!(
     (iir_reduction: u8, "IIR Reduction", UciOptionType::Spin { min: 0, max: 4 }, 1, cfg!(feature = "tuning")),
     (iir_min_depth: u8, "IIR Min Depth", UciOptionType::Spin { min: 2, max: 10 }, 4, cfg!(feature = "tuning")),
 
-    // SEE Pruning
-    (see_prune_min_remaining_depth: u8, "SEE Prune Min Remaining Depth", UciOptionType::Spin { min: 0, max: 10 }, 1, cfg!(feature = "tuning")),
-    (see_prune_max_depth: u8, "SEE Prune Max Depth", UciOptionType::Spin { min: 1, max: 10 }, 6, cfg!(feature = "tuning")),
-    (see_prune_depth_margin: i16, "SEE Prune Depth Margin", UciOptionType::Spin { min: 10, max: 150 }, 75, cfg!(feature = "tuning")),
-    (see_prune_min_attacker_value: i16, "SEE Prune Min Attacker Value", UciOptionType::Spin { min: 0, max: 500 }, 200, cfg!(feature = "tuning")),
+    (see_capture_max_depth: u8, "SEE Capture Max Depth", UciOptionType::Spin { min: 1, max: 10 }, 6, cfg!(feature = "tuning")),
+    (see_capture_depth_margin: i16, "SEE Capture Depth Margin", UciOptionType::Spin { min: 10, max: 150 }, 75, cfg!(feature = "tuning")),
+    (see_capture_min_attacker_value: i16, "SEE Capture Min Attacker Value", UciOptionType::Spin { min: 0, max: 500 }, 200, cfg!(feature = "tuning")),
+
+    (see_quiet_max_depth: u8, "SEE Quiet Max Depth", UciOptionType::Spin { min: 1, max: 12 }, 8, cfg!(feature = "tuning")),
+    (see_quiet_depth_multiplier: i16, "SEE Quiet Depth Multiplier", UciOptionType::Spin { min: 10, max: 150 }, 64, cfg!(feature = "tuning")),
+
+    (singular_min_depth: u8, "Singular Min Depth", UciOptionType::Spin { min: 4, max: 12 }, 6, cfg!(feature = "tuning")),
+    (singular_depth_margin: u8, "Singular Depth Margin", UciOptionType::Spin { min: 1, max: 5 }, 3, cfg!(feature = "tuning")),
+    (singular_beta_margin: i16, "Singular Beta Margin", UciOptionType::Spin { min: 1, max: 5 }, 2, cfg!(feature = "tuning")),
+    (double_ext_margin: i16, "Double Extension Margin", UciOptionType::Spin { min: 10, max: 100 }, 50, cfg!(feature = "tuning")),
 
     (hce_tempo_bonus: i16, "HCE Tempo Bonus", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
 
@@ -179,8 +202,15 @@ define_config!(
 
     (hce_threats_multiplier: i16, "HCE Threats Multiplier", UciOptionType::Spin { min: 0, max: 100 }, 50, cfg!(feature = "tuning")),
 
-    (piece_repetition_base_penalty: i16, "Piece Repetition Base Penalty", UciOptionType::Spin { min: 0, max: 100 }, 10, cfg!(feature = "tuning")),
-    (piece_repetition_min_phase: f32, "Piece Repetition Min Phase", UciOptionType::Spin { min: 0, max: 100 }, 50.0, cfg!(feature = "tuning")),
+    (correction_history_max_value: i32, "Correction History Max Value", UciOptionType::Spin { min: 128, max: 2048 }, 1024, cfg!(feature = "tuning")),
+    (correction_table_size: usize, "Correction Table Size", UciOptionType::Spin { min: 1024, max: 65536 }, 16384, cfg!(feature = "tuning")),
+
+    (correction_pawn_weight: i32, "Correction Pawn Weight", UciOptionType::Spin { min: 0, max: 20000 }, 10347, cfg!(feature = "tuning")),
+    (correction_minor_weight: i32, "Correction Minor Weight", UciOptionType::Spin { min: 0, max: 20000 }, 8821, cfg!(feature = "tuning")),
+    (correction_nonpawn_weight: i32, "Correction NonPawn Weight", UciOptionType::Spin { min: 0, max: 20000 }, 11665, cfg!(feature = "tuning")),
+    (correction_combined_divisor: i32, "Correction Combined Divisor", UciOptionType::Spin { min: 1024, max: 262144 }, 131072, cfg!(feature = "tuning")),
+    (correction_minor_update_weight: i32, "Correction Minor Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 156, cfg!(feature = "tuning")),
+    (correction_nonpawn_update_weight: i32, "Correction NonPawn Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 178, cfg!(feature = "tuning")),
 );
 
 impl EngineConfig {

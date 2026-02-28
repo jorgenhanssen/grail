@@ -11,6 +11,9 @@ target/
 # Logs
 *.log
 
+# SPRT test results
+sprt/
+
 # NNUE training data (large, regenerated locally)
 nnue/data/
 

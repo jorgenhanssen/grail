@@ -5,7 +5,7 @@ use std::simd::u32x4;
 use cozy_chess::{Move, Piece, Square};
 use utils::memory::prefetch;
 
-use crate::pruning::MATE_SCORE_BOUND;
+use evaluation::scores::MATE_SCORE_BOUND;
 
 /// Indicates whether the stored value is exact or a bound.
 #[derive(Clone, Copy, PartialEq, Default)]
@@ -155,7 +155,7 @@ impl TranspositionTable {
 
     /// Probes the TT for a matching entry, returning the deepest match.
     /// Caller should check `result.depth >= needed_depth` before using value/bound for cutoffs.
-    pub fn probe(&self, hash: u64, depth: u8) -> Option<ProbeResult> {
+    pub fn probe(&self, hash: u64, ply: u8) -> Option<ProbeResult> {
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
         let key32 = hash as u32;
@@ -187,12 +187,12 @@ impl TranspositionTable {
         let (i, _) = best?;
         let entry = &cluster[i];
 
-        // Adjust mate scores relative to current depth
+        // Adjust mate scores relative to current ply
         let value = if entry.value.abs() >= MATE_SCORE_BOUND {
             if entry.value > 0 {
-                entry.value - depth as i16
+                entry.value - ply as i16
             } else {
-                entry.value + depth as i16
+                entry.value + ply as i16
             }
         } else {
             entry.value
@@ -218,15 +218,14 @@ impl TranspositionTable {
     pub fn store(
         &mut self,
         hash: u64,
+        ply: u8,
         depth: u8,
-        max_depth: u8,
         value: i16,
         static_eval: Option<i16>,
         alpha: i16,
         beta: i16,
         best_move: Option<Move>,
     ) {
-        let stored_depth = max_depth - depth;
         let best_move_packed = pack_move(best_move);
         let key32 = hash as u32;
 
@@ -241,9 +240,9 @@ impl TranspositionTable {
         // Store mate scores relative to root so they remain valid from different plies
         let stored_value = if value.abs() >= MATE_SCORE_BOUND {
             if value > 0 {
-                value + depth as i16
+                value + ply as i16
             } else {
-                value - depth as i16
+                value - ply as i16
             }
         } else {
             value
@@ -268,7 +267,7 @@ impl TranspositionTable {
         // Exact key hit: Replace only if deeper or better bound
         for e in cluster.iter_mut() {
             if e.key == key32 {
-                let new_value = stored_depth as i16 + depth_bonus(bound);
+                let new_value = depth as i16 + depth_bonus(bound);
                 let old_value = e.depth as i16 + depth_bonus(e.bound);
 
                 // Always replace if new bound is Exact and old isn't.
@@ -279,7 +278,7 @@ impl TranspositionTable {
                 if should_replace {
                     e.set(
                         key32,
-                        stored_depth,
+                        depth,
                         stored_value,
                         stored_se,
                         bound,
@@ -296,7 +295,7 @@ impl TranspositionTable {
             if e.key == 0 {
                 e.set(
                     key32,
-                    stored_depth,
+                    depth,
                     stored_value,
                     stored_se,
                     bound,
@@ -326,7 +325,7 @@ impl TranspositionTable {
 
         cluster[victim_idx].set(
             key32,
-            stored_depth,
+            depth,
             stored_value,
             stored_se,
             bound,

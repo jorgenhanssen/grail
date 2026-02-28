@@ -22,6 +22,9 @@ pub enum UciInput {
         value: String,
     },
     Unknown(String),
+
+    /// Non-standard commands
+    Display,
 }
 
 /// Commands sent to the UCI GUI.
@@ -39,17 +42,34 @@ pub enum UciOutput {
 
 /// Search information sent to the GUI during analysis.
 ///
-/// Example: `info depth 4 seldepth 7 nodes 3274 nps 922805 time 3 score cp 10 pv e2e4 d7d5 e4d5 d8d5`
-#[derive(Debug, Default, Clone)]
+/// Example: `info depth 4 seldepth 7 multipv 1 nodes 3274 nps 922805 time 3 score cp 10 pv e2e4 d7d5 e4d5 d8d5`
+#[derive(Debug, Clone)]
 pub struct Info {
     pub depth: u8,
     pub sel_depth: u8,
-    pub nodes: u32,
-    pub nodes_per_second: u32,
+    pub multipv: u8,
+    pub nodes: u64,
+    pub nodes_per_second: u64,
     pub hashfull: u16,
     pub time: u32,
     pub pv: Vec<String>,
     pub score: Score,
+}
+
+impl Default for Info {
+    fn default() -> Self {
+        Self {
+            depth: 0,
+            sel_depth: 0,
+            multipv: 1,
+            nodes: 0,
+            nodes_per_second: 0,
+            hashfull: 0,
+            time: 0,
+            pv: Vec::new(),
+            score: Score::default(),
+        }
+    }
 }
 
 /// Evaluation score in UCI format.

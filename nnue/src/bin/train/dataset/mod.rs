@@ -12,7 +12,7 @@ pub use loader::DataLoader;
 pub use shard_builder::ShardStats;
 pub use shard_reader::ShardReader;
 
-use shard_builder::{build_shards, ShardPaths};
+use shard_builder::{ShardPaths, build_shards};
 
 /// A sharded dataset ready for training.
 ///

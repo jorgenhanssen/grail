@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use ahash::AHashSet;
-use cozy_chess::{util::parse_uci_move, Board};
+use cozy_chess::{Board, util::parse_uci_move};
 
 use super::commands::{GoParams, UciInput};
 
@@ -30,6 +30,9 @@ impl Decoder {
             _ if input.starts_with("setoption") => self.decode_setoption(input),
             _ if input.starts_with("stop") => UciInput::Stop,
             _ if input.starts_with("quit") => UciInput::Quit,
+
+            // Non-standard commands
+            "d" => UciInput::Display,
 
             _ => UciInput::Unknown(input.to_string()),
         }

@@ -1,2 +1,2 @@
 *.safetensors filter=lfs diff=lfs merge=lfs -text
-
+books/*.epd filter=lfs diff=lfs merge=lfs -text

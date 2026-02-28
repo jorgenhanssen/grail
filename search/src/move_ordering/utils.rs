@@ -1,5 +1,5 @@
 use cozy_chess::{Board, Move};
-use utils::piece_value;
+use utils::{captured_piece, piece_value};
 
 use crate::history::CaptureHistory;
 
@@ -24,8 +24,15 @@ pub(super) fn select_highest(array: &[ScoredMove]) -> Option<usize> {
 }
 
 pub(super) fn capture_score(board: &Board, mv: Move, capture_history: &CaptureHistory) -> i16 {
-    let victim = board.piece_on(mv.to).unwrap();
-    let hist = capture_history.get(board, mv);
+    let victim = captured_piece(board, mv).unwrap();
+    let attacker = board.piece_on(mv.from).unwrap();
 
-    piece_value(victim) + hist
+    // Prefer capturing high value with low-value attacker
+    // https://www.chessprogramming.org/MVV-LVA
+    let mvv_lva = 6 * piece_value(victim) - piece_value(attacker);
+
+    // Up-scale history to compensate for 6x victim value
+    let hist = 5 * capture_history.get(board, mv);
+
+    mvv_lva + hist
 }

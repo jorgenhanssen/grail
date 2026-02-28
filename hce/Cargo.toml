@@ -12,3 +12,6 @@ evaluation = { path = "../evaluation" }
 utils = { path = "../utils" }
 arrayvec = { workspace = true }
 cozy-chess = { workspace = true }
+
+[lints]
+workspace = true

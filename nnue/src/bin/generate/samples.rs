@@ -1,45 +1,47 @@
+use cozy_chess::Move;
 use nnue::network::CP_BOUND;
+use std::fmt;
 use std::io::{self, Write};
 
-#[derive(Clone, Debug)]
-pub struct Samples {
-    pub fens: Vec<Box<str>>,
-    pub scores: Vec<i16>,
-    pub game_ids: Vec<usize>,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameOutcome {
+    White,
+    Draw,
+    Black,
 }
 
-impl Samples {
-    pub fn from_evaluations(evals: &[(String, i16, usize)]) -> Self {
-        let mut fens = Vec::with_capacity(evals.len());
-        let mut scores = Vec::with_capacity(evals.len());
-        let mut game_ids = Vec::with_capacity(evals.len());
-        for (fen, score, game_id) in evals.iter() {
-            fens.push(fen.clone().into_boxed_str());
-            scores.push((*score).clamp(-CP_BOUND, CP_BOUND));
-            game_ids.push(*game_id);
-        }
-        Self {
-            fens,
-            scores,
-            game_ids,
+impl fmt::Display for GameOutcome {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GameOutcome::White => write!(f, "W"),
+            GameOutcome::Draw => write!(f, "D"),
+            GameOutcome::Black => write!(f, "B"),
         }
     }
+}
 
-    pub fn write<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-        writeln!(writer, "fen,score,game_id")?; // Header
+pub struct Sample {
+    pub fen: String,
+    pub score: i16,
+    pub game_id: usize,
+    pub best_move: Move,
+    pub outcome: GameOutcome,
+}
 
-        for i in 0..self.fens.len() {
-            writeln!(
-                writer,
-                "{},{},{}",
-                self.fens[i], self.scores[i], self.game_ids[i]
-            )?;
-        }
+pub fn write_samples<W: Write>(writer: &mut W, samples: &[Sample]) -> io::Result<()> {
+    writeln!(writer, "fen,score,best_move,outcome,game_id")?;
 
-        Ok(())
+    for s in samples {
+        writeln!(
+            writer,
+            "{},{},{},{},{}",
+            s.fen,
+            s.score.clamp(-CP_BOUND, CP_BOUND),
+            s.best_move,
+            s.outcome,
+            s.game_id,
+        )?;
     }
 
-    pub fn len(&self) -> usize {
-        self.fens.len()
-    }
+    Ok(())
 }

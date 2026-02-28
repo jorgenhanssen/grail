@@ -1,6 +1,6 @@
 # Grail
 
-[![CI](https://github.com/jorgenhanssen/grail/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jorgenhanssen/grail/actions/workflows/ci.yml)
+[![CCRL 40/15](https://img.shields.io/badge/CCRL%2040%2F15-3074%20Elo-%23DAA520.svg)](https://computerchess.org.uk/ccrl/4040/cgi/compare_engines.cgi?family=Grail&print=Rating+list)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-nightly-orange.svg)](https://www.rust-lang.org/)
 
@@ -47,6 +47,8 @@ and you should be able to run it! 🍎
 Once added to your GUI, you can configure the engine via the UCI options:
 
 - **Hash**: Size of the transposition table in MB (Default: 256).
+- **Threads**: Number of search threads (Default: 1).
+- **MultiPV**: Number of principal variations to search (Default: 1).
 - **NNUE**: Toggle between Neural Network (NNUE) and Hand-Crafted (HCE) evaluation (Default: true).
 - **Move Overhead**: Time buffer in milliseconds to account for communication lag (Default: 10).
 
@@ -78,7 +80,7 @@ This builds the release binary at `target/release/grail`.
 The project includes a `Makefile` for convenience:
 
 - **`make grail`** (default): Builds the release binary.
-- **`make grail-tuning`**: Builds with exposed parameters for SPSA tuning.
+- **`make tunable`**: Builds with exposed parameters for SPSA tuning.
 - **`make generate`**: Builds the data generation tool for NNUE training.
 - **`make train`**: Builds the NNUE trainer (auto-detects CUDA/Metal).
 - **`make clean`**: Cleans the build directory.
@@ -114,7 +116,9 @@ make generate
 
 - `--book`: Path to an opening book in EPD format (required).
 - `--depth`: Search depth for each move (default: 10).
-- `--nnue`: Use NNUE for generation (default: true, else HCE).
+- `--pv-lines`: Number of PV lines to search at each decision point (default: 1).
+- `--threads`: Number of threads (default: number of logical CPUs).
+- `--nnue`: Use NNUE for evaluation instead of HCE (default: false).
 
 Generated data is saved to `nnue/data/YYYY-MM-DD-HH:MM.csv`.
 
@@ -138,9 +142,13 @@ The trainer loads all CSV files from `nnue/data/` and saves the best model to `n
 - `--val-ratio`: Fraction of data to use for validation (default: 0.1).
 - `--test-ratio`: Fraction of data to use for testing (default: 0.01).
 - `--lr-decay`: Learning rate decay factor (default: 0.95).
-- `--patience`: Epochs to wait for improvement before stopping (default: 2).
+- `--patience`: Epochs without improvement before early stopping (default: 2).
+- `--shard-size-mb`: Size of each data shard in megabytes (default: 500).
+- `--wdl`: WDL blending weight, 0.0 = pure eval, 1.0 = pure WDL (default: 0.3).
+- `--init-model`: Save a randomly initialized model and exit.
 
 ## Acknowledgements
 
-- [Chess Programming Wiki](https://www.chessprogramming.org/) – An invaluable resource for chess programming concepts and techniques.
-- Opening books in `/books` sourced from the computer chess community via [TalkChess](https://talkchess.com/viewtopic.php?t=50619).
+- [Chess Programming Wiki](https://www.chessprogramming.org/) - A very helpful resource for chess programming concepts and techniques.
+- Thanks to various engine testers, such as the [CCRL](https://computerchess.org.uk/ccrl/), for testing and ranking Grail.
+- Opening books in `/books` sourced from the [Stockfish opening books](https://github.com/official-stockfish/books) and the computer chess community.

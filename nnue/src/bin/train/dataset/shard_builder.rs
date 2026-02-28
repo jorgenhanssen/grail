@@ -1,15 +1,15 @@
 use ahash::AHashMap;
 use cozy_chess::Board;
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
-use nnue::network::{output_bucket, OUTPUT_BUCKETS};
+use nnue::network::{OUTPUT_BUCKETS, output_bucket};
 use rayon::prelude::*;
 use std::collections::hash_map::RandomState;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::progress::ShardProgressBar;
 
@@ -30,6 +30,9 @@ pub struct ShardStats {
     pub unique_fens: usize,
     pub total_games: usize,
     pub bucket_counts: [usize; OUTPUT_BUCKETS],
+    pub white_wins: usize,
+    pub draws: usize,
+    pub black_wins: usize,
 }
 
 impl ShardStats {
@@ -41,9 +44,17 @@ impl ShardStats {
         );
         log::info!("Total games: {}", self.total_games);
 
+        let n = self.total_samples as f64;
+        log::info!(
+            "Outcomes: white {:.1}% / draw {:.1}% / black {:.1}%",
+            100.0 * self.white_wins as f64 / n,
+            100.0 * self.draws as f64 / n,
+            100.0 * self.black_wins as f64 / n,
+        );
+
         log::info!("Output bucket distribution:");
         for (i, &count) in self.bucket_counts.iter().enumerate() {
-            let percentage = 100.0 * count as f64 / self.total_samples as f64;
+            let percentage = 100.0 * count as f64 / n;
             log::info!("  Bucket {}: {} samples ({:.1}%)", i, count, percentage);
         }
     }
@@ -71,7 +82,7 @@ impl ShardWriter {
             let path = dir.join(format!("shard_{}.csv", i));
             let file = File::create(&path)?;
             let mut writer = BufWriter::new(file);
-            writeln!(writer, "fen,score")?;
+            writeln!(writer, "fen,score,outcome")?;
             writers.push(Mutex::new(writer));
         }
 
@@ -81,11 +92,10 @@ impl ShardWriter {
         })
     }
 
-    fn write(&self, fen: &str, score: i16) {
-        // Round-robin to spread correlated samples
+    fn write(&self, fen: &str, score: i16, outcome: &str) {
         let idx = self.next_idx.fetch_add(1, Ordering::Relaxed) % self.writers.len();
         let mut writer = self.writers[idx].lock().unwrap();
-        if let Err(e) = writeln!(writer, "{},{}", fen, score) {
+        if let Err(e) = writeln!(writer, "{},{},{}", fen, score, outcome) {
             log::error!("Failed to write to shard: {}", e);
         }
     }
@@ -106,6 +116,9 @@ struct WorkerStats {
     games: usize,
     unique_fens: HyperLogLogPlus<String, RandomState>,
     bucket_counts: [usize; OUTPUT_BUCKETS],
+    white_wins: usize,
+    draws: usize,
+    black_wins: usize,
 }
 
 impl WorkerStats {
@@ -116,14 +129,24 @@ impl WorkerStats {
             games: 0,
             unique_fens: HyperLogLogPlus::new(HLL_PRECISION, RandomState::new()).unwrap(),
             bucket_counts: [0; OUTPUT_BUCKETS],
+            white_wins: 0,
+            draws: 0,
+            black_wins: 0,
         }
     }
 
-    fn register_sample(&mut self, fen: &str, split: Split) {
+    fn register_sample(&mut self, fen: &str, outcome: &str, split: Split) {
         self.samples += 1;
 
         if split == Split::Train {
             self.train_samples += 1;
+        }
+
+        match outcome {
+            "W" => self.white_wins += 1,
+            "D" => self.draws += 1,
+            "B" => self.black_wins += 1,
+            _ => log::warn!("Unknown outcome: {}", outcome),
         }
 
         self.unique_fens.insert(&fen.to_string());
@@ -199,6 +222,9 @@ pub fn build_shards(
     let mut train_samples = 0;
     let mut total_games = 0;
     let mut bucket_counts = [0usize; OUTPUT_BUCKETS];
+    let mut white_wins = 0;
+    let mut draws = 0;
+    let mut black_wins = 0;
     let mut combined_hll: HyperLogLogPlus<String, RandomState> =
         HyperLogLogPlus::new(HLL_PRECISION, RandomState::new()).unwrap();
 
@@ -206,6 +232,9 @@ pub fn build_shards(
         total_samples += stats.samples;
         train_samples += stats.train_samples;
         total_games += stats.games;
+        white_wins += stats.white_wins;
+        draws += stats.draws;
+        black_wins += stats.black_wins;
         combined_hll.merge(&stats.unique_fens).unwrap();
 
         for (i, count) in stats.bucket_counts.iter().enumerate() {
@@ -231,6 +260,9 @@ pub fn build_shards(
         unique_fens: unique_fens_count,
         total_games,
         bucket_counts,
+        white_wins,
+        draws,
+        black_wins,
     };
 
     Ok((shard_paths, stats))
@@ -247,7 +279,7 @@ fn process_file(
 ) -> WorkerStats {
     let mut stats = WorkerStats::new();
     let mut game_assignments: AHashMap<u32, Split> = AHashMap::new();
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     let file = match File::open(path) {
         Ok(f) => f,
@@ -272,18 +304,18 @@ fn process_file(
         let line_len = line.len() as u64;
         let trimmed = line.trim();
 
-        if let Some((fen, score, game_id)) = parse_csv_line(trimmed) {
+        if let Some((fen, score, outcome, game_id)) = parse_csv_line(trimmed) {
             let split = *game_assignments.entry(game_id).or_insert_with(|| {
                 stats.register_game();
                 pick_split(&mut rng, val_ratio, test_ratio)
             });
 
-            stats.register_sample(fen, split);
+            stats.register_sample(fen, outcome, split);
 
             match split {
-                Split::Train => train_writer.write(fen, score),
-                Split::Val => val_writer.write(fen, score),
-                Split::Test => test_writer.write(fen, score),
+                Split::Train => train_writer.write(fen, score, outcome),
+                Split::Val => val_writer.write(fen, score, outcome),
+                Split::Test => test_writer.write(fen, score, outcome),
             }
 
             samples_since_update += 1;
@@ -304,16 +336,18 @@ fn process_file(
     stats
 }
 
-fn parse_csv_line(line: &str) -> Option<(&str, i16, u32)> {
+fn parse_csv_line(line: &str) -> Option<(&str, i16, &str, u32)> {
     let mut parts = line.split(',');
     let fen = parts.next()?;
     let score: i16 = parts.next()?.parse().ok()?;
+    let _best_move = parts.next()?;
+    let outcome = parts.next()?;
     let game_id: u32 = parts.next()?.parse().ok()?;
-    Some((fen, score, game_id))
+    Some((fen, score, outcome, game_id))
 }
 
 fn pick_split<R: rand::Rng>(rng: &mut R, val_ratio: f64, test_ratio: f64) -> Split {
-    let r: f64 = rng.gen();
+    let r: f64 = rng.random();
     if r < test_ratio {
         Split::Test
     } else if r < test_ratio + val_ratio {

@@ -1,6 +1,4 @@
-use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
+use std::time::Instant;
 
 use cozy_chess::{Board, Move};
 use uci::commands::GoParams;
@@ -13,11 +11,9 @@ use crate::time_control::stats::TimeControlStats;
 const NEXT_ITERATION_DURATION_FACTOR: f64 = 2.0;
 
 pub struct SearchController {
-    start_time: std::time::Instant,
+    start_time: Instant,
     time_budget: Option<TimeBudget>,
     max_depth: Option<u8>,
-    timer_handle: Option<thread::JoinHandle<()>>,
-    on_stop_callback: Option<Arc<dyn Fn() + Send + Sync>>,
     last_iteration_duration_ms: Option<u64>,
     current_iteration_start_ms: Option<u64>,
     stats: TimeControlStats,
@@ -26,41 +22,19 @@ pub struct SearchController {
 impl SearchController {
     pub fn new(params: &GoParams, board: &Board, move_overhead_ms: u64) -> Self {
         Self {
-            start_time: std::time::Instant::now(),
+            start_time: Instant::now(),
             time_budget: TimeBudget::new(params, board, move_overhead_ms),
             max_depth: params.depth,
-            timer_handle: None,
-            on_stop_callback: None,
             last_iteration_duration_ms: None,
             current_iteration_start_ms: None,
             stats: TimeControlStats::new(),
         }
     }
 
-    pub fn on_stop<F>(&mut self, callback: F)
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_stop_callback = Some(Arc::new(callback));
-    }
-
-    pub fn start_timer(&mut self) {
-        let Some(budget) = self.time_budget else {
-            return;
-        };
-        let Some(callback) = &self.on_stop_callback else {
-            return;
-        };
-
-        let duration = Duration::from_millis(budget.hard_limit());
-        let callback = Arc::clone(callback);
-
-        let handle = thread::spawn(move || {
-            thread::sleep(duration);
-            callback();
-        });
-
-        self.timer_handle = Some(handle);
+    /// Returns the hard deadline as an `Instant`, if time-controlled.
+    pub fn deadline(&self) -> Option<Instant> {
+        self.time_budget
+            .map(|b| self.start_time + std::time::Duration::from_millis(b.hard_limit()))
     }
 
     pub fn should_continue_to_next_depth(&self, next_depth: u8) -> bool {
@@ -132,27 +106,21 @@ impl SearchController {
         self.current_iteration_start_ms = Some(now_ms);
     }
 
-    pub fn on_iteration_complete(&mut self, depth: u8, score: i16, best_move: Option<Move>) {
+    pub fn on_iteration_complete(
+        &mut self,
+        depth: u8,
+        score: i16,
+        best_move: Option<Move>,
+        pv_count: u8,
+    ) {
         self.stats.add_iteration(depth, score, best_move);
 
         if let Some(ref mut budget) = self.time_budget {
-            budget.adjust_for_search_behavior(&self.stats);
+            budget.adjust_for_search_behavior(&self.stats, pv_count);
         }
     }
 
-    pub fn on_aspiration_failure(&mut self) {
-        self.stats.add_aspiration_failure();
-    }
-
-    pub fn stop_timer(&mut self) {
-        if let Some(handle) = self.timer_handle.take() {
-            std::mem::drop(handle);
-        }
-    }
-}
-
-impl Drop for SearchController {
-    fn drop(&mut self) {
-        self.stop_timer();
+    pub fn add_aspiration_failures(&mut self, count: u32) {
+        self.stats.add_aspiration_failures(count);
     }
 }

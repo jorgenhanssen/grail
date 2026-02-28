@@ -1,5 +1,12 @@
-use cozy_chess::{Move, Piece};
+use cozy_chess::{Color, Move, Piece};
 use utils::Node;
+
+/// Context for singular extension search.
+#[derive(Clone, Copy)]
+pub struct SingularSearch {
+    /// The TT move to exclude from this ply
+    pub excluded: Move,
+}
 
 /// A node in the search stack, tracking state at each ply.
 #[derive(Clone, Copy)]
@@ -10,8 +17,12 @@ pub struct SearchNode {
     pub last_move: Option<Move>,
     /// Piece that moved (for continuation history)
     pub piece: Option<Piece>,
+    /// Color of the piece that moved (for continuation history)
+    pub color: Option<Color>,
     /// Cached static eval (for improving detection)
     pub static_eval: Option<i16>,
+    /// Singular extension context (if in singular search)
+    pub singular: Option<SingularSearch>,
 }
 
 impl SearchNode {
@@ -20,16 +31,20 @@ impl SearchNode {
             hash,
             last_move: None,
             piece: None,
+            color: None,
             static_eval: None,
+            singular: None,
         }
     }
 
-    pub fn with_move(hash: u64, mv: Move, piece: Piece) -> Self {
+    pub fn with_move(hash: u64, mv: Move, piece: Piece, color: Color) -> Self {
         Self {
             hash,
             last_move: Some(mv),
             piece: Some(piece),
+            color: Some(color),
             static_eval: None,
+            singular: None,
         }
     }
 }
@@ -57,8 +72,8 @@ impl SearchStack {
         self.push(SearchNode::new(node.hash()));
     }
 
-    pub fn push_move(&mut self, node: &Node, mv: Move, piece: Piece) {
-        self.push(SearchNode::with_move(node.hash(), mv, piece));
+    pub fn push_move(&mut self, node: &Node, mv: Move, piece: Piece, color: Color) {
+        self.push(SearchNode::with_move(node.hash(), mv, piece, color));
     }
 
     pub fn pop(&mut self) -> Option<SearchNode> {
@@ -72,6 +87,11 @@ impl SearchStack {
         if let Some(node) = self.nodes.last_mut() {
             f(node);
         }
+    }
+
+    /// Returns the current node (if any).
+    pub fn current(&self) -> Option<&SearchNode> {
+        self.nodes.last()
     }
 
     /// Returns true if eval improved vs 2 plies ago (same side to move).
@@ -115,30 +135,5 @@ impl SearchStack {
 
     pub fn as_slice(&self) -> &[SearchNode] {
         &self.nodes
-    }
-
-    /// Penalty for repeatedly moving the same piece (discourages shuffling).
-    pub fn piece_repetition_penalty(&self, base_penalty: i16) -> i16 {
-        let stack_len = self.nodes.len();
-        if stack_len < 2 {
-            return 0;
-        }
-
-        let last_piece = match self.nodes[stack_len - 1].piece {
-            Some(p) => p,
-            None => return 0,
-        };
-
-        let consecutive_count = self.nodes[..stack_len - 1]
-            .iter()
-            .rev()
-            .take_while(|node| node.piece == Some(last_piece))
-            .count();
-
-        if consecutive_count == 0 {
-            return 0;
-        }
-
-        base_penalty * (1 << consecutive_count)
     }
 }

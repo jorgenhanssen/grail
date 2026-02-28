@@ -9,8 +9,8 @@ use dataset::ShardedDataset;
 use simplelog::{Config, LevelFilter, SimpleLogger};
 use std::error::Error;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use training::Trainer;
 
 const DATA_DIR: &str = "nnue/data";
@@ -20,6 +20,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     SimpleLogger::init(LevelFilter::Info, Config::default())?;
 
     let args = Args::parse();
+
+    let mut trainer = Trainer::new(&args, MODEL_PATH)?;
+
+    if args.init_model {
+        trainer.save_model(Path::new(MODEL_PATH))?;
+        log::info!("Saved random model to {}", MODEL_PATH);
+        return Ok(());
+    }
+
     let shutdown = setup_shutdown_handler()?;
 
     let dataset = ShardedDataset::build(
@@ -29,7 +38,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         args.test_ratio,
     )?;
 
-    let mut trainer = Trainer::new(&args, MODEL_PATH)?;
     trainer.train(&dataset, shutdown)?;
 
     Ok(())

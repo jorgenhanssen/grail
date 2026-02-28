@@ -20,6 +20,10 @@ arrayvec = { workspace = true }
 cozy-chess = { workspace = true }
 ahash = { workspace = true }
 log = { workspace = true }
+rand = { workspace = true }
 
 [lib]
 name = "search"
+
+[lints]
+workspace = true

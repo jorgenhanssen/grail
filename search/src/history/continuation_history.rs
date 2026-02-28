@@ -1,20 +1,21 @@
-use cozy_chess::{Board, Color, Move, Square};
+use cozy_chess::{Board, Move};
 
+use super::piece_to::PieceTo;
 use super::utils::apply_gravity;
 use crate::stack::SearchNode;
 use crate::{EngineConfig, MAX_DEPTH};
 
 /// Continuation history: scores moves based on the sequence of prior moves.
+/// Indexing: [lookback][prev: PieceTo][curr: PieceTo]
 ///
-/// Tracks correlations like "after Nf3, playing e4 tends to be good."
-/// Index 0 = opponent's last move, index 1 = our previous move, etc.
+/// Tracks correlations like "after White's Nf3, playing Bc4 tends to be good."
+/// lookback 0 = opponent's last move, 1 = our previous move, etc.
 /// Helps with move ordering by learning common tactical/positional patterns.
 ///
 /// <https://www.chessprogramming.org/Countermove_Heuristic>
 #[derive(Clone)]
 pub struct ContinuationHistory {
-    // Flattened: [continuation_index][color][prev_to][curr_from][curr_to]
-    // continuation_index 0 = opponent's last move, 1 = our previous move, etc.
+    // Flattened: [lookback][prev: PieceTo][curr: PieceTo]
     continuations: Vec<i16>,
 
     max_moves: usize,
@@ -30,7 +31,7 @@ impl ContinuationHistory {
         bonus_multiplier: i32,
         malus_multiplier: i32,
     ) -> Self {
-        let size = max_moves * Color::NUM * Square::NUM * Square::NUM * Square::NUM;
+        let size = Self::table_size(max_moves);
         Self {
             continuations: vec![0; size],
             max_moves,
@@ -38,6 +39,11 @@ impl ContinuationHistory {
             bonus_multiplier,
             malus_multiplier,
         }
+    }
+
+    fn table_size(max_moves: usize) -> usize {
+        // [lookback][prev: PieceTo][curr: PieceTo]
+        max_moves * PieceTo::SIZE * PieceTo::SIZE
     }
 
     pub fn configure(&mut self, config: &EngineConfig) {
@@ -57,68 +63,55 @@ impl ContinuationHistory {
     }
 
     pub fn reset(&mut self) {
-        let size = self.max_moves * Color::NUM * Square::NUM * Square::NUM * Square::NUM;
+        let size = Self::table_size(self.max_moves);
         self.continuations = vec![0; size];
     }
 
-    fn get_continuation(
-        &self,
-        continuation_index: usize,
-        color: Color,
-        prev_to: Option<Square>,
-        from: Square,
-        to: Square,
-    ) -> i16 {
-        if continuation_index >= self.max_moves {
+    fn get_continuation(&self, lookback: usize, prev: PieceTo, curr: PieceTo) -> i16 {
+        if lookback >= self.max_moves {
             return 0;
         }
-        if let Some(p_to) = prev_to {
-            self.continuations[self.index(continuation_index, color, p_to, from, to)]
-        } else {
-            0
-        }
+        self.continuations[self.index(lookback, prev, curr)]
     }
 
-    pub fn get(&self, color: Color, prev_to: &[Option<Square>], from: Square, to: Square) -> i16 {
+    pub fn get(&self, prev_moves: &[Option<PieceTo>], curr: PieceTo) -> i16 {
         let mut score = 0;
-        for (continuation_index, p_to) in prev_to.iter().enumerate().take(self.max_moves) {
-            score += self.get_continuation(continuation_index, color, *p_to, from, to);
+        for (lookback, prev_move) in prev_moves.iter().enumerate().take(self.max_moves) {
+            if let Some(prev) = *prev_move {
+                score += self.get_continuation(lookback, prev, curr);
+            }
         }
         score
     }
 
-    pub fn get_bonus(&self, remaining_depth: u8) -> i32 {
-        self.bonus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
+    pub fn get_bonus(&self, depth: u8) -> i32 {
+        self.bonus_multiplier * depth.min(MAX_DEPTH as u8) as i32
     }
 
-    pub fn get_malus(&self, remaining_depth: u8) -> i32 {
-        -self.malus_multiplier * remaining_depth.min(MAX_DEPTH as u8) as i32
+    pub fn get_malus(&self, depth: u8) -> i32 {
+        -self.malus_multiplier * depth.min(MAX_DEPTH as u8) as i32
     }
 
-    pub fn get_prev_to_squares(&self, search_stack: &[SearchNode]) -> Vec<Option<Square>> {
+    pub fn get_prev_moves(&self, search_stack: &[SearchNode]) -> Vec<Option<PieceTo>> {
         let len = search_stack.len();
         let mut vec = vec![None; self.max_moves];
         for i in 0..self.max_moves {
             if i < len {
-                if let Some(mv) = search_stack[len - 1 - i].last_move {
-                    vec[i] = Some(mv.to);
+                let node = &search_stack[len - 1 - i];
+                if let (Some(mv), Some(piece), Some(color)) =
+                    (node.last_move, node.piece, node.color)
+                {
+                    vec[i] = Some(PieceTo::new(color, piece, mv.to));
                 }
             }
         }
         vec
     }
 
-    fn update_continuations(
-        &mut self,
-        color: Color,
-        prev_to: &[Option<Square>],
-        from: Square,
-        to: Square,
-        delta: i32,
-    ) {
-        for (continuation_index, p_to_opt) in prev_to.iter().enumerate().take(self.max_moves) {
-            if let Some(p_to) = *p_to_opt {
-                let idx = self.index(continuation_index, color, p_to, from, to);
+    fn update_continuations(&mut self, prev_moves: &[Option<PieceTo>], curr: PieceTo, delta: i32) {
+        for (lookback, prev_move) in prev_moves.iter().enumerate().take(self.max_moves) {
+            if let Some(prev) = *prev_move {
+                let idx = self.index(lookback, prev, curr);
                 apply_gravity(&mut self.continuations[idx], delta, self.max_history);
             }
         }
@@ -127,36 +120,19 @@ impl ContinuationHistory {
     pub fn update_quiet_all(
         &mut self,
         board: &Board,
-        prev_to: &[Option<Square>],
+        prev_moves: &[Option<PieceTo>],
         mv: Move,
         delta: i32,
     ) {
-        let color = board.side_to_move();
-        self.update_continuations(color, prev_to, mv.from, mv.to, delta);
+        let curr = PieceTo::new(
+            board.side_to_move(),
+            board.piece_on(mv.from).unwrap(),
+            mv.to,
+        );
+        self.update_continuations(prev_moves, curr, delta);
     }
 
-    fn index(
-        &self,
-        continuation_index: usize,
-        color: Color,
-        prev_to: Square,
-        from: Square,
-        to: Square,
-    ) -> usize {
-        let color_idx = color as usize;
-        let prev_to_idx = prev_to as usize;
-        let from_idx = from as usize;
-        let to_idx = to as usize;
-
-        let continuation_stride = Color::NUM * Square::NUM * Square::NUM * Square::NUM;
-        let color_stride = Square::NUM * Square::NUM * Square::NUM;
-        let prev_to_stride = Square::NUM * Square::NUM;
-        let from_stride = Square::NUM;
-
-        continuation_index * continuation_stride
-            + color_idx * color_stride
-            + prev_to_idx * prev_to_stride
-            + from_idx * from_stride
-            + to_idx
+    fn index(&self, lookback: usize, prev: PieceTo, curr: PieceTo) -> usize {
+        lookback * PieceTo::SIZE * PieceTo::SIZE + prev.index() * PieceTo::SIZE + curr.index()
     }
 }

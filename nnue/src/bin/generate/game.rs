@@ -1,44 +1,42 @@
-use cozy_chess::{Board, Move};
-use nnue::network::CP_BOUND;
+use crate::samples::{GameOutcome, Sample};
+use cozy_chess::{Board, Color, Move};
 use rand::Rng;
-use search::Engine;
+use search::{Engine, PvLine, SearchResult};
 use std::collections::HashMap;
 use std::str::FromStr;
 use uci::commands::GoParams;
-use utils::{
-    collect_legal_moves, flip_eval_perspective, has_insufficient_material, has_legal_moves,
-};
+use utils::{flip_eval_perspective, has_check, has_insufficient_material, has_legal_moves};
 
-// Temperature-based move selection for diversity in training data.
-// High temperature early = more random moves, decays to deterministic play.
-const INITIAL_TEMPERATURE: f32 = 3.0;
-const TEMPERATURE_DECAY_RATE: f32 = 7.5;
-const MIN_TEMPERATURE: f32 = 0.05;
-
-/// A self-play game that generates training samples: (FEN, score, game_id) tuples.
-/// Plays from an opening position until terminal, recording evaluations.
+/// A self-play game that generates training samples.
+///
+/// Uses MultiPV search at decision points and teleports along chosen PV lines
+/// to reduce sample correlation and increase game diversity.
 pub struct SelfPlayGame {
     board: Board,
     game_id: usize,
-    ply_count: usize,
     position_counts: HashMap<u64, usize>,
-    current_game_samples: Vec<(String, i16)>,
+    positions: Vec<(String, i16, Move)>, // FEN, eval, best move
+    depth: u8,
 }
 
 impl SelfPlayGame {
-    pub fn new(game_id: usize, opening_fen: &str) -> Self {
+    pub fn new(game_id: usize, opening_fen: &str, depth: u8) -> Self {
         let board = Board::from_str(opening_fen).unwrap();
 
         Self {
             board,
             game_id,
-            ply_count: 0,
             position_counts: HashMap::new(),
-            current_game_samples: Vec::new(),
+            positions: Vec::new(),
+            depth,
         }
     }
 
-    pub fn play(&mut self, engine: &mut Engine, depth: u8) {
+    /// Play the game using MultiPV search and teleporting.
+    ///
+    /// At each decision point: search, record sample, select PV via softmax,
+    /// then teleport along the chosen PV.
+    pub fn play(&mut self, engine: &mut Engine) {
         engine.new_game();
 
         loop {
@@ -46,99 +44,97 @@ impl SelfPlayGame {
                 break;
             }
 
-            let (best_move, eval) = self.compute_move(engine, depth);
+            let result = match self.search(engine) {
+                Some(r) => r,
+                None => break,
+            };
 
-            // Skip near-mate positions
-            // Testing showed this improves strength (by freeing capacity for nuanced positions, I guess)
-            if eval.abs() >= CP_BOUND {
-                break;
+            let pv = match result.primary() {
+                Some(pv) => pv,
+                None => break,
+            };
+
+            if let Some(mv) = pv.best_move() {
+                self.record_position(pv.score, mv);
             }
 
-            self.record_eval(eval);
-            self.make_move(best_move);
+            let chosen_pv = result.select_softmax().expect("has lines");
+            self.teleport(chosen_pv);
         }
     }
 
-    fn compute_move(&self, engine: &mut Engine, depth: u8) -> (Move, i16) {
-        let history = self.history();
-
-        engine.set_position(self.board.clone(), Some(history));
+    fn search(&self, engine: &mut Engine) -> Option<SearchResult> {
+        engine.set_position(self.board.clone(), Some(self.history()));
 
         let params = GoParams {
-            depth: Some(depth),
+            depth: Some(self.depth),
             ..Default::default()
         };
 
-        engine.search(&params, None).unwrap()
+        engine.search(&params, None)
     }
 
-    fn is_terminal(&mut self) -> bool {
+    fn record_position(&mut self, eval: i16, best_move: Move) {
+        let white_score = flip_eval_perspective(self.board.side_to_move(), eval);
+        self.positions
+            .push((format!("{}", self.board), white_score, best_move));
+    }
+
+    fn outcome(&self) -> GameOutcome {
+        if !has_legal_moves(&self.board) && has_check(&self.board) {
+            return if self.board.side_to_move() == Color::White {
+                GameOutcome::Black
+            } else {
+                GameOutcome::White
+            };
+        }
+
+        GameOutcome::Draw
+    }
+
+    /// Teleport along a PV line by playing moves without searching.
+    ///
+    /// Picks a random teleport length from 1 to pv.len() (capped by depth),
+    /// then plays that many moves from the PV.
+    fn teleport(&mut self, pv: &PvLine) {
+        if pv.line.is_empty() {
+            return;
+        }
+
+        let mut rng = rand::rng();
+        let max_len = pv.line.len().min(self.depth as usize);
+        let teleport_len = rng.random_range(1..=max_len);
+
+        for mv in pv.line.iter().take(teleport_len) {
+            self.play_move(*mv);
+            if self.is_terminal() {
+                break;
+            }
+        }
+    }
+
+    /// Play a single move, updating all game state.
+    fn play_move(&mut self, mv: Move) {
+        self.board.play_unchecked(mv);
+
+        // Track position for repetition detection
+        let hash = self.board.hash();
+        *self.position_counts.entry(hash).or_insert(0) += 1;
+    }
+
+    fn is_terminal(&self) -> bool {
         if !has_legal_moves(&self.board) {
             return true;
         }
-
         if has_insufficient_material(&self.board) {
             return true;
         }
-
-        // Check position repetition (abort on first repetition)
-        // For training data, we don't need official three-fold rule -
-        // any repetition means the game is cycling and won't produce useful data
-        let board_hash = self.board.hash();
-        *self.position_counts.entry(board_hash).or_insert(0) += 1;
-        if self.position_counts[&board_hash] >= 2 {
-            return true;
-        }
-
-        false
+        // Any repetition ends game for training purposes
+        let hash = self.board.hash();
+        self.position_counts.get(&hash).copied().unwrap_or(0) >= 2
     }
 
-    fn record_eval(&mut self, engine_score: i16) {
-        // Engine score is from STM perspective; flip to white's perspective for training
-        let white_score = flip_eval_perspective(self.board.side_to_move(), engine_score);
-
-        self.current_game_samples
-            .push((format!("{}", self.board), white_score));
-    }
-
-    /// Selects a move using temperature-based randomization.
-    /// Early game: high chance of random move for position diversity.
-    /// Late game: always play the best move for accurate evaluations.
-    fn select_move(&self, best_move: Move) -> Move {
-        let mut rng = rand::thread_rng();
-
-        // Temperature decays exponentially based on full move number (not ply).
-        // Using full move ensures equal randomness for both sides—otherwise Black
-        // would have less random moves at each turn, skewing games in Black's favor.
-        let move_number = self.ply_count / 2;
-        let temp = INITIAL_TEMPERATURE * (-(move_number as f32) / TEMPERATURE_DECAY_RATE).exp();
-
-        if temp < MIN_TEMPERATURE {
-            return best_move;
-        }
-
-        let legal_moves = collect_legal_moves(&self.board);
-
-        if legal_moves.len() == 1 {
-            return legal_moves[0];
-        }
-
-        let probability_of_random_move = (temp / INITIAL_TEMPERATURE).min(1.0);
-
-        if rng.gen::<f32>() < probability_of_random_move {
-            let index = rng.gen_range(0..legal_moves.len());
-            legal_moves[index]
-        } else {
-            best_move
-        }
-    }
-
-    fn make_move(&mut self, best_move: Move) {
-        let chosen_move = self.select_move(best_move);
-        self.board.play_unchecked(chosen_move);
-        self.ply_count += 1;
-    }
-
+    /// Get position history for repetition detection during search.
     fn history(&self) -> ahash::AHashSet<u64> {
         let current_hash = self.board.hash();
         self.position_counts
@@ -148,11 +144,21 @@ impl SelfPlayGame {
             .collect()
     }
 
-    pub fn drain_samples(&mut self) -> (Vec<(String, i16, usize)>, Vec<i16>) {
+    pub fn get_samples(&mut self) -> (Vec<Sample>, Vec<i16>) {
+        let outcome = self.outcome();
         let (samples, scores): (Vec<_>, Vec<_>) = self
-            .current_game_samples
+            .positions
             .drain(..)
-            .map(|(fen, score)| ((fen, score, self.game_id), score))
+            .map(|(fen, score, best_move)| {
+                let sample = Sample {
+                    fen,
+                    score,
+                    game_id: self.game_id,
+                    best_move,
+                    outcome,
+                };
+                (sample, score)
+            })
             .unzip();
         (samples, scores)
     }

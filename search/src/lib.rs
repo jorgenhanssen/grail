@@ -1,12 +1,14 @@
 #![feature(portable_simd)]
 
+mod aspiration;
 mod config;
-pub mod engine;
-mod extensions;
+mod engine;
 mod history;
+mod lmr;
 mod move_ordering;
-mod pruning;
-mod reductions;
+mod pv;
+mod result;
+pub(crate) mod searcher;
 mod stack;
 mod time_control;
 mod transposition;
@@ -17,5 +19,7 @@ pub const MAX_DEPTH: usize = 100;
 
 pub use config::EngineConfig;
 pub use engine::Engine;
+pub use pv::PvLine;
+pub use result::SearchResult;
 
 pub use ::utils::{Node, NodeType};

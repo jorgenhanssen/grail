@@ -1,6 +1,6 @@
 use cozy_chess::{
-    get_bishop_moves, get_knight_moves, get_pawn_attacks, get_rook_moves, BitBoard, Board, Color,
-    Piece,
+    BitBoard, Board, Color, Piece, get_bishop_moves, get_knight_moves, get_pawn_attacks,
+    get_rook_moves,
 };
 
 /// Precomputed board metrics for evaluation.
@@ -123,7 +123,7 @@ fn compute(
     // Pawns: threaten any non-pawn piece
     if !pawns.is_empty() {
         for sq in pawns {
-            let squares = get_pawn_attacks(sq, color) & all_pieces;
+            let squares = get_pawn_attacks(sq, color);
             space += (squares & !my_pieces).len() as i16;
             attacks |= squares;
             if has_non_pawns {

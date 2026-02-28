@@ -6,7 +6,7 @@ use utils::bitset::Bitset;
 
 use crate::encoding::NUM_FEATURES;
 
-use super::simd::{SimdF32, SimdI16, SIMD_WIDTH_F32, SIMD_WIDTH_I16};
+use super::simd::{SIMD_WIDTH_F32, SIMD_WIDTH_I16, SimdF32, SimdI16};
 use super::{EMBEDDING_SIZE, QUANTIZATION_PERCENTILE};
 
 /// The Accumulator manages the stateful first (embedding) layer of the NNUE.

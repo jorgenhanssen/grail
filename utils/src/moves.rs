@@ -1,12 +1,57 @@
-use cozy_chess::{Board, Move};
+use cozy_chess::{Board, Color, Move, Piece, Rank};
 
-/// Check if a move is a capture (enemy piece on destination).
+/// Check if a move is an en passant capture.
+pub fn is_en_passant(board: &Board, mv: Move) -> bool {
+    let Some(ep_file) = board.en_passant() else {
+        return false;
+    };
+
+    if mv.to.file() != ep_file || board.piece_on(mv.from) != Some(Piece::Pawn) {
+        return false;
+    }
+
+    let ep_rank = if board.side_to_move() == Color::White {
+        Rank::Sixth
+    } else {
+        Rank::Third
+    };
+
+    mv.to.rank() == ep_rank
+}
+
+/// Check if a move is a capture (enemy piece on destination or en passant).
 ///
 /// Handles castling correctly: cozy-chess represents castling as
 /// "king captures rook", but this function only returns true for
 /// actual captures of enemy pieces.
 pub fn is_capture(board: &Board, mv: Move) -> bool {
-    board.colors(!board.side_to_move()).has(mv.to)
+    if board.colors(!board.side_to_move()).has(mv.to) {
+        return true;
+    }
+
+    if is_en_passant(board, mv) {
+        return true;
+    }
+
+    false
+}
+
+/// Get the piece captured by a move, if any.
+/// Handles en passant (captured pawn is not on mv.to).
+///
+/// Note: The move should be a verified with `is_capture` first.
+pub fn captured_piece(board: &Board, mv: Move) -> Option<Piece> {
+    if let Some(piece) = board.piece_on(mv.to) {
+        return Some(piece);
+    }
+
+    // No piece on destination. If EP file matches, it's en passant.
+    // Assumes is_capture(board, mv) is true.
+    if board.en_passant().is_some_and(|ep| mv.to.file() == ep) {
+        return Some(Piece::Pawn);
+    }
+
+    None
 }
 
 /// Make a move and return a new board.

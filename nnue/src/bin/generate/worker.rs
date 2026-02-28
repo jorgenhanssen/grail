@@ -1,13 +1,14 @@
 use crate::book::Book;
 use crate::game::SelfPlayGame;
 use crate::histogram::HistogramHandle;
-use evaluation::NNUE;
+use crate::samples::Sample;
+use evaluation::{HCE, NNUE};
 use search::{Engine, EngineConfig};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-// Reduced hash per worker to limit total RAM when running many threads.
-const WORKER_HASH_SIZE_MB: i32 = 384;
+// TT Hash size per worker.
+const WORKER_HASH_SIZE_MB: i32 = 256;
 
 /// A single worker thread that plays self-play games and collects samples.
 /// Each worker has its own engine instance to avoid contention.
@@ -22,47 +23,49 @@ pub struct SelfPlayWorker {
 }
 
 impl SelfPlayWorker {
+    /// Create a new worker.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         tid: usize,
         sample_counter: Arc<AtomicUsize>,
         game_id_counter: Arc<AtomicUsize>,
         depth: u8,
-        nnue: Option<Box<dyn NNUE>>,
+        multi_pv: u8,
+        evaluator_factory: impl FnMut() -> (Box<dyn HCE>, Option<Box<dyn NNUE>>) + Send + 'static,
         opening_book: Arc<Book>,
         histogram: HistogramHandle,
     ) -> Self {
         let mut config = EngineConfig::default();
 
-        // Reduced hash size to reduce RAM usage
         config.hash_size.value = WORKER_HASH_SIZE_MB;
-
-        let hce = Box::new(hce::Evaluator::new(config.get_hce_config()));
+        config.multi_pv.value = multi_pv;
 
         // Engine stop flag (not used in data generation, but required by Engine)
         let stop = Arc::new(AtomicBool::new(false));
+        let engine = Engine::new(&config, stop, evaluator_factory);
 
         Self {
             _tid: tid,
             sample_counter,
             game_id_counter,
             depth,
-            engine: Engine::new(&config, hce, nnue, stop),
+            engine,
             opening_book,
             histogram,
         }
     }
 
-    pub fn play_games(&mut self, stop_flag: Arc<AtomicBool>) -> Vec<(String, i16, usize)> {
+    pub fn play_games(&mut self, stop_flag: Arc<AtomicBool>) -> Vec<Sample> {
         let mut evaluations = Vec::new();
 
         while !stop_flag.load(Ordering::Relaxed) {
             let game_id = self.game_id_counter.fetch_add(1, Ordering::Relaxed);
             let opening_fen = self.opening_book.random_position();
 
-            let mut game = SelfPlayGame::new(game_id, opening_fen);
-            game.play(&mut self.engine, self.depth);
+            let mut game = SelfPlayGame::new(game_id, opening_fen, self.depth);
+            game.play(&mut self.engine);
 
-            let (samples, scores) = game.drain_samples();
+            let (samples, scores) = game.get_samples();
             self.record_statistics(&samples, scores);
 
             evaluations.extend(samples);
@@ -71,7 +74,7 @@ impl SelfPlayWorker {
         evaluations
     }
 
-    fn record_statistics(&self, samples: &[(String, i16, usize)], scores: Vec<i16>) {
+    fn record_statistics(&self, samples: &[Sample], scores: Vec<i16>) {
         let num_samples = samples.len();
 
         self.histogram.record_scores(&scores);
