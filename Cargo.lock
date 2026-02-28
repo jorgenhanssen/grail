@@ -531,7 +531,7 @@ dependencies = [
 
 [[package]]
 name = "evaluation"
-version = "1.0.4"
+version = "1.1.0"
 dependencies = [
  "arrayvec",
  "cozy-chess",
@@ -863,7 +863,7 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "grail"
-version = "1.0.4"
+version = "1.1.0"
 dependencies = [
  "ahash",
  "candle-core",
@@ -908,7 +908,7 @@ dependencies = [
 
 [[package]]
 name = "hce"
-version = "1.0.4"
+version = "1.1.0"
 dependencies = [
  "arrayvec",
  "cozy-chess",
@@ -1104,7 +1104,7 @@ dependencies = [
 
 [[package]]
 name = "nnue"
-version = "1.0.4"
+version = "1.1.0"
 dependencies = [
  "ahash",
  "candle-core",
@@ -1521,7 +1521,7 @@ dependencies = [
 
 [[package]]
 name = "search"
-version = "1.0.4"
+version = "1.1.0"
 dependencies = [
  "ahash",
  "arrayvec",
@@ -1782,7 +1782,7 @@ checksum = "3015e6ce46d5ad8751e4a772543a30c7511468070e98e64e20165f8f81155b64"
 
 [[package]]
 name = "uci"
-version = "1.0.4"
+version = "1.1.0"
 dependencies = [
  "ahash",
  "cozy-chess",
@@ -1862,7 +1862,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "1.0.4"
+version = "1.1.0"
 dependencies = [
  "cozy-chess",
  "rand",
