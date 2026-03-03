@@ -1,5 +1,5 @@
-use cozy_chess::{Board, Color, Move, Square};
 use crate::scores::MATE_VALUE;
+use cozy_chess::{Board, Color, Move, Square};
 use utils::{
     MINOR_PIECES, NON_PAWN_PIECES, PAWN_PIECES, generate_zobrist_table, is_capture, zobrist_key,
 };

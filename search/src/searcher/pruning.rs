@@ -1,5 +1,5 @@
-use cozy_chess::{Move, Piece};
 use crate::scores::MATE_VALUE;
+use cozy_chess::{Move, Piece};
 use utils::{Node, captured_piece, piece_value};
 
 use crate::utils::{Bounds, see::see};

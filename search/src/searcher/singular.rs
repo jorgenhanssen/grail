@@ -1,5 +1,5 @@
-use cozy_chess::Move;
 use crate::scores::MATE_SCORE_BOUND;
+use cozy_chess::Move;
 use utils::Node;
 
 use crate::{
