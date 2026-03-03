@@ -14,7 +14,7 @@ tunable:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin grail --features tuning
 
 generate:
-	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin generate
+	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin generate
 
 test:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo test
@@ -22,9 +22,9 @@ test:
 train:
 	@GPU_FEATURES=$$([ "$$(uname -s)" = "Darwin" ] && echo metal || (command -v nvcc >/dev/null 2>&1 && echo cuda || true)); \
 	if [ -n "$$GPU_FEATURES" ]; then \
-		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p nnue --bin train --features $$GPU_FEATURES; \
+		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin train --features $$GPU_FEATURES; \
 	else \
-		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p nnue --bin train; \
+		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin train; \
 	fi
 
 clean:
