@@ -2,7 +2,7 @@ use std::sync::mpsc::Sender;
 
 use arrayvec::ArrayVec;
 use cozy_chess::{Move, Piece};
-use evaluation::scores::{MATE_VALUE, SCORE_INF};
+use crate::scores::{MATE_VALUE, SCORE_INF};
 use uci::{
     UciOutput,
     commands::{GoParams, Info, Score},

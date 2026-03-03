@@ -530,15 +530,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "evaluation"
-version = "1.1.0"
-dependencies = [
- "arrayvec",
- "cozy-chess",
- "utils",
-]
-
-[[package]]
 name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -869,8 +860,6 @@ dependencies = [
  "candle-core",
  "candle-nn",
  "cozy-chess",
- "evaluation",
- "hce",
  "nnue",
  "rand",
  "rayon",
@@ -904,16 +893,6 @@ dependencies = [
  "foldhash",
  "serde",
  "serde_core",
-]
-
-[[package]]
-name = "hce"
-version = "1.1.0"
-dependencies = [
- "arrayvec",
- "cozy-chess",
- "evaluation",
- "utils",
 ]
 
 [[package]]
@@ -1106,25 +1085,10 @@ dependencies = [
 name = "nnue"
 version = "1.1.0"
 dependencies = [
- "ahash",
  "candle-core",
  "candle-nn",
- "chrono",
- "clap",
  "cozy-chess",
- "ctrlc",
- "evaluation",
- "hce",
- "hyperloglogplus",
- "indicatif",
  "log",
- "num_cpus",
- "rand",
- "rayon",
- "search",
- "simplelog",
- "tempfile",
- "uci",
  "utils",
 ]
 
@@ -1526,9 +1490,8 @@ dependencies = [
  "ahash",
  "arrayvec",
  "cozy-chess",
- "evaluation",
- "hce",
  "log",
+ "nnue",
  "rand",
  "uci",
  "utils",
@@ -1772,6 +1735,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
+]
+
+[[package]]
+name = "training"
+version = "1.1.0"
+dependencies = [
+ "ahash",
+ "candle-core",
+ "candle-nn",
+ "chrono",
+ "clap",
+ "cozy-chess",
+ "ctrlc",
+ "hyperloglogplus",
+ "indicatif",
+ "log",
+ "nnue",
+ "num_cpus",
+ "rand",
+ "rayon",
+ "search",
+ "simplelog",
+ "tempfile",
+ "uci",
+ "utils",
 ]
 
 [[package]]

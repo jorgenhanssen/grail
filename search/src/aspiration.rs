@@ -1,4 +1,4 @@
-use evaluation::scores::{MATE_SCORE_BOUND, SCORE_INF};
+use crate::scores::{MATE_SCORE_BOUND, SCORE_INF};
 
 use crate::utils::Bounds;
 

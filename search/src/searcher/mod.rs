@@ -3,15 +3,14 @@ use std::time::Instant;
 
 use ahash::AHashSet;
 use cozy_chess::Board;
-use evaluation::{HCE, NNUE};
 use uci::{UciOutput, commands::Info, pv_to_uci};
 
 use crate::pv::{MultiPvSearchContext, PvLine, PvTable};
-
 use crate::{
     EngineConfig,
     history::{CaptureHistory, ContinuationHistory, HistoryHeuristic},
     lmr::LmrTable,
+    scores::MATE_VALUE,
     stack::SearchStack,
     utils::{convert_centipawn_score, convert_mate_score},
 };
@@ -39,10 +38,8 @@ pub struct Searcher {
     /// Configuration for the engine
     config: EngineConfig,
 
-    /// Hand-crafted evaluation
-    hce: Box<dyn HCE>,
     /// Neural network evaluation
-    nnue: Option<Box<dyn NNUE>>,
+    evaluator: nnue::Evaluator,
 
     /// Multi-PV search context (exclusions, PVs, etc)
     multi_pv: MultiPvSearchContext,
@@ -89,16 +86,14 @@ impl Searcher {
         shared: Arc<SharedSearcherState>,
         thread_id: usize,
         config: &EngineConfig,
-        hce: Box<dyn HCE>,
-        nnue: Option<Box<dyn NNUE>>,
+        evaluator: nnue::Evaluator,
     ) -> Self {
         let mut instance = Self {
             shared,
             thread_id,
             config: config.clone(),
 
-            hce,
-            nnue,
+            evaluator,
 
             multi_pv: MultiPvSearchContext::new(),
 
@@ -126,7 +121,6 @@ impl Searcher {
 
     pub fn configure(&mut self, config: &EngineConfig) {
         self.config = config.clone();
-        self.hce = Box::new(hce::Evaluator::new(config.get_hce_config()));
 
         if !self.history_heuristic.matches_config(config) {
             self.history_heuristic.configure(config);
@@ -136,13 +130,6 @@ impl Searcher {
         }
         if !self.continuation_history.matches_config(config) {
             self.continuation_history.configure(config);
-        }
-    }
-
-    pub fn name(&self) -> String {
-        match &self.nnue {
-            Some(nnue) => format!("Negamax ({})", nnue.name()),
-            None => format!("Negamax ({})", self.hce.name()),
         }
     }
 
@@ -192,7 +179,7 @@ impl Searcher {
         pv: &PvLine,
         elapsed: std::time::Duration,
     ) {
-        let found_checkmate = pv.score.abs() >= evaluation::scores::MATE_VALUE - MAX_DEPTH as i16;
+        let found_checkmate = pv.score.abs() >= MATE_VALUE - MAX_DEPTH as i16;
         let total = self.total_nodes();
         let secs = elapsed.as_secs_f64();
         let nps = if secs > 0.0 {

@@ -8,6 +8,7 @@ mod lmr;
 mod move_ordering;
 mod pv;
 mod result;
+mod scores;
 pub(crate) mod searcher;
 mod stack;
 mod time_control;

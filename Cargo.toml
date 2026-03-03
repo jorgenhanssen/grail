@@ -2,10 +2,9 @@
 resolver = "2"
 members = [
   "core",
-  "evaluation",
-  "hce",
   "search",
-  "nnue", 
+  "nnue",
+  "training",
   "uci", 
   "utils",
 ]

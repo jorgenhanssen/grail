@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 use cozy_chess::{Board, Color, Move, Piece, Rank};
-use evaluation::scores::{MATE_VALUE, SCORE_INF};
+use crate::scores::{MATE_VALUE, SCORE_INF};
 use utils::{QUEEN_VALUE, make_move, piece_value};
 
 use utils::Node;

@@ -4,23 +4,20 @@ use crate::samples::Sample;
 use crate::worker::SelfPlayWorker;
 use candle_core::Device;
 use candle_nn::VarMap;
-use evaluation::NNUE;
 use indicatif::MultiProgress;
-use search::EngineConfig;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
-const DEFAULT_NNUE_PATH: &str = "nnue/model.safetensors";
+const MODEL_PATH: &str = "nnue/model.safetensors";
 const PROGRESS_UPDATE_INTERVAL_MS: u64 = 200;
 
 /// Coordinates multi-threaded self-play data generation.
 pub struct Generator {
     threads: usize,
     pv_lines: u8,
-    nnue_path: Option<PathBuf>,
     opening_book: Arc<Book>,
 }
 
@@ -28,29 +25,21 @@ impl Generator {
     pub fn new(
         threads: usize,
         pv_lines: u8,
-        use_nnue: bool,
         opening_book_path: String,
     ) -> Result<Self, Box<dyn Error>> {
         let opening_book = Arc::new(Book::load(&opening_book_path)?);
 
-        let nnue_path = if use_nnue {
-            let path = PathBuf::from(DEFAULT_NNUE_PATH);
-            if path.exists() {
-                log::info!("Using NNUE ({})", path.display());
-                Some(path)
-            } else {
-                log::warn!("NNUE ({}) not found, falling back to HCE", path.display());
-                None
-            }
-        } else {
-            log::info!("Using HCE");
-            None
-        };
+        if !PathBuf::from(MODEL_PATH).exists() {
+            return Err(format!(
+                "NNUE model not found at {}. Create an initial model first.",
+                MODEL_PATH
+            )
+            .into());
+        }
 
         Ok(Self {
             threads,
             pv_lines,
-            nnue_path,
             opening_book,
         })
     }
@@ -74,7 +63,6 @@ impl Generator {
         let worker_handles: Vec<_> = (0..self.threads)
             .map(|tid| {
                 let pv_lines = self.pv_lines;
-                let nnue_path = self.nnue_path.clone();
                 let sample_counter = Arc::clone(&sample_counter);
                 let game_id_counter = Arc::clone(&game_id_counter);
                 let opening_book = Arc::clone(&self.opening_book);
@@ -82,19 +70,13 @@ impl Generator {
                 let histogram_handle = histogram.clone_handle();
 
                 std::thread::spawn(move || {
-                    let hce_config = EngineConfig::default().get_hce_config();
                     let mut worker = SelfPlayWorker::new(
                         tid,
                         sample_counter,
                         game_id_counter,
                         depth,
                         pv_lines,
-                        move || {
-                            let hce = Box::new(hce::Evaluator::new(hce_config))
-                                as Box<dyn evaluation::HCE>;
-                            let nnue = Self::load_nnue(nnue_path.clone());
-                            (hce, nnue)
-                        },
+                        Self::load_nnue,
                         opening_book,
                         histogram_handle,
                     );
@@ -118,14 +100,12 @@ impl Generator {
         samples
     }
 
-    fn load_nnue(nnue_path: Option<PathBuf>) -> Option<Box<dyn NNUE>> {
-        nnue_path.map(|path| {
-            let mut varmap = VarMap::new();
-            let mut nnue = nnue::Evaluator::new(&varmap, &Device::Cpu);
-            varmap.load(path).unwrap();
-            nnue.enable_nnue();
-            Box::new(nnue) as Box<dyn NNUE>
-        })
+    fn load_nnue() -> nnue::Evaluator {
+        let mut varmap = VarMap::new();
+        let mut evaluator = nnue::Evaluator::new(&varmap, &Device::Cpu);
+        varmap.load(MODEL_PATH).unwrap();
+        evaluator.enable_nnue();
+        evaluator
     }
 
     fn spawn_progress_updater(

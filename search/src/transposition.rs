@@ -5,7 +5,7 @@ use std::simd::u32x4;
 use cozy_chess::{Move, Piece, Square};
 use utils::memory::prefetch;
 
-use evaluation::scores::MATE_SCORE_BOUND;
+use crate::scores::MATE_SCORE_BOUND;
 
 /// Indicates whether the stored value is exact or a bound.
 #[derive(Clone, Copy, PartialEq, Default)]
