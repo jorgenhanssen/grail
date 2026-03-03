@@ -151,21 +151,6 @@ pub fn has_insufficient_material(board: &Board) -> bool {
     false
 }
 
-/// Compute game phase from piece counts.
-///
-/// Returns a value from 0.0 (endgame) to 1.0 (opening/middlegame).
-/// Uses piece weights: N=1, B=1, R=2, Q=4, with max score of 24.
-pub fn game_phase(board: &Board) -> f32 {
-    let knights = board.pieces(Piece::Knight);
-    let bishops = board.pieces(Piece::Bishop);
-    let rooks = board.pieces(Piece::Rook);
-    let queens = board.pieces(Piece::Queen);
-
-    let score = knights.len() + bishops.len() + 2 * rooks.len() + 4 * queens.len();
-
-    (score.min(24) as f32) / 24.0
-}
-
 /// Check if position is prone to zugzwang (based on Stockfish).
 ///
 /// Returns true when side to move has no pieces (only king and pawns).
@@ -217,21 +202,6 @@ mod tests {
     fn test_sufficient_material_with_rook() {
         let board: Board = "k7/8/8/8/8/8/8/KR6 w - - 0 1".parse().unwrap();
         assert!(!has_insufficient_material(&board));
-    }
-
-    #[test]
-    fn test_game_phase_starting_position() {
-        // Full material = 1.0
-        assert!((game_phase(&Board::default()) - 1.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn test_game_phase_endgame() {
-        // Just kings and a rook
-        let board: Board = "k7/8/8/8/8/8/8/KR6 w - - 0 1".parse().unwrap();
-        let phase = game_phase(&board);
-        // Rook = 2, so 2/24 ≈ 0.083
-        assert!(phase < 0.2);
     }
 
     #[test]

@@ -20,8 +20,4 @@ pub struct Args {
     /// Number of PV lines to search at each decision point.
     #[arg(long, default_value_t = 1)]
     pub pv_lines: u8,
-
-    /// Use existing NNUE for evaluation instead of HCE.
-    #[arg(long, default_value_t = false)]
-    pub nnue: bool,
 }

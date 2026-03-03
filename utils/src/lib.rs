@@ -17,9 +17,8 @@ pub use attacks::{get_attackers_to, get_discovered_attacks};
 pub use eval::flip_eval_perspective;
 pub use material::{
     BISHOP_VALUE, KNIGHT_VALUE, MAJOR_PIECES, MINOR_PIECES, NON_PAWN_PIECES, PAWN_PIECES,
-    PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE, cap_eval_by_material, game_phase,
-    has_insufficient_material, is_zugzwang, majors, minors, piece_value,
-    side_has_insufficient_material, total_material,
+    PAWN_VALUE, QUEEN_VALUE, ROOK_VALUE, cap_eval_by_material, has_insufficient_material,
+    is_zugzwang, majors, minors, piece_value, side_has_insufficient_material, total_material,
 };
 pub use math::select_softmax;
 pub use moves::{

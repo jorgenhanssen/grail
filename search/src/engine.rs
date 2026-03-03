@@ -3,7 +3,6 @@ use std::thread;
 
 use ahash::AHashSet;
 use cozy_chess::Board;
-use evaluation::{HCE, NNUE};
 use uci::UciOutput;
 
 use crate::{
@@ -19,14 +18,14 @@ pub struct Engine {
     board: Board,
     game_history: AHashSet<u64>,
     searchers: Vec<Searcher>,
-    evaluator_factory: Box<dyn FnMut() -> (Box<dyn HCE>, Option<Box<dyn NNUE>>) + Send>,
+    create_evaluator: fn() -> nnue::Evaluator,
 }
 
 impl Engine {
     pub fn new(
         config: &EngineConfig,
         stop: Arc<AtomicBool>,
-        evaluator_factory: impl FnMut() -> (Box<dyn HCE>, Option<Box<dyn NNUE>>) + Send + 'static,
+        create_evaluator: fn() -> nnue::Evaluator,
     ) -> Self {
         let shared = Arc::new(SharedSearcherState::new(config, stop));
 
@@ -36,7 +35,7 @@ impl Engine {
             board: Board::default(),
             game_history: AHashSet::new(),
             searchers: Vec::new(),
-            evaluator_factory: Box::new(evaluator_factory),
+            create_evaluator,
         };
         engine.configure(config, true);
         engine
@@ -57,13 +56,12 @@ impl Engine {
         let new_num_threads = config.threads.value;
         while self.searchers.len() < new_num_threads {
             let thread_id = self.searchers.len();
-            let (hce, nnue) = (self.evaluator_factory)();
+            let evaluator = (self.create_evaluator)();
             self.searchers.push(Searcher::new(
                 Arc::clone(&self.shared),
                 thread_id,
                 config,
-                hce,
-                nnue,
+                evaluator,
             ));
         }
         self.searchers.truncate(new_num_threads);
@@ -71,13 +69,6 @@ impl Engine {
         for searcher in &mut self.searchers {
             searcher.configure(config);
         }
-    }
-
-    pub fn name(&self) -> String {
-        self.searchers
-            .first()
-            .map(|s| s.name())
-            .unwrap_or_else(|| "Negamax".to_string())
     }
 
     pub fn new_game(&mut self) {

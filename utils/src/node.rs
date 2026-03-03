@@ -4,7 +4,7 @@ use cozy_chess::{BitBoard, Board, Color, GameStatus, Move, Piece, Square};
 
 use crate::board_metrics::BoardMetrics;
 use crate::is_zugzwang;
-use crate::material::{game_phase, total_material};
+use crate::material::total_material;
 use crate::moves::is_capture;
 
 /// Classification of nodes in the alpha-beta search tree.
@@ -149,11 +149,6 @@ impl Node {
         is_capture(&self.board, mv)
     }
 
-    /// Get the game phase (0.0 = endgame, 1.0 = opening).
-    pub fn game_phase(&self) -> f32 {
-        game_phase(&self.board)
-    }
-
     /// Get total material on the board.
     pub fn total_material(&self) -> i16 {
         total_material(&self.board)
@@ -203,11 +198,6 @@ impl Node {
     /// Get the attack bitboard for a color.
     pub fn attacks_for(&self, color: Color) -> BitBoard {
         self.metrics().attacks[color as usize]
-    }
-
-    /// Get the space score for a color.
-    pub fn space_for(&self, color: Color) -> i16 {
-        self.metrics().space[color as usize]
     }
 
     /// Get the support bitboard for a color (own pieces defended by own pieces).

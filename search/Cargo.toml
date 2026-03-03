@@ -11,8 +11,7 @@ repository = { workspace = true }
 tuning = []
 
 [dependencies]
-evaluation = { path = "../evaluation" }
-hce = { path = "../hce" }
+nnue = { path = "../nnue" }
 uci = { path = "../uci" }
 utils = { path = "../utils" }
 

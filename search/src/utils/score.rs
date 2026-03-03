@@ -1,4 +1,4 @@
-use evaluation::scores::MATE_VALUE;
+use crate::scores::MATE_VALUE;
 use uci::commands::Score;
 
 pub fn convert_mate_score(score: i16) -> Score {

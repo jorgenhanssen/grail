@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use hce::HCEConfig;
 use uci::{UciOption, UciOptionType, UciOutput};
 
 /// Helper to conditionally create UCI option metadata.
@@ -79,7 +78,6 @@ define_config!(
     (threads: usize, "Threads", UciOptionType::Spin { min: 1, max: 256 }, 1, true),
     (move_overhead: i32, "Move Overhead", UciOptionType::Spin { min: 0, max: 5000 }, 10, true),
     (multi_pv: u8, "MultiPV", UciOptionType::Spin { min: 1, max: 64 }, 1, true),
-    (nnue: bool, "NNUE", UciOptionType::Check, true, true),
 
     // Tuning options
     (aspiration_window_size: i16, "Aspiration Window Size", UciOptionType::Spin { min: 10, max: 100 }, 40, cfg!(feature = "tuning")),
@@ -162,46 +160,6 @@ define_config!(
     (singular_beta_margin: i16, "Singular Beta Margin", UciOptionType::Spin { min: 1, max: 5 }, 2, cfg!(feature = "tuning")),
     (double_ext_margin: i16, "Double Extension Margin", UciOptionType::Spin { min: 10, max: 100 }, 50, cfg!(feature = "tuning")),
 
-    (hce_tempo_bonus: i16, "HCE Tempo Bonus", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
-
-    (hce_doubled_pawn_penalty: i16, "HCE Doubled Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 30, cfg!(feature = "tuning")),
-    (hce_tripled_pawn_penalty: i16, "HCE Tripled Pawn Penalty", UciOptionType::Spin { min: 0, max: 150 }, 60, cfg!(feature = "tuning")),
-    (hce_isolated_pawn_penalty: i16, "HCE Isolated Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 39, cfg!(feature = "tuning")),
-    (hce_backward_pawn_penalty: i16, "HCE Backward Pawn Penalty", UciOptionType::Spin { min: 0, max: 100 }, 20, cfg!(feature = "tuning")),
-    (hce_backward_pawn_half_open_penalty: i16, "HCE Backward Pawn Half Open Penalty", UciOptionType::Spin { min: 0, max: 50 }, 10, cfg!(feature = "tuning")),
-
-    (hce_passed_pawn_linear: i16, "HCE Passed Pawn Linear", UciOptionType::Spin { min: 0, max: 20 }, 6, cfg!(feature = "tuning")),
-    (hce_passed_pawn_quadratic: i16, "HCE Passed Pawn Quadratic", UciOptionType::Spin { min: 0, max: 10 }, 5, cfg!(feature = "tuning")),
-    (hce_center_pawn_bonus: i16, "HCE Center Pawn Bonus", UciOptionType::Spin { min: 0, max: 50 }, 20, cfg!(feature = "tuning")),
-
-    (hce_bishop_pair_bonus: i16, "HCE Bishop Pair Bonus", UciOptionType::Spin { min: 0, max: 150 }, 50, cfg!(feature = "tuning")),
-    (hce_rook_open_file_bonus: i16, "HCE Rook Open File Bonus", UciOptionType::Spin { min: 0, max: 50 }, 15, cfg!(feature = "tuning")),
-    (hce_rook_semi_open_file_bonus: i16, "HCE Rook Semi-Open File Bonus", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
-    (hce_rook_seventh_rank_bonus: i16, "HCE Rook Seventh Rank Bonus", UciOptionType::Spin { min: 0, max: 50 }, 20, cfg!(feature = "tuning")),
-
-    (hce_space_multiplier: i16, "HCE Space Multiplier", UciOptionType::Spin { min: 0, max: 10 }, 4, cfg!(feature = "tuning")),
-
-    (hce_supported_minor_bonus: i16, "HCE Supported Minor Bonus", UciOptionType::Spin { min: 0, max: 20 }, 5, cfg!(feature = "tuning")),
-    (hce_supported_major_bonus: i16, "HCE Supported Major Bonus", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
-
-    (hce_king_shield_r1_bonus: i16, "HCE King Shield R1 Bonus", UciOptionType::Spin { min: 0, max: 50 }, 12, cfg!(feature = "tuning")),
-    (hce_king_shield_r2_bonus: i16, "HCE King Shield R2 Bonus", UciOptionType::Spin { min: 0, max: 50 }, 6, cfg!(feature = "tuning")),
-
-    (hce_king_open_file_penalty: i16, "HCE King Open File Penalty", UciOptionType::Spin { min: 0, max: 50 }, 24, cfg!(feature = "tuning")),
-    (hce_king_semi_open_file_penalty: i16, "HCE King Semi Open File Penalty", UciOptionType::Spin { min: 0, max: 50 }, 12, cfg!(feature = "tuning")),
-    (hce_king_thin_cover_penalty: i16, "HCE King Thin Cover Penalty", UciOptionType::Spin { min: 0, max: 50 }, 6, cfg!(feature = "tuning")),
-
-    (hce_king_pressure_knight: i16, "HCE King Pressure Knight", UciOptionType::Spin { min: 0, max: 50 }, 12, cfg!(feature = "tuning")),
-    (hce_king_pressure_bishop: i16, "HCE King Pressure Bishop", UciOptionType::Spin { min: 0, max: 50}, 14, cfg!(feature = "tuning")),
-    (hce_king_pressure_rook: i16, "HCE King Pressure Rook", UciOptionType::Spin { min: 0, max: 50}, 18, cfg!(feature = "tuning")),
-    (hce_king_pressure_queen: i16, "HCE King Pressure Queen", UciOptionType::Spin { min: 0, max: 50 }, 22, cfg!(feature = "tuning")),
-    (hce_king_pressure_pawn: i16, "HCE King Pressure Pawn", UciOptionType::Spin { min: 0, max: 50 }, 8, cfg!(feature = "tuning")),
-
-    (hce_king_central_penalty: i16, "HCE King Central Penalty", UciOptionType::Spin { min: 0, max: 50 }, 20, cfg!(feature = "tuning")),
-    (hce_king_activity_bonus: i16, "HCE King Activity Bonus", UciOptionType::Spin { min: 0, max: 50 }, 14, cfg!(feature = "tuning")),
-
-    (hce_threats_multiplier: i16, "HCE Threats Multiplier", UciOptionType::Spin { min: 0, max: 100 }, 50, cfg!(feature = "tuning")),
-
     (correction_history_max_value: i32, "Correction History Max Value", UciOptionType::Spin { min: 128, max: 2048 }, 1024, cfg!(feature = "tuning")),
     (correction_table_size: usize, "Correction Table Size", UciOptionType::Spin { min: 1024, max: 65536 }, 16384, cfg!(feature = "tuning")),
 
@@ -212,48 +170,6 @@ define_config!(
     (correction_minor_update_weight: i32, "Correction Minor Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 156, cfg!(feature = "tuning")),
     (correction_nonpawn_update_weight: i32, "Correction NonPawn Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 178, cfg!(feature = "tuning")),
 );
-
-impl EngineConfig {
-    pub fn get_hce_config(&self) -> HCEConfig {
-        HCEConfig {
-            tempo_bonus: self.hce_tempo_bonus.value,
-
-            doubled_pawn_penalty: self.hce_doubled_pawn_penalty.value,
-            tripled_pawn_penalty: self.hce_tripled_pawn_penalty.value,
-            isolated_pawn_penalty: self.hce_isolated_pawn_penalty.value,
-            backward_pawn_penalty: self.hce_backward_pawn_penalty.value,
-            backward_pawn_half_open_penalty: self.hce_backward_pawn_half_open_penalty.value,
-            passed_pawn_linear: self.hce_passed_pawn_linear.value,
-            passed_pawn_quadratic: self.hce_passed_pawn_quadratic.value,
-            center_pawn_bonus: self.hce_center_pawn_bonus.value,
-
-            bishop_pair_bonus: self.hce_bishop_pair_bonus.value,
-            rook_open_file_bonus: self.hce_rook_open_file_bonus.value,
-            rook_semi_open_file_bonus: self.hce_rook_semi_open_file_bonus.value,
-            rook_seventh_rank_bonus: self.hce_rook_seventh_rank_bonus.value,
-
-            space_multiplier: self.hce_space_multiplier.value,
-
-            supported_minor_bonus: self.hce_supported_minor_bonus.value,
-            supported_major_bonus: self.hce_supported_major_bonus.value,
-
-            king_shield_r1_bonus: self.hce_king_shield_r1_bonus.value,
-            king_shield_r2_bonus: self.hce_king_shield_r2_bonus.value,
-            king_open_file_penalty: self.hce_king_open_file_penalty.value,
-            king_semi_open_file_penalty: self.hce_king_semi_open_file_penalty.value,
-            king_thin_cover_penalty: self.hce_king_thin_cover_penalty.value,
-            king_pressure_knight: self.hce_king_pressure_knight.value,
-            king_pressure_bishop: self.hce_king_pressure_bishop.value,
-            king_pressure_rook: self.hce_king_pressure_rook.value,
-            king_pressure_queen: self.hce_king_pressure_queen.value,
-            king_pressure_pawn: self.hce_king_pressure_pawn.value,
-            king_central_penalty: self.hce_king_central_penalty.value,
-            king_activity_bonus: self.hce_king_activity_bonus.value,
-
-            threats_multiplier: self.hce_threats_multiplier.value,
-        }
-    }
-}
 
 /// A configuration parameter with optional UCI metadata.
 /// If `uci` is Some, the parameter can be changed via UCI setoption.

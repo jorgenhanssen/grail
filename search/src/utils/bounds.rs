@@ -1,4 +1,4 @@
-use evaluation::scores::SCORE_INF;
+use crate::scores::SCORE_INF;
 
 /// Alpha-beta search bounds.
 ///

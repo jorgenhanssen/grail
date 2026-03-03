@@ -1,9 +1,8 @@
 use candle_core::Device;
 use candle_core::safetensors::SliceSafetensors;
 use candle_nn::VarMap;
-use evaluation::NNUE;
 
-pub fn resolve_nnue() -> Result<Box<dyn NNUE>, Box<dyn std::error::Error>> {
+pub fn resolve_nnue() -> Result<nnue::Evaluator, Box<dyn std::error::Error>> {
     static NNUE_BYTES: &[u8] = include_bytes!("../../nnue/model.safetensors");
 
     let varmap = VarMap::new();
@@ -19,5 +18,5 @@ pub fn resolve_nnue() -> Result<Box<dyn NNUE>, Box<dyn std::error::Error>> {
 
     nnue.enable_nnue();
 
-    Ok(Box::new(nnue))
+    Ok(nnue)
 }

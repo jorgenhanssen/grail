@@ -1,6 +1,5 @@
 use candle_nn::{VarBuilder, VarMap};
 use cozy_chess::Color;
-use evaluation::NNUE;
 use utils::Node;
 
 use crate::{
@@ -35,15 +34,9 @@ impl Evaluator {
     pub fn enable_nnue(&mut self) {
         self.nnue = Some(NNUENetwork::from_network(&self.network).unwrap());
     }
-}
-
-impl NNUE for Evaluator {
-    fn name(&self) -> String {
-        "NNUE".to_string()
-    }
 
     /// Evaluates the position using the neural network.
-    fn evaluate(&mut self, node: &Node) -> i16 {
+    pub fn evaluate(&mut self, node: &Node) -> i16 {
         let board = node.board();
         let white_attacks = node.attacks_for(Color::White);
         let black_attacks = node.attacks_for(Color::Black);

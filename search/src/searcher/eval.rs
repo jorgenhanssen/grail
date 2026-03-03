@@ -5,12 +5,7 @@ use super::Searcher;
 impl Searcher {
     /// Get the static evaluation from the perspective of the side to move.
     pub(super) fn static_eval(&mut self, node: &Node) -> i16 {
-        let phase = node.game_phase();
-
-        let mut score = match self.nnue.as_mut().filter(|_| self.config.nnue.value) {
-            Some(nnue) => nnue.evaluate(node),
-            None => self.hce.evaluate(node, phase),
-        };
+        let mut score = self.evaluator.evaluate(node);
 
         score = cap_eval_by_material(node.board(), score);
 
