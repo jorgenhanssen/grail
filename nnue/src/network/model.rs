@@ -61,7 +61,7 @@ impl EvalHead {
     }
 }
 
-/// Hidden layers and output for a single game phase.
+/// Hidden layers and output head for a single game phase.
 pub struct OutputStack {
     pub hidden1: Linear,
     pub hidden2: Linear,
