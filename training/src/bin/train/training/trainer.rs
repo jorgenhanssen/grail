@@ -148,11 +148,10 @@ impl Trainer {
             let buckets = self.network.forward(&x)?;
             let preds = EvalHead::gather(&buckets, &batch.buckets)?;
 
-            let loss = 
-            // WDL and eval loss
-            (wdl_eval_loss(&preds, &y_eval, &y_outcome, self.wdl)?
-            // Bucket smoothness loss
-            + bucket_smoothness_loss(&buckets)? * self.bucket_smoothness)?;
+            let loss_wdl_eval = wdl_eval_loss(&preds, &y_eval, &y_outcome, self.wdl)?;
+            let loss_bucket_smoothness = bucket_smoothness_loss(&buckets)? * self.bucket_smoothness;
+
+            let loss = (loss_wdl_eval + loss_bucket_smoothness)?;
 
             self.optimizer.backward_step(&loss)?;
 
