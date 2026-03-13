@@ -4,13 +4,14 @@ use nnue::network::{EvalHead, Network};
 use std::error::Error;
 
 use crate::dataset::DataLoader;
-use crate::utils::loss::wdl_eval_loss;
+use crate::utils::loss::{bucket_smoothness_loss, wdl_eval_loss};
 
 pub fn evaluate(
     network: &Network,
     loader: DataLoader,
     device: &Device,
     wdl: f64,
+    bucket_smoothness: f64,
 ) -> Result<f32, Box<dyn Error>> {
     let mut total_loss = 0.0;
     let mut batches = 0;
@@ -28,7 +29,9 @@ pub fn evaluate(
         let buckets = network.forward(&x)?;
         let preds = EvalHead::gather(&buckets, &batch.buckets)?;
 
-        let loss = wdl_eval_loss(&preds, &y_eval, &y_outcome, wdl)?;
+        let loss_wdl_eval = wdl_eval_loss(&preds, &y_eval, &y_outcome, wdl)?;
+        let loss_bucket_smoothness = bucket_smoothness_loss(&buckets)? * bucket_smoothness;
+        let loss = (loss_wdl_eval + loss_bucket_smoothness)?;
 
         total_loss += loss.to_vec0::<f32>()?;
         batches += 1;

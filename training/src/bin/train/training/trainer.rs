@@ -150,7 +150,6 @@ impl Trainer {
 
             let loss_wdl_eval = wdl_eval_loss(&preds, &y_eval, &y_outcome, self.wdl)?;
             let loss_bucket_smoothness = bucket_smoothness_loss(&buckets)? * self.bucket_smoothness;
-
             let loss = (loss_wdl_eval + loss_bucket_smoothness)?;
 
             self.optimizer.backward_step(&loss)?;
@@ -170,7 +169,13 @@ impl Trainer {
             self.workers,
             Arc::clone(shutdown),
         );
-        let val_loss = evaluate(&self.network, val_loader, &self.device, self.wdl)?;
+        let val_loss = evaluate(
+            &self.network,
+            val_loader,
+            &self.device,
+            self.wdl,
+            self.bucket_smoothness,
+        )?;
 
         progress.finish(val_loss, train_loss);
 
@@ -199,7 +204,13 @@ impl Trainer {
             self.workers,
             Arc::clone(shutdown),
         );
-        let test_loss = evaluate(&self.network, test_loader, &self.device, self.wdl)?;
+        let test_loss = evaluate(
+            &self.network,
+            test_loader,
+            &self.device,
+            self.wdl,
+            self.bucket_smoothness,
+        )?;
         log::info!("Test Loss: {:.6}", test_loss);
 
         Ok(test_loss)
