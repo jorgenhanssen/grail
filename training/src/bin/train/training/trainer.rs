@@ -1,7 +1,7 @@
 use candle_core::{DType, Device, Tensor};
 use candle_nn::{AdamW, Optimizer, ParamsAdamW, VarBuilder, VarMap};
 use nnue::encoding::NUM_FEATURES;
-use nnue::network::Network;
+use nnue::network::{EvalHead, Network};
 use std::error::Error;
 use std::path::Path;
 use std::sync::Arc;
@@ -13,7 +13,7 @@ use crate::training::evaluation::evaluate;
 use crate::training::metrics::MetricsTracker;
 use crate::training::progress::TrainingProgressBar;
 use crate::utils::device::get_device;
-use crate::utils::loss::wdl_eval_loss;
+use crate::utils::loss::{bucket_smoothness_loss, wdl_eval_loss};
 
 /// Number of shards to keep loaded for training.
 const TRAIN_SHARDS: usize = 10;
@@ -32,6 +32,7 @@ pub struct Trainer {
     lr_decay: f64,
     patience: u64,
     wdl: f64,
+    bucket_smoothness: f64,
     model_path: String,
 }
 
@@ -62,6 +63,7 @@ impl Trainer {
             lr_decay: args.lr_decay,
             patience: args.patience,
             wdl,
+            bucket_smoothness: args.bucket_smoothness,
             model_path: model_path.to_string(),
         })
     }
@@ -77,6 +79,7 @@ impl Trainer {
             self.wdl * 100.0,
             (1.0 - self.wdl) * 100.0
         );
+        log::info!("Bucket smoothness: {}", self.bucket_smoothness);
 
         let mut metrics = MetricsTracker::new(self.patience);
 
@@ -142,8 +145,14 @@ impl Trainer {
             let y_eval = Tensor::from_vec(batch.scores, (batch_len, 1), &self.device)?;
             let y_outcome = Tensor::from_vec(batch.outcomes, (batch_len, 1), &self.device)?;
 
-            let preds = self.network.forward(&x, &batch.buckets)?;
-            let loss = wdl_eval_loss(&preds, &y_eval, &y_outcome, self.wdl)?;
+            let buckets = self.network.forward(&x)?;
+            let preds = EvalHead::gather(&buckets, &batch.buckets)?;
+
+            let loss = 
+            // WDL and eval loss
+            (wdl_eval_loss(&preds, &y_eval, &y_outcome, self.wdl)?
+            // Bucket smoothness loss
+            + bucket_smoothness_loss(&buckets)? * self.bucket_smoothness)?;
 
             self.optimizer.backward_step(&loss)?;
 

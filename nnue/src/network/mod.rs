@@ -7,7 +7,7 @@ pub mod simd;
 use cozy_chess::Board;
 pub use inference::NNUENetwork;
 pub use linear::LinearLayer;
-pub use model::Network;
+pub use model::{EvalHead, Network};
 
 /// Size of the accumulator that input features are embedded into.
 pub const EMBEDDING_SIZE: usize = 1024;

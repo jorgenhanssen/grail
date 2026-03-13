@@ -6,16 +6,34 @@ use crate::encoding::NUM_FEATURES;
 use super::{EMBEDDING_SIZE, HIDDEN_SIZE, OUTPUT_BUCKETS};
 
 /// Full-precision network for training and weight loading.
-/// Shared embedding layer with phase-specific output stacks.
 pub struct Network {
     pub embedding: Linear,
-    pub buckets: [OutputStack; OUTPUT_BUCKETS],
+    pub eval_head: EvalHead,
 }
 
 impl Network {
     pub fn new(vs: &VarBuilder) -> Result<Self> {
-        // Note: unwrap() is used here because layer creation only fails on programmer error
-        // (wrong dimensions). This keeps the array initialization clean.
+        Ok(Self {
+            embedding: linear(NUM_FEATURES, EMBEDDING_SIZE, vs.pp("embedding"))?,
+            eval_head: EvalHead::new(vs)?,
+        })
+    }
+
+    /// Forward pass returning all bucket outputs: [batch, OUTPUT_BUCKETS].
+    pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
+        let embedding = x.apply(&self.embedding)?.relu()?;
+        self.eval_head.forward(&embedding)
+    }
+}
+
+/// Phase-specific evaluation head with one output stack per bucket.
+pub struct EvalHead {
+    pub buckets: [OutputStack; OUTPUT_BUCKETS],
+}
+
+impl EvalHead {
+    fn new(vs: &VarBuilder) -> Result<Self> {
+        // unwrap() is safe: layer creation only fails on programmer error (wrong dimensions).
         let buckets: [OutputStack; OUTPUT_BUCKETS] = std::array::from_fn(|i| {
             let bvs = vs.pp(format!("bucket_{}", i));
             OutputStack {
@@ -24,41 +42,30 @@ impl Network {
                 output: linear(HIDDEN_SIZE, 1, bvs.pp("output")).unwrap(),
             }
         });
-
-        Ok(Self {
-            embedding: linear(NUM_FEATURES, EMBEDDING_SIZE, vs.pp("embedding"))?,
-            buckets,
-        })
+        Ok(Self { buckets })
     }
 
-    /// Forward pass for training.
-    ///
-    /// Computes all bucket outputs, then gathers the correct one per sample.
-    /// During backprop, `gather` scatters gradients only to each sample's
-    /// selected bucket—unused buckets receive zero gradient for that sample.
-    #[inline]
-    pub fn forward(&self, x: &Tensor, buckets: &[usize]) -> Result<Tensor> {
-        let embedding_out = x.apply(&self.embedding)?.relu()?;
-
-        // Compute all bucket outputs: [batch, OUTPUT_BUCKETS]
-        let all_outputs: Vec<_> = self
+    fn forward(&self, embedding: &Tensor) -> Result<Tensor> {
+        let outputs: Vec<_> = self
             .buckets
             .iter()
-            .map(|b| b.forward(&embedding_out))
+            .map(|b| b.forward(embedding))
             .collect::<Result<_>>()?;
-        let stacked = Tensor::cat(&all_outputs, 1)?;
+        Tensor::cat(&outputs, 1)
+    }
 
-        // Select each sample's bucket output: [batch, 1]
+    /// Select each sample's bucket from the full output: [batch, 1].
+    pub fn gather(all_buckets: &Tensor, buckets: &[usize]) -> Result<Tensor> {
         let indices = Tensor::from_vec(
             buckets.iter().map(|&i| i as u32).collect::<Vec<_>>(),
             (buckets.len(), 1),
-            stacked.device(),
+            all_buckets.device(),
         )?;
-        stacked.gather(&indices, 1)
+        all_buckets.gather(&indices, 1)
     }
 }
 
-/// Hidden layers and output head for a single game phase.
+/// Hidden layers and output for a single game phase.
 pub struct OutputStack {
     pub hidden1: Linear,
     pub hidden2: Linear,

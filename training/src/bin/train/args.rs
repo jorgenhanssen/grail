@@ -45,6 +45,10 @@ pub struct Args {
     #[arg(long, default_value_t = 0.3)]
     pub wdl: f64,
 
+    /// Bucket smoothness regularization weight (0.0 = disabled).
+    #[arg(long, default_value_t = 0.1)]
+    pub bucket_smoothness: f64,
+
     /// Save a randomly initialized model and exit.
     #[arg(long)]
     pub init_model: bool,

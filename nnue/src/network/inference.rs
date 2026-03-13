@@ -26,7 +26,7 @@ impl NNUENetwork {
         );
 
         let buckets: [OutputStack; OUTPUT_BUCKETS] = std::array::from_fn(|i| {
-            let bucket = &network.buckets[i];
+            let bucket = &network.eval_head.buckets[i];
             OutputStack {
                 hidden1: LinearLayer::from_candle_linear(&bucket.hidden1).unwrap(),
                 hidden2: LinearLayer::from_candle_linear(&bucket.hidden2).unwrap(),

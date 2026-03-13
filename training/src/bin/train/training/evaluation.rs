@@ -1,6 +1,6 @@
 use candle_core::{Device, Tensor};
 use nnue::encoding::NUM_FEATURES;
-use nnue::network::Network;
+use nnue::network::{EvalHead, Network};
 use std::error::Error;
 
 use crate::dataset::DataLoader;
@@ -25,7 +25,9 @@ pub fn evaluate(
         let y_eval = Tensor::from_vec(batch.scores, (batch_len, 1), device)?;
         let y_outcome = Tensor::from_vec(batch.outcomes, (batch_len, 1), device)?;
 
-        let preds = network.forward(&x, &batch.buckets)?;
+        let buckets = network.forward(&x)?;
+        let preds = EvalHead::gather(&buckets, &batch.buckets)?;
+
         let loss = wdl_eval_loss(&preds, &y_eval, &y_outcome, wdl)?;
 
         total_loss += loss.to_vec0::<f32>()?;
