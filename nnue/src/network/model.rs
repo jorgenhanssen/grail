@@ -33,24 +33,20 @@ pub struct EvalHead {
 
 impl EvalHead {
     fn new(vs: &VarBuilder) -> Result<Self> {
-        // unwrap() is safe: layer creation only fails on programmer error (wrong dimensions).
-        let buckets: [OutputStack; OUTPUT_BUCKETS] = std::array::from_fn(|i| {
-            let bvs = vs.pp(format!("bucket_{}", i));
-            OutputStack {
-                hidden1: linear(EMBEDDING_SIZE, HIDDEN_SIZE, bvs.pp("hidden1")).unwrap(),
-                hidden2: linear(HIDDEN_SIZE, HIDDEN_SIZE, bvs.pp("hidden2")).unwrap(),
-                output: linear(HIDDEN_SIZE, 1, bvs.pp("output")).unwrap(),
-            }
-        });
-        Ok(Self { buckets })
+        let buckets = (0..OUTPUT_BUCKETS)
+            .map(|i| OutputStack::new(&vs.pp(format!("bucket_{i}"))))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Self {
+            buckets: buckets.try_into().ok().expect("correct bucket count"),
+        })
     }
 
     fn forward(&self, embedding: &Tensor) -> Result<Tensor> {
-        let outputs: Vec<_> = self
+        let outputs = self
             .buckets
             .iter()
             .map(|b| b.forward(embedding))
-            .collect::<Result<_>>()?;
+            .collect::<Result<Vec<_>>>()?;
         Tensor::cat(&outputs, 1)
     }
 
@@ -73,6 +69,14 @@ pub struct OutputStack {
 }
 
 impl OutputStack {
+    fn new(vs: &VarBuilder) -> Result<Self> {
+        Ok(Self {
+            hidden1: linear(EMBEDDING_SIZE, HIDDEN_SIZE, vs.pp("hidden1"))?,
+            hidden2: linear(HIDDEN_SIZE, HIDDEN_SIZE, vs.pp("hidden2"))?,
+            output: linear(HIDDEN_SIZE, 1, vs.pp("output"))?,
+        })
+    }
+
     fn forward(&self, input: &Tensor) -> Result<Tensor> {
         let h1 = input.apply(&self.hidden1)?.relu()?;
         let h2 = (h1.apply(&self.hidden2)? + &h1)?.relu()?;
