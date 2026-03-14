@@ -87,9 +87,7 @@ define_config!(
     (aspiration_score_divisor: i32, "Aspiration Score Divisor", UciOptionType::Spin { min: 1024, max: 65536 }, 16384, cfg!(feature = "tuning")),
 
     (history_max_value: i32, "History Max Value", UciOptionType::Spin { min: 128, max: 1024 }, 512, cfg!(feature = "tuning")),
-    (history_reduction_threshold: i16, "History Reduction Threshold", UciOptionType::Spin { min: -512, max: 512 }, -8, cfg!(feature = "tuning")),
     (history_prune_threshold: i16, "History Prune Threshold", UciOptionType::Spin { min: -512, max: 512 }, -64, cfg!(feature = "tuning")),
-    (history_min_move_index: i32, "History Min Move Index", UciOptionType::Spin { min: 1, max: 10 }, 5, cfg!(feature = "tuning")),
     (history_bonus_multiplier: i32, "History Bonus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 13, cfg!(feature = "tuning")),
     (history_malus_multiplier: i32, "History Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 4, cfg!(feature = "tuning")),
 
@@ -112,12 +110,14 @@ define_config!(
 
     (reduction_cut_node: u16, "Reduction Cut Node", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (reduction_not_improving: u16, "Reduction Not Improving", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
-    (reduction_bad_history: u16, "Reduction Bad History", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_near_root: u16, "Anti Reduction Near Root", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_pv_node: u16, "Anti Reduction PV Node", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_tactical: u16, "Anti Reduction Tactical", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_threat: u16, "Anti Reduction Threat", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_check: u16, "Anti Reduction Check", UciOptionType::Spin { min: 0, max: 4096 }, 1500, cfg!(feature = "tuning")),
+
+    (reduction_history_divisor: i32, "Reduction History Divisor", UciOptionType::Spin { min: 64, max: 16384 }, 2048, cfg!(feature = "tuning")),
+    (reduction_cont_hist_divisor: i32, "Reduction Cont Hist Divisor", UciOptionType::Spin { min: 64, max: 16384 }, 8192, cfg!(feature = "tuning")),
 
     (nmp_min_depth: u8, "NMP Min Depth", UciOptionType::Spin { min: 2, max: 10 }, 4, cfg!(feature = "tuning")),
     (nmp_base_reduction: u8, "NMP Base Reduction", UciOptionType::Spin { min: 1, max: 10 }, 2, cfg!(feature = "tuning")),

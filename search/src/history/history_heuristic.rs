@@ -14,9 +14,7 @@ pub struct HistoryHeuristic {
     history: Vec<i16>,
 
     max_history: i32,
-    reduction_threshold: i16,
     prune_threshold: i16,
-    min_move_index: i32,
 
     bonus_multiplier: i32,
     malus_multiplier: i32,
@@ -25,9 +23,7 @@ pub struct HistoryHeuristic {
 impl HistoryHeuristic {
     pub fn new(
         max_history: i32,
-        reduction_threshold: i16,
         prune_threshold: i16,
-        min_move_index: i32,
         bonus_multiplier: i32,
         malus_multiplier: i32,
     ) -> Self {
@@ -35,9 +31,7 @@ impl HistoryHeuristic {
             history: vec![0; HISTORY_SIZE],
 
             max_history,
-            reduction_threshold,
             prune_threshold,
-            min_move_index,
 
             bonus_multiplier,
             malus_multiplier,
@@ -46,9 +40,7 @@ impl HistoryHeuristic {
 
     pub fn configure(&mut self, config: &EngineConfig) {
         self.max_history = config.history_max_value.value;
-        self.reduction_threshold = config.history_reduction_threshold.value;
         self.prune_threshold = config.history_prune_threshold.value;
-        self.min_move_index = config.history_min_move_index.value;
 
         self.bonus_multiplier = config.history_bonus_multiplier.value;
         self.malus_multiplier = config.history_malus_multiplier.value;
@@ -58,9 +50,7 @@ impl HistoryHeuristic {
 
     pub fn matches_config(&self, config: &EngineConfig) -> bool {
         self.max_history == config.history_max_value.value
-            && self.reduction_threshold == config.history_reduction_threshold.value
             && self.prune_threshold == config.history_prune_threshold.value
-            && self.min_move_index == config.history_min_move_index.value
             && self.bonus_multiplier == config.history_bonus_multiplier.value
             && self.malus_multiplier == config.history_malus_multiplier.value
     }
@@ -92,10 +82,6 @@ impl HistoryHeuristic {
         let source_stride = Square::NUM;
 
         color_idx * color_stride + source_idx * source_stride + dest_idx
-    }
-
-    pub fn reduction_threshold(&self) -> i16 {
-        self.reduction_threshold
     }
 
     pub fn prune_threshold(&self) -> i16 {

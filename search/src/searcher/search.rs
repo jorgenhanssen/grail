@@ -11,6 +11,7 @@ use utils::{Node, NodeType, has_legal_moves};
 
 use crate::{
     aspiration::Pass,
+    history::PieceTo,
     move_ordering::{MAX_CAPTURES, MAX_QUIETS, MainMoveGenerator},
     pv::PvLine,
     result::SearchResult,
@@ -548,6 +549,14 @@ impl Searcher {
             return None;
         }
 
+        let hist = self.history_heuristic.get(moved_color, m.from, m.to);
+        let cont_hist = {
+            let prev_moves = self
+                .continuation_history
+                .get_prev_moves(self.search_stack.as_slice());
+            let pt = PieceTo::new(moved_color, moved_piece, m.to);
+            self.continuation_history.get(&prev_moves, pt)
+        };
         let reduction = match self.get_reduction(
             ply,
             depth,
@@ -558,8 +567,8 @@ impl Searcher {
             move_index,
             node,
             &child,
-            m,
-            &self.lmr,
+            hist,
+            cont_hist,
         ) {
             Reduction::Reduce(r) => r,
             Reduction::Prune => return None,

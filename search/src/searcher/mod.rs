@@ -104,7 +104,7 @@ impl Searcher {
 
             search_stack: SearchStack::with_capacity(MAX_DEPTH),
 
-            history_heuristic: HistoryHeuristic::new(1, 1, 1, 1, 1, 1),
+            history_heuristic: HistoryHeuristic::new(1, 1, 1, 1),
             capture_history: CaptureHistory::new(1, 1, 1),
             continuation_history: Box::new(ContinuationHistory::new(1, 1, 1, 1)),
 

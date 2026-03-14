@@ -1,7 +1,6 @@
-use cozy_chess::Move;
 use utils::{FracPly, Node, creates_threat, evades_threat};
 
-use crate::{lmr::LmrTable, utils::near_root};
+use crate::utils::near_root;
 
 use super::Searcher;
 
@@ -26,18 +25,14 @@ impl Searcher {
         move_index: i32,
         parent: &Node,
         child: &Node,
-        m: Move,
-        lmr_table: &LmrTable,
+        hist: i16,
+        cont_hist: i16,
     ) -> Reduction {
         if is_pv_move {
             return Reduction::Reduce(0);
         }
 
-        let hist = self
-            .history_heuristic
-            .get(parent.side_to_move(), m.from, m.to);
-
-        let mut reduction = lmr_table.get(depth, move_index);
+        let mut reduction = self.lmr.get(depth, move_index);
 
         // Reduce more
         if parent.is_cut() {
@@ -45,11 +40,21 @@ impl Searcher {
         }
         if !is_improving {
             reduction += FracPly(self.config.reduction_not_improving.value);
-
-            if !is_capture && hist < self.history_heuristic.reduction_threshold() {
-                reduction += FracPly(self.config.reduction_bad_history.value);
-            }
         }
+
+        if !is_capture {
+            scale_by_history(
+                &mut reduction,
+                hist,
+                self.config.reduction_history_divisor.value,
+            );
+        }
+
+        scale_by_history(
+            &mut reduction,
+            cont_hist,
+            self.config.reduction_cont_hist_divisor.value,
+        );
 
         // Reduce less
         if reduction > FracPly(0) {
@@ -83,5 +88,14 @@ impl Searcher {
         }
 
         Reduction::Reduce(r)
+    }
+}
+
+fn scale_by_history(reduction: &mut FracPly, score: i16, divisor: i32) {
+    let delta = score as i32 * FracPly::ONE as i32 / divisor;
+    if delta > 0 {
+        *reduction -= FracPly(delta.min(u16::MAX as i32) as u16);
+    } else {
+        *reduction += FracPly((-delta).min(u16::MAX as i32) as u16);
     }
 }
