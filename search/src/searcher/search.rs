@@ -7,7 +7,7 @@ use uci::{
     UciOutput,
     commands::{GoParams, Info, Score},
 };
-use utils::{Node, NodeType, has_legal_moves};
+use utils::{Node, NodeType, captured_piece, has_legal_moves};
 
 use crate::{
     aspiration::Pass,
@@ -549,24 +549,26 @@ impl Searcher {
             return None;
         }
 
-        let hist = if is_cap {
-            self.capture_history.get(node.board(), m)
+        let (captured, hist, cont_hist) = if is_cap {
+            let captured = captured_piece(node.board(), m);
+            let hist = self.capture_history.get(node.board(), m);
+            (captured, hist, 0)
         } else {
-            self.history_heuristic.get(moved_color, m.from, m.to)
-        };
-        let cont_hist = {
+            let hist = self.history_heuristic.get(moved_color, m.from, m.to);
             let prev_moves = self
                 .continuation_history
                 .get_prev_moves(self.search_stack.as_slice());
             let pt = PieceTo::new(moved_color, moved_piece, m.to);
-            self.continuation_history.get(&prev_moves, pt)
+            let cont_hist = self.continuation_history.get(&prev_moves, pt);
+            (None, hist, cont_hist)
         };
+
         let reduction = match self.get_reduction(
             ply,
             depth,
             is_pv_move,
             is_improving,
-            is_cap,
+            captured,
             is_promotion,
             move_index,
             node,

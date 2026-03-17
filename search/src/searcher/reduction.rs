@@ -1,4 +1,5 @@
-use utils::{FracPly, Node, creates_threat, evades_threat};
+use cozy_chess::Piece;
+use utils::{FracPly, Node, creates_threat, evades_threat, piece_value};
 
 use crate::utils::near_root;
 
@@ -20,7 +21,7 @@ impl Searcher {
         depth: u8,
         is_pv_move: bool,
         is_improving: bool,
-        is_capture: bool,
+        captured: Option<Piece>,
         is_promotion: bool,
         move_index: i32,
         parent: &Node,
@@ -42,16 +43,29 @@ impl Searcher {
             reduction += FracPly(self.config.reduction_not_improving.value);
         }
 
-        history_reduction(
-            &mut reduction,
-            hist,
-            self.config.reduction_history_divisor.value,
-        );
-        history_reduction(
-            &mut reduction,
-            cont_hist,
-            self.config.reduction_cont_hist_divisor.value,
-        );
+        if let Some(victim) = captured {
+            history_reduction(
+                &mut reduction,
+                piece_value(victim),
+                self.config.reduction_capture_value_divisor.value,
+            );
+            history_reduction(
+                &mut reduction,
+                hist,
+                self.config.reduction_capture_history_divisor.value,
+            );
+        } else {
+            history_reduction(
+                &mut reduction,
+                hist,
+                self.config.reduction_history_divisor.value,
+            );
+            history_reduction(
+                &mut reduction,
+                cont_hist,
+                self.config.reduction_cont_hist_divisor.value,
+            );
+        }
 
         // Reduce less
         if reduction > FracPly(0) {
@@ -64,7 +78,7 @@ impl Searcher {
             if parent.in_check() || child.in_check() {
                 reduction -= FracPly(self.config.anti_reduction_check.value);
             }
-            if is_capture || is_promotion {
+            if captured.is_some() || is_promotion {
                 reduction -= FracPly(self.config.anti_reduction_tactical.value);
             }
             if creates_threat(parent, child) || evades_threat(parent, child) {
@@ -76,7 +90,7 @@ impl Searcher {
 
         // Prune when bad history if it would barely search anyway
         let reduced_depth = depth.saturating_sub(r);
-        if !is_capture
+        if captured.is_none()
             && !is_improving
             && hist < self.history_heuristic.prune_threshold()
             && reduced_depth <= 1

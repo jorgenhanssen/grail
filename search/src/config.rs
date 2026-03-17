@@ -110,14 +110,16 @@ define_config!(
 
     (reduction_cut_node: u16, "Reduction Cut Node", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (reduction_not_improving: u16, "Reduction Not Improving", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (reduction_history_divisor: i32, "Reduction History Divisor", UciOptionType::Spin { min: 64, max: 16384 }, 987, cfg!(feature = "tuning")),
+    (reduction_capture_history_divisor: i32, "Reduction Capture History Divisor", UciOptionType::Spin { min: 64, max: 16384 }, 987, cfg!(feature = "tuning")),
+    (reduction_capture_value_divisor: i32, "Reduction Capture Value Divisor", UciOptionType::Spin { min: 256, max: 16384 }, 2048, cfg!(feature = "tuning")),
+    (reduction_cont_hist_divisor: i32, "Reduction Cont Hist Divisor", UciOptionType::Spin { min: 64, max: 16384 }, 5030, cfg!(feature = "tuning")),
+
     (anti_reduction_near_root: u16, "Anti Reduction Near Root", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_pv_node: u16, "Anti Reduction PV Node", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_tactical: u16, "Anti Reduction Tactical", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_threat: u16, "Anti Reduction Threat", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_check: u16, "Anti Reduction Check", UciOptionType::Spin { min: 0, max: 4096 }, 1500, cfg!(feature = "tuning")),
-
-    (reduction_history_divisor: i32, "Reduction History Divisor", UciOptionType::Spin { min: 64, max: 16384 }, 987, cfg!(feature = "tuning")),
-    (reduction_cont_hist_divisor: i32, "Reduction Cont Hist Divisor", UciOptionType::Spin { min: 64, max: 16384 }, 5030, cfg!(feature = "tuning")),
 
     (nmp_min_depth: u8, "NMP Min Depth", UciOptionType::Spin { min: 2, max: 10 }, 4, cfg!(feature = "tuning")),
     (nmp_base_reduction: u8, "NMP Base Reduction", UciOptionType::Spin { min: 1, max: 10 }, 2, cfg!(feature = "tuning")),
