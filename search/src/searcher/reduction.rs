@@ -42,12 +42,15 @@ impl Searcher {
             reduction += FracPly(self.config.reduction_not_improving.value);
         }
 
-        history_reduction(
-            &mut reduction,
-            hist,
-            self.config.reduction_history_divisor.value,
-        );
-        history_reduction(
+        if !is_capture {
+            scale_by_history(
+                &mut reduction,
+                hist,
+                self.config.reduction_history_divisor.value,
+            );
+        }
+
+        scale_by_history(
             &mut reduction,
             cont_hist,
             self.config.reduction_cont_hist_divisor.value,
@@ -88,12 +91,11 @@ impl Searcher {
     }
 }
 
-fn history_reduction(reduction: &mut FracPly, score: i16, divisor: i32) {
-    let delta = FracPly((score.abs() as i32 * FracPly::ONE as i32 / divisor) as u16);
-
-    if score > 0 {
-        *reduction -= delta
+fn scale_by_history(reduction: &mut FracPly, score: i16, divisor: i32) {
+    let delta = score as i32 * FracPly::ONE as i32 / divisor;
+    if delta > 0 {
+        *reduction -= FracPly(delta.min(u16::MAX as i32) as u16);
     } else {
-        *reduction += delta
+        *reduction += FracPly((-delta).min(u16::MAX as i32) as u16);
     }
 }

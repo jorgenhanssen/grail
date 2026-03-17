@@ -549,11 +549,7 @@ impl Searcher {
             return None;
         }
 
-        let hist = if is_cap {
-            self.capture_history.get(node.board(), m)
-        } else {
-            self.history_heuristic.get(moved_color, m.from, m.to)
-        };
+        let hist = self.history_heuristic.get(moved_color, m.from, m.to);
         let cont_hist = {
             let prev_moves = self
                 .continuation_history
