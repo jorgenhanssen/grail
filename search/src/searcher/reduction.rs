@@ -42,11 +42,13 @@ impl Searcher {
             reduction += FracPly(self.config.reduction_not_improving.value);
         }
 
-        history_reduction(
-            &mut reduction,
-            hist,
-            self.config.reduction_history_divisor.value,
-        );
+        let hist_divisor = if is_capture {
+            self.config.reduction_capture_history_divisor.value
+        } else {
+            self.config.reduction_history_divisor.value
+        };
+        history_reduction(&mut reduction, hist, hist_divisor);
+
         history_reduction(
             &mut reduction,
             cont_hist,

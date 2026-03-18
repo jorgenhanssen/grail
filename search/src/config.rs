@@ -117,6 +117,7 @@ define_config!(
     (anti_reduction_check: u16, "Anti Reduction Check", UciOptionType::Spin { min: 0, max: 4096 }, 1500, cfg!(feature = "tuning")),
 
     (reduction_history_divisor: i32, "Reduction History Divisor", UciOptionType::Spin { min: 64, max: 16384 }, 987, cfg!(feature = "tuning")),
+    (reduction_capture_history_divisor: i32, "Reduction Capture History Divisor", UciOptionType::Spin { min: 64, max: 16384 }, 987, cfg!(feature = "tuning")),
     (reduction_cont_hist_divisor: i32, "Reduction Cont Hist Divisor", UciOptionType::Spin { min: 64, max: 16384 }, 5030, cfg!(feature = "tuning")),
 
     (nmp_min_depth: u8, "NMP Min Depth", UciOptionType::Spin { min: 2, max: 10 }, 4, cfg!(feature = "tuning")),
