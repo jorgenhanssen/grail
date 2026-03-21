@@ -1,6 +1,6 @@
 use cozy_chess::{
-    BitBoard, Board, Color, Piece, get_bishop_moves, get_knight_moves, get_pawn_attacks,
-    get_rook_moves,
+    BitBoard, Board, Color, Piece, get_bishop_moves, get_king_moves, get_knight_moves,
+    get_pawn_attacks, get_rook_moves,
 };
 
 /// Precomputed board metrics for evaluation.
@@ -53,6 +53,9 @@ impl BoardMetrics {
         let white_non_pawns = white_minors | white_majors;
         let black_non_pawns = black_minors | black_majors;
 
+        let white_king = board.king(Color::White);
+        let black_king = board.king(Color::Black);
+
         let (white_attacks, black_threats) = compute(
             Color::White,
             white_pawns,
@@ -60,6 +63,7 @@ impl BoardMetrics {
             white_bishops,
             white_rooks,
             white_queens,
+            white_king,
             black_non_pawns,
             black_majors,
             black_queens,
@@ -73,6 +77,7 @@ impl BoardMetrics {
             black_bishops,
             black_rooks,
             black_queens,
+            black_king,
             white_non_pawns,
             white_majors,
             white_queens,
@@ -100,6 +105,7 @@ fn compute(
     bishops: BitBoard,
     rooks: BitBoard,
     queens: BitBoard,
+    king: cozy_chess::Square,
     opponent_non_pawns: BitBoard,
     opponent_majors: BitBoard,
     opponent_queens: BitBoard,
@@ -163,6 +169,8 @@ fn compute(
             attacks |= squares;
         }
     }
+
+    attacks |= get_king_moves(king);
 
     (attacks, threats)
 }
