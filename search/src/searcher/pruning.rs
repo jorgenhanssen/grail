@@ -192,6 +192,7 @@ impl Searcher {
         }
 
         // At high depths, verify the null-move result with NMP disabled.
+        // (no push_node needed = same position/ply)
         if depth >= self.config.nmp_verify_depth.value {
             let v = self.search_node(
                 node,
@@ -210,7 +211,7 @@ impl Searcher {
             ply,
             depth.saturating_sub(r),
             bounds.beta,
-            None,
+            static_eval,
             bounds.alpha,
             bounds.beta,
             None,
