@@ -3,6 +3,8 @@ use cozy_chess::{
     get_pawn_attacks, get_rook_moves,
 };
 
+use crate::attacks::get_queen_moves;
+
 /// Precomputed board metrics for evaluation.
 ///
 /// These metrics are expensive to compute but reused multiple times
@@ -114,62 +116,41 @@ fn compute(
     let mut attacks = BitBoard::EMPTY;
     let mut threats = BitBoard::EMPTY;
 
-    let has_non_pawns = !opponent_non_pawns.is_empty();
-    let has_majors = !opponent_majors.is_empty();
-    let has_queens = !opponent_queens.is_empty();
-
     // Pawns: threaten any non-pawn piece
-    if !pawns.is_empty() {
-        for sq in pawns {
-            let squares = get_pawn_attacks(sq, color);
-            attacks |= squares;
-            if has_non_pawns {
-                threats |= squares & opponent_non_pawns;
-            }
-        }
+    for sq in pawns {
+        let squares = get_pawn_attacks(sq, color);
+        attacks |= squares;
+        threats |= squares & opponent_non_pawns;
     }
 
     // Knights: threaten major pieces (rooks, queens)
-    if !knights.is_empty() {
-        for sq in knights {
-            let squares = get_knight_moves(sq);
-            attacks |= squares;
-            if has_majors {
-                threats |= squares & opponent_majors;
-            }
-        }
+    for sq in knights {
+        let squares = get_knight_moves(sq);
+        attacks |= squares;
+        threats |= squares & opponent_majors;
     }
 
     // Bishops: threaten major pieces (rooks, queens)
-    if !bishops.is_empty() {
-        for sq in bishops {
-            let squares = get_bishop_moves(sq, all_pieces);
-            attacks |= squares;
-            if has_majors {
-                threats |= squares & opponent_majors;
-            }
-        }
+    for sq in bishops {
+        let squares = get_bishop_moves(sq, all_pieces);
+        attacks |= squares;
+        threats |= squares & opponent_majors;
     }
 
     // Rooks: threaten queens
-    if !rooks.is_empty() {
-        for sq in rooks {
-            let squares = get_rook_moves(sq, all_pieces);
-            attacks |= squares;
-            if has_queens {
-                threats |= squares & opponent_queens;
-            }
-        }
+    for sq in rooks {
+        let squares = get_rook_moves(sq, all_pieces);
+        attacks |= squares;
+        threats |= squares & opponent_queens;
     }
 
     // Queens: don't generate threats (nothing more valuable to threaten)
-    if !queens.is_empty() {
-        for sq in queens {
-            let squares = get_bishop_moves(sq, all_pieces) | get_rook_moves(sq, all_pieces);
-            attacks |= squares;
-        }
+    for sq in queens {
+        let squares = get_queen_moves(sq, all_pieces);
+        attacks |= squares;
     }
 
+    // Kings: Also don't generate threats (can be discussed, I suppose)
     attacks |= get_king_moves(king);
 
     (attacks, threats)
