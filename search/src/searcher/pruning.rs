@@ -135,7 +135,7 @@ impl Searcher {
     }
 
     /// Null move pruning: give opponent a free move; if we still beat beta, prune the subtree.
-    /// Includes verification search at low depths to avoid zugzwang.
+    /// Includes verification search at high depths to avoid zugzwang.
     ///
     /// <https://www.chessprogramming.org/Null_Move_Pruning>
     pub(super) fn try_null_move_prune(
@@ -180,29 +180,42 @@ impl Searcher {
 
         // Null window around beta for the null move search
         let null_bounds = Bounds::null(-bounds.beta);
+        let reduced_depth = depth.saturating_sub(r + 1);
 
         // Do a reduced depth null search to check if our position is still good enough
         self.search_stack.push_node(&nm_child);
-        let reduced_child_depth = depth.saturating_sub(r + 1);
-        let score = self.search_node(&nm_child, reduced_child_depth, ply + 1, null_bounds, false);
+        let null_value = -self.search_node(&nm_child, reduced_depth, ply + 1, null_bounds, false);
         self.search_stack.pop();
 
-        // If opponent couldn't beat beta even with a free move, position is strong enough to prune
-        if -score >= bounds.beta {
-            self.shared.tt().store(
-                node.hash(),
-                ply,
-                depth.saturating_sub(r),
-                bounds.beta,
-                None,
-                bounds.alpha,
-                bounds.beta,
-                None,
-            );
-            return Some(bounds.beta);
+        if null_value < bounds.beta || null_value.abs() >= NEAR_MATE_VALUE {
+            return None;
         }
 
-        None
+        // At high depths, verify the null-move result with NMP disabled.
+        if depth >= self.config.nmp_verify_depth.value {
+            let v = self.search_node(
+                node,
+                reduced_depth,
+                ply,
+                Bounds::null(bounds.beta - 1),
+                false,
+            );
+            if v < bounds.beta {
+                return None;
+            }
+        }
+
+        self.shared.tt().store(
+            node.hash(),
+            ply,
+            depth.saturating_sub(r),
+            bounds.beta,
+            None,
+            bounds.alpha,
+            bounds.beta,
+            None,
+        );
+        Some(bounds.beta)
     }
 
     /// Reverse futility pruning: if static eval - margin >= beta, the position is too good to search.
