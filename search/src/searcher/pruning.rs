@@ -135,7 +135,6 @@ impl Searcher {
     }
 
     /// Null move pruning: give opponent a free move; if we still beat beta, prune the subtree.
-    /// Includes verification search at low depths to avoid zugzwang.
     ///
     /// <https://www.chessprogramming.org/Null_Move_Pruning>
     pub(super) fn try_null_move_prune(
@@ -184,25 +183,32 @@ impl Searcher {
         // Do a reduced depth null search to check if our position is still good enough
         self.search_stack.push_node(&nm_child);
         let reduced_child_depth = depth.saturating_sub(r + 1);
-        let score = self.search_node(&nm_child, reduced_child_depth, ply + 1, null_bounds, false);
+        let null_value =
+            -self.search_node(&nm_child, reduced_child_depth, ply + 1, null_bounds, false);
         self.search_stack.pop();
 
-        // If opponent couldn't beat beta even with a free move, position is strong enough to prune
-        if -score >= bounds.beta {
-            self.shared.tt().store(
-                node.hash(),
-                ply,
-                depth.saturating_sub(r),
-                bounds.beta,
-                None,
-                bounds.alpha,
-                bounds.beta,
-                None,
-            );
-            return Some(bounds.beta);
+        // Opponent beat beta even with a free move = not strong enough to prune
+        if null_value < bounds.beta {
+            return None;
         }
 
-        None
+        // The null move is not realistic, so mates may not exist
+        if null_value.abs() >= NEAR_MATE_VALUE {
+            return None;
+        }
+
+        self.shared.tt().store(
+            node.hash(),
+            ply,
+            depth.saturating_sub(r),
+            bounds.beta,
+            static_eval,
+            bounds.alpha,
+            bounds.beta,
+            None,
+        );
+
+        Some(bounds.beta)
     }
 
     /// Reverse futility pruning: if static eval - margin >= beta, the position is too good to search.
