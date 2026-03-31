@@ -1,4 +1,4 @@
-use crate::scores::{MATE_VALUE, SCORE_INF};
+use crate::scores::{MATE_SCORE_BOUND, MATE_VALUE, SCORE_INF};
 use arrayvec::ArrayVec;
 use cozy_chess::{Board, Color, Move, Piece, Rank};
 use utils::{QUEEN_VALUE, make_move, piece_value};
@@ -124,6 +124,14 @@ impl Searcher {
         let mut moves = QMoveGenerator::new(node, &self.capture_history);
 
         while let Some(mv) = moves.next() {
+            // Skip quiet evasions once we know we're not getting mated.
+            // Without this, check chains explode apparently, like in KQ+K,,,
+            if in_check && best_eval > -MATE_SCORE_BOUND {
+                if board.piece_on(mv.to).is_none() && mv.promotion.is_none() {
+                    continue;
+                }
+            }
+
             // Per-move delta pruning (skip if capture can't possibly improve alpha)
             if can_delta {
                 let captured = board.piece_on(mv.to);
