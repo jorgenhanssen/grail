@@ -82,7 +82,7 @@ impl Searcher {
             // Should help cases where TT hits givve check chains (KQ+K,,, etc).
             let overshoot = ply.saturating_sub(self.root_depth) as i16;
             let double_margin = self.config.double_ext_margin.value
-                + overshoot * self.config.double_ext_overshoot_penalty.value;
+                + overshoot * overshoot * self.config.double_ext_overshoot_penalty.value;
             if singular_value < singular_beta.saturating_sub(double_margin) {
                 result.extension = 2;
                 return result;
