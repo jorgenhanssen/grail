@@ -55,6 +55,9 @@ pub struct Searcher {
     /// Selective depth (max ply reached including quiescence - deepest we have gotten)
     max_ply_reached: u8,
 
+    /// Current iterative deepening depth
+    root_depth: u8,
+
     /// Tracks active search path - used for repetition, improving, etc.
     search_stack: SearchStack,
 
@@ -101,6 +104,7 @@ impl Searcher {
             game_history: AHashSet::new(),
             nodes: 0,
             max_ply_reached: 1,
+            root_depth: 0,
 
             search_stack: SearchStack::with_capacity(MAX_DEPTH),
 

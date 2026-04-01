@@ -63,6 +63,7 @@ impl Searcher {
             }
 
             self.multi_pv.reset_excluded();
+            self.root_depth = depth;
 
             for pv_index in 0..pv_count {
                 let (pv, failures) = self.search_pv(&root, depth, pv_index);
