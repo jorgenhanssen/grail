@@ -77,11 +77,13 @@ impl Searcher {
 
         if singular_value < singular_beta {
             // TT move is uniquely strong: extend (extra if very singular).
-            if singular_value < singular_beta.saturating_sub(self.config.double_ext_margin.value)
-                // Limit double extensions when ply exceeds depth to prevent
-                // search explosion from repeated singular extensions (e.g. check chains).
-                && ply <= depth * 2
-            {
+            // Widen the margin when ply exceeds root depth to make double
+            // extensions progressively harder deep in the tree.
+            // Should help cases where TT hits givve check chains (KQ+K,,, etc).
+            let overshoot = ply.saturating_sub(self.root_depth) as i16;
+            let double_margin = self.config.double_ext_margin.value
+                + overshoot * self.config.double_ext_overshoot_penalty.value;
+            if singular_value < singular_beta.saturating_sub(double_margin) {
                 result.extension = 2;
                 return result;
             }
