@@ -160,7 +160,7 @@ define_config!(
     (singular_depth_margin: u8, "Singular Depth Margin", UciOptionType::Spin { min: 1, max: 5 }, 3, cfg!(feature = "tuning")),
     (singular_beta_margin: i16, "Singular Beta Margin", UciOptionType::Spin { min: 1, max: 5 }, 2, cfg!(feature = "tuning")),
     (double_ext_margin: i16, "Double Extension Margin", UciOptionType::Spin { min: 10, max: 100 }, 50, cfg!(feature = "tuning")),
-    (double_ext_overshoot_penalty: i16, "Double Extension Overshoot Penalty", UciOptionType::Spin { min: 0, max: 20 }, 3, cfg!(feature = "tuning")),
+    (double_ext_overshoot_penalty: i16, "Double Extension Overshoot Penalty", UciOptionType::Spin { min: 0, max: 3 }, 2, cfg!(feature = "tuning")),
 
     (correction_history_max_value: i32, "Correction History Max Value", UciOptionType::Spin { min: 128, max: 2048 }, 1024, cfg!(feature = "tuning")),
     (correction_table_size: usize, "Correction Table Size", UciOptionType::Spin { min: 1024, max: 65536 }, 16384, cfg!(feature = "tuning")),
