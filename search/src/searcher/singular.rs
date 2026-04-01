@@ -77,7 +77,11 @@ impl Searcher {
 
         if singular_value < singular_beta {
             // TT move is uniquely strong: extend (extra if very singular).
-            if singular_value < singular_beta.saturating_sub(self.config.double_ext_margin.value) {
+            if singular_value < singular_beta.saturating_sub(self.config.double_ext_margin.value)
+                // Limit double extensions when ply exceeds depth to prevent
+                // search explosion from repeated singular extensions (e.g. check chains).
+                && ply <= depth * 2
+            {
                 result.extension = 2;
                 return result;
             }
