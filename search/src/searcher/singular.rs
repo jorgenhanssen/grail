@@ -59,9 +59,9 @@ impl Searcher {
         }
 
         let singular_depth = (depth - 1) / 2;
-        let singular_beta = tt
-            .value
-            .saturating_sub((self.config.singular_beta_margin.value * depth as i16).max(1));
+        let singular_beta = tt.value.saturating_sub(
+            (self.config.singular_beta_margin.value as i32 * depth as i32 / 100).max(1) as i16,
+        );
 
         // Reduced null-window search excluding TT move.
         self.search_stack
@@ -99,8 +99,12 @@ impl Searcher {
             return result;
         }
 
-        // TODO: Negative extensions. Infrastructure is now in place
-        // but tested neutral at STC/LTC. Revisit after tuning.
+        // Negative extensions (inspired by Stockfish).
+        if tt.value >= beta && !node.is_pv() {
+            result.extension = -self.config.negative_ext_tt_high.value;
+        } else if node.is_cut() {
+            result.extension = -self.config.negative_ext_cut_node.value;
+        }
 
         result
     }

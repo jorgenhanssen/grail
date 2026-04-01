@@ -579,10 +579,9 @@ impl Searcher {
             Reduction::Prune => return None,
         };
 
-        let extension = self.get_extension(node, &m, moved_piece, is_cap);
-        let extension = (extension + extra_extension).max(0) as u8;
+        let extension = self.get_extension(node, &m, moved_piece, is_cap) + extra_extension;
 
-        let mut adjusted_depth = depth.saturating_add(extension).saturating_sub(reduction);
+        let mut adjusted_depth = (depth as i16 + extension as i16 - reduction as i16).max(0) as u8;
 
         let child_bounds = if is_pv_move {
             bounds.invert()
@@ -606,7 +605,7 @@ impl Searcher {
             child.set_type(child.node_type().inverted());
 
             // Search at full depth
-            adjusted_depth = depth.saturating_add(extension);
+            adjusted_depth = (depth as i16 + extension as i16).max(0) as u8;
 
             self.search_stack
                 .push_move(&child, m, moved_piece, moved_color);
