@@ -99,8 +99,9 @@ impl Searcher {
             return result;
         }
 
-        // Negative extensions (inspired by Stockfish).
-        if tt.value >= beta && !node.is_pv() {
+        // Negative extensions (based on Stockfish).
+        // <https://www.chessprogramming.org/Extensions#Negative_Extensions>
+        if tt.value >= beta {
             result.extension = -self.config.negative_ext_tt_high.value;
         } else if node.is_cut() {
             result.extension = -self.config.negative_ext_cut_node.value;
