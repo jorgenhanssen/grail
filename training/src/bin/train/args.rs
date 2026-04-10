@@ -14,7 +14,7 @@ pub struct Args {
     pub learning_rate: f64,
 
     /// Maximum number of training epochs.
-    #[arg(long, default_value_t = 100)]
+    #[arg(long, default_value_t = 200)]
     pub epochs: usize,
 
     /// Number of data loader workers.
@@ -22,7 +22,7 @@ pub struct Args {
     pub workers: usize,
 
     /// Fraction of data for validation set.
-    #[arg(long, default_value_t = 0.1)]
+    #[arg(long, default_value_t = 0.05)]
     pub val_ratio: f64,
 
     /// Fraction of data for test set.
@@ -34,7 +34,7 @@ pub struct Args {
     pub lr_decay: f64,
 
     /// Epochs without improvement before early stopping.
-    #[arg(long, default_value_t = 2)]
+    #[arg(long, default_value_t = 5)]
     pub patience: u64,
 
     /// Size of each shard in megabytes.
