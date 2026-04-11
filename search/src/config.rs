@@ -158,7 +158,7 @@ define_config!(
 
     (singular_min_depth: u8, "Singular Min Depth", UciOptionType::Spin { min: 4, max: 12 }, 6, cfg!(feature = "tuning")),
     (singular_depth_margin: u8, "Singular Depth Margin", UciOptionType::Spin { min: 1, max: 5 }, 3, cfg!(feature = "tuning")),
-    (singular_beta_margin: i16, "Singular Beta Margin", UciOptionType::Spin { min: 1, max: 5 }, 2, cfg!(feature = "tuning")),
+    (singular_beta_margin: i16, "Singular Beta Margin", UciOptionType::Spin { min: 100, max: 500 }, 200, cfg!(feature = "tuning")),
     (double_ext_margin: i16, "Double Extension Margin", UciOptionType::Spin { min: 10, max: 100 }, 50, cfg!(feature = "tuning")),
     (double_ext_overshoot_penalty: i16, "Double Extension Overshoot Penalty", UciOptionType::Spin { min: 0, max: 3 }, 2, cfg!(feature = "tuning")),
 

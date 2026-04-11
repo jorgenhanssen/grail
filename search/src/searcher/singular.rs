@@ -61,7 +61,7 @@ impl Searcher {
         let singular_depth = (depth - 1) / 2;
         let singular_beta = tt
             .value
-            .saturating_sub((self.config.singular_beta_margin.value * depth as i16).max(1));
+            .saturating_sub((self.config.singular_beta_margin.value * depth as i16 / 100).max(1));
 
         // Reduced null-window search excluding TT move.
         self.search_stack
