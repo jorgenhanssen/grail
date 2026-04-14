@@ -54,8 +54,9 @@ impl SelfPlayWorker {
         }
     }
 
-    pub fn play_games(&mut self, stop_flag: Arc<AtomicBool>) -> Vec<Sample> {
+    pub fn play_games(&mut self, stop_flag: Arc<AtomicBool>) -> (Vec<Sample>, Vec<u16>) {
         let mut evaluations = Vec::new();
+        let mut game_lengths = Vec::new();
 
         while !stop_flag.load(Ordering::Relaxed) {
             let game_id = self.game_id_counter.fetch_add(1, Ordering::Relaxed);
@@ -64,13 +65,14 @@ impl SelfPlayWorker {
             let mut game = SelfPlayGame::new(game_id, opening_fen, self.depth);
             game.play(&mut self.engine);
 
+            game_lengths.push(game.game_length());
             let (samples, scores) = game.get_samples();
             self.record_statistics(&samples, scores);
 
             evaluations.extend(samples);
         }
 
-        evaluations
+        (evaluations, game_lengths)
     }
 
     fn record_statistics(&self, samples: &[Sample], scores: Vec<i16>) {

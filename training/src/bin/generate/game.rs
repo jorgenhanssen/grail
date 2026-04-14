@@ -158,13 +158,17 @@ impl SelfPlayGame {
             .collect()
     }
 
+    pub fn game_length(&self) -> u16 {
+        self.ply
+    }
+
     pub fn get_samples(&mut self) -> (Vec<Sample>, Vec<i16>) {
         let outcome = self.outcome();
         let end_ply = self.ply;
         let (samples, scores): (Vec<_>, Vec<_>) = self
             .positions
             .drain(..)
-            .map(|pos: RecordedPosition| {
+            .map(|pos| {
                 let distance_to_end = end_ply.saturating_sub(pos.ply);
                 let sample = Sample {
                     fen: pos.fen,

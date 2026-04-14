@@ -5,9 +5,12 @@ use candle_nn::ops::sigmoid;
 const WDL_DECAY: f64 = 0.05;
 
 /// Per-sample WDL weight via exponential decay on distance-to-end.
-///
-/// w = start + (end - start) * e^(-k * d), k = 0.05 (~14-ply half-life).
-pub fn wdl_weights(distance_to_end: &[u16], start: f64, end: f64, device: &Device) -> Result<Tensor> {
+pub fn wdl_weights(
+    distance_to_end: &[u16],
+    start: f64,
+    end: f64,
+    device: &Device,
+) -> Result<Tensor> {
     let range = end - start;
     let weights: Vec<f32> = distance_to_end
         .iter()

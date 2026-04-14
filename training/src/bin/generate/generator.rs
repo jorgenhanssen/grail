@@ -90,12 +90,16 @@ impl Generator {
             Self::spawn_progress_updater(sample_counter.clone(), histogram, stop_flag.clone());
 
         // Wait for all workers to complete
-        let samples: Vec<_> = worker_handles
+        let (samples, game_lengths): (Vec<_>, Vec<_>) = worker_handles
             .into_iter()
-            .flat_map(|h| h.join().unwrap())
-            .collect();
+            .map(|h| h.join().unwrap())
+            .unzip();
+        let samples: Vec<_> = samples.into_iter().flatten().collect();
+        let mut game_lengths: Vec<_> = game_lengths.into_iter().flatten().collect();
 
         progress_handle.join().unwrap();
+
+        Self::log_game_length_stats(&mut game_lengths);
 
         samples
     }
@@ -106,6 +110,25 @@ impl Generator {
         varmap.load(MODEL_PATH).unwrap();
         evaluator.enable_nnue();
         evaluator
+    }
+
+    fn log_game_length_stats(lengths: &mut [u16]) {
+        if lengths.is_empty() {
+            return;
+        }
+        lengths.sort_unstable();
+        let n = lengths.len();
+        let sum: u64 = lengths.iter().map(|&l| l as u64).sum();
+        let avg = sum as f64 / n as f64;
+        let median = lengths[n / 2];
+        log::info!(
+            "Game lengths ({} games): avg={:.1}, median={}, min={}, max={}",
+            n,
+            avg,
+            median,
+            lengths[0],
+            lengths[n - 1],
+        );
     }
 
     fn spawn_progress_updater(

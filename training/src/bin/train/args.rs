@@ -41,11 +41,11 @@ pub struct Args {
     #[arg(long, default_value_t = 500)]
     pub shard_size_mb: usize,
 
-    /// WDL weight far from game end (trust eval).
+    /// WDL weight far from game end.
     #[arg(long, default_value_t = 0.2)]
     pub wdl_start: f64,
 
-    /// WDL weight at game end (trust outcome).
+    /// WDL weight at game end.
     #[arg(long, default_value_t = 0.8)]
     pub wdl_end: f64,
 
