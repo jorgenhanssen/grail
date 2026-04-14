@@ -14,6 +14,7 @@ pub struct Sample {
     pub fen: String,
     pub score: i16,
     pub outcome: f32,
+    pub distance_to_end: u16,
 }
 
 pub struct EncodedSample {
@@ -21,6 +22,7 @@ pub struct EncodedSample {
     pub score: f32,
     pub outcome: f32,
     pub bucket: usize,
+    pub distance_to_end: u16,
 }
 
 impl Sample {
@@ -45,6 +47,7 @@ impl Sample {
             outcome: self.outcome,
             bucket,
             features,
+            distance_to_end: self.distance_to_end,
         })
     }
 }
@@ -101,9 +104,12 @@ fn parse_line(line: &str) -> Option<Sample> {
         _ => return None,
     };
 
+    let distance_to_end: u16 = parts.next()?.parse().ok()?;
+
     Some(Sample {
         fen,
         score,
         outcome,
+        distance_to_end,
     })
 }

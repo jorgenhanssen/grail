@@ -7,6 +7,13 @@ use std::str::FromStr;
 use uci::commands::GoParams;
 use utils::{flip_eval_perspective, has_check, has_insufficient_material, has_legal_moves};
 
+struct RecordedPosition {
+    fen: String,
+    score: i16,
+    best_move: Move,
+    ply: u16,
+}
+
 /// A self-play game that generates training samples.
 ///
 /// Uses MultiPV search at decision points and teleports along chosen PV lines
@@ -15,7 +22,8 @@ pub struct SelfPlayGame {
     board: Board,
     game_id: usize,
     position_counts: HashMap<u64, usize>,
-    positions: Vec<(String, i16, Move)>, // FEN, eval, best move
+    positions: Vec<RecordedPosition>,
+    ply: u16,
     depth: u8,
 }
 
@@ -28,6 +36,7 @@ impl SelfPlayGame {
             game_id,
             position_counts: HashMap::new(),
             positions: Vec::new(),
+            ply: 0,
             depth,
         }
     }
@@ -76,8 +85,12 @@ impl SelfPlayGame {
 
     fn record_position(&mut self, eval: i16, best_move: Move) {
         let white_score = flip_eval_perspective(self.board.side_to_move(), eval);
-        self.positions
-            .push((format!("{}", self.board), white_score, best_move));
+        self.positions.push(RecordedPosition {
+            fen: format!("{}", self.board),
+            score: white_score,
+            best_move,
+            ply: self.ply,
+        });
     }
 
     fn outcome(&self) -> GameOutcome {
@@ -116,6 +129,7 @@ impl SelfPlayGame {
     /// Play a single move, updating all game state.
     fn play_move(&mut self, mv: Move) {
         self.board.play_unchecked(mv);
+        self.ply += 1;
 
         // Track position for repetition detection
         let hash = self.board.hash();
@@ -146,18 +160,21 @@ impl SelfPlayGame {
 
     pub fn get_samples(&mut self) -> (Vec<Sample>, Vec<i16>) {
         let outcome = self.outcome();
+        let end_ply = self.ply;
         let (samples, scores): (Vec<_>, Vec<_>) = self
             .positions
             .drain(..)
-            .map(|(fen, score, best_move)| {
+            .map(|pos: RecordedPosition| {
+                let distance_to_end = end_ply.saturating_sub(pos.ply);
                 let sample = Sample {
-                    fen,
-                    score,
+                    fen: pos.fen,
+                    score: pos.score,
                     game_id: self.game_id,
-                    best_move,
+                    best_move: pos.best_move,
                     outcome,
+                    distance_to_end,
                 };
-                (sample, score)
+                (sample, pos.score)
             })
             .unzip();
         (samples, scores)

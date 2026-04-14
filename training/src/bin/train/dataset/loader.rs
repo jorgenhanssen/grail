@@ -13,6 +13,7 @@ pub struct Batch {
     pub scores: Vec<f32>,
     pub outcomes: Vec<f32>,
     pub buckets: Vec<usize>,
+    pub distance_to_end: Vec<u16>,
 }
 
 /// Multi-threaded data loader that reads samples from shards.
@@ -72,6 +73,7 @@ impl DataLoader {
         let mut scores = Vec::with_capacity(batch_size);
         let mut outcomes = Vec::with_capacity(batch_size);
         let mut buckets = Vec::with_capacity(batch_size);
+        let mut distance_to_end = Vec::with_capacity(batch_size);
 
         for _ in 0..batch_size {
             if shutdown.load(Ordering::Relaxed) {
@@ -85,6 +87,7 @@ impl DataLoader {
                         scores.push(encoded.score);
                         outcomes.push(encoded.outcome);
                         buckets.push(encoded.bucket);
+                        distance_to_end.push(encoded.distance_to_end);
                     }
                 }
                 None => break,
@@ -96,6 +99,7 @@ impl DataLoader {
             scores,
             outcomes,
             buckets,
+            distance_to_end,
         }
     }
 }

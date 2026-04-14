@@ -26,20 +26,22 @@ pub struct Sample {
     pub game_id: usize,
     pub best_move: Move,
     pub outcome: GameOutcome,
+    pub distance_to_end: u16,
 }
 
 pub fn write_samples<W: Write>(writer: &mut W, samples: &[Sample]) -> io::Result<()> {
-    writeln!(writer, "fen,score,best_move,outcome,game_id")?;
+    writeln!(writer, "fen,score,best_move,outcome,game_id,dte")?;
 
     for s in samples {
         writeln!(
             writer,
-            "{},{},{},{},{}",
+            "{},{},{},{},{},{}",
             s.fen,
             s.score.clamp(-CP_BOUND, CP_BOUND),
             s.best_move,
             s.outcome,
             s.game_id,
+            s.distance_to_end,
         )?;
     }
 

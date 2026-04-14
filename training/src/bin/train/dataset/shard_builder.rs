@@ -82,7 +82,7 @@ impl ShardWriter {
             let path = dir.join(format!("shard_{}.csv", i));
             let file = File::create(&path)?;
             let mut writer = BufWriter::new(file);
-            writeln!(writer, "fen,score,outcome")?;
+            writeln!(writer, "fen,score,outcome,dte")?;
             writers.push(Mutex::new(writer));
         }
 
@@ -92,10 +92,10 @@ impl ShardWriter {
         })
     }
 
-    fn write(&self, fen: &str, score: i16, outcome: &str) {
+    fn write(&self, fen: &str, score: i16, outcome: &str, distance_to_end: u16) {
         let idx = self.next_idx.fetch_add(1, Ordering::Relaxed) % self.writers.len();
         let mut writer = self.writers[idx].lock().unwrap();
-        if let Err(e) = writeln!(writer, "{},{},{}", fen, score, outcome) {
+        if let Err(e) = writeln!(writer, "{},{},{},{}", fen, score, outcome, distance_to_end) {
             log::error!("Failed to write to shard: {}", e);
         }
     }
@@ -304,7 +304,7 @@ fn process_file(
         let line_len = line.len() as u64;
         let trimmed = line.trim();
 
-        if let Some((fen, score, outcome, game_id)) = parse_csv_line(trimmed) {
+        if let Some((fen, score, outcome, game_id, distance_to_end)) = parse_csv_line(trimmed) {
             let split = *game_assignments.entry(game_id).or_insert_with(|| {
                 stats.register_game();
                 pick_split(&mut rng, val_ratio, test_ratio)
@@ -313,9 +313,9 @@ fn process_file(
             stats.register_sample(fen, outcome, split);
 
             match split {
-                Split::Train => train_writer.write(fen, score, outcome),
-                Split::Val => val_writer.write(fen, score, outcome),
-                Split::Test => test_writer.write(fen, score, outcome),
+                Split::Train => train_writer.write(fen, score, outcome, distance_to_end),
+                Split::Val => val_writer.write(fen, score, outcome, distance_to_end),
+                Split::Test => test_writer.write(fen, score, outcome, distance_to_end),
             }
 
             samples_since_update += 1;
@@ -336,14 +336,15 @@ fn process_file(
     stats
 }
 
-fn parse_csv_line(line: &str) -> Option<(&str, i16, &str, u32)> {
+fn parse_csv_line(line: &str) -> Option<(&str, i16, &str, u32, u16)> {
     let mut parts = line.split(',');
     let fen = parts.next()?;
     let score: i16 = parts.next()?.parse().ok()?;
     let _best_move = parts.next()?;
     let outcome = parts.next()?;
     let game_id: u32 = parts.next()?.parse().ok()?;
-    Some((fen, score, outcome, game_id))
+    let distance_to_end: u16 = parts.next()?.parse().ok()?;
+    Some((fen, score, outcome, game_id, distance_to_end))
 }
 
 fn pick_split<R: rand::Rng>(rng: &mut R, val_ratio: f64, test_ratio: f64) -> Split {
