@@ -142,7 +142,12 @@ impl Trainer {
             let x = Tensor::from_vec(batch.features, (batch_len, NUM_FEATURES), &self.device)?;
             let y_eval = Tensor::from_vec(batch.scores, (batch_len, 1), &self.device)?;
             let y_outcome = Tensor::from_vec(batch.outcomes, (batch_len, 1), &self.device)?;
-            let w = wdl_weights(&batch.distance_to_end, self.wdl_start, self.wdl_end, &self.device)?;
+            let w = wdl_weights(
+                &batch.distance_to_end,
+                self.wdl_start,
+                self.wdl_end,
+                &self.device,
+            )?;
 
             let preds = self.network.forward(&x, &batch.buckets)?;
             let loss = wdl_eval_loss(&preds, &y_eval, &y_outcome, &w)?;
