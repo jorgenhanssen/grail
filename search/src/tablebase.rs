@@ -5,8 +5,8 @@ use cozy_chess::{
 use pyrrhic_rs::{EngineAdapter, TableBases, WdlProbeResult};
 use utils::en_passant_square;
 
-use crate::scores::MATE_VALUE;
 use crate::MAX_DEPTH;
+use crate::scores::MATE_VALUE;
 
 /// Just below MATE_VALUE - MAX_DEPTH so TB wins don't trigger "score mate X" in UCI output,
 /// but above MATE_SCORE_BOUND so the TT's ply normalization handles them correctly.
