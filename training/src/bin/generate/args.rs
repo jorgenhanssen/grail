@@ -10,7 +10,7 @@ pub struct Args {
     pub threads: Option<usize>,
 
     /// Search depth for position evaluation.
-    #[arg(long, default_value_t = 10)]
+    #[arg(long, default_value_t = 8)]
     pub depth: u8,
 
     /// Path to opening book file (EPD format).
@@ -20,4 +20,8 @@ pub struct Args {
     /// Number of PV lines to search at each decision point.
     #[arg(long, default_value_t = 1)]
     pub pv_lines: u8,
+
+    /// Colon-separated paths to Syzygy tablebase files.
+    #[arg(long)]
+    pub syzygy_path: Option<String>,
 }

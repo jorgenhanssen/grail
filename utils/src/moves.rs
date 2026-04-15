@@ -1,22 +1,22 @@
-use cozy_chess::{Board, Color, Move, Piece, Rank};
+use cozy_chess::{Board, Color, Move, Piece, Rank, Square};
 
-/// Check if a move is an en passant capture.
-pub fn is_en_passant(board: &Board, mv: Move) -> bool {
-    let Some(ep_file) = board.en_passant() else {
-        return false;
-    };
-
-    if mv.to.file() != ep_file || board.piece_on(mv.from) != Some(Piece::Pawn) {
-        return false;
-    }
-
-    let ep_rank = if board.side_to_move() == Color::White {
+/// Get the en passant target square, if any.
+pub fn en_passant_square(board: &Board) -> Option<Square> {
+    let file = board.en_passant()?;
+    let rank = if board.side_to_move() == Color::White {
         Rank::Sixth
     } else {
         Rank::Third
     };
+    Some(Square::new(file, rank))
+}
 
-    mv.to.rank() == ep_rank
+/// Check if a move is an en passant capture.
+pub fn is_en_passant(board: &Board, mv: Move) -> bool {
+    let Some(ep_sq) = en_passant_square(board) else {
+        return false;
+    };
+    mv.to == ep_sq && board.piece_on(mv.from) == Some(Piece::Pawn)
 }
 
 /// Check if a move is a capture (enemy piece on destination or en passant).

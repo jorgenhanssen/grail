@@ -20,6 +20,7 @@ cozy-chess = { workspace = true }
 ahash = { workspace = true }
 log = { workspace = true }
 rand = { workspace = true }
+pyrrhic-rs = "0.2"
 
 [lib]
 name = "search"
