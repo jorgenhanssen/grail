@@ -226,6 +226,12 @@ impl Searcher {
             return self.draw_value();
         }
 
+        if ply > 0 {
+            if let Some(score) = self.probe_tb_wdl(node, depth) {
+                return score;
+            }
+        }
+
         // As deep as we can go, so return static eval
         if ply as usize >= MAX_DEPTH {
             return self.static_eval(node);

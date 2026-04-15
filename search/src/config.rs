@@ -78,6 +78,8 @@ define_config!(
     (threads: usize, "Threads", UciOptionType::Spin { min: 1, max: 256 }, 1, true),
     (move_overhead: i32, "Move Overhead", UciOptionType::Spin { min: 0, max: 5000 }, 10, true),
     (multi_pv: u8, "MultiPV", UciOptionType::Spin { min: 1, max: 64 }, 1, true),
+    (syzygy_path: String, "SyzygyPath", UciOptionType::String, String::new(), true),
+    (syzygy_probe_depth: u8, "SyzygyProbeDepth", UciOptionType::Spin { min: 1, max: 100 }, 1, true),
 
     // Tuning options
     (aspiration_window_size: i16, "Aspiration Window Size", UciOptionType::Spin { min: 10, max: 100 }, 40, cfg!(feature = "tuning")),

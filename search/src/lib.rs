@@ -11,6 +11,7 @@ mod result;
 mod scores;
 pub(crate) mod searcher;
 mod stack;
+pub mod tablebase;
 mod time_control;
 mod transposition;
 mod utils;
@@ -22,5 +23,6 @@ pub use config::EngineConfig;
 pub use engine::Engine;
 pub use pv::PvLine;
 pub use result::SearchResult;
+pub use tablebase::CozyAdapter;
 
 pub use ::utils::{Node, NodeType};

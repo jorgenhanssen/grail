@@ -2,7 +2,8 @@ use crate::book::Book;
 use crate::game::SelfPlayGame;
 use crate::histogram::HistogramHandle;
 use crate::samples::Sample;
-use search::{Engine, EngineConfig};
+use pyrrhic_rs::TableBases;
+use search::{CozyAdapter, Engine, EngineConfig};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -19,6 +20,7 @@ pub struct SelfPlayWorker {
     depth: u8,
     opening_book: Arc<Book>,
     histogram: HistogramHandle,
+    tablebases: Option<TableBases<CozyAdapter>>,
 }
 
 impl SelfPlayWorker {
@@ -33,15 +35,19 @@ impl SelfPlayWorker {
         create_evaluator: fn() -> nnue::Evaluator,
         opening_book: Arc<Book>,
         histogram: HistogramHandle,
+        tablebases: Option<TableBases<CozyAdapter>>,
     ) -> Self {
         let mut config = EngineConfig::default();
 
         config.hash_size.value = WORKER_HASH_SIZE_MB;
         config.multi_pv.value = multi_pv;
 
-        // Engine stop flag (not used in data generation, but required by Engine)
         let stop = Arc::new(AtomicBool::new(false));
         let engine = Engine::new(&config, stop, create_evaluator);
+
+        if let Some(ref tb) = tablebases {
+            engine.set_tablebases(tb.clone());
+        }
 
         Self {
             _tid: tid,
@@ -51,6 +57,7 @@ impl SelfPlayWorker {
             engine,
             opening_book,
             histogram,
+            tablebases,
         }
     }
 
@@ -61,7 +68,8 @@ impl SelfPlayWorker {
             let game_id = self.game_id_counter.fetch_add(1, Ordering::Relaxed);
             let opening_fen = self.opening_book.random_position();
 
-            let mut game = SelfPlayGame::new(game_id, opening_fen, self.depth);
+            let mut game =
+                SelfPlayGame::new(game_id, opening_fen, self.depth, self.tablebases.clone());
             game.play(&mut self.engine);
 
             let (samples, scores) = game.get_samples();

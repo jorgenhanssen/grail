@@ -1346,6 +1346,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40e24eee682d89fb193496edf918a7f407d30175b2e785fe057e4392dfd182e0"
 
 [[package]]
+name = "pyrrhic-rs"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3910f053bb86e0d75fb0e61b47d82e456a15c548fb4d8a8da9d9d1a34a4e299"
+dependencies = [
+ "libc",
+ "memmap2",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1492,6 +1502,7 @@ dependencies = [
  "cozy-chess",
  "log",
  "nnue",
+ "pyrrhic-rs",
  "rand",
  "uci",
  "utils",
@@ -1753,6 +1764,7 @@ dependencies = [
  "log",
  "nnue",
  "num_cpus",
+ "pyrrhic-rs",
  "rand",
  "rayon",
  "search",
