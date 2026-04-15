@@ -10,7 +10,7 @@ pub struct Args {
     pub threads: Option<usize>,
 
     /// Search depth for position evaluation.
-    #[arg(long, default_value_t = 10)]
+    #[arg(long, default_value_t = 8)]
     pub depth: u8,
 
     /// Path to opening book file (EPD format).
