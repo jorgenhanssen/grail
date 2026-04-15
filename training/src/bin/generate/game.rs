@@ -143,6 +143,9 @@ impl SelfPlayGame {
         if has_insufficient_material(&self.board) {
             return true;
         }
+        if self.board.halfmove_clock() >= 100 {
+            return true;
+        }
         // Any repetition ends game for training purposes
         let hash = self.board.hash();
         self.position_counts.get(&hash).copied().unwrap_or(0) >= 2
