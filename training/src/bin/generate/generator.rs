@@ -5,6 +5,8 @@ use crate::worker::SelfPlayWorker;
 use candle_core::Device;
 use candle_nn::VarMap;
 use indicatif::MultiProgress;
+use pyrrhic_rs::TableBases;
+use search::CozyAdapter;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,6 +21,7 @@ pub struct Generator {
     threads: usize,
     pv_lines: u8,
     opening_book: Arc<Book>,
+    tablebases: Option<TableBases<CozyAdapter>>,
 }
 
 impl Generator {
@@ -26,6 +29,7 @@ impl Generator {
         threads: usize,
         pv_lines: u8,
         opening_book_path: String,
+        syzygy_path: Option<String>,
     ) -> Result<Self, Box<dyn Error>> {
         let opening_book = Arc::new(Book::load(&opening_book_path)?);
 
@@ -37,10 +41,21 @@ impl Generator {
             .into());
         }
 
+        let tablebases = match syzygy_path {
+            Some(path) => {
+                let tb = TableBases::<CozyAdapter>::new(&path)
+                    .map_err(|e| format!("Failed to load Syzygy tablebases: {:?}", e))?;
+                log::info!("Syzygy tablebases loaded: up to {} pieces", tb.max_pieces());
+                Some(tb)
+            }
+            None => None,
+        };
+
         Ok(Self {
             threads,
             pv_lines,
             opening_book,
+            tablebases,
         })
     }
 
@@ -68,6 +83,7 @@ impl Generator {
                 let opening_book = Arc::clone(&self.opening_book);
                 let stop_flag = Arc::clone(&stop_flag);
                 let histogram_handle = histogram.clone_handle();
+                let tb = self.tablebases.clone();
 
                 std::thread::spawn(move || {
                     let mut worker = SelfPlayWorker::new(
@@ -79,6 +95,7 @@ impl Generator {
                         Self::load_nnue,
                         opening_book,
                         histogram_handle,
+                        tb,
                     );
                     worker.play_games(stop_flag)
                 })

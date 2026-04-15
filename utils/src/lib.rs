@@ -22,8 +22,8 @@ pub use material::{
 };
 pub use math::select_softmax;
 pub use moves::{
-    captured_piece, collect_legal_moves, gives_check, has_check, has_legal_moves, is_capture,
-    is_en_passant, make_move, only_move,
+    captured_piece, collect_legal_moves, en_passant_square, gives_check, has_check,
+    has_legal_moves, is_capture, is_en_passant, make_move, only_move,
 };
 pub use node::{Node, NodeType, creates_threat, evades_threat};
 pub use ply::FracPly;

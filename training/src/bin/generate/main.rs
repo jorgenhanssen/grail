@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     })?;
 
     let threads = args.threads.unwrap_or_else(num_cpus::get);
-    let generator = Generator::new(threads, args.pv_lines, args.book)?;
+    let generator = Generator::new(threads, args.pv_lines, args.book, args.syzygy_path)?;
     let samples = generator.run(args.depth, stop_flag);
 
     log::info!("Generated {} samples", samples.len());

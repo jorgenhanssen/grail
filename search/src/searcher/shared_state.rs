@@ -4,8 +4,11 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
+use pyrrhic_rs::TableBases;
+
 use crate::EngineConfig;
 use crate::history::CorrectionHistory;
+use crate::tablebase::CozyAdapter;
 use crate::transposition::TranspositionTable;
 
 /// Shared mutable state for searchers.
@@ -17,6 +20,7 @@ use crate::transposition::TranspositionTable;
 pub struct SharedSearcherState {
     tt: UnsafeCell<TranspositionTable>,
     correction: UnsafeCell<CorrectionHistory>,
+    tb: UnsafeCell<Option<TableBases<CozyAdapter>>>,
     stop: Arc<AtomicBool>,
     total_nodes: AtomicU64,
 }
@@ -41,6 +45,7 @@ impl SharedSearcherState {
         Self {
             tt: UnsafeCell::new(tt),
             correction: UnsafeCell::new(correction),
+            tb: UnsafeCell::new(None),
             stop,
             total_nodes: AtomicU64::new(0),
         }
@@ -74,5 +79,32 @@ impl SharedSearcherState {
 
     pub fn reset_nodes(&self) {
         self.total_nodes.store(0, Ordering::Relaxed);
+    }
+
+    /// Load from path (UCI `setoption`). Only call when no search is running.
+    pub fn init_tablebases(&self, path: &str) {
+        match TableBases::<CozyAdapter>::new(path) {
+            Ok(tb) => {
+                log::info!("Syzygy tablebases loaded: up to {} pieces", tb.max_pieces());
+                unsafe { *self.tb.get() = Some(tb) }
+            }
+            Err(e) => {
+                log::warn!("Failed to load Syzygy tablebases: {:?}", e);
+                unsafe { *self.tb.get() = None }
+            }
+        }
+    }
+
+    pub fn clear_tablebases(&self) {
+        unsafe { *self.tb.get() = None }
+    }
+
+    /// Inject an already-loaded handle (data gen workers share one instance via clone).
+    pub fn set_tablebases(&self, tb: TableBases<CozyAdapter>) {
+        unsafe { *self.tb.get() = Some(tb) }
+    }
+
+    pub fn tb(&self) -> Option<&TableBases<CozyAdapter>> {
+        unsafe { (*self.tb.get()).as_ref() }
     }
 }

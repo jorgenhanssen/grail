@@ -8,6 +8,7 @@ pub struct UciOption {
 pub enum UciOptionType {
     Spin { min: i32, max: i32 },
     Check,
+    String,
 }
 
 impl UciOptionType {
@@ -26,6 +27,7 @@ impl UciOptionType {
                 "true" | "false" => Ok(()),
                 _ => Err("Boolean value must be 'true' or 'false'".to_string()),
             },
+            UciOptionType::String => Ok(()),
         }
     }
 
@@ -49,6 +51,14 @@ impl UciOptionType {
                     name,
                     current_value.to_string()
                 )
+            }
+            UciOptionType::String => {
+                let val = current_value.to_string();
+                if val.is_empty() {
+                    format!("option name {} type string default <empty>", name)
+                } else {
+                    format!("option name {} type string default {}", name, val)
+                }
             }
         }
     }

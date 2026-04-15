@@ -1,7 +1,8 @@
 use crate::samples::{GameOutcome, Sample};
 use cozy_chess::{Board, Color, Move};
+use pyrrhic_rs::{TableBases, WdlProbeResult};
 use rand::Rng;
-use search::{Engine, PvLine, SearchResult};
+use search::{CozyAdapter, Engine, PvLine, SearchResult};
 use std::collections::HashMap;
 use std::str::FromStr;
 use uci::commands::GoParams;
@@ -17,10 +18,16 @@ pub struct SelfPlayGame {
     position_counts: HashMap<u64, usize>,
     positions: Vec<(String, i16, Move)>, // FEN, eval, best move
     depth: u8,
+    tablebases: Option<TableBases<CozyAdapter>>,
 }
 
 impl SelfPlayGame {
-    pub fn new(game_id: usize, opening_fen: &str, depth: u8) -> Self {
+    pub fn new(
+        game_id: usize,
+        opening_fen: &str,
+        depth: u8,
+        tablebases: Option<TableBases<CozyAdapter>>,
+    ) -> Self {
         let board = Board::from_str(opening_fen).unwrap();
 
         Self {
@@ -29,6 +36,7 @@ impl SelfPlayGame {
             position_counts: HashMap::new(),
             positions: Vec::new(),
             depth,
+            tablebases,
         }
     }
 
@@ -131,7 +139,19 @@ impl SelfPlayGame {
         }
         // Any repetition ends game for training purposes
         let hash = self.board.hash();
-        self.position_counts.get(&hash).copied().unwrap_or(0) >= 2
+        if self.position_counts.get(&hash).copied().unwrap_or(0) >= 2 {
+            return true;
+        }
+        // Adjudicate theoretical draws via tablebases (wins/losses play on naturally)
+        if let Some(tb) = self.tablebases.as_ref() {
+            if let Some(
+                WdlProbeResult::Draw | WdlProbeResult::CursedWin | WdlProbeResult::BlessedLoss,
+            ) = search::tablebase::probe_wdl(tb, &self.board)
+            {
+                return true;
+            }
+        }
+        false
     }
 
     /// Get position history for repetition detection during search.

@@ -5,10 +5,13 @@ use ahash::AHashSet;
 use cozy_chess::Board;
 use uci::UciOutput;
 
+use pyrrhic_rs::TableBases;
+
 use crate::{
     EngineConfig,
     result::SearchResult,
     searcher::{Searcher, SharedSearcherState},
+    tablebase::CozyAdapter,
     transposition::TranspositionTable,
 };
 
@@ -53,6 +56,14 @@ impl Engine {
             self.shared.correction().configure(config);
         }
 
+        if init || old_config.syzygy_path.value != config.syzygy_path.value {
+            if config.syzygy_path.value.is_empty() {
+                self.shared.clear_tablebases();
+            } else {
+                self.shared.init_tablebases(&config.syzygy_path.value);
+            }
+        }
+
         let new_num_threads = config.threads.value;
         while self.searchers.len() < new_num_threads {
             let thread_id = self.searchers.len();
@@ -86,6 +97,10 @@ impl Engine {
 
     pub fn board(&self) -> &Board {
         &self.board
+    }
+
+    pub fn set_tablebases(&self, tb: TableBases<CozyAdapter>) {
+        self.shared.set_tablebases(tb);
     }
 
     pub fn stop(&self) {
