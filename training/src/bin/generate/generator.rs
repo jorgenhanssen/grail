@@ -43,6 +43,7 @@ impl Generator {
 
         let tablebases = match syzygy_path {
             Some(path) => {
+                let path = path.replace(';', ":");
                 let tb = TableBases::<CozyAdapter>::new(&path)
                     .map_err(|e| format!("Failed to load Syzygy tablebases: {:?}", e))?;
                 log::info!("Syzygy tablebases loaded: up to {} pieces", tb.max_pieces());

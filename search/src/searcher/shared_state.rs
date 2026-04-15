@@ -82,7 +82,9 @@ impl SharedSearcherState {
     }
 
     /// Load from path (UCI `setoption`). Only call when no search is running.
+    /// Accepts both `;` and `:` as path separators for Windows compatibility.
     pub fn init_tablebases(&self, path: &str) {
+        let path = path.replace(';', ":");
         match TableBases::<CozyAdapter>::new(path) {
             Ok(tb) => {
                 log::info!("Syzygy tablebases loaded: up to {} pieces", tb.max_pieces());
