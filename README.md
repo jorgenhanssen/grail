@@ -116,10 +116,10 @@ make generate
 **Arguments:**
 
 - `--book`: Path to an opening book in EPD format (required).
-- `--depth`: Search depth for each move (default: 10).
+- `--depth`: Search depth for each move (default: 8).
 - `--pv-lines`: Number of PV lines to search at each decision point (default: 1).
 - `--threads`: Number of threads (default: number of logical CPUs).
-- `--nnue`: Use NNUE for evaluation instead of HCE (default: false).
+- `--syzygy-path`: Paths to Syzygy tablebase files (separated by `;` on Windows, `:` on Linux/macOS). Optional.
 
 Generated data is saved to `nnue/data/YYYY-MM-DD-HH:MM.csv`.
 
@@ -138,14 +138,15 @@ The trainer loads all CSV files from `nnue/data/` and saves the best model to `n
 
 - `--batch-size`: Batch size for training (default: 8192).
 - `--learning-rate`: Initial learning rate (default: 0.001).
-- `--epochs`: Number of epochs to train (default: 100).
+- `--epochs`: Number of epochs to train (default: 200).
 - `--workers`: Number of worker threads for data loading (default: 4).
-- `--val-ratio`: Fraction of data to use for validation (default: 0.1).
+- `--val-ratio`: Fraction of data to use for validation (default: 0.05).
 - `--test-ratio`: Fraction of data to use for testing (default: 0.01).
 - `--lr-decay`: Learning rate decay factor (default: 0.95).
-- `--patience`: Epochs without improvement before early stopping (default: 2).
+- `--patience`: Epochs without improvement before early stopping (default: 5).
 - `--shard-size-mb`: Size of each data shard in megabytes (default: 500).
-- `--wdl`: WDL blending weight, 0.0 = pure eval, 1.0 = pure WDL (default: 0.3).
+- `--wdl-start`: WDL blending weight far from game end (default: 0.2).
+- `--wdl-end`: WDL blending weight at game end (default: 0.8).
 - `--init-model`: Save a randomly initialized model and exit.
 
 ## Acknowledgements
