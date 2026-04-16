@@ -67,7 +67,7 @@ impl SelfPlayGame {
             }
 
             let chosen_pv = result.select_softmax().expect("has lines");
-            self.teleport(chosen_pv);
+            self.teleport(chosen_pv, engine);
         }
     }
 
@@ -102,21 +102,41 @@ impl SelfPlayGame {
 
     /// Teleport along a PV line by playing moves without searching.
     ///
-    /// Picks a random teleport length from 1 to pv.len() (capped by depth),
-    /// then plays that many moves from the PV.
-    fn teleport(&mut self, pv: &PvLine) {
+    /// Picks a random teleport length from 1 to depth, then plays that many
+    /// moves from the PV. If the PV is shorter than the teleport distance
+    /// (e.g. TB positions where the PV is only 1 move), continues teleporting
+    /// by searching for the best move at each step.
+    fn teleport(&mut self, pv: &PvLine, engine: &mut Engine) {
         if pv.line.is_empty() {
             return;
         }
 
         let mut rng = rand::rng();
-        let max_len = pv.line.len().min(self.depth as usize);
-        let teleport_len = rng.random_range(1..=max_len);
+        let teleport_len = rng.random_range(1..=self.depth as usize);
+
+        let mut steps = 0;
 
         for mv in pv.line.iter().take(teleport_len) {
             self.play_move(*mv);
+            steps += 1;
             if self.is_terminal() {
-                break;
+                return;
+            }
+        }
+
+        while steps < teleport_len {
+            let result = match self.search(engine) {
+                Some(r) => r,
+                None => return,
+            };
+            let mv = match result.primary().and_then(|pv| pv.best_move()) {
+                Some(mv) => mv,
+                None => return,
+            };
+            self.play_move(mv);
+            steps += 1;
+            if self.is_terminal() {
+                return;
             }
         }
     }
