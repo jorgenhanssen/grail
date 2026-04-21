@@ -105,9 +105,10 @@ impl Accumulator {
         }
     }
 
-    /// Converts the accumulated i16 buffer into f32 activations with ReLU applied.
-    pub fn dequantize_and_relu(&self, output: &mut [f32; EMBEDDING_SIZE]) {
+    /// Converts the accumulated i16 buffer into f32 activations with SCReLU applied.
+    pub fn dequantize_and_screlu(&self, output: &mut [f32; EMBEDDING_SIZE]) {
         let zeros = SimdF32::splat(0.0);
+        let ones = SimdF32::splat(1.0);
 
         let mut i = 0;
         while i + SIMD_WIDTH_F32 <= EMBEDDING_SIZE {
@@ -116,7 +117,8 @@ impl Accumulator {
             let scale_vec = SimdF32::from_slice(&self.inv_scales[i..i + SIMD_WIDTH_F32]);
 
             let dequantized = vals_f32 * scale_vec;
-            let activated = dequantized.simd_max(zeros); // ReLU
+            let clamped = dequantized.simd_max(zeros).simd_min(ones);
+            let activated = clamped * clamped;
 
             activated.copy_to_slice(&mut output[i..i + SIMD_WIDTH_F32]);
             i += SIMD_WIDTH_F32;
@@ -124,7 +126,8 @@ impl Accumulator {
 
         // Cleanup remaining outside SIMD width
         while i < EMBEDDING_SIZE {
-            output[i] = (self.buffer[i] as f32 * self.inv_scales[i]).max(0.0);
+            let clamped = (self.buffer[i] as f32 * self.inv_scales[i]).clamp(0.0, 1.0);
+            output[i] = clamped * clamped;
             i += 1;
         }
     }

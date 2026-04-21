@@ -38,7 +38,7 @@ impl Network {
     /// selected bucket—unused buckets receive zero gradient for that sample.
     #[inline]
     pub fn forward(&self, x: &Tensor, buckets: &[usize]) -> Result<Tensor> {
-        let embedding_out = x.apply(&self.embedding)?.relu()?;
+        let embedding_out = screlu(&x.apply(&self.embedding)?)?;
 
         // Compute all bucket outputs: [batch, OUTPUT_BUCKETS]
         let all_outputs: Vec<_> = self
@@ -67,8 +67,12 @@ pub struct OutputStack {
 
 impl OutputStack {
     fn forward(&self, input: &Tensor) -> Result<Tensor> {
-        let h1 = input.apply(&self.hidden1)?.relu()?;
-        let h2 = (h1.apply(&self.hidden2)? + &h1)?.relu()?;
+        let h1 = screlu(&input.apply(&self.hidden1)?)?;
+        let h2 = screlu(&(h1.apply(&self.hidden2)? + &h1)?)?;
         h2.apply(&self.output)
     }
+}
+
+fn screlu(x: &Tensor) -> Result<Tensor> {
+    x.clamp(0.0f32, 1.0f32)?.sqr()
 }
