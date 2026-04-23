@@ -7,22 +7,21 @@ pub type SimdI16 = i16x32;
 pub const SIMD_WIDTH_F32: usize = 16;
 pub const SIMD_WIDTH_I16: usize = 32;
 
-pub fn simd_screlu(values: &mut [f32]) {
+pub fn simd_relu(values: &mut [f32]) {
     let len = values.len();
     let mut i = 0;
     let zeros = SimdF32::splat(0.0);
-    let ones = SimdF32::splat(1.0);
 
     while i + SIMD_WIDTH_F32 <= len {
         let chunk = SimdF32::from_slice(&values[i..i + SIMD_WIDTH_F32]);
-        let clamped = chunk.simd_max(zeros).simd_min(ones);
-        (clamped * clamped).copy_to_slice(&mut values[i..i + SIMD_WIDTH_F32]);
+        chunk
+            .simd_max(zeros)
+            .copy_to_slice(&mut values[i..i + SIMD_WIDTH_F32]);
         i += SIMD_WIDTH_F32;
     }
 
     for val in &mut values[i..len] {
-        let clamped = val.clamp(0.0, 1.0);
-        *val = clamped * clamped;
+        *val = val.max(0.0);
     }
 }
 

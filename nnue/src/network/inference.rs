@@ -6,7 +6,7 @@ use crate::encoding::NUM_FEATURES;
 use super::accumulator::Accumulator;
 use super::linear::LinearLayer;
 use super::model::Network;
-use super::simd::{simd_add, simd_screlu};
+use super::simd::{simd_add, simd_relu};
 use super::{CP_BOUND, EMBEDDING_SIZE, FV_SCALE, HIDDEN_SIZE, OUTPUT_BUCKETS};
 
 /// NNUE inference engine with quantized weights.
@@ -54,7 +54,7 @@ impl NNUENetwork {
     pub fn forward(&mut self, bitset: &Bitset<NUM_FEATURES>, bucket: usize) -> f32 {
         self.accumulator.update(bitset);
         self.accumulator
-            .dequantize_and_screlu(&mut self.embedding_buffer);
+            .dequantize_and_relu(&mut self.embedding_buffer);
 
         let output = self.buckets[bucket].forward(&self.embedding_buffer);
 
@@ -76,11 +76,11 @@ impl OutputStack {
     #[inline]
     fn forward(&mut self, input: &[f32]) -> f32 {
         self.hidden1.forward(input, &mut self.h1_buffer);
-        simd_screlu(&mut self.h1_buffer);
+        simd_relu(&mut self.h1_buffer);
 
         self.hidden2.forward(&self.h1_buffer, &mut self.h2_buffer);
         simd_add(&mut self.h2_buffer, &self.h1_buffer); // residual connection
-        simd_screlu(&mut self.h2_buffer);
+        simd_relu(&mut self.h2_buffer);
 
         self.output.forward(&self.h2_buffer, &mut self.out_buffer);
 
