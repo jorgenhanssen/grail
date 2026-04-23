@@ -2,7 +2,7 @@ SHELL = /bin/bash
 
 .ONESHELL:
 
-.PHONY: grail tunable generate train clean
+.PHONY: grail tunable generate train clean nnue-analysis
 
 # Default to native optimization for local development.
 RUSTFLAGS = -C target-cpu=native
@@ -26,6 +26,9 @@ train:
 	else \
 		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin train; \
 	fi
+
+nnue-analysis:
+	RUSTFLAGS="$(RUSTFLAGS)" cargo run --release -p nnue --bin nnue-analysis
 
 clean:
 	cargo clean

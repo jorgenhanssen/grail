@@ -35,21 +35,22 @@ pub const NUM_FEATURES: usize = NUM_PIECE_PLACEMENT_FEATURES
     + NUM_THREAT_FEATURES
     + NUM_SIDE_TO_MOVE_FEATURES; // 1153 total
 
-const PIECE_FEATURES_END: usize = NUM_PIECE_PLACEMENT_FEATURES;
-const WHITE_SUPPORT_START: usize = PIECE_FEATURES_END;
-const WHITE_SUPPORT_END: usize = WHITE_SUPPORT_START + Square::NUM;
-const BLACK_SUPPORT_START: usize = WHITE_SUPPORT_END;
-const BLACK_SUPPORT_END: usize = BLACK_SUPPORT_START + Square::NUM;
-const WHITE_SPACE_START: usize = BLACK_SUPPORT_END;
-const WHITE_SPACE_END: usize = WHITE_SPACE_START + Square::NUM;
-const BLACK_SPACE_START: usize = WHITE_SPACE_END;
-const BLACK_SPACE_END: usize = BLACK_SPACE_START + Square::NUM;
-const WHITE_THREATS_START: usize = BLACK_SPACE_END;
-const WHITE_THREATS_END: usize = WHITE_THREATS_START + Square::NUM;
-const BLACK_THREATS_START: usize = WHITE_THREATS_END;
-#[allow(dead_code)]
-const BLACK_THREATS_END: usize = BLACK_THREATS_START + Square::NUM;
-const SIDE_TO_MOVE_IDX: usize = NUM_FEATURES - 1;
+// Exported to the analysis tool
+pub const PIECE_FEATURES_START: usize = 0;
+pub const PIECE_FEATURES_END: usize = NUM_PIECE_PLACEMENT_FEATURES;
+pub const WHITE_SUPPORT_START: usize = PIECE_FEATURES_END;
+pub const WHITE_SUPPORT_END: usize = WHITE_SUPPORT_START + Square::NUM;
+pub const BLACK_SUPPORT_START: usize = WHITE_SUPPORT_END;
+pub const BLACK_SUPPORT_END: usize = BLACK_SUPPORT_START + Square::NUM;
+pub const WHITE_SPACE_START: usize = BLACK_SUPPORT_END;
+pub const WHITE_SPACE_END: usize = WHITE_SPACE_START + Square::NUM;
+pub const BLACK_SPACE_START: usize = WHITE_SPACE_END;
+pub const BLACK_SPACE_END: usize = BLACK_SPACE_START + Square::NUM;
+pub const WHITE_THREATS_START: usize = BLACK_SPACE_END;
+pub const WHITE_THREATS_END: usize = WHITE_THREATS_START + Square::NUM;
+pub const BLACK_THREATS_START: usize = WHITE_THREATS_END;
+pub const BLACK_THREATS_END: usize = BLACK_THREATS_START + Square::NUM;
+pub const SIDE_TO_MOVE_IDX: usize = NUM_FEATURES - 1;
 
 /// Encodes a board position into a dense f32 feature array.
 /// Used during training where f32 tensors are required.
