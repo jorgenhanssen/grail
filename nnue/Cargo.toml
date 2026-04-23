@@ -29,5 +29,9 @@ metal = [
 [lib]
 name = "nnue"
 
+[[bin]]
+name = "nnue-analysis"
+path = "src/bin/analysis/main.rs"
+
 [lints]
 workspace = true
