@@ -1,6 +1,6 @@
 use candle_nn::{VarBuilder, VarMap};
 use cozy_chess::Color;
-use utils::Node;
+use utils::{Node, flip_eval_perspective};
 
 use crate::{
     encoding::encode_board_bitset,
@@ -36,8 +36,12 @@ impl Evaluator {
     }
 
     /// Evaluates the position using the neural network.
+    ///
+    /// Returns the score from white's perspective.
     pub fn evaluate(&mut self, node: &Node) -> i16 {
         let board = node.board();
+        let stm = board.side_to_move();
+
         let white_attacks = node.attacks_for(Color::White);
         let black_attacks = node.attacks_for(Color::Black);
         let white_support = node.support_for(Color::White);
@@ -45,7 +49,7 @@ impl Evaluator {
         let white_threats = node.threats_for(Color::White);
         let black_threats = node.threats_for(Color::Black);
 
-        let bitset = encode_board_bitset(
+        let white_bits = encode_board_bitset(
             board,
             white_attacks,
             black_attacks,
@@ -53,14 +57,30 @@ impl Evaluator {
             black_support,
             white_threats,
             black_threats,
+            Color::White,
+        );
+        let black_bits = encode_board_bitset(
+            board,
+            white_attacks,
+            black_attacks,
+            white_support,
+            black_support,
+            white_threats,
+            black_threats,
+            Color::Black,
         );
 
         let bucket = output_bucket(board);
 
-        self.nnue
+        let stm_score = self
+            .nnue
             .as_mut()
             .expect("NNUE network not initialized - call enable_nnue() first")
-            .forward(&bitset, bucket)
-            .clamp(i16::MIN as f32, i16::MAX as f32) as i16
+            .forward(&white_bits, &black_bits, stm, bucket);
+
+        let stm_score = stm_score.clamp(i16::MIN as f32, i16::MAX as f32) as i16;
+
+        // Return the score as white
+        flip_eval_perspective(stm, stm_score)
     }
 }

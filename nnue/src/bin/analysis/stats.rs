@@ -1,9 +1,8 @@
 use candle_nn::Linear;
 use cozy_chess::{Color, Piece};
 use nnue::encoding::{
-    BLACK_SPACE_END, BLACK_SUPPORT_END, BLACK_THREATS_END, NUM_FEATURES, PIECE_FEATURES_END,
-    PIECE_FEATURES_START, SIDE_TO_MOVE_IDX, WHITE_SPACE_START, WHITE_SUPPORT_START,
-    WHITE_THREATS_START,
+    PIECE_FEATURES_END, PIECE_FEATURES_START, THEM_SPACE_END, THEM_SUPPORT_END, THEM_THREATS_END,
+    US_SPACE_START, US_SUPPORT_START, US_THREATS_START,
 };
 use nnue::network::model::OutputStack;
 use std::error::Error;
@@ -16,8 +15,8 @@ pub const DEAD_WEIGHT_THRESHOLD: f32 = 1e-4;
 /// Output neurons whose row L2 norm exceeds this are considered active.
 pub const ACTIVE_NEURON_THRESHOLD: f32 = 1.0;
 
-/// Piece slots per square: 6 white + 6 black, in (P, N, B, R, Q, K) order.
-/// Matches the layout used by `encoding::piece_color_to_index`.
+/// Piece slots per square: 6 us + 6 them, in (P, N, B, R, Q, K) order.
+/// Matches the layout used by `encoding::piece_index`.
 pub const PIECES_PER_SQUARE: usize = Piece::NUM * Color::NUM;
 
 /// Feature group in the input layer. Used to split up column norms.
@@ -41,28 +40,23 @@ pub const FEATURE_GROUPS: &[FeatureGroup] = &[
     },
     FeatureGroup {
         name: "support",
-        start: WHITE_SUPPORT_START,
-        end: BLACK_SUPPORT_END,
+        start: US_SUPPORT_START,
+        end: THEM_SUPPORT_END,
     },
     FeatureGroup {
         name: "space",
-        start: WHITE_SPACE_START,
-        end: BLACK_SPACE_END,
+        start: US_SPACE_START,
+        end: THEM_SPACE_END,
     },
     FeatureGroup {
         name: "threats",
-        start: WHITE_THREATS_START,
-        end: BLACK_THREATS_END,
-    },
-    FeatureGroup {
-        name: "stm",
-        start: SIDE_TO_MOVE_IDX,
-        end: NUM_FEATURES,
+        start: US_THREATS_START,
+        end: THEM_THREATS_END,
     },
 ];
 
 /// Per-piece-type offsets inside the 12-slot piece block of a square.
-/// Each row is (name, white_offset, black_offset).
+/// Each row is (name, us_offset, them_offset).
 pub const PIECE_TYPES: &[(&str, usize, usize)] = &[
     ("pawn", 0, 6),
     ("knight", 1, 7),

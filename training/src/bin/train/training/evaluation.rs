@@ -21,11 +21,12 @@ pub fn evaluate(
             continue;
         }
 
-        let x = Tensor::from_vec(batch.features, (batch_len, NUM_FEATURES), device)?;
+        let stm = Tensor::from_vec(batch.stm_features, (batch_len, NUM_FEATURES), device)?;
+        let nstm = Tensor::from_vec(batch.nstm_features, (batch_len, NUM_FEATURES), device)?;
         let y_eval = Tensor::from_vec(batch.scores, (batch_len, 1), device)?;
         let y_outcome = Tensor::from_vec(batch.outcomes, (batch_len, 1), device)?;
 
-        let preds = network.forward(&x, &batch.buckets)?;
+        let preds = network.forward(&stm, &nstm, &batch.buckets)?;
         let loss = wdl_eval_loss(&preds, &y_eval, &y_outcome, wdl)?;
 
         total_loss += loss.to_vec0::<f32>()?;

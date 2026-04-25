@@ -1,4 +1,5 @@
 use candle_core::Result;
+use cozy_chess::Color;
 use utils::bitset::Bitset;
 
 use crate::encoding::NUM_FEATURES;
@@ -9,13 +10,15 @@ use super::model::Network;
 use super::simd::{simd_add, simd_relu};
 use super::{CP_BOUND, EMBEDDING_SIZE, FV_SCALE, HIDDEN_SIZE, OUTPUT_BUCKETS};
 
-/// NNUE inference engine with quantized weights.
-/// Uses an incremental accumulator for the embedding layer and
-/// phase-specific output stacks selected by piece count.
+/// NNUE inference engine with quantized weights and dual-perspective accumulators.
+///
+/// The accumulator holds one running buffer per absolute color; `forward`
+/// picks which one goes into the stm half of the concat buffer based on the
+/// current side-to-move.
 pub struct NNUENetwork {
     accumulator: Accumulator,
     buckets: [OutputStack; OUTPUT_BUCKETS],
-    embedding_buffer: [f32; EMBEDDING_SIZE],
+    embedding_buffer: [f32; 2 * EMBEDDING_SIZE],
 }
 
 impl NNUENetwork {
@@ -40,7 +43,7 @@ impl NNUENetwork {
         Ok(Self {
             accumulator,
             buckets,
-            embedding_buffer: [0.0; EMBEDDING_SIZE],
+            embedding_buffer: [0.0; 2 * EMBEDDING_SIZE],
         })
     }
 
@@ -48,13 +51,25 @@ impl NNUENetwork {
         self.accumulator.reset();
     }
 
-    /// Forward pass with incremental updates from a bitset.
+    /// Forward pass with color-keyed inputs. `white_bits` and `black_bits` are
+    /// the encodings of the current board from each perspective; `stm` decides
+    /// which color's activations land in the stm half of the concat buffer.
     /// Use `output_bucket(&board)` to compute the bucket index.
     #[inline]
-    pub fn forward(&mut self, bitset: &Bitset<NUM_FEATURES>, bucket: usize) -> f32 {
-        self.accumulator.update(bitset);
-        self.accumulator
-            .dequantize_and_relu(&mut self.embedding_buffer);
+    pub fn forward(
+        &mut self,
+        white_bits: &Bitset<NUM_FEATURES>,
+        black_bits: &Bitset<NUM_FEATURES>,
+        stm: Color,
+        bucket: usize,
+    ) -> f32 {
+        self.accumulator.update(Color::White, white_bits);
+        self.accumulator.update(Color::Black, black_bits);
+
+        let nstm = !stm;
+        let (stm_half, nstm_half) = self.embedding_buffer.split_at_mut(EMBEDDING_SIZE);
+        self.accumulator.dequantize_and_relu(stm, stm_half);
+        self.accumulator.dequantize_and_relu(nstm, nstm_half);
 
         let output = self.buckets[bucket].forward(&self.embedding_buffer);
 

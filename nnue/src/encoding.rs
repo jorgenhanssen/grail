@@ -1,58 +1,31 @@
 use cozy_chess::{BitBoard, Board, Color, Piece, Square};
 use utils::bitset::Bitset;
 
-// Feature Layout (1153 total):
-//
-// Piece Placements [0-767]:
-//   Per square (12 features): [WP, WN, WB, WR, WQ, WK, BP, BN, BB, BR, BQ, BK]
-//
-//   [Sq0 (A1)][Sq1 (B1)]...[Sq63 (H8)]
-//   └─ 12 ──┘ └─ 12 ──┘    └── 12 ──┘
-//
-// Support [768-895] - squares where color defends own pieces:
-//   [White: Sq0...Sq63][Black: Sq0...Sq63]
-//   └────── 64 ───────┘└────── 64 ───────┘
-//
-// Space [896-1023] - squares color controls (excl. own pieces):
-//   [White: Sq0...Sq63][Black: Sq0...Sq63]
-//   └────── 64 ───────┘└────── 64 ───────┘
-//
-// Threats [1024-1151] - squares of valuable pieces attacked by lesser pieces:
-//   [White: Sq0...Sq63][Black: Sq0...Sq63]
-//   └────── 64 ───────┘└────── 64 ───────┘
-//
-// Side to Move [1152] - 1.0 if White to move
-
 const NUM_PIECE_PLACEMENT_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM;
 const NUM_SUPPORT_FEATURES: usize = Square::NUM * 2;
 const NUM_SPACE_FEATURES: usize = Square::NUM * 2;
 const NUM_THREAT_FEATURES: usize = Square::NUM * 2;
-const NUM_SIDE_TO_MOVE_FEATURES: usize = 1;
 
-pub const NUM_FEATURES: usize = NUM_PIECE_PLACEMENT_FEATURES
-    + NUM_SUPPORT_FEATURES
-    + NUM_SPACE_FEATURES
-    + NUM_THREAT_FEATURES
-    + NUM_SIDE_TO_MOVE_FEATURES; // 1153 total
+pub const NUM_FEATURES: usize =
+    NUM_PIECE_PLACEMENT_FEATURES + NUM_SUPPORT_FEATURES + NUM_SPACE_FEATURES + NUM_THREAT_FEATURES; // 1152 total
 
 // Exported to the analysis tool
 pub const PIECE_FEATURES_START: usize = 0;
 pub const PIECE_FEATURES_END: usize = NUM_PIECE_PLACEMENT_FEATURES;
-pub const WHITE_SUPPORT_START: usize = PIECE_FEATURES_END;
-pub const WHITE_SUPPORT_END: usize = WHITE_SUPPORT_START + Square::NUM;
-pub const BLACK_SUPPORT_START: usize = WHITE_SUPPORT_END;
-pub const BLACK_SUPPORT_END: usize = BLACK_SUPPORT_START + Square::NUM;
-pub const WHITE_SPACE_START: usize = BLACK_SUPPORT_END;
-pub const WHITE_SPACE_END: usize = WHITE_SPACE_START + Square::NUM;
-pub const BLACK_SPACE_START: usize = WHITE_SPACE_END;
-pub const BLACK_SPACE_END: usize = BLACK_SPACE_START + Square::NUM;
-pub const WHITE_THREATS_START: usize = BLACK_SPACE_END;
-pub const WHITE_THREATS_END: usize = WHITE_THREATS_START + Square::NUM;
-pub const BLACK_THREATS_START: usize = WHITE_THREATS_END;
-pub const BLACK_THREATS_END: usize = BLACK_THREATS_START + Square::NUM;
-pub const SIDE_TO_MOVE_IDX: usize = NUM_FEATURES - 1;
+pub const US_SUPPORT_START: usize = PIECE_FEATURES_END;
+pub const US_SUPPORT_END: usize = US_SUPPORT_START + Square::NUM;
+pub const THEM_SUPPORT_START: usize = US_SUPPORT_END;
+pub const THEM_SUPPORT_END: usize = THEM_SUPPORT_START + Square::NUM;
+pub const US_SPACE_START: usize = THEM_SUPPORT_END;
+pub const US_SPACE_END: usize = US_SPACE_START + Square::NUM;
+pub const THEM_SPACE_START: usize = US_SPACE_END;
+pub const THEM_SPACE_END: usize = THEM_SPACE_START + Square::NUM;
+pub const US_THREATS_START: usize = THEM_SPACE_END;
+pub const US_THREATS_END: usize = US_THREATS_START + Square::NUM;
+pub const THEM_THREATS_START: usize = US_THREATS_END;
+pub const THEM_THREATS_END: usize = THEM_THREATS_START + Square::NUM;
 
-/// Encodes a board position into a dense f32 feature array.
+/// Encodes a board position into a dense f32 feature array from a perspective.
 /// Used during training where f32 tensors are required.
 pub fn encode_board(
     board: &Board,
@@ -62,57 +35,51 @@ pub fn encode_board(
     black_support: BitBoard,
     white_threats: BitBoard,
     black_threats: BitBoard,
+    perspective: Color,
 ) -> [f32; NUM_FEATURES] {
     let mut features = [0f32; NUM_FEATURES];
 
     // Piece placements
     for color in [Color::White, Color::Black] {
+        let side_offset = if color == perspective { 0 } else { Piece::NUM };
         for piece in Piece::ALL {
-            let piece_idx = piece_color_to_index(piece, color);
+            let piece_idx = side_offset + piece as usize;
             for sq in board.colored_pieces(color, piece) {
-                let offset = sq as usize * (Piece::NUM * Color::NUM) + piece_idx;
-                features[offset] = 1.0;
+                let sq_idx = sq.relative_to(perspective) as usize;
+                features[sq_idx * (Piece::NUM * Color::NUM) + piece_idx] = 1.0;
             }
         }
     }
 
-    // White support
-    for sq in white_support {
-        features[WHITE_SUPPORT_START + sq as usize] = 1.0;
+    // Support
+    let (us_support, them_support) = from_perspective(white_support, black_support, perspective);
+    for sq in us_support {
+        features[US_SUPPORT_START + sq as usize] = 1.0;
+    }
+    for sq in them_support {
+        features[THEM_SUPPORT_START + sq as usize] = 1.0;
     }
 
-    // Black support
-    for sq in black_support {
-        features[BLACK_SUPPORT_START + sq as usize] = 1.0;
-    }
-
-    // White space (controlled non-piece squares)
+    // Space (controlled non-piece squares)
     let white_pieces = board.colors(Color::White);
     let white_space_bb = white_attacks & !white_pieces;
-    for sq in white_space_bb {
-        features[WHITE_SPACE_START + sq as usize] = 1.0;
-    }
-
-    // Black space
     let black_pieces = board.colors(Color::Black);
     let black_space_bb = black_attacks & !black_pieces;
-    for sq in black_space_bb {
-        features[BLACK_SPACE_START + sq as usize] = 1.0;
+    let (us_space, them_space) = from_perspective(white_space_bb, black_space_bb, perspective);
+    for sq in us_space {
+        features[US_SPACE_START + sq as usize] = 1.0;
+    }
+    for sq in them_space {
+        features[THEM_SPACE_START + sq as usize] = 1.0;
     }
 
-    // White threats
-    for sq in white_threats {
-        features[WHITE_THREATS_START + sq as usize] = 1.0;
+    // Threats
+    let (us_threats, them_threats) = from_perspective(white_threats, black_threats, perspective);
+    for sq in us_threats {
+        features[US_THREATS_START + sq as usize] = 1.0;
     }
-
-    // Black threats
-    for sq in black_threats {
-        features[BLACK_THREATS_START + sq as usize] = 1.0;
-    }
-
-    // Side to move
-    if board.side_to_move() == Color::White {
-        features[SIDE_TO_MOVE_IDX] = 1.0;
+    for sq in them_threats {
+        features[THEM_THREATS_START + sq as usize] = 1.0;
     }
 
     features
@@ -131,59 +98,53 @@ pub fn encode_board_bitset(
     black_support: BitBoard,
     white_threats: BitBoard,
     black_threats: BitBoard,
+    perspective: Color,
 ) -> Bitset<NUM_FEATURES> {
     let mut bitset = Bitset::default();
 
     // Piece placements
     for color in [Color::White, Color::Black] {
+        let side_offset = if color == perspective { 0 } else { Piece::NUM };
         for piece in Piece::ALL {
-            let piece_idx = piece_color_to_index(piece, color);
+            let piece_idx = side_offset + piece as usize;
             for sq in board.colored_pieces(color, piece) {
-                let idx = sq as usize * (Piece::NUM * Color::NUM) + piece_idx;
-                bitset.set(idx);
+                let sq_idx = sq.relative_to(perspective) as usize;
+                bitset.set(sq_idx * (Piece::NUM * Color::NUM) + piece_idx);
             }
         }
     }
 
-    // Support, space, and threats are 64-bit aligned - use bulk u64 assignment
-    // instead of iterating through each square
-    bitset.set_u64(bitset.u64_index(WHITE_SUPPORT_START), white_support.0);
-    bitset.set_u64(bitset.u64_index(BLACK_SUPPORT_START), black_support.0);
+    // The bitboard sections all start at 64-bit aligned offsets, so let's write
+    // whole ranks at once instead of iterating per square.
 
+    // Support
+    let (us_support, them_support) = from_perspective(white_support, black_support, perspective);
+    bitset.set_u64(bitset.u64_index(US_SUPPORT_START), us_support.0);
+    bitset.set_u64(bitset.u64_index(THEM_SUPPORT_START), them_support.0);
+
+    // Space (controlled non-piece squares)
     let white_pieces = board.colors(Color::White);
     let white_space_bb = white_attacks & !white_pieces;
-    bitset.set_u64(bitset.u64_index(WHITE_SPACE_START), white_space_bb.0);
-
     let black_pieces = board.colors(Color::Black);
     let black_space_bb = black_attacks & !black_pieces;
-    bitset.set_u64(bitset.u64_index(BLACK_SPACE_START), black_space_bb.0);
+    let (us_space, them_space) = from_perspective(white_space_bb, black_space_bb, perspective);
+    bitset.set_u64(bitset.u64_index(US_SPACE_START), us_space.0);
+    bitset.set_u64(bitset.u64_index(THEM_SPACE_START), them_space.0);
 
-    bitset.set_u64(bitset.u64_index(WHITE_THREATS_START), white_threats.0);
-    bitset.set_u64(bitset.u64_index(BLACK_THREATS_START), black_threats.0);
-
-    // Side to move
-    if board.side_to_move() == Color::White {
-        bitset.set(SIDE_TO_MOVE_IDX);
-    }
+    // Threats
+    let (us_threats, them_threats) = from_perspective(white_threats, black_threats, perspective);
+    bitset.set_u64(bitset.u64_index(US_THREATS_START), us_threats.0);
+    bitset.set_u64(bitset.u64_index(THEM_THREATS_START), them_threats.0);
 
     bitset
 }
 
-fn piece_color_to_index(piece: Piece, color: Color) -> usize {
-    match (color, piece) {
-        (Color::White, Piece::Pawn) => 0,
-        (Color::White, Piece::Knight) => 1,
-        (Color::White, Piece::Bishop) => 2,
-        (Color::White, Piece::Rook) => 3,
-        (Color::White, Piece::Queen) => 4,
-        (Color::White, Piece::King) => 5,
-
-        (Color::Black, Piece::Pawn) => 6,
-        (Color::Black, Piece::Knight) => 7,
-        (Color::Black, Piece::Bishop) => 8,
-        (Color::Black, Piece::Rook) => 9,
-        (Color::Black, Piece::Queen) => 10,
-        (Color::Black, Piece::King) => 11,
+/// Returns the (us, them) bitboard pair for the given perspective. From black,
+/// the ranks are flipped so rank 1 is always our back rank.
+fn from_perspective(white: BitBoard, black: BitBoard, perspective: Color) -> (BitBoard, BitBoard) {
+    match perspective {
+        Color::White => (white, black),
+        Color::Black => (black.flip_ranks(), white.flip_ranks()),
     }
 }
 
@@ -207,34 +168,39 @@ mod tests {
             let board: Board = fen.parse().unwrap();
             let metrics = BoardMetrics::new(&board);
 
-            let features = encode_board(
-                &board,
-                metrics.attacks[Color::White as usize],
-                metrics.attacks[Color::Black as usize],
-                metrics.support[Color::White as usize],
-                metrics.support[Color::Black as usize],
-                metrics.threats[Color::White as usize],
-                metrics.threats[Color::Black as usize],
-            );
-
-            let bitset = encode_board_bitset(
-                &board,
-                metrics.attacks[Color::White as usize],
-                metrics.attacks[Color::Black as usize],
-                metrics.support[Color::White as usize],
-                metrics.support[Color::Black as usize],
-                metrics.threats[Color::White as usize],
-                metrics.threats[Color::Black as usize],
-            );
-
-            for (i, &f) in features.iter().enumerate() {
-                assert_eq!(
-                    f == 1.0,
-                    bitset.get(i),
-                    "Mismatch at feature {} for FEN: {}",
-                    i,
-                    fen
+            for perspective in [Color::White, Color::Black] {
+                let features = encode_board(
+                    &board,
+                    metrics.attacks[Color::White as usize],
+                    metrics.attacks[Color::Black as usize],
+                    metrics.support[Color::White as usize],
+                    metrics.support[Color::Black as usize],
+                    metrics.threats[Color::White as usize],
+                    metrics.threats[Color::Black as usize],
+                    perspective,
                 );
+
+                let bitset = encode_board_bitset(
+                    &board,
+                    metrics.attacks[Color::White as usize],
+                    metrics.attacks[Color::Black as usize],
+                    metrics.support[Color::White as usize],
+                    metrics.support[Color::Black as usize],
+                    metrics.threats[Color::White as usize],
+                    metrics.threats[Color::Black as usize],
+                    perspective,
+                );
+
+                for (i, &f) in features.iter().enumerate() {
+                    assert_eq!(
+                        f == 1.0,
+                        bitset.get(i),
+                        "Mismatch at feature {} for FEN: {} ({:?})",
+                        i,
+                        fen,
+                        perspective
+                    );
+                }
             }
         }
     }

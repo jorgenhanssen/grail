@@ -9,7 +9,8 @@ use super::shard_reader::ShardReader;
 const CHANNEL_BUFFER_MULTIPLIER: usize = 2;
 
 pub struct Batch {
-    pub features: Vec<f32>,
+    pub stm_features: Vec<f32>,
+    pub nstm_features: Vec<f32>,
     pub scores: Vec<f32>,
     pub outcomes: Vec<f32>,
     pub buckets: Vec<usize>,
@@ -68,7 +69,8 @@ impl DataLoader {
     }
 
     fn collect_batch(reader: &ShardReader, batch_size: usize, shutdown: &AtomicBool) -> Batch {
-        let mut features = Vec::with_capacity(batch_size * NUM_FEATURES);
+        let mut stm_features = Vec::with_capacity(batch_size * NUM_FEATURES);
+        let mut nstm_features = Vec::with_capacity(batch_size * NUM_FEATURES);
         let mut scores = Vec::with_capacity(batch_size);
         let mut outcomes = Vec::with_capacity(batch_size);
         let mut buckets = Vec::with_capacity(batch_size);
@@ -81,7 +83,8 @@ impl DataLoader {
             match reader.next() {
                 Some(sample) => {
                     if let Some(encoded) = sample.encode() {
-                        features.extend_from_slice(&encoded.features);
+                        stm_features.extend_from_slice(&encoded.stm_features);
+                        nstm_features.extend_from_slice(&encoded.nstm_features);
                         scores.push(encoded.score);
                         outcomes.push(encoded.outcome);
                         buckets.push(encoded.bucket);
@@ -92,7 +95,8 @@ impl DataLoader {
         }
 
         Batch {
-            features,
+            stm_features,
+            nstm_features,
             scores,
             outcomes,
             buckets,
