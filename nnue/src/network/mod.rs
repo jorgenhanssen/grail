@@ -10,7 +10,7 @@ pub use linear::LinearLayer;
 pub use model::Network;
 
 /// Size of the accumulator that input features are embedded into.
-pub const EMBEDDING_SIZE: usize = 1024;
+pub const EMBEDDING_SIZE: usize = 768;
 
 /// Size of the hidden layers after the embedding.
 pub const HIDDEN_SIZE: usize = 16;

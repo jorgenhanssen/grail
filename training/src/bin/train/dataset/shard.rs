@@ -17,7 +17,8 @@ pub struct Sample {
 }
 
 pub struct EncodedSample {
-    pub features: [f32; NUM_FEATURES],
+    pub stm_features: [f32; NUM_FEATURES],
+    pub nstm_features: [f32; NUM_FEATURES],
     pub score: f32,
     pub outcome: f32,
     pub bucket: usize,
@@ -27,10 +28,10 @@ impl Sample {
     pub fn encode(&self) -> Option<EncodedSample> {
         let board = Board::from_str(&self.fen).ok()?;
         let metrics = BoardMetrics::new(&board);
+        let stm = board.side_to_move();
+        let nstm = !stm;
 
-        let score = self.score as f32 / FV_SCALE;
-        let bucket = output_bucket(&board);
-        let features = encode_board(
+        let stm_features = encode_board(
             &board,
             metrics.attacks[Color::White as usize],
             metrics.attacks[Color::Black as usize],
@@ -38,13 +39,32 @@ impl Sample {
             metrics.support[Color::Black as usize],
             metrics.threats[Color::White as usize],
             metrics.threats[Color::Black as usize],
+            stm,
+        );
+        let nstm_features = encode_board(
+            &board,
+            metrics.attacks[Color::White as usize],
+            metrics.attacks[Color::Black as usize],
+            metrics.support[Color::White as usize],
+            metrics.support[Color::Black as usize],
+            metrics.threats[Color::White as usize],
+            metrics.threats[Color::Black as usize],
+            nstm,
         );
 
+        let white_score = self.score as f32 / FV_SCALE;
+        let white_outcome = self.outcome;
+        let (score, outcome) = match stm {
+            Color::White => (white_score, white_outcome),
+            Color::Black => (-white_score, 1.0 - white_outcome),
+        };
+
         Some(EncodedSample {
+            stm_features,
+            nstm_features,
             score,
-            outcome: self.outcome,
-            bucket,
-            features,
+            outcome,
+            bucket: output_bucket(&board),
         })
     }
 }

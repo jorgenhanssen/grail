@@ -61,12 +61,12 @@ fn write_embedding(out: &mut String, embedding: &Linear) -> Result<(), Box<dyn E
     }
     writeln!(out)?;
 
-    // Piece-type means combine both colors so the number reads as total weight
+    // Piece-type means combine us and them so the number reads as total weight
     // the net gives to e.g. all knights across the board.
     writeln!(out, "  piece types (column norms, x pawn):")?;
     let pawn_mean = piece_type_mean(&norms, PIECE_TYPES[0].1, PIECE_TYPES[0].2);
-    for &(name, white_off, black_off) in PIECE_TYPES {
-        let m = piece_type_mean(&norms, white_off, black_off);
+    for &(name, us_off, them_off) in PIECE_TYPES {
+        let m = piece_type_mean(&norms, us_off, them_off);
         writeln!(
             out,
             "    {:6} ({:3} feats): norm {:.4} ({:.2}x)",
@@ -80,42 +80,43 @@ fn write_embedding(out: &mut String, embedding: &Linear) -> Result<(), Box<dyn E
     Ok(())
 }
 
-fn piece_type_mean(col_norms: &[f32], white_off: usize, black_off: usize) -> f32 {
+fn piece_type_mean(col_norms: &[f32], us_off: usize, them_off: usize) -> f32 {
     let mut sum = 0.0;
     for sq in 0..Square::NUM {
-        sum += col_norms[sq * PIECES_PER_SQUARE + white_off];
-        sum += col_norms[sq * PIECES_PER_SQUARE + black_off];
+        sum += col_norms[sq * PIECES_PER_SQUARE + us_off];
+        sum += col_norms[sq * PIECES_PER_SQUARE + them_off];
     }
     sum / (Square::NUM * 2) as f32
 }
 
-// Side-by-side 8x8 heatmaps per piece type, white on the left, black on the right.
-// Each side is normalized against its own range so any color asymmetry is obvious.
-// Relevant since the embedding treats white and black as fully independent features.
+// Side-by-side 8x8 heatmaps per piece type from the perspective the embedding
+// sees: "us" on the left, "them" on the right. Each side is normalized against
+// its own range so any us/them asymmetry is obvious. Squares are oriented from
+// the perspective viewer's side, so rank 1 is the back rank for us.
 fn write_piece_heatmaps(out: &mut String, embedding: &Linear) -> Result<(), Box<dyn Error>> {
     let weights = embedding.weight().flatten_all()?.to_vec1::<f32>()?;
     let fan_in = embedding.weight().dim(1)?;
     let norms = col_norms(&weights, fan_in);
 
-    write_header(out, "piece heatmaps (col norm per square, white | black)")?;
-    for &(name, white_off, black_off) in PIECE_TYPES {
-        let white = per_square_norms(&norms, white_off);
-        let black = per_square_norms(&norms, black_off);
-        let (wmin, wmax) = (min_of(&white), max_of(&white));
-        let (bmin, bmax) = (min_of(&black), max_of(&black));
+    write_header(out, "piece heatmaps (col norm per square, us | them)")?;
+    for &(name, us_off, them_off) in PIECE_TYPES {
+        let us = per_square_norms(&norms, us_off);
+        let them = per_square_norms(&norms, them_off);
+        let (umin, umax) = (min_of(&us), max_of(&us));
+        let (tmin, tmax) = (min_of(&them), max_of(&them));
 
         writeln!(
             out,
-            "  {name:6} white ({wmin:.3} - {wmax:.3})     black ({bmin:.3} - {bmax:.3})",
+            "  {name:6} us ({umin:.3} - {umax:.3})        them ({tmin:.3} - {tmax:.3})",
         )?;
         writeln!(
             out,
             "      a  b  c  d  e  f  g  h       a  b  c  d  e  f  g  h"
         )?;
         for rank in (0..8).rev() {
-            write_rank(out, "    ", rank, &white, wmin, wmax)?;
+            write_rank(out, "    ", rank, &us, umin, umax)?;
             write!(out, "    ")?;
-            write_rank(out, "", rank, &black, bmin, bmax)?;
+            write_rank(out, "", rank, &them, tmin, tmax)?;
             writeln!(out)?;
         }
         writeln!(out)?;
@@ -162,7 +163,7 @@ fn write_buckets(
         let stats = BucketStats::from_stack(stack)?;
 
         write_header(out, &format!("bucket {i}"))?;
-        writeln!(out, "  hidden1 ({EMBEDDING_SIZE} -> {HIDDEN_SIZE}):")?;
+        writeln!(out, "  hidden1 ({} -> {HIDDEN_SIZE}):", 2 * EMBEDDING_SIZE)?;
         write_layer(out, &stats.h1, "    ")?;
         writeln!(out, "  hidden2 ({HIDDEN_SIZE} -> {HIDDEN_SIZE}):")?;
         write_layer(out, &stats.h2, "    ")?;
