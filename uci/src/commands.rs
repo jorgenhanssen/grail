@@ -106,6 +106,8 @@ pub struct GoParams {
     pub depth: Option<u8>,
     /// Search for exactly this many milliseconds.
     pub move_time: Option<u64>,
+    /// Stop after searching this many total nodes.
+    pub nodes: Option<u64>,
 }
 
 #[derive(Debug, Default)]

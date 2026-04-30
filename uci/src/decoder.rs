@@ -114,6 +114,7 @@ impl Decoder {
             // TODO: Consider error handling
             depth: extract_numeric_param(input, "depth").map(|d| d as u8),
             move_time: extract_numeric_param(input, "movetime"),
+            nodes: extract_numeric_param(input, "nodes"),
         })
     }
 }
@@ -222,6 +223,16 @@ mod tests {
             panic!("Expected Go")
         };
         assert_eq!(params.move_time, Some(5000));
+    }
+
+    #[test]
+    fn test_go_nodes() {
+        let UciInput::Go(params) = Decoder.decode("go nodes 100000") else {
+            panic!("Expected Go")
+        };
+        assert_eq!(params.nodes, Some(100000));
+        assert!(params.depth.is_none());
+        assert!(params.move_time.is_none());
     }
 
     #[test]

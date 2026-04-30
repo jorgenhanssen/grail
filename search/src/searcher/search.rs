@@ -49,6 +49,7 @@ impl Searcher {
         let mut controller =
             SearchController::new(params, &self.board, self.config.move_overhead.value as u64);
         self.deadline = controller.deadline();
+        self.node_limit = params.nodes;
 
         let pv_count = self.config.multi_pv.value as usize;
         let root = Node::new(self.board.clone(), NodeType::Pv);
@@ -216,7 +217,7 @@ impl Searcher {
 
         let singular = self.search_stack.current().and_then(|n| n.singular);
 
-        self.check_time();
+        self.check_limits();
         if self.shared.is_stopped() {
             return 0;
         }

@@ -76,6 +76,10 @@ pub struct Searcher {
 
     /// Hard time deadline for the search (main searcher).
     deadline: Option<Instant>,
+
+    /// Hard node-count limit for the search. When the cumulative node count
+    /// (across all threads) reaches this, the search is stopped.
+    node_limit: Option<u64>,
 }
 
 impl Searcher {
@@ -117,6 +121,7 @@ impl Searcher {
             pv_table: PvTable::new(),
 
             deadline: None,
+            node_limit: None,
         };
 
         instance.configure(config);
@@ -163,10 +168,25 @@ impl Searcher {
         }
     }
 
-    /// Checks if the hard time deadline has been reached.
-    fn check_time(&self) {
+    /// Checks if any hard search limit has been reached (time deadline or
+    /// total node count). Sets the shared stop flag when triggered.
+    fn check_limits(&self) {
+        if !self.nodes.is_multiple_of(Self::TIME_CHECK_INTERVAL) {
+            return;
+        }
+
         if let Some(deadline) = self.deadline {
-            if self.nodes.is_multiple_of(Self::TIME_CHECK_INTERVAL) && Instant::now() >= deadline {
+            if Instant::now() >= deadline {
+                self.shared.set_stop(true);
+                return;
+            }
+        }
+
+        if let Some(node_limit) = self.node_limit {
+            // shared.total_nodes() lags by up to NODE_SYNC_INTERVAL per worker,
+            // so add the local count for an accurate-enough estimate.
+            let total = self.shared.total_nodes() + self.nodes;
+            if total >= node_limit {
                 self.shared.set_stop(true);
             }
         }
