@@ -28,10 +28,6 @@ impl Searcher {
         hist: i16,
         cont_hist: i16,
     ) -> Reduction {
-        if is_pv_move {
-            return Reduction::Reduce(0);
-        }
-
         let mut reduction = self.lmr.get(depth, move_index);
 
         // Reduce more
@@ -57,6 +53,9 @@ impl Searcher {
 
         // Reduce less
         if reduction > FracPly(0) {
+            if is_pv_move {
+                reduction -= FracPly(self.config.anti_reduction_pv_move.value);
+            }
             if near_root(ply, depth) {
                 reduction -= FracPly(self.config.anti_reduction_near_root.value);
             }
