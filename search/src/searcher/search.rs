@@ -297,6 +297,7 @@ impl Searcher {
 
         let in_check = node.in_check();
         let tt_move = tt_info.and_then(|t| t.best_move);
+        let tt_move_is_capture = tt_move.is_some_and(|m| node.is_capture(m));
 
         let static_eval = tt_info
             .and_then(|t| t.static_eval)
@@ -435,6 +436,7 @@ impl Searcher {
                 is_improving,
                 corrected_eval,
                 singular_result.extension,
+                tt_move_is_capture,
             ) {
                 if self.shared.is_stopped() {
                     break;
@@ -523,6 +525,7 @@ impl Searcher {
         is_improving: bool,
         static_eval: i16,
         extra_extension: i8,
+        tt_move_is_capture: bool,
     ) -> Option<(i16, bool, u8)> {
         let moved_color = node.board().side_to_move();
         let moved_piece = node.piece_on(m.from).unwrap();
@@ -581,6 +584,7 @@ impl Searcher {
             &child,
             hist,
             cont_hist,
+            tt_move_is_capture,
         ) {
             Reduction::Reduce(r) => r,
             Reduction::Prune => return None,
