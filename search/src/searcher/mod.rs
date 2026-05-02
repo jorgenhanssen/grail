@@ -116,7 +116,7 @@ impl Searcher {
             capture_history: CaptureHistory::new(1, 1, 1),
             continuation_history: Box::new(ContinuationHistory::new(1, 1, 1, 1)),
 
-            lmr: LmrTable::new(config.lmr_divisor.value as f32 / 100.0),
+            lmr: LmrTable::new(config.lmr_divisor.value),
 
             pv_table: PvTable::new(),
 
@@ -139,6 +139,9 @@ impl Searcher {
         }
         if !self.continuation_history.matches_config(config) {
             self.continuation_history.configure(config);
+        }
+        if !self.lmr.matches_config(config) {
+            self.lmr.configure(config);
         }
     }
 

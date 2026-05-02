@@ -74,9 +74,8 @@ impl Searcher {
         }
 
         // Prune quiet moves with bad history.
-        let history_score = hist as i32 + cont_hist as i32;
-        let prune_threshold =
-            self.config.history_prune_depth_multiplier.value as i32 * depth as i32;
+        let history_score = hist + cont_hist;
+        let prune_threshold = self.config.history_prune_depth_multiplier.value * depth as i16;
         if !is_pv_move && !is_capture && !is_improving && history_score < prune_threshold {
             return Reduction::Prune;
         }

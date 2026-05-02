@@ -64,7 +64,11 @@ impl ContinuationHistory {
 
     pub fn reset(&mut self) {
         let size = Self::table_size(self.max_moves);
-        self.continuations = vec![0; size];
+        if self.continuations.len() == size {
+            self.continuations.fill(0);
+        } else {
+            self.continuations = vec![0; size];
+        }
     }
 
     fn get_continuation(&self, lookback: usize, prev: PieceTo, curr: PieceTo) -> i16 {

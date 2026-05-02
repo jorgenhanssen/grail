@@ -17,6 +17,7 @@ use crate::transposition::TranspositionTable;
 /// the exact same entry at the same time is rare, and even when it happens:
 /// - tt: just a cache. Worst case is a super super rare mixed entry (from different writes).
 /// - correction: statistical hint, so one wrong value out of thousands doesn't matter
+/// - tb: configured outside search, then read by workers
 pub struct SharedSearcherState {
     tt: UnsafeCell<TranspositionTable>,
     correction: UnsafeCell<CorrectionHistory>,
