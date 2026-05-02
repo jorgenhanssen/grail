@@ -73,18 +73,15 @@ impl Searcher {
             }
         }
 
-        let r = reduction.whole().min(depth.saturating_sub(2));
-
-        // Prune when bad history if it would barely search anyway
-        let reduced_depth = depth.saturating_sub(r);
-        if !is_capture
-            && !is_improving
-            && hist < self.history_heuristic.prune_threshold()
-            && reduced_depth <= 1
-        {
+        // Prune quiet moves with bad history.
+        let history_score = hist as i32 + cont_hist as i32;
+        let prune_threshold =
+            self.config.history_prune_depth_multiplier.value as i32 * depth as i32;
+        if !is_pv_move && !is_capture && !is_improving && history_score < prune_threshold {
             return Reduction::Prune;
         }
 
+        let r = reduction.whole().min(depth.saturating_sub(2));
         Reduction::Reduce(r)
     }
 }
