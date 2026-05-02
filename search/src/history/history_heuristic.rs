@@ -14,24 +14,17 @@ pub struct HistoryHeuristic {
     history: Vec<i16>,
 
     max_history: i32,
-    prune_threshold: i16,
 
     bonus_multiplier: i32,
     malus_multiplier: i32,
 }
 
 impl HistoryHeuristic {
-    pub fn new(
-        max_history: i32,
-        prune_threshold: i16,
-        bonus_multiplier: i32,
-        malus_multiplier: i32,
-    ) -> Self {
+    pub fn new(max_history: i32, bonus_multiplier: i32, malus_multiplier: i32) -> Self {
         Self {
             history: vec![0; HISTORY_SIZE],
 
             max_history,
-            prune_threshold,
 
             bonus_multiplier,
             malus_multiplier,
@@ -40,7 +33,6 @@ impl HistoryHeuristic {
 
     pub fn configure(&mut self, config: &EngineConfig) {
         self.max_history = config.history_max_value.value;
-        self.prune_threshold = config.history_prune_threshold.value;
 
         self.bonus_multiplier = config.history_bonus_multiplier.value;
         self.malus_multiplier = config.history_malus_multiplier.value;
@@ -50,7 +42,6 @@ impl HistoryHeuristic {
 
     pub fn matches_config(&self, config: &EngineConfig) -> bool {
         self.max_history == config.history_max_value.value
-            && self.prune_threshold == config.history_prune_threshold.value
             && self.bonus_multiplier == config.history_bonus_multiplier.value
             && self.malus_multiplier == config.history_malus_multiplier.value
     }
@@ -82,10 +73,6 @@ impl HistoryHeuristic {
         let source_stride = Square::NUM;
 
         color_idx * color_stride + source_idx * source_stride + dest_idx
-    }
-
-    pub fn prune_threshold(&self) -> i16 {
-        self.prune_threshold
     }
 
     pub fn get_bonus(&self, depth: u8) -> i32 {
