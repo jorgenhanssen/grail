@@ -288,4 +288,24 @@ impl Searcher {
 
         move_index > limit
     }
+
+    /// History pruning: skip quiet moves with bad history.
+    pub(super) fn try_history_prune(
+        &self,
+        depth: u8,
+        is_pv_move: bool,
+        is_capture: bool,
+        is_improving: bool,
+        hist: i16,
+        cont_hist: i16,
+    ) -> bool {
+        if is_pv_move || is_capture || is_improving {
+            return false;
+        }
+
+        let history_score = hist + cont_hist;
+        let prune_threshold = self.config.history_prune_depth_multiplier.value * depth as i16;
+
+        history_score < prune_threshold
+    }
 }

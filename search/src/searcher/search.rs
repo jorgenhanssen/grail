@@ -15,7 +15,6 @@ use crate::{
     move_ordering::{MAX_CAPTURES, MAX_QUIETS, MainMoveGenerator},
     pv::PvLine,
     result::SearchResult,
-    searcher::reduction::Reduction,
     stack::SearchNode,
     time_control::SearchController,
     transposition::{Bound, ProbeResult},
@@ -569,7 +568,12 @@ impl Searcher {
             let pt = PieceTo::new(moved_color, moved_piece, m.to);
             self.continuation_history.get(&prev_moves, pt)
         };
-        let reduction = match self.get_reduction(
+
+        if self.try_history_prune(depth, is_pv_move, is_cap, is_improving, hist, cont_hist) {
+            return None;
+        }
+
+        let reduction = self.get_reduction(
             ply,
             depth,
             is_pv_move,
@@ -581,10 +585,7 @@ impl Searcher {
             &child,
             hist,
             cont_hist,
-        ) {
-            Reduction::Reduce(r) => r,
-            Reduction::Prune => return None,
-        };
+        );
 
         let extension = self.get_extension(node, &m, moved_piece, is_cap);
         let extension = (extension + extra_extension).max(0) as u8;

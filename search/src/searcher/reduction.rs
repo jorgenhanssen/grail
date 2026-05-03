@@ -4,11 +4,6 @@ use crate::utils::near_root;
 
 use super::Searcher;
 
-pub enum Reduction {
-    Reduce(u8),
-    Prune,
-}
-
 impl Searcher {
     /// Late move reductions: reduce search depth for moves unlikely to be best.
     ///
@@ -27,7 +22,7 @@ impl Searcher {
         child: &Node,
         hist: i16,
         cont_hist: i16,
-    ) -> Reduction {
+    ) -> u8 {
         let mut reduction = self.lmr.get(depth, move_index);
 
         // Reduce more
@@ -73,15 +68,7 @@ impl Searcher {
             }
         }
 
-        // Prune quiet moves with bad history.
-        let history_score = hist + cont_hist;
-        let prune_threshold = self.config.history_prune_depth_multiplier.value * depth as i16;
-        if !is_pv_move && !is_capture && !is_improving && history_score < prune_threshold {
-            return Reduction::Prune;
-        }
-
-        let r = reduction.whole().min(depth.saturating_sub(2));
-        Reduction::Reduce(r)
+        reduction.whole().min(depth.saturating_sub(2))
     }
 }
 
