@@ -1,6 +1,6 @@
+use config::EngineConfig;
 use utils::FracPly;
 
-use crate::EngineConfig;
 use crate::MAX_DEPTH;
 
 /// <https://www.chessprogramming.org/Late_Move_Reductions>

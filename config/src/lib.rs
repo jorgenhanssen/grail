@@ -1,67 +1,12 @@
-use std::str::FromStr;
+use uci::UciOptionType;
 
-use uci::{UciOption, UciOptionType, UciOutput};
+mod macros;
+mod param;
 
-/// Helper to conditionally create public UCI options.
-fn uci(include: bool, name: &'static str, option_type: UciOptionType) -> Option<UciOption> {
-    if include {
-        Some(UciOption { name, option_type })
-    } else {
-        None
-    }
-}
+pub use param::ConfigParam;
 
-/// Generates the EngineConfig struct, its Default impl and the UCI
-/// setoption/to_uci plumbing from a list of (field, name, type, default, include)
-/// tuples. The include flag (usually cfg!(feature = "tuning")) decides whether
-/// a parameter is exposed over UCI so we can hide tuning knobs in release
-/// builds without changing the field set.
-macro_rules! define_config {
-    ($(($field:ident: $type:ty, $uci_name:expr, $uci_type:expr, $default:expr, $include:expr)),* $(,)?) => {
-        #[derive(Debug, Clone)]
-        pub struct EngineConfig {
-            $(pub $field: ConfigParam<$type>,)*
-        }
+use macros::define_config;
 
-        impl Default for EngineConfig {
-            fn default() -> Self {
-                Self {
-                    $($field: ConfigParam {
-                        value: $default,
-                        uci: uci($include, $uci_name, $uci_type),
-                    },)*
-                }
-            }
-        }
-
-        impl EngineConfig {
-            pub fn update_from_uci(&mut self, uci_name: &str, value: &str) -> Result<(), String> {
-                // TODO: Empty name is a workaround for malformed setoption commands.
-                // Consider adding InvalidCommand variant to UciInput instead.
-                if uci_name.is_empty() {
-                    return Err("Invalid setoption command: missing option name".to_string());
-                }
-
-                match uci_name {
-                    $($uci_name if $include => self.$field.update_from_uci(value),)*
-                    _ => Err(format!("Unknown option: {}", uci_name)),
-                }
-            }
-
-            pub fn to_uci(&self, output: &std::sync::mpsc::Sender<UciOutput>) -> Result<(), std::sync::mpsc::SendError<UciOutput>> {
-                $(
-                    if self.$field.uci.is_some() {
-                        output.send(UciOutput::Option(self.$field.to_uci()))?;
-                    }
-                )*
-                Ok(())
-            }
-
-        }
-    };
-}
-
-// (field, "UCI Name", type, default, exposed_via_uci)
 define_config!(
     // Public UCI options
     (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 16384 }, 256, true),
@@ -165,38 +110,3 @@ define_config!(
     (correction_minor_update_weight: i32, "Correction Minor Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 156, cfg!(feature = "tuning")),
     (correction_nonpawn_update_weight: i32, "Correction NonPawn Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 178, cfg!(feature = "tuning")),
 );
-
-/// A configuration parameter with optional UCI metadata.
-/// If `uci` is Some, the parameter can be changed via UCI setoption.
-#[derive(Debug, Clone)]
-pub struct ConfigParam<T> {
-    pub value: T,
-    pub uci: Option<UciOption>,
-}
-
-impl<T> ConfigParam<T>
-where
-    T: FromStr + ToString + Clone,
-    T::Err: std::fmt::Display,
-{
-    pub fn update_from_uci(&mut self, value: &str) -> Result<(), String> {
-        if let Some(uci_meta) = &self.uci {
-            uci_meta.option_type.validate(value)?;
-        }
-
-        let new_value = value
-            .parse::<T>()
-            .map_err(|e| format!("Parse error: {}", e))?;
-
-        self.value = new_value;
-        Ok(())
-    }
-
-    pub fn to_uci(&self) -> String {
-        let uci_meta = self
-            .uci
-            .as_ref()
-            .expect("UCI metadata required for UCI output");
-        uci_meta.option_type.to_uci(uci_meta.name, &self.value)
-    }
-}

@@ -2,8 +2,9 @@ use crate::book::Book;
 use crate::game::SelfPlayGame;
 use crate::histogram::HistogramHandle;
 use crate::samples::Sample;
+use config::EngineConfig;
 use pyrrhic_rs::TableBases;
-use search::{CozyAdapter, Engine, EngineConfig};
+use search::{CozyAdapter, Engine};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 

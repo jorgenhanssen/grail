@@ -9,9 +9,10 @@ repository = { workspace = true }
 
 [features]
 default = []
-tuning = ["uci/tuning", "search/tuning"]
+tuning = ["config/tuning", "search/tuning"]
 
 [dependencies]
+config = { path = "../config" }
 search = { path = "../search" }
 nnue = { path = "../nnue" }
 uci = { path = "../uci" }

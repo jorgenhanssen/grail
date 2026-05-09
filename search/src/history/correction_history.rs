@@ -4,8 +4,9 @@ use utils::{
     MINOR_PIECES, NON_PAWN_PIECES, PAWN_PIECES, generate_zobrist_table, is_capture, zobrist_key,
 };
 
+use config::EngineConfig;
+
 use super::utils::apply_gravity;
-use crate::EngineConfig;
 
 // Zobrist tables for correction history indexing.
 const PAWN_ZOBRIST: [u64; Square::NUM * Color::NUM * PAWN_PIECES.len()] =

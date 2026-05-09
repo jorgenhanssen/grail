@@ -1,8 +1,9 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
-use crate::nnue::resolve_nnue;
+use config::EngineConfig;
 use search::Engine;
-use search::EngineConfig;
+
+use crate::nnue::resolve_nnue;
 
 pub fn create_engine(config: &EngineConfig, stop: Arc<AtomicBool>) -> Engine {
     Engine::new(config, stop, || {

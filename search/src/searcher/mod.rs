@@ -5,9 +5,10 @@ use ahash::AHashSet;
 use cozy_chess::Board;
 use uci::{UciOutput, commands::Info, pv_to_uci};
 
+use config::EngineConfig;
+
 use crate::pv::{MultiPvSearchContext, PvLine, PvTable};
 use crate::{
-    EngineConfig,
     history::{CaptureHistory, ContinuationHistory, HistoryHeuristic},
     lmr::LmrTable,
     scores::MATE_VALUE,

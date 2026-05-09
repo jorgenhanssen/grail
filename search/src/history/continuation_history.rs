@@ -1,9 +1,11 @@
 use cozy_chess::{Board, Move};
 
+use config::EngineConfig;
+
 use super::piece_to::PieceTo;
 use super::utils::apply_gravity;
+use crate::MAX_DEPTH;
 use crate::stack::SearchNode;
-use crate::{EngineConfig, MAX_DEPTH};
 
 /// Continuation history: scores moves based on the sequence of prior moves.
 /// Indexing: [lookback][prev: PieceTo][curr: PieceTo]

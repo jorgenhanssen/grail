@@ -1,8 +1,9 @@
 use std::sync::mpsc::{Receiver, Sender};
 
 use ahash::AHashSet;
+use config::EngineConfig;
 use cozy_chess::Board;
-use search::{Engine, EngineConfig};
+use search::Engine;
 use uci::{NULL_MOVE, UciOutput, move_to_uci};
 
 use crate::display::display_position;

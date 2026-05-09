@@ -4,9 +4,9 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
+use config::EngineConfig;
 use pyrrhic_rs::TableBases;
 
-use crate::EngineConfig;
 use crate::history::CorrectionHistory;
 use crate::tablebase::CozyAdapter;
 use crate::transposition::TranspositionTable;

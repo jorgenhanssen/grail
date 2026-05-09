@@ -6,7 +6,7 @@ use std::sync::{
 };
 use std::thread::{self, JoinHandle};
 
-use search::EngineConfig;
+use config::EngineConfig;
 use uci::{Decoder, UciConnection, UciInput, UciOutput};
 
 use crate::engine::create_engine;

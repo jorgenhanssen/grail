@@ -1,7 +1,9 @@
 use cozy_chess::{Board, Color, Move, Square};
 
+use config::EngineConfig;
+
 use super::utils::apply_gravity;
-use crate::{EngineConfig, MAX_DEPTH};
+use crate::MAX_DEPTH;
 
 const HISTORY_SIZE: usize = Color::NUM * Square::NUM * Square::NUM;
 

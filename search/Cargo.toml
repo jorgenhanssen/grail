@@ -8,9 +8,10 @@ description = { workspace = true }
 repository = { workspace = true }
 
 [features]
-tuning = []
+tuning = ["config/tuning"]
 
 [dependencies]
+config = { path = "../config" }
 nnue = { path = "../nnue" }
 uci = { path = "../uci" }
 utils = { path = "../utils" }

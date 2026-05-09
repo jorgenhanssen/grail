@@ -1,8 +1,10 @@
 use cozy_chess::{Board, Move, Piece, Square};
 use utils::captured_piece;
 
+use config::EngineConfig;
+
 use super::utils::apply_gravity;
-use crate::{EngineConfig, MAX_DEPTH};
+use crate::MAX_DEPTH;
 
 const CAPTURE_HISTORY_SIZE: usize = Piece::NUM * Square::NUM * Piece::NUM;
 

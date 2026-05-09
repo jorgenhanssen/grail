@@ -2,13 +2,12 @@ use std::sync::{Arc, atomic::AtomicBool, mpsc::Sender};
 use std::thread;
 
 use ahash::AHashSet;
+use config::EngineConfig;
 use cozy_chess::Board;
+use pyrrhic_rs::TableBases;
 use uci::UciOutput;
 
-use pyrrhic_rs::TableBases;
-
 use crate::{
-    EngineConfig,
     result::SearchResult,
     searcher::{Searcher, SharedSearcherState},
     tablebase::CozyAdapter,
