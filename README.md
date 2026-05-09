@@ -4,7 +4,7 @@
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-nightly-orange.svg)](https://www.rust-lang.org/)
 
-Grail is a hobby chess engine written in Rust. Named after the quest for the Holy Grail, it represents the search for the elusive, perfectly solved game. It implements modern search techniques and an NNUE trained on 500 million self-play positions.
+Grail is a hobby chess engine written in Rust. Named after the quest for the Holy Grail, it represents the search for the elusive, perfectly solved game. It implements modern search techniques and a fully self-taught NNUE that learned chess from 67 million self-play games.
 
 ## Usage
 
@@ -117,10 +117,10 @@ make generate
 **Arguments:**
 
 - `--book`: Path to an opening book in EPD format (required).
-- `--depth`: Search depth for each move (default: 10).
+- `--depth`: Search depth for each move (default: 8).
 - `--pv-lines`: Number of PV lines to search at each decision point (default: 1).
 - `--threads`: Number of threads (default: number of logical CPUs).
-- `--nnue`: Use NNUE for evaluation instead of HCE (default: false).
+- `--syzygy-path`: Colon-separated paths to Syzygy tablebase files (optional).
 
 Generated data is saved to `nnue/data/YYYY-MM-DD-HH:MM.csv`.
 
@@ -139,12 +139,12 @@ The trainer loads all CSV files from `nnue/data/` and saves the best model to `n
 
 - `--batch-size`: Batch size for training (default: 8192).
 - `--learning-rate`: Initial learning rate (default: 0.001).
-- `--epochs`: Number of epochs to train (default: 100).
+- `--epochs`: Number of epochs to train (default: 200).
 - `--workers`: Number of worker threads for data loading (default: 4).
-- `--val-ratio`: Fraction of data to use for validation (default: 0.1).
+- `--val-ratio`: Fraction of data to use for validation (default: 0.05).
 - `--test-ratio`: Fraction of data to use for testing (default: 0.01).
 - `--lr-decay`: Learning rate decay factor (default: 0.95).
-- `--patience`: Epochs without improvement before early stopping (default: 2).
+- `--patience`: Epochs without improvement before early stopping (default: 5).
 - `--shard-size-mb`: Size of each data shard in megabytes (default: 500).
 - `--wdl`: WDL blending weight, 0.0 = pure eval, 1.0 = pure WDL (default: 0.3).
 - `--init-model`: Save a randomly initialized model and exit.
