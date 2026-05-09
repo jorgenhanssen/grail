@@ -16,7 +16,7 @@ pub const DEAD_WEIGHT_THRESHOLD: f32 = 1e-4;
 pub const ACTIVE_NEURON_THRESHOLD: f32 = 1.0;
 
 /// Piece slots per square: 6 us + 6 them, in (P, N, B, R, Q, K) order.
-/// Matches the layout used by `encoding::piece_index`.
+/// Matches the layout used by encoding::piece_index.
 pub const PIECES_PER_SQUARE: usize = Piece::NUM * Color::NUM;
 
 /// Feature group in the input layer. Used to split up column norms.

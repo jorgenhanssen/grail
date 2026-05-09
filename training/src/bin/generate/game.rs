@@ -52,14 +52,11 @@ impl SelfPlayGame {
                 break;
             }
 
-            let result = match self.search(engine) {
-                Some(r) => r,
-                None => break,
+            let Some(result) = self.search(engine) else {
+                break;
             };
-
-            let pv = match result.primary() {
-                Some(pv) => pv,
-                None => break,
+            let Some(pv) = result.primary() else {
+                break;
             };
 
             if let Some(mv) = pv.best_move() {
@@ -125,13 +122,11 @@ impl SelfPlayGame {
         }
 
         while steps < teleport_len {
-            let result = match self.search(engine) {
-                Some(r) => r,
-                None => return,
+            let Some(result) = self.search(engine) else {
+                return;
             };
-            let mv = match result.primary().and_then(|pv| pv.best_move()) {
-                Some(mv) => mv,
-                None => return,
+            let Some(mv) = result.primary().and_then(PvLine::best_move) else {
+                return;
             };
             self.play_move(mv);
             steps += 1;

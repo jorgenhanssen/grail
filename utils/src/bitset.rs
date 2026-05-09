@@ -1,7 +1,4 @@
-/// A packed bit array that holds `BITS` bits.
-///
-/// The bits are stored in an array of `u64` values, automatically sized
-/// to fit the requested number of bits.
+/// A packed bit array that holds a specific number of bits.
 #[derive(Clone, Copy)]
 pub struct Bitset<const BITS: usize>([u64; BITS.div_ceil(64)])
 where

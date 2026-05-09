@@ -9,8 +9,7 @@ const SOFTMAX_TEMPERATURE: f32 = 100.0;
 
 /// Result of a search containing all PV lines found.
 ///
-/// When MultiPV > 1, contains multiple lines ranked by quality.
-/// Provides convenient accessors for the primary line and selection methods.
+/// PV lines ranked by quality.
 #[derive(Clone, Debug, Default)]
 pub struct SearchResult {
     lines: Vec<PvLine>,
@@ -31,9 +30,8 @@ impl SearchResult {
         &self.lines
     }
 
-    /// Select a PV line using softmax over scores.
-    ///
-    /// Returns None if no lines are available.
+    /// Pick a line at random, weighted by softmax over scores. Used by the
+    /// data generator to add some variance to self-play.
     pub fn select_softmax(&self) -> Option<&PvLine> {
         if self.lines.is_empty() {
             return None;

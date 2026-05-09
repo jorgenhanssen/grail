@@ -3,10 +3,8 @@ use cozy_chess::Move;
 use crate::MAX_DEPTH;
 use crate::aspiration::AspirationWindow;
 
-/// A principal variation line with its exact score.
-///
-/// Represents the best line of play found from a position, along with
-/// the score (from the searching side's perspective) and its rank in MultiPV search.
+/// One PV line with its score, scored from the searching side. pv_index is
+/// the rank in MultiPV (0 = the best line).
 #[derive(Clone, Debug, Default)]
 pub struct PvLine {
     pub line: Vec<Move>,
@@ -15,7 +13,6 @@ pub struct PvLine {
 }
 
 impl PvLine {
-    /// Creates a new PV line with the given moves, score, and PV index.
     pub fn new(line: Vec<Move>, score: i16, pv_index: usize) -> Self {
         Self {
             line,
@@ -24,25 +21,18 @@ impl PvLine {
         }
     }
 
-    /// Returns the root move that starts this PV (the "best move").
     pub fn best_move(&self) -> Option<Move> {
         self.line.first().copied()
     }
 
-    /// Returns true if this PV line has no moves.
     pub fn is_empty(&self) -> bool {
         self.line.is_empty()
     }
 }
 
 /// Search context for a single PV rank in multi-PV search.
-///
-/// Each context has its own aspiration window (persists across depths)
-/// and stores the current best line for that PV rank.
 pub struct PvSearchContext {
-    /// Best line found for this PV rank
     pub result: PvLine,
-    /// Aspiration window for this PV
     pub window: AspirationWindow,
 }
 
@@ -55,10 +45,6 @@ impl PvSearchContext {
     }
 }
 
-/// Multi-PV search state manager.
-///
-/// Manages all PV search contexts, move exclusions, and tracking of which PV
-/// is currently being searched.
 pub struct MultiPvSearchContext {
     /// Search context for each PV line
     pub lines: Vec<PvSearchContext>,
@@ -77,7 +63,6 @@ impl MultiPvSearchContext {
         }
     }
 
-    /// Initialize for a new search with N PVs.
     pub fn init(
         &mut self,
         count: usize,
@@ -96,39 +81,33 @@ impl MultiPvSearchContext {
         }
     }
 
-    /// Begin searching a specific PV rank.
     pub fn begin_pv_search(&mut self, pv_index: usize, depth: u8) {
         self.current_pv_index = Some(pv_index);
         let prev_score = self.lines[pv_index].result.score;
         self.lines[pv_index].window.begin_depth(depth, prev_score);
     }
 
-    /// Reset exclusions for a new depth iteration.
-    /// Call this at the start of each depth before searching all PVs.
+    /// Called at the start of each depth before iterating through the PVs.
     pub fn reset_excluded(&mut self) {
         self.excluded.clear();
         self.current_pv_index = None;
     }
 
-    /// Add a move to the exclusion list (found in a higher PV rank).
-    /// Excluded moves will be skipped in subsequent PV searches at this depth.
     pub fn add_excluded(&mut self, mv: Move) {
         self.excluded.push(mv);
     }
 
-    /// Check if a move is excluded.
     pub fn is_excluded(&self, mv: Move) -> bool {
         self.excluded.contains(&mv)
     }
 
-    /// Get the best move hint for move ordering at root.
-    /// Returns the best move from the current PV's previous search.
+    /// Best move from the previous depth's search of the current PV rank, used
+    /// as a hint for move ordering.
     pub fn best_move_hint(&self) -> Option<Move> {
         let pv_index = self.current_pv_index?;
         self.lines.get(pv_index)?.result.best_move()
     }
 
-    /// Get the primary (first) PV result.
     pub fn primary(&self) -> Option<&PvLine> {
         self.lines
             .first()
@@ -168,7 +147,7 @@ impl PvTable {
         ply * MAX_DEPTH
     }
 
-    /// `pvArray[pvIndex] = 0` (no PV at this ply yet)
+    /// Mark this ply as having no PV yet.
     pub fn init_ply(&mut self, ply: u8) {
         let p = ply as usize;
         if p < MAX_DEPTH {
@@ -176,7 +155,7 @@ impl PvTable {
         }
     }
 
-    /// Write `mv` at this ply with no continuation (e.g. TT cutoff).
+    /// Write a move at this ply with no continuation (e.g. TT cutoff).
     pub fn set_move(&mut self, ply: u8, mv: Move) {
         let p = ply as usize;
         let pv_index = Self::index(p);
@@ -184,7 +163,7 @@ impl PvTable {
         self.pv_array[pv_index + 1] = None;
     }
 
-    /// Write `mv` at this ply and append the child's PV from `ply + 1`.
+    /// Write a move at this ply and append the child's PV from ply + 1.
     pub fn update(&mut self, ply: u8, mv: Move) {
         let p = ply as usize;
         let pv_index = Self::index(p);

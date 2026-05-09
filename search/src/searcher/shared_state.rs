@@ -34,7 +34,7 @@ impl SharedSearcherState {
         let tt = TranspositionTable::new(config.hash_size.value as usize);
         let correction = CorrectionHistory::new(
             config.correction_table_size.value,
-            config.correction_history_max_value.value,
+            config.correction_history_max_correction.value,
             config.correction_pawn_weight.value,
             config.correction_minor_weight.value,
             config.correction_nonpawn_weight.value,
@@ -82,8 +82,6 @@ impl SharedSearcherState {
         self.total_nodes.store(0, Ordering::Relaxed);
     }
 
-    /// Load from path (UCI `setoption`). Only call when no search is running.
-    /// Accepts both `;` and `:` as path separators for Windows compatibility.
     pub fn init_tablebases(&self, path: &str) {
         let path = path.replace(';', ":");
         match TableBases::<CozyAdapter>::new(path) {

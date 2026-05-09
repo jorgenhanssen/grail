@@ -99,10 +99,7 @@ impl Accumulator {
         let mut i = 0;
 
         while i + SIMD_WIDTH_I16 <= EMBEDDING_SIZE {
-            // Load current buffer values
             let mut buffer_vec = SimdI16::from_slice(&buffer[i..i + SIMD_WIDTH_I16]);
-
-            // Load and widen weights (i8 -> i16)
             let weights_i8 = i8x32::from_slice(&weights_row[i..i + SIMD_WIDTH_I16]);
             let weights_i16: SimdI16 = weights_i8.cast();
 
@@ -128,7 +125,7 @@ impl Accumulator {
         }
     }
 
-    /// Converts the accumulated i16 buffer for `color` into f32 activations with ReLU applied.
+    /// Dequantizes one color's i16 buffer into f32 and applies ReLU into output.
     pub fn dequantize_and_relu(&self, color: Color, output: &mut [f32]) {
         debug_assert_eq!(output.len(), EMBEDDING_SIZE);
         let buffer = match color {
@@ -165,10 +162,8 @@ fn compute_quantization_scales(weights: &[f32]) -> (Vec<f32>, Vec<f32>) {
     let mut scales = Vec::with_capacity(EMBEDDING_SIZE);
     let mut abs_weights = vec![0.0f32; NUM_FEATURES];
 
-    // Index in the sorted abs-weight list used as the percentile cutoff.
     let percentile_index = ((NUM_FEATURES - 1) as f32 * QUANTIZATION_PERCENTILE) as usize;
 
-    // Compute the quantization scale for each accumulator neuron
     for out_idx in 0..EMBEDDING_SIZE {
         let row = &weights[out_idx * NUM_FEATURES..(out_idx + 1) * NUM_FEATURES];
         for (i, &w) in row.iter().enumerate() {

@@ -364,7 +364,7 @@ fn calculate_shard_count(total_bytes: u64, shard_size: u64, ratio: f64) -> usize
 
 fn get_csv_files(data_dir: &Path) -> io::Result<Vec<PathBuf>> {
     let mut files: Vec<PathBuf> = fs::read_dir(data_dir)?
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|ext| ext == "csv"))
         .collect();

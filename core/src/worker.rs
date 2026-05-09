@@ -64,7 +64,7 @@ impl EngineWorker {
                         if !lines.is_empty() {
                             self.last_search = Some(SearchResultMeta::new(lines.to_vec(), stm));
                         }
-                        if let Some(mv) = r.primary().and_then(|pv| pv.best_move()) {
+                        if let Some(mv) = r.primary().and_then(search::PvLine::best_move) {
                             uci_move = move_to_uci(self.engine.board(), mv);
                         }
                     }

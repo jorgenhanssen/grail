@@ -24,8 +24,7 @@ impl UciConnection {
         Self { output_tx }
     }
 
-    /// Returns a sender for UCI output messages.
-    /// Can be cloned and shared with the engine worker thread.
+    /// Cloneable sender that the engine worker thread uses to push UCI output.
     pub fn output_sender(&self) -> Sender<UciOutput> {
         self.output_tx.clone()
     }

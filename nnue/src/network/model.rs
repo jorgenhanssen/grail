@@ -17,8 +17,6 @@ pub struct Network {
 
 impl Network {
     pub fn new(vs: &VarBuilder) -> Result<Self> {
-        // Note: unwrap() is used here because layer creation only fails on programmer error
-        // (wrong dimensions). This keeps the array initialization clean.
         let buckets: [OutputStack; OUTPUT_BUCKETS] = std::array::from_fn(|i| {
             let bvs = vs.pp(format!("bucket_{}", i));
             OutputStack {
@@ -34,22 +32,16 @@ impl Network {
         })
     }
 
-    /// Forward pass for training.
-    ///
-    /// Computes all bucket outputs, then gathers the correct one per sample.
-    /// During backprop, `gather` scatters gradients only to each sample's
-    /// selected bucket—unused buckets receive zero gradient for that sample.
-    ///
-    /// `stm` and `nstm` are feature tensors for the side-to-move and opponent
-    /// perspectives of the same position. The output is in stm-perspective
-    /// space; callers that need a white-perspective value must sign-flip.
+    /// Training forward pass. Runs every bucket and then gathers the one each
+    /// sample actually wants (unused buckets get zero gradient through gather).
+    /// stm/nstm are the position encoded from each side, output is in stm
+    /// space so the caller has to sign-flip if they want it as white.
     #[inline]
     pub fn forward(&self, stm: &Tensor, nstm: &Tensor, buckets: &[usize]) -> Result<Tensor> {
         let stm_embed = stm.apply(&self.embedding)?.relu()?;
         let nstm_embed = nstm.apply(&self.embedding)?.relu()?;
         let embedding_out = Tensor::cat(&[stm_embed, nstm_embed], 1)?;
 
-        // Compute all bucket outputs: [batch, OUTPUT_BUCKETS]
         let all_outputs: Vec<_> = self
             .buckets
             .iter()
@@ -57,12 +49,12 @@ impl Network {
             .collect::<Result<_>>()?;
         let stacked = Tensor::cat(&all_outputs, 1)?;
 
-        // Select each sample's bucket output: [batch, 1]
         let indices = Tensor::from_vec(
             buckets.iter().map(|&i| i as u32).collect::<Vec<_>>(),
             (buckets.len(), 1),
             stacked.device(),
         )?;
+
         stacked.gather(&indices, 1)
     }
 }

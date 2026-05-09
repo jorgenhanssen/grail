@@ -8,14 +8,13 @@ use crate::{
 };
 use candle_core::{DType, Device};
 
-/// NNUE evaluator for inference.
-///
-/// The `network` field exists because candle's VarMap requires creating the network structure
-/// first (which registers tensors), then loading weights. After loading, `enable_nnue()` creates
-/// the quantized network from the loaded weights.
+/// NNUE evaluator for inference. The full-precision network field is kept
+/// around because candle's VarMap wants to register tensors before weights are
+/// loaded; enable_nnue then quantizes it into the nnue field for actual eval.
 pub struct Evaluator {
     /// Quantized network for fast inference
     nnue: Option<NNUENetwork>,
+
     /// Full-precision network used to load weights before quantization
     network: Network,
 }
@@ -35,9 +34,7 @@ impl Evaluator {
         self.nnue = Some(NNUENetwork::from_network(&self.network).unwrap());
     }
 
-    /// Evaluates the position using the neural network.
-    ///
-    /// Returns the score from white's perspective.
+    /// Runs the NNUE forward pass and returns the score from white's perspective.
     pub fn evaluate(&mut self, node: &Node) -> i16 {
         let board = node.board();
         let stm = board.side_to_move();
@@ -80,7 +77,7 @@ impl Evaluator {
 
         let stm_score = stm_score.clamp(i16::MIN as f32, i16::MAX as f32) as i16;
 
-        // Return the score as white
+        // Return the score as white (as needed by the search)
         flip_eval_perspective(stm, stm_score)
     }
 }

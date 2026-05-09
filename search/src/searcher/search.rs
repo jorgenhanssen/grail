@@ -448,14 +448,7 @@ impl Searcher {
 
                 bounds.raise_alpha(best_value);
                 if bounds.is_cutoff(bounds.alpha) {
-                    self.on_fail_high(
-                        node,
-                        m,
-                        depth,
-                        is_quiet,
-                        &quiets_searched,
-                        &captures_searched,
-                    );
+                    self.on_fail_high(node, m, depth, &quiets_searched, &captures_searched);
                     break;
                 }
 
@@ -507,8 +500,8 @@ impl Searcher {
         best_value
     }
 
-    /// Searches a single move with per-move pruning and LMR.
-    /// Returns `None` if pruned, otherwise (score, is_quiet, searched_depth).
+    /// Searches a single move.
+    /// Returns None if pruned, otherwise (score, is_quiet, searched_depth).
     #[allow(clippy::too_many_arguments)]
     fn search_move(
         &mut self,
@@ -649,58 +642,48 @@ impl Searcher {
         Some((value, is_quiet, adjusted_depth))
     }
 
-    /// Handler called if a search fails high - updates history tables.
-    #[allow(clippy::too_many_arguments)]
+    /// Updates the history tables after a beta cutoff: boost the cutting move,
+    /// apply malus to the moves we searched before it.
     pub(super) fn on_fail_high(
         &mut self,
         node: &Node,
         mv: Move,
         depth: u8,
-        is_quiet: bool,
         quiets_searched: &[Move],
         captures_searched: &[Move],
     ) {
         let board = node.board();
+        let is_quiet = !node.is_capture(mv);
 
         let prev_moves = self
             .continuation_history
             .get_prev_moves(self.search_stack.as_slice());
+
         if is_quiet {
-            // Boost the quiet move that caused the cutoff
             let bonus = self.history_heuristic.get_bonus(depth);
             self.history_heuristic.update(board, mv, bonus);
 
-            // Continuation history bonus for quiet cutoff move
             let cont_bonus = self.continuation_history.get_bonus(depth);
             self.continuation_history
                 .update_quiet_all(board, &prev_moves, mv, cont_bonus);
         } else {
-            // Boost the capture that caused the cutoff
             let bonus = self.capture_history.get_bonus(depth);
             self.capture_history.update_capture(board, mv, bonus);
         }
 
         if !quiets_searched.is_empty() {
-            // Apply malus to all previously searched quiet moves
             let quiet_malus = self.history_heuristic.get_malus(depth);
-            for &q in quiets_searched {
-                self.history_heuristic.update(board, q, quiet_malus);
-            }
-
-            // Continuation history malus for previously searched quiets
             let cont_malus = self.continuation_history.get_malus(depth);
             for &q in quiets_searched {
+                self.history_heuristic.update(board, q, quiet_malus);
                 self.continuation_history
                     .update_quiet_all(board, &prev_moves, q, cont_malus);
             }
         }
 
-        if !captures_searched.is_empty() {
-            // Apply malus to all previously searched captures
-            let capture_malus = self.capture_history.get_malus(depth);
-            for &c in captures_searched {
-                self.capture_history.update_capture(board, c, capture_malus);
-            }
+        let capture_malus = self.capture_history.get_malus(depth);
+        for &c in captures_searched {
+            self.capture_history.update_capture(board, c, capture_malus);
         }
     }
 }

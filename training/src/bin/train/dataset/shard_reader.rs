@@ -22,11 +22,11 @@ pub struct ShardReader {
 impl ShardReader {
     /// Creates a new ShardReader for the given shard directory.
     ///
-    /// Shuffles shard order and loads the first `initial_shards` into memory.
+    /// Shuffles shard order and loads the first initial shards into memory.
     /// Remaining shards are loaded on-demand as active ones are exhausted.
     pub fn new(shard_dir: &Path, initial_shards: usize) -> io::Result<Self> {
         let mut paths: Vec<PathBuf> = fs::read_dir(shard_dir)?
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
             .map(|e| e.path())
             .filter(|p| p.extension().is_some_and(|ext| ext == "csv"))
             .collect();

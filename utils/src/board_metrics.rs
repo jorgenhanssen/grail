@@ -5,21 +5,16 @@ use cozy_chess::{
 
 use crate::attacks::get_queen_moves;
 
-/// Precomputed board metrics for evaluation.
-///
-/// These metrics are expensive to compute but reused multiple times
-/// during position evaluation.
+/// Per-color attack/threat/support bitboards, computed once and reused
+/// throughout evaluation.
 #[derive(Clone, Copy, Debug)]
 pub struct BoardMetrics {
-    /// Attack bitboards for each color (all squares attacked by that color).
     pub attacks: [BitBoard; Color::NUM],
 
-    /// Threats bitboards: opponent's valuable pieces (non-pawns) under attack.
-    /// `threats[White]` = White's pieces threatened by Black.
+    /// Opponent's pieces under attack by lesser pieces.
     pub threats: [BitBoard; Color::NUM],
 
-    /// Support bitboards: own pieces defended by own pieces.
-    /// `support[White]` = White pieces defended by White.
+    /// Own pieces defended by own pieces.
     pub support: [BitBoard; Color::NUM],
 }
 
@@ -47,7 +42,6 @@ impl BoardMetrics {
         let white_queens = queens & white_pieces;
         let black_queens = queens & black_pieces;
 
-        // Compute piece groupings for threat detection
         let white_minors = white_knights | white_bishops;
         let black_minors = black_knights | black_bishops;
         let white_majors = white_rooks | white_queens;
@@ -86,7 +80,6 @@ impl BoardMetrics {
             all_pieces,
         );
 
-        // Which of our pieces are defended by our own pieces
         let white_support = white_attacks & white_pieces;
         let black_support = black_attacks & black_pieces;
 
@@ -137,7 +130,6 @@ fn compute(
         threats |= squares & opponent_majors;
     }
 
-    // Rooks: threaten queens
     for sq in rooks {
         let squares = get_rook_moves(sq, all_pieces);
         attacks |= squares;
@@ -146,8 +138,7 @@ fn compute(
 
     // Queens: don't generate threats (nothing more valuable to threaten)
     for sq in queens {
-        let squares = get_queen_moves(sq, all_pieces);
-        attacks |= squares;
+        attacks |= get_queen_moves(sq, all_pieces);
     }
 
     // Kings: Also don't generate threats (can be discussed, I suppose)

@@ -16,10 +16,7 @@ pub const fn generate_zobrist_table<const N: usize>(seed: u64) -> [u64; N] {
     table
 }
 
-/// Compute a Zobrist key from a board, Zobrist table, and piece types to hash.
-///
-/// - `zobrist_key!(board, table, pieces)` - hash both colors
-/// - `zobrist_key!(board, table, pieces, color)` - hash single color
+/// Compute a Zobrist key over a board (or specific color's pieces)
 #[macro_export]
 macro_rules! zobrist_key {
     ($board:expr, $table:expr, $pieces:expr) => {{

@@ -11,10 +11,6 @@ use super::simd::{simd_add, simd_relu};
 use super::{CP_BOUND, EMBEDDING_SIZE, FV_SCALE, HIDDEN_SIZE, OUTPUT_BUCKETS};
 
 /// NNUE inference engine with quantized weights and dual-perspective accumulators.
-///
-/// The accumulator holds one running buffer per absolute color; `forward`
-/// picks which one goes into the stm half of the concat buffer based on the
-/// current side-to-move.
 pub struct NNUENetwork {
     accumulator: Accumulator,
     buckets: [OutputStack; OUTPUT_BUCKETS],
@@ -51,10 +47,6 @@ impl NNUENetwork {
         self.accumulator.reset();
     }
 
-    /// Forward pass with color-keyed inputs. `white_bits` and `black_bits` are
-    /// the encodings of the current board from each perspective; `stm` decides
-    /// which color's activations land in the stm half of the concat buffer.
-    /// Use `output_bucket(&board)` to compute the bucket index.
     #[inline]
     pub fn forward(
         &mut self,

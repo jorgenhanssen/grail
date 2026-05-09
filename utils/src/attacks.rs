@@ -3,7 +3,6 @@ use cozy_chess::{
     get_pawn_attacks, get_rook_moves,
 };
 
-/// Returns all squares a queen can move to from the given square.
 #[inline]
 pub fn get_queen_moves(sq: Square, occupied: BitBoard) -> BitBoard {
     get_bishop_moves(sq, occupied) | get_rook_moves(sq, occupied)

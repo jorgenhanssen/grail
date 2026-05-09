@@ -139,8 +139,8 @@ pub fn encode_board_bitset(
     bitset
 }
 
-/// Returns the (us, them) bitboard pair for the given perspective. From black,
-/// the ranks are flipped so rank 1 is always our back rank.
+/// (us, them) bitboards relative to perspective. Ranks are flipped for black
+/// so that rank 1 is always our back rank.
 fn from_perspective(white: BitBoard, black: BitBoard, perspective: Color) -> (BitBoard, BitBoard) {
     match perspective {
         Color::White => (white, black),

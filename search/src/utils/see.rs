@@ -1,41 +1,22 @@
 use cozy_chess::{Board, Move, Piece, Square};
 use utils::{get_attackers_to, get_discovered_attacks, piece_value};
 
-/// Static Exchange Evaluation (SEE) with threshold comparison.
+/// Static Exchange Evaluation with a threshold comparison: returns true when
+/// the SEE value at the destination square is >= threshold. The negamax swap
+/// loop never plays any actual moves, just shuffles bitboards around.
 ///
-/// Evaluates the material outcome of a capture sequence on a square without
-/// making any moves. Used extensively for move ordering and pruning decisions.
-///
-/// Returns true if the SEE value >= threshold. This is the de facto standard
-/// approach in modern chess engines, as it enables early exits and avoids
-/// computing the full SEE value when only a comparison is needed.
-///
-/// # Algorithm
-///
-/// Uses the negamax swap algorithm with bitboard manipulation:
-/// 1. Early exit if capturing for free doesn't meet threshold
-/// 2. Early exit if we still meet threshold after losing our piece
-/// 3. Otherwise, simulate the capture sequence using bitboards (no moves made)
-/// 4. Use `gain = -gain - 1 - piece_value` (negamax with strict inequality)
-/// 5. Handle X-ray attacks by updating occupancy and recalculating sliders
-///
-/// # References
-///
-/// - <https://www.chessprogramming.org/Static_Exchange_Evaluation>
-/// - [Stockfish `see_ge`](https://github.com/official-stockfish/Stockfish/blob/master/src/position.h)
-/// - [Black Marlin](https://github.com/jnlt3/blackmarlin)
-/// - [PlentyChess](https://github.com/Yoshie2000/PlentyChess)
+/// Closely follows PlentyChess's SEE, which is itself a port of Stockfish's
+/// see_ge. Also I don't bother with pin handling.
+/// <https://www.chessprogramming.org/Static_Exchange_Evaluation>
+/// <https://github.com/official-stockfish/Stockfish/blob/master/src/position.cpp>
+/// <https://github.com/Yoshie2000/PlentyChess/blob/main/src/evaluation.cpp>
 #[inline]
 pub fn see(board: &Board, mv: Move, threshold: i16) -> bool {
     let from = mv.from;
     let to = mv.to;
 
     // Initial gain: value of victim - threshold
-    let mut gain = board
-        .piece_on(to)
-        .map(|victim| piece_value(victim))
-        .unwrap_or(0)
-        - threshold;
+    let mut gain = board.piece_on(to).map(piece_value).unwrap_or(0) - threshold;
 
     // Account for promotion delta
     if let Some(promo) = mv.promotion {

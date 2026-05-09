@@ -55,28 +55,6 @@ pub struct TTEntry {
     pub generation: u8,
 }
 
-impl TTEntry {
-    #[allow(clippy::too_many_arguments)]
-    pub fn set(
-        &mut self,
-        key: u32,
-        depth: u8,
-        value: i16,
-        static_eval: i16,
-        bound: Bound,
-        best_move_packed: u16,
-        generation: u8,
-    ) {
-        self.key = key;
-        self.depth = depth;
-        self.value = value;
-        self.static_eval = static_eval;
-        self.bound = bound;
-        self.best_move_packed = best_move_packed;
-        self.generation = generation;
-    }
-}
-
 const CLUSTER_SIZE: usize = 4;
 const MIN_BUCKETS: usize = 1024;
 
@@ -248,7 +226,17 @@ impl TranspositionTable {
         let cluster = &mut self.entries[base..end];
         let current_gen = self.generation;
 
-        // Depth bonus for valuable bound types (exact/lower more useful than upper)
+        let new_entry = TTEntry {
+            key: key32,
+            value: stored_value,
+            bound,
+            static_eval: stored_se,
+            depth,
+            best_move_packed,
+            generation: current_gen,
+        };
+
+        // Exact bounds are more useful than upper bounds at the same depth.
         let depth_bonus = |b: Bound| -> i16 {
             match b {
                 Bound::Exact | Bound::Lower => 1,
@@ -256,7 +244,7 @@ impl TranspositionTable {
             }
         };
 
-        // Exact key hit: replace only if deeper or stronger bound type.
+        // Same-key hit: only replace if the new entry beats the old one.
         for e in cluster.iter_mut() {
             if e.key == key32 {
                 let new_value = depth as i16 + depth_bonus(bound);
@@ -265,44 +253,26 @@ impl TranspositionTable {
                     (bound == Bound::Exact && e.bound != Bound::Exact) || new_value >= old_value;
 
                 if should_replace {
-                    e.set(
-                        key32,
-                        depth,
-                        stored_value,
-                        stored_se,
-                        bound,
-                        best_move_packed,
-                        current_gen,
-                    );
+                    *e = new_entry;
                 }
                 return;
             }
         }
 
-        // Empty slot
         for e in cluster.iter_mut() {
             if e.key == 0 {
-                e.set(
-                    key32,
-                    depth,
-                    stored_value,
-                    stored_se,
-                    bound,
-                    best_move_packed,
-                    current_gen,
-                );
+                *e = new_entry;
                 return;
             }
         }
 
-        // Prefer replacing: shallow entries, old entries, upper bounds
+        // No empty slot - evict the shallowest/oldest entry.
         let mut victim_idx = 0;
         let mut min_score = i16::MAX;
 
         for (i, entry) in cluster.iter().enumerate() {
             let age = current_gen.wrapping_sub(entry.generation) as i16;
             let entry_depth = entry.depth as i16 + depth_bonus(entry.bound);
-
             let score = (8 * entry_depth) - age;
 
             if score < min_score {
@@ -311,15 +281,7 @@ impl TranspositionTable {
             }
         }
 
-        cluster[victim_idx].set(
-            key32,
-            depth,
-            stored_value,
-            stored_se,
-            bound,
-            best_move_packed,
-            current_gen,
-        );
+        cluster[victim_idx] = new_entry;
     }
 }
 

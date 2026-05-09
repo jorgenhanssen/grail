@@ -104,8 +104,7 @@ impl Generator {
             .collect();
 
         // Spawn progress update thread
-        let progress_handle =
-            Self::spawn_progress_updater(sample_counter.clone(), histogram, stop_flag.clone());
+        let progress_handle = Self::spawn_progress_updater(sample_counter, histogram, stop_flag);
 
         // Wait for all workers to complete
         let samples: Vec<_> = worker_handles

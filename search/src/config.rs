@@ -2,8 +2,7 @@ use std::str::FromStr;
 
 use uci::{UciOption, UciOptionType, UciOutput};
 
-/// Helper to conditionally create UCI option metadata.
-/// If `include` is false (e.g., tuning feature disabled), option won't appear in UCI.
+/// Helper to conditionally create public UCI options.
 fn uci(include: bool, name: &'static str, option_type: UciOptionType) -> Option<UciOption> {
     if include {
         Some(UciOption { name, option_type })
@@ -12,18 +11,11 @@ fn uci(include: bool, name: &'static str, option_type: UciOptionType) -> Option<
     }
 }
 
-/// Generates EngineConfig struct and UCI plumbing from a list of parameters.
-///
-/// Each entry: (field_name: Type, "UCI Name", UciOptionType, default_value, include_in_uci)
-///
-/// The macro generates:
-/// - `EngineConfig` struct with all fields as `ConfigParam<T>`
-/// - `Default` impl with specified defaults
-/// - `update_from_uci()` to set values from UCI setoption commands
-/// - `to_uci()` to send all options to the GUI
-///
-/// The `include` flag (often `cfg!(feature = "tuning")`) controls whether
-/// the option is exposed via UCI. useful for hiding tuning params in release builds.
+/// Generates the EngineConfig struct, its Default impl and the UCI
+/// setoption/to_uci plumbing from a list of (field, name, type, default, include)
+/// tuples. The include flag (usually cfg!(feature = "tuning")) decides whether
+/// a parameter is exposed over UCI so we can hide tuning knobs in release
+/// builds without changing the field set.
 macro_rules! define_config {
     ($(($field:ident: $type:ty, $uci_name:expr, $uci_type:expr, $default:expr, $include:expr)),* $(,)?) => {
         #[derive(Debug, Clone)]
@@ -69,9 +61,7 @@ macro_rules! define_config {
     };
 }
 
-// Engine configuration parameters.
-// Format: (field, "UCI Name", type, default, exposed_via_uci)
-// Most tuning params use cfg!(feature = "tuning") so they're hidden in release builds.
+// (field, "UCI Name", type, default, exposed_via_uci)
 define_config!(
     // Public UCI options
     (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 16384 }, 256, true),
@@ -165,7 +155,7 @@ define_config!(
     (double_ext_margin: i16, "Double Extension Margin", UciOptionType::Spin { min: 10, max: 100 }, 50, cfg!(feature = "tuning")),
     (double_ext_overshoot_penalty: i16, "Double Extension Overshoot Penalty", UciOptionType::Spin { min: 0, max: 3 }, 2, cfg!(feature = "tuning")),
 
-    (correction_history_max_value: i32, "Correction History Max Value", UciOptionType::Spin { min: 128, max: 2048 }, 1024, cfg!(feature = "tuning")),
+    (correction_history_max_correction: i32, "Correction History Max Correction", UciOptionType::Spin { min: 128, max: 2048 }, 1024, cfg!(feature = "tuning")),
     (correction_table_size: usize, "Correction Table Size", UciOptionType::Spin { min: 1024, max: 65536 }, 16384, cfg!(feature = "tuning")),
 
     (correction_pawn_weight: i32, "Correction Pawn Weight", UciOptionType::Spin { min: 0, max: 20000 }, 10347, cfg!(feature = "tuning")),

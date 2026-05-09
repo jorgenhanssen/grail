@@ -9,7 +9,7 @@ use std::fmt::{self, Write};
 use crate::math::{col_norms, cosine, max_of, mean, min_of};
 use crate::stats::{BucketStats, FEATURE_GROUPS, LayerStats, PIECE_TYPES, PIECES_PER_SQUARE};
 
-/// Total width of the `header ====` section rulers.
+/// Total width of the section rulers under each header.
 const HEADER_WIDTH: usize = 68;
 
 pub fn create(network: &Network) -> Result<String, Box<dyn Error>> {
