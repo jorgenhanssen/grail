@@ -20,18 +20,18 @@ pub enum Bound {
 }
 
 /// Result from probing the transposition table.
-/// Caller should check `depth` to decide if `value`/`bound` are trustworthy for cutoffs.
+/// Caller should check depth to decide if value/bound are trustworthy for cutoffs.
 #[derive(Clone, Copy)]
 pub struct ProbeResult {
-    /// Score from searching this position (mate-adjusted for current ply)
+    /// Score from the previous search, mate-adjusted to the probing ply.
     pub value: i16,
     /// Indicates whether the stored value is exact or a bound
     pub bound: Bound,
     /// Best move found from previous search
     pub best_move: Option<Move>,
-    /// Cached static eval (None if unknown)
+    /// Cached static eval (None if never computed).
     pub static_eval: Option<i16>,
-    /// Search depth that produced this result
+    /// Depth of the search that produced this entry.
     pub depth: u8,
 }
 
@@ -39,19 +39,19 @@ pub struct ProbeResult {
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
 pub struct TTEntry {
-    /// Lower 32 bits of Zobrist hash for verification
+    /// Low 32 bits of the Zobrist hash (checksumed on probe).
     pub key: u32,
-    /// Score from searching this position
+    /// Score from the search.
     pub value: i16,
-    /// Indicates whether the stored value is exact or a bound
+    /// Whether value is exact or a bound.
     pub bound: Bound,
-    /// Static eval without search, cached to avoid recomputation (i16::MIN = unknown)
+    /// Cached static eval (i16::MIN if never computed).
     pub static_eval: i16,
-    /// Search depth that produced this result
+    /// Depth of the search that produced this entry.
     pub depth: u8,
-    /// Best move found, packed as: [15:12]=promo, [11:6]=to, [5:0]=from
+    /// Best move found, packed as: [15:12]=promo, [11:6]=to, [5:0]=from (zero = no move).
     pub best_move_packed: u16,
-    /// Age for replacement policy
+    /// Generation for age-based replacement.
     pub generation: u8,
 }
 
@@ -123,26 +123,18 @@ impl TranspositionTable {
         self.generation = self.generation.wrapping_add(1);
     }
 
-    /// Returns hash table fill rate in permille (0-1000).
-    ///
-    /// Samples the first 1000 entries to get an approximation of the fill rate.
-    /// Looping through the entire table would be too slow.
+    /// Returns hash table fill rate in permille (0-1000), sampled over the
+    /// first 1000 entries.
     pub fn hashfull(&self) -> u16 {
         const MAX_SAMPLE: usize = 1000;
 
         let sample_size = self.entries.len().min(MAX_SAMPLE);
         let sample = &self.entries[..sample_size];
+        let filled = sample.iter().filter(|e| e.key != 0).count();
 
-        // Count non-empty entries (key == 0)
-        let filled_count = sample.iter().filter(|e| e.key != 0).count();
-
-        // Convert to permille: (filled / sample_size) * 1000
-        let permille = (filled_count * 1000) / sample_size;
-
-        permille as u16
+        ((filled * 1000) / sample_size) as u16
     }
 
-    // Prefetch TT entry into cache
     pub fn prefetch(&self, hash: u64) {
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
@@ -154,7 +146,7 @@ impl TranspositionTable {
     }
 
     /// Probes the TT for a matching entry, returning the deepest match.
-    /// Caller should check `result.depth >= needed_depth` before using value/bound for cutoffs.
+    /// Caller should check result.depth before using value/bound for cutoffs.
     pub fn probe(&self, hash: u64, ply: u8) -> Option<ProbeResult> {
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
@@ -264,14 +256,11 @@ impl TranspositionTable {
             }
         };
 
-        // Exact key hit: Replace only if deeper or better bound
+        // Exact key hit: replace only if deeper or stronger bound type.
         for e in cluster.iter_mut() {
             if e.key == key32 {
                 let new_value = depth as i16 + depth_bonus(bound);
                 let old_value = e.depth as i16 + depth_bonus(e.bound);
-
-                // Always replace if new bound is Exact and old isn't.
-                // Otherwise, only replace if new entry is deeper or better bound type
                 let should_replace =
                     (bound == Bound::Exact && e.bound != Bound::Exact) || new_value >= old_value;
 
@@ -314,7 +303,6 @@ impl TranspositionTable {
             let age = current_gen.wrapping_sub(entry.generation) as i16;
             let entry_depth = entry.depth as i16 + depth_bonus(entry.bound);
 
-            // Lower score = better candidate for replacement
             let score = (8 * entry_depth) - age;
 
             if score < min_score {
@@ -382,31 +370,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_pack_unpack_roundtrip() {
-        let test_moves: &[(&str, &str, Option<Piece>)] = &[
-            ("e2", "e4", None),                // Simple pawn push
-            ("a1", "h8", None),                // Corner to corner
-            ("g1", "f3", None),                // Knight move
-            ("e7", "e8", Some(Piece::Queen)),  // Queen promotion
-            ("a7", "a8", Some(Piece::Knight)), // Knight promotion
-            ("h7", "h8", Some(Piece::Rook)),   // Rook promotion
-            ("b7", "b8", Some(Piece::Bishop)), // Bishop promotion
+    fn pack_unpack_roundtrip() {
+        let moves: &[(&str, &str, Option<Piece>)] = &[
+            ("e2", "e4", None),
+            ("a1", "h8", None),
+            ("g1", "f3", None),
+            ("e7", "e8", Some(Piece::Queen)),
+            ("a7", "a8", Some(Piece::Knight)),
+            ("h7", "h8", Some(Piece::Rook)),
+            ("b7", "b8", Some(Piece::Bishop)),
         ];
-
-        for &(from, to, promo) in test_moves {
+        for &(from, to, promotion) in moves {
             let mv = Move {
                 from: from.parse().unwrap(),
                 to: to.parse().unwrap(),
-                promotion: promo,
+                promotion,
             };
-            let packed = pack_move(Some(mv));
-            let unpacked = unpack_move(packed);
-            assert_eq!(unpacked, Some(mv), "Failed for move {}{}", from, to);
+            assert_eq!(unpack_move(pack_move(Some(mv))), Some(mv), "{from}{to}");
         }
-    }
 
-    #[test]
-    fn test_pack_unpack_none() {
         assert_eq!(pack_move(None), 0);
         assert_eq!(unpack_move(0), None);
     }
