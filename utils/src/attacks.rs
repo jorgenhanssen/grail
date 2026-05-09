@@ -3,7 +3,6 @@ use cozy_chess::{
     get_pawn_attacks, get_rook_moves,
 };
 
-#[inline]
 pub fn get_queen_moves(sq: Square, occupied: BitBoard) -> BitBoard {
     get_bishop_moves(sq, occupied) | get_rook_moves(sq, occupied)
 }
@@ -12,7 +11,6 @@ pub fn get_queen_moves(sq: Square, occupied: BitBoard) -> BitBoard {
 ///
 /// Uses custom occupancy to properly handle X-ray attacks through pieces
 /// that have already captured.
-#[inline]
 pub fn get_attackers_to(board: &Board, sq: Square, occupied: BitBoard) -> BitBoard {
     let knights = board.pieces(Piece::Knight);
     let kings = board.pieces(Piece::King);
@@ -37,7 +35,6 @@ pub fn get_attackers_to(board: &Board, sq: Square, occupied: BitBoard) -> BitBoa
 ///
 /// When a piece captures and is removed from the board, it may reveal hidden
 /// attackers behind it. This function returns those newly visible attackers.
-#[inline]
 pub fn get_discovered_attacks(
     piece_moved: Piece,
     target: Square,

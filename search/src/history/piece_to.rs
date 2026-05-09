@@ -18,7 +18,6 @@ impl PieceTo {
     }
 
     /// Flattened index (0-767): (color * 6 + piece) * 64 + square
-    #[inline]
     pub const fn index(&self) -> usize {
         (self.color as usize * Piece::NUM + self.piece as usize) * Square::NUM + self.to as usize
     }

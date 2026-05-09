@@ -47,7 +47,6 @@ impl NNUENetwork {
         self.accumulator.reset();
     }
 
-    #[inline]
     pub fn forward(
         &mut self,
         white_bits: &Bitset<NUM_FEATURES>,
@@ -80,7 +79,6 @@ struct OutputStack {
 }
 
 impl OutputStack {
-    #[inline]
     fn forward(&mut self, input: &[f32]) -> f32 {
         self.hidden1.forward(input, &mut self.h1_buffer);
         simd_relu(&mut self.h1_buffer);

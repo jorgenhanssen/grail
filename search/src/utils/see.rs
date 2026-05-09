@@ -10,7 +10,6 @@ use utils::{get_attackers_to, get_discovered_attacks, piece_value};
 /// <https://www.chessprogramming.org/Static_Exchange_Evaluation>
 /// <https://github.com/official-stockfish/Stockfish/blob/master/src/position.cpp>
 /// <https://github.com/Yoshie2000/PlentyChess/blob/main/src/evaluation.cpp>
-#[inline]
 pub fn see(board: &Board, mv: Move, threshold: i16) -> bool {
     let from = mv.from;
     let to = mv.to;
@@ -90,7 +89,6 @@ pub fn see(board: &Board, mv: Move, threshold: i16) -> bool {
 }
 
 /// Finds the least valuable attacker from the given attackers bitboard.
-#[inline]
 fn find_least_valuable_attacker(board: &Board, attackers: cozy_chess::BitBoard) -> (Piece, Square) {
     // Piece::ALL is ordered by value: Pawn, Knight, Bishop, Rook, Queen, King
     for piece in Piece::ALL {

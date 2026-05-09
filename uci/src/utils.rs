@@ -3,7 +3,6 @@
 
 use cozy_chess::{Board, Move, util::display_uci_move};
 
-#[inline]
 pub fn move_to_uci(board: &Board, mv: Move) -> String {
     display_uci_move(board, mv).to_string()
 }

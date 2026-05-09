@@ -31,7 +31,6 @@ pub const NON_PAWN_PIECES: [Piece; 5] = [
 ];
 
 /// Get the value of a piece in centipawns.
-#[inline]
 pub fn piece_value(piece: Piece) -> i16 {
     PIECE_VALUES[piece as usize]
 }

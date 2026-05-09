@@ -36,7 +36,6 @@ impl Network {
     /// sample actually wants (unused buckets get zero gradient through gather).
     /// stm/nstm are the position encoded from each side, output is in stm
     /// space so the caller has to sign-flip if they want it as white.
-    #[inline]
     pub fn forward(&self, stm: &Tensor, nstm: &Tensor, buckets: &[usize]) -> Result<Tensor> {
         let stm_embed = stm.apply(&self.embedding)?.relu()?;
         let nstm_embed = nstm.apply(&self.embedding)?.relu()?;

@@ -155,7 +155,6 @@ impl TimeBudget {
     }
 }
 
-#[inline]
 fn get_time_left(params: &GoParams, color: Color) -> Option<u64> {
     match color {
         Color::White => params.wtime,
@@ -163,7 +162,6 @@ fn get_time_left(params: &GoParams, color: Color) -> Option<u64> {
     }
 }
 
-#[inline]
 fn get_increment(params: &GoParams, color: Color) -> u64 {
     match color {
         Color::White => params.winc.unwrap_or(0),
