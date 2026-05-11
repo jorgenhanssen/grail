@@ -1,9 +1,6 @@
 use cozy_chess::{Color, Piece, Square};
 
-/// A colored piece and its destination square.
-///
-/// Used for history indexing where we track correlations between moves.
-/// Based on Stockfish's `PieceToHistory` concept.
+/// A colored piece and its destination square, used as a history table key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PieceTo {
     pub color: Color,
@@ -21,7 +18,6 @@ impl PieceTo {
     }
 
     /// Flattened index (0-767): (color * 6 + piece) * 64 + square
-    #[inline]
     pub const fn index(&self) -> usize {
         (self.color as usize * Piece::NUM + self.piece as usize) * Square::NUM + self.to as usize
     }

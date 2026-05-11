@@ -326,6 +326,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
+name = "config"
+version = "1.1.0"
+dependencies = [
+ "uci",
+]
+
+[[package]]
 name = "console"
 version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -527,15 +534,6 @@ checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
  "windows-sys",
-]
-
-[[package]]
-name = "evaluation"
-version = "1.1.0"
-dependencies = [
- "arrayvec",
- "cozy-chess",
- "utils",
 ]
 
 [[package]]
@@ -868,9 +866,8 @@ dependencies = [
  "ahash",
  "candle-core",
  "candle-nn",
+ "config",
  "cozy-chess",
- "evaluation",
- "hce",
  "nnue",
  "rand",
  "rayon",
@@ -904,16 +901,6 @@ dependencies = [
  "foldhash",
  "serde",
  "serde_core",
-]
-
-[[package]]
-name = "hce"
-version = "1.1.0"
-dependencies = [
- "arrayvec",
- "cozy-chess",
- "evaluation",
- "utils",
 ]
 
 [[package]]
@@ -1106,25 +1093,10 @@ dependencies = [
 name = "nnue"
 version = "1.1.0"
 dependencies = [
- "ahash",
  "candle-core",
  "candle-nn",
- "chrono",
- "clap",
  "cozy-chess",
- "ctrlc",
- "evaluation",
- "hce",
- "hyperloglogplus",
- "indicatif",
  "log",
- "num_cpus",
- "rand",
- "rayon",
- "search",
- "simplelog",
- "tempfile",
- "uci",
  "utils",
 ]
 
@@ -1382,6 +1354,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40e24eee682d89fb193496edf918a7f407d30175b2e785fe057e4392dfd182e0"
 
 [[package]]
+name = "pyrrhic-rs"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3910f053bb86e0d75fb0e61b47d82e456a15c548fb4d8a8da9d9d1a34a4e299"
+dependencies = [
+ "libc",
+ "memmap2",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1525,10 +1507,11 @@ version = "1.1.0"
 dependencies = [
  "ahash",
  "arrayvec",
+ "config",
  "cozy-chess",
- "evaluation",
- "hce",
  "log",
+ "nnue",
+ "pyrrhic-rs",
  "rand",
  "uci",
  "utils",
@@ -1772,6 +1755,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
+]
+
+[[package]]
+name = "training"
+version = "1.1.0"
+dependencies = [
+ "ahash",
+ "candle-core",
+ "candle-nn",
+ "chrono",
+ "clap",
+ "config",
+ "cozy-chess",
+ "ctrlc",
+ "hyperloglogplus",
+ "indicatif",
+ "log",
+ "nnue",
+ "num_cpus",
+ "pyrrhic-rs",
+ "rand",
+ "rayon",
+ "search",
+ "simplelog",
+ "tempfile",
+ "uci",
+ "utils",
 ]
 
 [[package]]

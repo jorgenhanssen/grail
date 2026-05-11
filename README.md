@@ -1,10 +1,10 @@
 # Grail
 
-[![CCRL 40/15](https://img.shields.io/badge/CCRL%2040%2F15-3074%20Elo-%23DAA520.svg)](https://computerchess.org.uk/ccrl/4040/cgi/compare_engines.cgi?family=Grail&print=Rating+list)
+[![CCRL 40/15](https://img.shields.io/badge/CCRL%2040%2F15-3320%20Elo-%23DAA520.svg)](https://computerchess.org.uk/ccrl/4040/cgi/compare_engines.cgi?family=Grail&print=Rating+list)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-nightly-orange.svg)](https://www.rust-lang.org/)
 
-Grail is a hobby chess engine written in Rust. Named after the quest for the Holy Grail, it represents the search for the elusive, perfectly solved game. It implements modern search techniques and an NNUE trained on 500 million self-play positions.
+Grail is a hobby chess engine written in Rust. Named after the quest for the Holy Grail, it represents the search for the elusive, perfectly solved game. It implements modern search techniques and a fully self-taught NNUE that learned chess from 67 million self-play games.
 
 ## Usage
 
@@ -49,8 +49,9 @@ Once added to your GUI, you can configure the engine via the UCI options:
 - **Hash**: Size of the transposition table in MB (Default: 256).
 - **Threads**: Number of search threads (Default: 1).
 - **MultiPV**: Number of principal variations to search (Default: 1).
-- **NNUE**: Toggle between Neural Network (NNUE) and Hand-Crafted (HCE) evaluation (Default: true).
 - **Move Overhead**: Time buffer in milliseconds to account for communication lag (Default: 10).
+- **SyzygyPath**: Paths to Syzygy tablebase files (separated by `;` on Windows, `:` on Linux/macOS).
+- **SyzygyProbeDepth**: Minimum depth to probe tablebases (Default: 1).
 
 The engine supports standard time controls (increment, sudden death, moves to go) and analysis modes (fixed depth, infinite).
 
@@ -83,6 +84,7 @@ The project includes a `Makefile` for convenience:
 - **`make tunable`**: Builds with exposed parameters for SPSA tuning.
 - **`make generate`**: Builds the data generation tool for NNUE training.
 - **`make train`**: Builds the NNUE trainer (auto-detects CUDA/Metal).
+- **`make nnue-analysis`**: Dumps a human-readable weight analysis of the current NNUE to `nnue/model.analysis.txt`.
 - **`make clean`**: Cleans the build directory.
 
 ### Benchmarking
@@ -115,10 +117,10 @@ make generate
 **Arguments:**
 
 - `--book`: Path to an opening book in EPD format (required).
-- `--depth`: Search depth for each move (default: 10).
+- `--depth`: Search depth for each move (default: 8).
 - `--pv-lines`: Number of PV lines to search at each decision point (default: 1).
 - `--threads`: Number of threads (default: number of logical CPUs).
-- `--nnue`: Use NNUE for evaluation instead of HCE (default: false).
+- `--syzygy-path`: Colon-separated paths to Syzygy tablebase files (optional).
 
 Generated data is saved to `nnue/data/YYYY-MM-DD-HH:MM.csv`.
 
@@ -137,12 +139,12 @@ The trainer loads all CSV files from `nnue/data/` and saves the best model to `n
 
 - `--batch-size`: Batch size for training (default: 8192).
 - `--learning-rate`: Initial learning rate (default: 0.001).
-- `--epochs`: Number of epochs to train (default: 100).
+- `--epochs`: Number of epochs to train (default: 200).
 - `--workers`: Number of worker threads for data loading (default: 4).
-- `--val-ratio`: Fraction of data to use for validation (default: 0.1).
+- `--val-ratio`: Fraction of data to use for validation (default: 0.05).
 - `--test-ratio`: Fraction of data to use for testing (default: 0.01).
 - `--lr-decay`: Learning rate decay factor (default: 0.95).
-- `--patience`: Epochs without improvement before early stopping (default: 2).
+- `--patience`: Epochs without improvement before early stopping (default: 5).
 - `--shard-size-mb`: Size of each data shard in megabytes (default: 500).
 - `--wdl`: WDL blending weight, 0.0 = pure eval, 1.0 = pure WDL (default: 0.3).
 - `--init-model`: Save a randomly initialized model and exit.

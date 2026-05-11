@@ -1,8 +1,9 @@
 use std::sync::mpsc::{Receiver, Sender};
 
 use ahash::AHashSet;
+use config::EngineConfig;
 use cozy_chess::Board;
-use search::{Engine, EngineConfig};
+use search::Engine;
 use uci::{NULL_MOVE, UciOutput, move_to_uci};
 
 use crate::display::display_position;
@@ -64,7 +65,7 @@ impl EngineWorker {
                         if !lines.is_empty() {
                             self.last_search = Some(SearchResultMeta::new(lines.to_vec(), stm));
                         }
-                        if let Some(mv) = r.primary().and_then(|pv| pv.best_move()) {
+                        if let Some(mv) = r.primary().and_then(search::PvLine::best_move) {
                             uci_move = move_to_uci(self.engine.board(), mv);
                         }
                     }

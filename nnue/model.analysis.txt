@@ -1,0 +1,231 @@
+embedding (1152 -> 768) ============================================
+  weight:  mean 0.0514, median 0.0260, std 0.0900, max 1.2757, scale 3.49x, CoV 1.75, dead 3.2%
+  neurons: 768/768 active, row norm min 1.474 / mean 2.988 / max 11.302
+  bias:    mean -0.1643 (|b| mean 0.1901, max 0.5030)
+
+  feature groups (column norms, x pieces):
+    pieces   ( 768 feats): norm 2.7996 (1.00x)
+    support  ( 128 feats): norm 1.0807 (0.39x)
+    space    ( 128 feats): norm 0.8342 (0.30x)
+    threats  ( 128 feats): norm 2.2957 (0.82x)
+
+  piece types (column norms, x pawn):
+    pawn   (128 feats): norm 2.2230 (1.00x)
+    knight (128 feats): norm 2.5107 (1.13x)
+    bishop (128 feats): norm 2.6156 (1.18x)
+    rook   (128 feats): norm 2.5157 (1.13x)
+    queen  (128 feats): norm 3.1370 (1.41x)
+    king   (128 feats): norm 3.7953 (1.71x)
+
+piece heatmaps (col norm per square, us | them) ====================
+  pawn   us (0.000 - 3.402)        them (0.000 - 3.649)
+      a  b  c  d  e  f  g  h       a  b  c  d  e  f  g  h
+    8                            8                        
+    7 ██ ██ ██ ██ ██ ██ ██ ██    7 ▓▓ ██ ▓▓ ██ ▓▓ ██ ██ ██
+    6 ██ ▓▓ ██ ▓▓ ██ ██ ██ ██    6 ▓▓ ██ ██ ██ ██ ██ ▓▓ ▓▓
+    5 ▓▓ ██ ██ ██ ██ ██ ██ ▓▓    5 ▓▓ ▓▓ ██ ██ ██ ██ ██ ▓▓
+    4 ▓▓ ▓▓ ██ ██ ██ ██ ▓▓ ▓▓    4 ▓▓ ▓▓ ▓▓ ██ ██ ▓▓ ██ ▓▓
+    3 ▓▓ ▓▓ ██ ██ ██ ██ ██ ▓▓    3 ▓▓ ██ ▓▓ ██ ██ ██ ██ ██
+    2 ▓▓ ██ ██ ▓▓ ██ ██ ██ ▓▓    2 ██ ██ ██ ██ ██ ██ ██ ██
+    1                            1                        
+
+  knight us (2.165 - 2.868)        them (2.190 - 2.987)
+      a  b  c  d  e  f  g  h       a  b  c  d  e  f  g  h
+    8 ▒▒ ▒▒ ▒▒ ▓▓ ▒▒ ██ ██ ▓▓    8 ▓▓ ▓▓ ░░       ░░ ▒▒ ▓▓
+    7 ▒▒ ▒▒ ▓▓ ░░ ▓▓ ▓▓ ▒▒ ██    7 ░░       ░░ ░░ ░░    ░░
+    6 ▒▒ ░░ ▓▓ ▓▓ ▒▒ ▓▓ ▒▒ ▓▓    6 ░░ ░░ ▒▒ ░░ ▓▓    ░░   
+    5    ░░ ▒▒ ░░ ▒▒ ▓▓ ▓▓ ▒▒    5 ▓▓ ░░ ██ ░░ ▓▓ ▒▒ ░░ ░░
+    4       ▒▒ ▒▒ ░░ ░░ ▒▒ ▓▓    4 ░░    ▒▒ ▓▓ ░░ ░░ ▒▒ ▒▒
+    3    ░░    ░░ ░░ ▒▒ ░░ ░░    3 ▒▒ ░░       ░░ ▒▒ ░░ ██
+    2 ░░    ░░ ▒▒ ▒▒ ▒▒ ░░ ▒▒    2 ░░ ▒▒ ▓▓ ▒▒ ▒▒ ▒▒ ▒▒ ▓▓
+    1 ██ ░░ ░░ ▒▒ ▒▒ ░░ ██ ██    1 ▓▓ ▓▓ ▒▒    ▒▒ ▒▒ ▓▓ ██
+
+  bishop us (2.273 - 3.145)        them (2.350 - 3.190)
+      a  b  c  d  e  f  g  h       a  b  c  d  e  f  g  h
+    8 ░░ ░░ ░░ ▒▒ ░░ ▒▒ ▒▒ ▒▒    8 ▒▒ ▓▓ ▓▓ ▒▒    ░░ ▓▓ ██
+    7 ▒▒ ░░ ░░ ░░ ▒▒ ░░ ▒▒ ▒▒    7 ▒▒    ▒▒ ░░ ░░    ░░ ░░
+    6          ░░ ░░ ▓▓ ▒▒ ▒▒    6    ▒▒ ░░ ▒▒ ░░ ░░ ░░ ░░
+    5       ░░ ░░ ░░ ░░    ░░    5       ▒▒ ░░ ▒▒ ▒▒ ░░   
+    4    ░░ ▒▒ ▒▒ ░░    ░░ ░░    4       ░░ ▒▒ ▓▓ ░░ ▒▒   
+    3    ░░ ░░ ░░    ▒▒ ▒▒ ▒▒    3       ░░ ░░ ▒▒    ▒▒ ░░
+    2 ▒▒ ░░    ░░ ▒▒ ░░ ▓▓ ▓▓    2 ▒▒    ░░ ░░    ▓▓ ░░ ▓▓
+    1 ▓▓ ▒▒    ░░ ░░ ▒▒ ▓▓ ██    1 ▒▒ ░░ ░░ ░░ ░░ ░░ ▒▒ ▒▒
+
+  rook   us (2.237 - 3.113)        them (2.187 - 2.783)
+      a  b  c  d  e  f  g  h       a  b  c  d  e  f  g  h
+    8 ▒▒ ▒▒ ▒▒ ▒▒ ▒▒ ▓▓ ▓▓ ▓▓    8 ▒▒ ▓▓ ░░ ░░ ░░ ░░ ▓▓ ▓▓
+    7 ▒▒ ▒▒ ▒▒ ▒▒ ▓▓ ▒▒ ▓▓ ██    7 ▒▒ ▒▒    ░░    ░░ ▒▒ ▒▒
+    6 ░░ ░░ ░░ ▒▒ ░░ ▒▒ ▒▒ ▒▒    6    ░░ ░░    ░░    ░░   
+    5    ░░ ░░       ░░ ░░ ▒▒    5       ░░    ▒▒ ░░ ▒▒ ░░
+    4       ░░ ░░    ░░ ░░ ▒▒    4       ░░    ░░ ░░ ▒▒ ░░
+    3 ░░       ░░    ░░ ▓▓ ▒▒    3 ░░ ▒▒ ▒▒ ░░ ░░ ▒▒ ██ ██
+    2 ░░          ░░ ░░ ▒▒ ▒▒    2 ▒▒ ██ ▓▓ ▒▒ ██ ██ ██ ▓▓
+    1 ██ ░░ ░░ ▒▒ ░░ ▒▒ ▓▓ ▓▓    1 ▓▓ ▓▓ ▓▓ ▒▒ ▓▓ ▓▓ ██ ██
+
+  queen  us (2.778 - 3.525)        them (2.871 - 3.656)
+      a  b  c  d  e  f  g  h       a  b  c  d  e  f  g  h
+    8 ██ ░░ ▒▒ ▒▒ ▒▒ ▓▓ ██ ██    8       ░░ ░░       ░░ ▒▒
+    7 ▒▒ ░░ ▒▒ ▒▒ ▓▓ ▓▓ ▓▓ ██    7 ░░    ░░          ░░ ▒▒
+    6 ▒▒ ▒▒ ▒▒ ░░ ▓▓ ▓▓ ▓▓ ▓▓    6 ░░ ░░ ░░    ░░    ░░ ░░
+    5 ▒▒ ▒▒ ▒▒ ░░ ░░ ▒▒ ░░ ▒▒    5 ▒▒ ░░       ░░    ▒▒ ▒▒
+    4 ░░    ░░ ░░    ░░ ░░ ▒▒    4 ░░ ░░ ░░ ░░ ░░ ░░ ▒▒ ▒▒
+    3 ░░ ░░          ▒▒ ░░ ░░    3 ░░ ▒▒ ▒▒ ░░ ░░ ▒▒ ▓▓ ██
+    2 ▒▒          ░░ ░░ ░░ ▒▒    2 ▒▒ ▓▓ ▒▒ ░░ ▒▒ ▓▓ ██ ▓▓
+    1 ▒▒    ░░ ░░ ░░ ░░ ░░ ▓▓    1 ▓▓ ▒▒ ░░ ▒▒ ▓▓ ▓▓ ▓▓ ██
+
+  king   us (3.384 - 4.814)        them (3.188 - 4.565)
+      a  b  c  d  e  f  g  h       a  b  c  d  e  f  g  h
+    8 ░░ ░░          ░░ ░░ ▒▒    8 ██ ██ ▓▓ ░░ ▒▒ ▒▒ ▒▒ ▒▒
+    7 ▒▒ ▒▒ ░░ ░░    ░░ ░░ ▒▒    7 ▓▓ ▓▓ ▒▒ ░░    ░░ ▒▒ ▒▒
+    6 ░░ ░░             ▒▒ ░░    6 ▓▓ ▒▒ ░░ ▒▒       ░░ ░░
+    5 ░░ ░░ ░░          ░░ ░░    5 ▒▒ ▒▒ ░░               
+    4    ░░ ░░ ░░          ░░    4 ▒▒ ▒▒             ░░ ░░
+    3 ▓▓ ▒▒ ▒▒ ░░       ░░ ▒▒    3 ▒▒ ▒▒ ░░ ░░ ░░    ▒▒ ░░
+    2 ▓▓ ▓▓ ▓▓ ▒▒ ░░ ░░ ░░ ▒▒    2 ▒▒ ▒▒ ▒▒ ░░ ░░ ▒▒ ▒▒ ░░
+    1 ██ ██ ▓▓ ▒▒ ▓▓ ░░ ▒▒ ▓▓    1 ▓▓ ▒▒ ▒▒    ░░ ░░ ░░ ▒▒
+
+bucket 0 ===========================================================
+  hidden1 (1536 -> 16):
+    weight:  mean 0.0629, median 0.0319, std 0.1103, max 1.2148, scale 4.93x, CoV 1.75, rel 0.03x, dead 18.9%
+    neurons: 13/16 active, row norm min 0.000 / mean 3.799 / max 7.108
+    bias:    mean +0.0112 (|b| mean 0.0213, max 0.0614)
+  hidden2 (16 -> 16):
+    weight:  mean 0.4754, median 0.2538, std 0.7261, max 2.9546, scale 3.80x, CoV 1.53, rel 0.25x, dead 18.8%
+    neurons: 16/16 active, row norm min 2.117 / mean 2.919 / max 4.205
+    bias:    mean +0.0378 (|b| mean 0.0724, max 0.1835)
+  output (16 -> 1):
+    weight:  mean 1.8662, median 1.3051, std 2.0958, max 4.3170, scale 14.93x, CoV 1.12, rel 1.00x, dead 0.0%
+    neurons: 1/1 active, row norm min 8.916 / mean 8.916 / max 8.916
+    bias:    mean +0.2061 (|b| mean 0.2061, max 0.2061)
+
+bucket 1 ===========================================================
+  hidden1 (1536 -> 16):
+    weight:  mean 0.0554, median 0.0290, std 0.0983, max 1.0751, scale 4.34x, CoV 1.77, rel 0.03x, dead 18.8%
+    neurons: 13/16 active, row norm min 0.000 / mean 3.434 / max 5.759
+    bias:    mean +0.0209 (|b| mean 0.0366, max 0.1143)
+  hidden2 (16 -> 16):
+    weight:  mean 0.3257, median 0.1796, std 0.5526, max 4.5289, scale 2.61x, CoV 1.70, rel 0.19x, dead 18.8%
+    neurons: 15/16 active, row norm min 0.971 / mean 2.027 / max 5.314
+    bias:    mean +0.0282 (|b| mean 0.0825, max 0.1905)
+  output (16 -> 1):
+    weight:  mean 1.7297, median 1.2861, std 1.9209, max 3.3089, scale 13.84x, CoV 1.11, rel 1.00x, dead 0.0%
+    neurons: 1/1 active, row norm min 7.725 / mean 7.725 / max 7.725
+    bias:    mean +0.0178 (|b| mean 0.0178, max 0.0178)
+
+bucket 2 ===========================================================
+  hidden1 (1536 -> 16):
+    weight:  mean 0.0488, median 0.0191, std 0.0963, max 0.9644, scale 3.83x, CoV 1.97, rel 0.03x, dead 31.5%
+    neurons: 11/16 active, row norm min 0.000 / mean 3.099 / max 5.842
+    bias:    mean +0.0242 (|b| mean 0.0342, max 0.1630)
+  hidden2 (16 -> 16):
+    weight:  mean 0.2905, median 0.1192, std 0.5171, max 3.0926, scale 2.32x, CoV 1.78, rel 0.16x, dead 31.2%
+    neurons: 16/16 active, row norm min 1.188 / mean 1.959 / max 3.468
+    bias:    mean +0.0241 (|b| mean 0.1026, max 0.3550)
+  output (16 -> 1):
+    weight:  mean 1.7975, median 1.7864, std 1.9311, max 3.6786, scale 14.38x, CoV 1.07, rel 1.00x, dead 0.0%
+    neurons: 1/1 active, row norm min 8.198 / mean 8.198 / max 8.198
+    bias:    mean +0.1017 (|b| mean 0.1017, max 0.1017)
+
+bucket 3 ===========================================================
+  hidden1 (1536 -> 16):
+    weight:  mean 0.0292, median 0.0000, std 0.0771, max 1.0417, scale 2.29x, CoV 2.65, rel 0.02x, dead 62.7%
+    neurons: 6/16 active, row norm min 0.000 / mean 1.819 / max 6.659
+    bias:    mean +0.0225 (|b| mean 0.0233, max 0.2382)
+  hidden2 (16 -> 16):
+    weight:  mean 0.1358, median 0.0000, std 0.3377, max 3.3472, scale 1.09x, CoV 2.49, rel 0.10x, dead 67.2%
+    neurons: 9/16 active, row norm min 0.000 / mean 1.129 / max 3.450
+    bias:    mean +0.0266 (|b| mean 0.0864, max 0.2724)
+  output (16 -> 1):
+    weight:  mean 1.4264, median 1.2427, std 1.6224, max 3.0722, scale 11.41x, CoV 1.14, rel 1.00x, dead 12.5%
+    neurons: 1/1 active, row norm min 6.668 / mean 6.668 / max 6.668
+    bias:    mean +0.0104 (|b| mean 0.0104, max 0.0104)
+
+bucket 4 ===========================================================
+  hidden1 (1536 -> 16):
+    weight:  mean 0.0207, median 0.0000, std 0.0765, max 1.3187, scale 1.62x, CoV 3.70, rel 0.01x, dead 75.4%
+    neurons: 4/16 active, row norm min 0.000 / mean 1.416 / max 9.012
+    bias:    mean +0.0350 (|b| mean 0.0350, max 0.1951)
+  hidden2 (16 -> 16):
+    weight:  mean 0.0847, median 0.0000, std 0.2103, max 1.4149, scale 0.68x, CoV 2.48, rel 0.05x, dead 75.0%
+    neurons: 3/16 active, row norm min 0.359 / mean 0.782 / max 1.634
+    bias:    mean -0.0703 (|b| mean 0.2022, max 0.4675)
+  output (16 -> 1):
+    weight:  mean 1.7261, median 1.7789, std 1.8537, max 3.2139, scale 13.81x, CoV 1.07, rel 1.00x, dead 0.0%
+    neurons: 1/1 active, row norm min 7.417 / mean 7.417 / max 7.417
+    bias:    mean +0.2662 (|b| mean 0.2662, max 0.2662)
+
+bucket 5 ===========================================================
+  hidden1 (1536 -> 16):
+    weight:  mean 0.0237, median 0.0000, std 0.0757, max 1.2017, scale 1.86x, CoV 3.19, rel 0.02x, dead 69.6%
+    neurons: 5/16 active, row norm min 0.000 / mean 1.589 / max 8.142
+    bias:    mean +0.0328 (|b| mean 0.0328, max 0.1796)
+  hidden2 (16 -> 16):
+    weight:  mean 0.0936, median 0.0000, std 0.2191, max 1.2855, scale 0.75x, CoV 2.34, rel 0.07x, dead 68.8%
+    neurons: 3/16 active, row norm min 0.436 / mean 0.833 / max 1.591
+    bias:    mean -0.0732 (|b| mean 0.1249, max 0.3476)
+  output (16 -> 1):
+    weight:  mean 1.3237, median 1.2675, std 1.4510, max 2.3698, scale 10.59x, CoV 1.10, rel 1.00x, dead 0.0%
+    neurons: 1/1 active, row norm min 5.804 / mean 5.804 / max 5.804
+    bias:    mean -0.0274 (|b| mean 0.0274, max 0.0274)
+
+bucket 6 ===========================================================
+  hidden1 (1536 -> 16):
+    weight:  mean 0.0134, median 0.0000, std 0.0528, max 1.5287, scale 1.05x, CoV 3.93, rel 0.01x, dead 82.1%
+    neurons: 3/16 active, row norm min 0.000 / mean 0.888 / max 5.612
+    bias:    mean +0.0097 (|b| mean 0.0171, max 0.1566)
+  hidden2 (16 -> 16):
+    weight:  mean 0.0720, median 0.0000, std 0.2363, max 1.4219, scale 0.58x, CoV 3.28, rel 0.07x, dead 85.9%
+    neurons: 5/16 active, row norm min 0.000 / mean 0.764 / max 1.940
+    bias:    mean -0.0227 (|b| mean 0.0888, max 0.2928)
+  output (16 -> 1):
+    weight:  mean 1.0463, median 1.1881, std 1.2651, max 2.6073, scale 8.37x, CoV 1.21, rel 1.00x, dead 25.0%
+    neurons: 1/1 active, row norm min 5.131 / mean 5.131 / max 5.131
+    bias:    mean -0.0641 (|b| mean 0.0641, max 0.0641)
+
+bucket 7 ===========================================================
+  hidden1 (1536 -> 16):
+    weight:  mean 0.0069, median 0.0000, std 0.0451, max 2.2461, scale 0.54x, CoV 6.52, rel 0.01x, dead 94.3%
+    neurons: 1/16 active, row norm min 0.000 / mean 0.442 / max 7.079
+    bias:    mean +0.0100 (|b| mean 0.0100, max 0.1604)
+  hidden2 (16 -> 16):
+    weight:  mean 0.0203, median 0.0000, std 0.1964, max 2.9705, scale 0.16x, CoV 9.69, rel 0.02x, dead 97.7%
+    neurons: 1/16 active, row norm min 0.000 / mean 0.324 / max 2.971
+    bias:    mean -0.0226 (|b| mean 0.0935, max 0.5216)
+  output (16 -> 1):
+    weight:  mean 0.8875, median 0.0000, std 1.5585, max 3.9994, scale 7.10x, CoV 1.76, rel 1.00x, dead 62.5%
+    neurons: 1/1 active, row norm min 6.260 / mean 6.260 / max 6.260
+    bias:    mean +0.1160 (|b| mean 0.1160, max 0.1160)
+
+summary (across 8 buckets) =========================================
+  scale (x init):
+    hidden1: avg 2.56x (range 0.54x - 4.93x)
+    hidden2: avg 1.50x (range 0.16x - 3.80x)
+    output : avg 11.80x (range 7.10x - 14.93x)
+
+  dead weight fraction:
+    hidden1: avg 56.7% (range 18.8% - 94.3%)
+    hidden2: avg 57.9% (range 18.8% - 97.7%)
+    output : avg 12.5% (range 0.0% - 62.5%)
+
+  active neurons (of 16):
+    hidden1: avg 7.0 (range 1.0 - 13.0)
+    hidden2: avg 8.5 (range 1.0 - 16.0)
+
+  CoV (std / mean |W|):
+    hidden1: avg 3.19 (range 1.75 - 6.52)
+    hidden2: avg 3.16 (range 1.53 - 9.69)
+    output : avg 1.20 (range 1.07 - 1.76)
+
+  rel (x bucket output mean |W|):
+    hidden1: avg 0.02x (range 0.01x - 0.03x)
+    hidden2: avg 0.11x (range 0.02x - 0.25x)
+
+bucket output similarity (cosine) ==================================
+         b1    b2    b3    b4    b5    b6    b7
+  b0   0.02  0.28 -0.23  0.42  0.11 -0.35  0.17
+  b1        -0.09 -0.26 -0.23 -0.06  0.21 -0.16
+  b2              -0.18 -0.06  0.11  0.07 -0.14
+  b3                    -0.34  0.34  0.10  0.16
+  b4                           0.09 -0.24  0.04
+  b5                                -0.02  0.01
+  b6                                       0.06

@@ -1,7 +1,6 @@
 use candle_nn::{VarBuilder, VarMap};
 use cozy_chess::Color;
-use evaluation::NNUE;
-use utils::Node;
+use utils::{Node, flip_eval_perspective};
 
 use crate::{
     encoding::encode_board_bitset,
@@ -9,14 +8,13 @@ use crate::{
 };
 use candle_core::{DType, Device};
 
-/// NNUE evaluator for inference.
-///
-/// The `network` field exists because candle's VarMap requires creating the network structure
-/// first (which registers tensors), then loading weights. After loading, `enable_nnue()` creates
-/// the quantized network from the loaded weights.
+/// NNUE evaluator for inference. The full-precision network field is kept
+/// around because candle's VarMap wants to register tensors before weights are
+/// loaded; enable_nnue then quantizes it into the nnue field for actual eval.
 pub struct Evaluator {
     /// Quantized network for fast inference
     nnue: Option<NNUENetwork>,
+
     /// Full-precision network used to load weights before quantization
     network: Network,
 }
@@ -35,16 +33,12 @@ impl Evaluator {
     pub fn enable_nnue(&mut self) {
         self.nnue = Some(NNUENetwork::from_network(&self.network).unwrap());
     }
-}
 
-impl NNUE for Evaluator {
-    fn name(&self) -> String {
-        "NNUE".to_string()
-    }
-
-    /// Evaluates the position using the neural network.
-    fn evaluate(&mut self, node: &Node) -> i16 {
+    /// Runs the NNUE forward pass and returns the score from white's perspective.
+    pub fn evaluate(&mut self, node: &Node) -> i16 {
         let board = node.board();
+        let stm = board.side_to_move();
+
         let white_attacks = node.attacks_for(Color::White);
         let black_attacks = node.attacks_for(Color::Black);
         let white_support = node.support_for(Color::White);
@@ -52,7 +46,7 @@ impl NNUE for Evaluator {
         let white_threats = node.threats_for(Color::White);
         let black_threats = node.threats_for(Color::Black);
 
-        let bitset = encode_board_bitset(
+        let white_bits = encode_board_bitset(
             board,
             white_attacks,
             black_attacks,
@@ -60,14 +54,30 @@ impl NNUE for Evaluator {
             black_support,
             white_threats,
             black_threats,
+            Color::White,
+        );
+        let black_bits = encode_board_bitset(
+            board,
+            white_attacks,
+            black_attacks,
+            white_support,
+            black_support,
+            white_threats,
+            black_threats,
+            Color::Black,
         );
 
         let bucket = output_bucket(board);
 
-        self.nnue
+        let stm_score = self
+            .nnue
             .as_mut()
             .expect("NNUE network not initialized - call enable_nnue() first")
-            .forward(&bitset, bucket)
-            .clamp(i16::MIN as f32, i16::MAX as f32) as i16
+            .forward(&white_bits, &black_bits, stm, bucket);
+
+        let stm_score = stm_score.clamp(i16::MIN as f32, i16::MAX as f32) as i16;
+
+        // Return the score as white (as needed by the search)
+        flip_eval_perspective(stm, stm_score)
     }
 }

@@ -1,0 +1,54 @@
+[package]
+name = "training"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = "NNUE training and data generation tools"
+repository = { workspace = true }
+
+[dependencies]
+config = { path = "../config" }
+search = { path = "../search" }
+nnue = { path = "../nnue" }
+uci = { path = "../uci" }
+utils = { path = "../utils" }
+
+ahash = { workspace = true }
+cozy-chess = { workspace = true }
+chrono = { workspace = true }
+ctrlc = { workspace = true }
+log = { workspace = true }
+rayon = { workspace = true }
+rand = { workspace = true }
+num_cpus = { workspace = true }
+simplelog = { workspace = true }
+clap = { workspace = true }
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+indicatif = { workspace = true }
+tempfile = { workspace = true }
+hyperloglogplus = { workspace = true }
+pyrrhic-rs = "0.2"
+
+[features]
+default = []
+cuda = [
+    "candle-core/cuda",
+    "candle-nn/cuda",
+]
+metal = [
+    "candle-core/metal",
+    "candle-nn/metal",
+]
+
+[[bin]]
+name = "generate"
+path = "src/bin/generate/main.rs"
+
+[[bin]]
+name = "train"
+path = "src/bin/train/main.rs"
+
+[lints]
+workspace = true

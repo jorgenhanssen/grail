@@ -31,7 +31,7 @@ impl SearchController {
         }
     }
 
-    /// Returns the hard deadline as an `Instant`, if time-controlled.
+    /// Hard deadline as an Instant, or None if there is no time control.
     pub fn deadline(&self) -> Option<Instant> {
         self.time_budget
             .map(|b| self.start_time + std::time::Duration::from_millis(b.hard_limit()))
@@ -89,7 +89,6 @@ impl SearchController {
         None
     }
 
-    /// Returns the total elapsed time since search started.
     pub fn elapsed(&self) -> std::time::Duration {
         self.start_time.elapsed()
     }

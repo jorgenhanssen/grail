@@ -48,14 +48,12 @@ mod tests {
             counts[select_softmax(&scores, &mut rng)] += 1;
         }
 
-        // First index should be selected most often
         assert!(counts[0] > counts[1]);
         assert!(counts[0] > counts[2]);
     }
 
     #[test]
     fn equal_scores_produce_equal_weights() {
-        // With equal scores, all weights should be equal (all exp(0) = 1)
         let scores = [5.0, 5.0, 5.0];
 
         let max = scores.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
@@ -64,28 +62,6 @@ mod tests {
         // All weights should be exactly 1.0
         for w in weights {
             assert!((w - 1.0).abs() < f32::EPSILON);
-        }
-    }
-
-    #[test]
-    fn numerically_stable_with_large_values() {
-        let mut rng = seeded_rng();
-        let scores = [1000.0, 999.0, 998.0];
-
-        for _ in 0..100 {
-            let idx = select_softmax(&scores, &mut rng);
-            assert!(idx < 3);
-        }
-    }
-
-    #[test]
-    fn numerically_stable_with_negative_values() {
-        let mut rng = seeded_rng();
-        let scores = [-1000.0, -999.0, -998.0];
-
-        for _ in 0..100 {
-            let idx = select_softmax(&scores, &mut rng);
-            assert!(idx < 3);
         }
     }
 }

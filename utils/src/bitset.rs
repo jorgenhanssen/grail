@@ -1,7 +1,4 @@
-/// A packed bit array that holds `BITS` bits.
-///
-/// The bits are stored in an array of `u64` values, automatically sized
-/// to fit the requested number of bits.
+/// A packed bit array that holds a specific number of bits.
 #[derive(Clone, Copy)]
 pub struct Bitset<const BITS: usize>([u64; BITS.div_ceil(64)])
 where
@@ -41,7 +38,7 @@ where
         self.0[index] = value;
     }
 
-    /// Get the underlying `u64` array.
+    /// Get the underlying u64 array.
     pub fn as_array(&self) -> &[u64; BITS.div_ceil(64)] {
         &self.0
     }
@@ -118,10 +115,8 @@ mod tests {
     #[test]
     fn test_cross_word_boundary() {
         let mut bits: Bitset<128> = Bitset::default();
-
-        // Set bits at word boundaries
-        bits.set(63); // Last bit of first word
-        bits.set(64); // First bit of second word
+        bits.set(63);
+        bits.set(64);
 
         assert!(bits.get(63));
         assert!(bits.get(64));
@@ -145,9 +140,6 @@ mod tests {
         let mut diffs = Vec::new();
         a.for_each_diff(&b, |idx| diffs.push(idx));
 
-        // Bit 0: in a, not in b
-        // Bit 100: in b, not in a
-        // Bits 10 and 64: same in both (no diff)
         assert_eq!(diffs.len(), 2);
         assert!(diffs.contains(&0));
         assert!(diffs.contains(&100));
@@ -174,38 +166,26 @@ mod tests {
     #[test]
     fn test_set_u64() {
         let mut bits: Bitset<256> = Bitset::default();
-
-        // Set all bits in the second word (bits 64-127)
         bits.set_u64(1, u64::MAX);
 
-        // Bits 0-63 should be unset
         for i in 0..64 {
-            assert!(!bits.get(i), "bit {} should be unset", i);
+            assert!(!bits.get(i));
         }
-        // Bits 64-127 should be set
         for i in 64..128 {
-            assert!(bits.get(i), "bit {} should be set", i);
+            assert!(bits.get(i));
         }
-        // Bits 128+ should be unset
         for i in 128..256 {
-            assert!(!bits.get(i), "bit {} should be unset", i);
+            assert!(!bits.get(i));
         }
     }
 
     #[test]
     fn test_set_u64_specific_pattern() {
         let mut bits: Bitset<128> = Bitset::default();
-
-        // Set a specific pattern: alternating bits
         bits.set_u64(0, 0xAAAAAAAAAAAAAAAA);
 
-        // Even bits should be unset, odd bits should be set
         for i in 0..64 {
-            if i % 2 == 0 {
-                assert!(!bits.get(i), "bit {} should be unset", i);
-            } else {
-                assert!(bits.get(i), "bit {} should be set", i);
-            }
+            assert_eq!(bits.get(i), i % 2 == 1);
         }
     }
 }

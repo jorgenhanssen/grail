@@ -1,8 +1,8 @@
 use std::sync::mpsc::Sender;
 
+use crate::scores::{MATE_VALUE, SCORE_INF};
 use arrayvec::ArrayVec;
 use cozy_chess::{Move, Piece};
-use evaluation::scores::{MATE_VALUE, SCORE_INF};
 use uci::{
     UciOutput,
     commands::{GoParams, Info, Score},
@@ -11,10 +11,10 @@ use utils::{Node, NodeType, has_legal_moves};
 
 use crate::{
     aspiration::Pass,
+    history::PieceTo,
     move_ordering::{MAX_CAPTURES, MAX_QUIETS, MainMoveGenerator},
     pv::PvLine,
     result::SearchResult,
-    searcher::reduction::Reduction,
     stack::SearchNode,
     time_control::SearchController,
     transposition::{Bound, ProbeResult},
@@ -48,6 +48,7 @@ impl Searcher {
         let mut controller =
             SearchController::new(params, &self.board, self.config.move_overhead.value as u64);
         self.deadline = controller.deadline();
+        self.node_limit = params.nodes;
 
         let pv_count = self.config.multi_pv.value as usize;
         let root = Node::new(self.board.clone(), NodeType::Pv);
@@ -62,6 +63,7 @@ impl Searcher {
             }
 
             self.multi_pv.reset_excluded();
+            self.root_depth = depth;
 
             for pv_index in 0..pv_count {
                 let (pv, failures) = self.search_pv(&root, depth, pv_index);
@@ -214,7 +216,7 @@ impl Searcher {
 
         let singular = self.search_stack.current().and_then(|n| n.singular);
 
-        self.check_time();
+        self.check_limits();
         if self.shared.is_stopped() {
             return 0;
         }
@@ -222,6 +224,12 @@ impl Searcher {
 
         if ply > 0 && self.is_forced_draw(node) {
             return self.draw_value();
+        }
+
+        if ply > 0 {
+            if let Some(score) = self.probe_tb_wdl(node, depth) {
+                return score;
+            }
         }
 
         // As deep as we can go, so return static eval
@@ -440,14 +448,7 @@ impl Searcher {
 
                 bounds.raise_alpha(best_value);
                 if bounds.is_cutoff(bounds.alpha) {
-                    self.on_fail_high(
-                        node,
-                        m,
-                        depth,
-                        is_quiet,
-                        &quiets_searched,
-                        &captures_searched,
-                    );
+                    self.on_fail_high(node, m, depth, &quiets_searched, &captures_searched);
                     break;
                 }
 
@@ -499,8 +500,8 @@ impl Searcher {
         best_value
     }
 
-    /// Searches a single move with per-move pruning and LMR.
-    /// Returns `None` if pruned, otherwise (score, is_quiet, searched_depth).
+    /// Searches a single move.
+    /// Returns None if pruned, otherwise (score, is_quiet, searched_depth).
     #[allow(clippy::too_many_arguments)]
     fn search_move(
         &mut self,
@@ -548,7 +549,24 @@ impl Searcher {
             return None;
         }
 
-        let reduction = match self.get_reduction(
+        let hist = if is_cap {
+            self.capture_history.get(node.board(), m)
+        } else {
+            self.history_heuristic.get(moved_color, m.from, m.to)
+        };
+        let cont_hist = {
+            let prev_moves = self
+                .continuation_history
+                .get_prev_moves(self.search_stack.as_slice());
+            let pt = PieceTo::new(moved_color, moved_piece, m.to);
+            self.continuation_history.get(&prev_moves, pt)
+        };
+
+        if self.try_history_prune(depth, is_pv_move, is_cap, is_improving, hist, cont_hist) {
+            return None;
+        }
+
+        let reduction = self.get_reduction(
             ply,
             depth,
             is_pv_move,
@@ -558,12 +576,9 @@ impl Searcher {
             move_index,
             node,
             &child,
-            m,
-            &self.lmr,
-        ) {
-            Reduction::Reduce(r) => r,
-            Reduction::Prune => return None,
-        };
+            hist,
+            cont_hist,
+        );
 
         let extension = self.get_extension(node, &m, moved_piece, is_cap);
         let extension = (extension + extra_extension).max(0) as u8;
@@ -627,58 +642,48 @@ impl Searcher {
         Some((value, is_quiet, adjusted_depth))
     }
 
-    /// Handler called if a search fails high - updates history tables.
-    #[allow(clippy::too_many_arguments)]
+    /// Updates the history tables after a beta cutoff: boost the cutting move,
+    /// apply malus to the moves we searched before it.
     pub(super) fn on_fail_high(
         &mut self,
         node: &Node,
         mv: Move,
         depth: u8,
-        is_quiet: bool,
         quiets_searched: &[Move],
         captures_searched: &[Move],
     ) {
         let board = node.board();
+        let is_quiet = !node.is_capture(mv);
 
         let prev_moves = self
             .continuation_history
             .get_prev_moves(self.search_stack.as_slice());
+
         if is_quiet {
-            // Boost the quiet move that caused the cutoff
             let bonus = self.history_heuristic.get_bonus(depth);
             self.history_heuristic.update(board, mv, bonus);
 
-            // Continuation history bonus for quiet cutoff move
             let cont_bonus = self.continuation_history.get_bonus(depth);
             self.continuation_history
                 .update_quiet_all(board, &prev_moves, mv, cont_bonus);
         } else {
-            // Boost the capture that caused the cutoff
             let bonus = self.capture_history.get_bonus(depth);
             self.capture_history.update_capture(board, mv, bonus);
         }
 
         if !quiets_searched.is_empty() {
-            // Apply malus to all previously searched quiet moves
             let quiet_malus = self.history_heuristic.get_malus(depth);
-            for &q in quiets_searched {
-                self.history_heuristic.update(board, q, quiet_malus);
-            }
-
-            // Continuation history malus for previously searched quiets
             let cont_malus = self.continuation_history.get_malus(depth);
             for &q in quiets_searched {
+                self.history_heuristic.update(board, q, quiet_malus);
                 self.continuation_history
                     .update_quiet_all(board, &prev_moves, q, cont_malus);
             }
         }
 
-        if !captures_searched.is_empty() {
-            // Apply malus to all previously searched captures
-            let capture_malus = self.capture_history.get_malus(depth);
-            for &c in captures_searched {
-                self.capture_history.update_capture(board, c, capture_malus);
-            }
+        let capture_malus = self.capture_history.get_malus(depth);
+        for &c in captures_searched {
+            self.capture_history.update_capture(board, c, capture_malus);
         }
     }
 }

@@ -89,13 +89,11 @@ impl SearchStack {
         }
     }
 
-    /// Returns the current node (if any).
     pub fn current(&self) -> Option<&SearchNode> {
         self.nodes.last()
     }
 
     /// Returns true if eval improved vs 2 plies ago (same side to move).
-    /// Used for more aggressive pruning when position is getting worse.
     pub fn is_improving(&self) -> bool {
         const IMPROVING_MARGIN: i16 = 20;
 

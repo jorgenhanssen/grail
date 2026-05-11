@@ -1,4 +1,4 @@
-use evaluation::scores::{MATE_SCORE_BOUND, SCORE_INF};
+use crate::scores::{MATE_SCORE_BOUND, SCORE_INF};
 
 use crate::utils::Bounds;
 
@@ -69,12 +69,12 @@ impl AspirationWindow {
             return Pass::Hit(score);
         }
         if score <= self.bounds.alpha {
-            // fail‑low – widen only the low side
+            // fail-low: widen only the low side
             let span = (self.bounds.beta - score).abs().max(self.start_half) * self.widen;
             self.bounds.alpha = score.saturating_sub(span);
             Pass::FailLow
         } else {
-            // fail‑high
+            // fail-high
             let span = (score - self.bounds.alpha).abs().max(self.start_half) * self.widen;
             self.bounds.beta = score.saturating_add(span);
             Pass::FailHigh

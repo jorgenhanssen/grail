@@ -1,14 +1,8 @@
-use cozy_chess::Move;
 use utils::{FracPly, Node, creates_threat, evades_threat};
 
-use crate::{lmr::LmrTable, utils::near_root};
+use crate::utils::near_root;
 
 use super::Searcher;
-
-pub enum Reduction {
-    Reduce(u8),
-    Prune,
-}
 
 impl Searcher {
     /// Late move reductions: reduce search depth for moves unlikely to be best.
@@ -26,18 +20,10 @@ impl Searcher {
         move_index: i32,
         parent: &Node,
         child: &Node,
-        m: Move,
-        lmr_table: &LmrTable,
-    ) -> Reduction {
-        if is_pv_move {
-            return Reduction::Reduce(0);
-        }
-
-        let hist = self
-            .history_heuristic
-            .get(parent.side_to_move(), m.from, m.to);
-
-        let mut reduction = lmr_table.get(depth, move_index);
+        hist: i16,
+        cont_hist: i16,
+    ) -> u8 {
+        let mut reduction = self.lmr.get(depth, move_index);
 
         // Reduce more
         if parent.is_cut() {
@@ -45,14 +31,26 @@ impl Searcher {
         }
         if !is_improving {
             reduction += FracPly(self.config.reduction_not_improving.value);
-
-            if !is_capture && hist < self.history_heuristic.reduction_threshold() {
-                reduction += FracPly(self.config.reduction_bad_history.value);
-            }
         }
+
+        let hist_divisor = if is_capture {
+            self.config.reduction_capture_history_divisor.value
+        } else {
+            self.config.reduction_history_divisor.value
+        };
+        history_reduction(&mut reduction, hist, hist_divisor);
+
+        history_reduction(
+            &mut reduction,
+            cont_hist,
+            self.config.reduction_cont_hist_divisor.value,
+        );
 
         // Reduce less
         if reduction > FracPly(0) {
+            if is_pv_move {
+                reduction -= FracPly(self.config.anti_reduction_pv_move.value);
+            }
             if near_root(ply, depth) {
                 reduction -= FracPly(self.config.anti_reduction_near_root.value);
             }
@@ -70,18 +68,16 @@ impl Searcher {
             }
         }
 
-        let r = reduction.whole().min(depth.saturating_sub(2));
+        reduction.whole().min(depth.saturating_sub(2))
+    }
+}
 
-        // Prune when bad history if it would barely search anyway
-        let reduced_depth = depth.saturating_sub(r);
-        if !is_capture
-            && !is_improving
-            && hist < self.history_heuristic.prune_threshold()
-            && reduced_depth <= 1
-        {
-            return Reduction::Prune;
-        }
+fn history_reduction(reduction: &mut FracPly, score: i16, divisor: i32) {
+    let delta = FracPly((score.abs() as i32 * FracPly::ONE as i32 / divisor) as u16);
 
-        Reduction::Reduce(r)
+    if score > 0 {
+        *reduction -= delta
+    } else {
+        *reduction += delta
     }
 }

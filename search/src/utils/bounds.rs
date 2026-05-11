@@ -1,10 +1,6 @@
-use evaluation::scores::SCORE_INF;
+use crate::scores::SCORE_INF;
 
 /// Alpha-beta search bounds.
-///
-/// In negamax, `alpha` is the best score the maximizing player can guarantee,
-/// and `beta` is the best score the opponent can guarantee. The search tries
-/// to find a score in the window (alpha, beta).
 ///
 /// <https://www.chessprogramming.org/Alpha-Beta>
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

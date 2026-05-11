@@ -1,11 +1,11 @@
 [workspace]
 resolver = "2"
 members = [
+  "config",
   "core",
-  "evaluation",
-  "hce",
   "search",
-  "nnue", 
+  "nnue",
+  "training",
   "uci", 
   "utils",
 ]

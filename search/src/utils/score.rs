@@ -1,4 +1,4 @@
-use evaluation::scores::MATE_VALUE;
+use crate::scores::MATE_VALUE;
 use uci::commands::Score;
 
 pub fn convert_mate_score(score: i16) -> Score {
@@ -20,39 +20,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_convert_mate_score_positive() {
-        // Mate in 1 = MATE_VALUE - 1 ply
-        let score = MATE_VALUE - 1;
-        let result = convert_mate_score(score);
-        assert!(matches!(result, Score::Mate(m) if m > 0));
+    fn mate_score_to_mate_in() {
+        let cases: &[(i16, i16)] = &[
+            (MATE_VALUE - 1, 1),
+            (MATE_VALUE - 3, 2),
+            (MATE_VALUE - 5, 3),
+            (-(MATE_VALUE - 1), -1),
+            (-(MATE_VALUE - 3), -2),
+        ];
+        for &(score, want) in cases {
+            assert!(
+                matches!(convert_mate_score(score), Score::Mate(m) if m == want),
+                "score={score} want=Mate({want})",
+            );
+        }
     }
 
     #[test]
-    fn test_convert_mate_score_negative() {
-        // Getting mated in 1 = -(MATE_VALUE - 1)
-        let score = -(MATE_VALUE - 1);
-        let result = convert_mate_score(score);
-        assert!(matches!(result, Score::Mate(m) if m < 0));
-    }
-
-    #[test]
-    fn test_convert_mate_in_one() {
-        // Mate in 1 ply = mate in 1 move
-        let score = MATE_VALUE - 1;
-        let result = convert_mate_score(score);
-        assert!(matches!(result, Score::Mate(1)));
-    }
-
-    #[test]
-    fn test_convert_mate_in_two() {
-        // Mate in 3 plies = mate in 2 moves (we move, they move, we mate)
-        let score = MATE_VALUE - 3;
-        let result = convert_mate_score(score);
-        assert!(matches!(result, Score::Mate(2)));
-    }
-
-    #[test]
-    fn test_convert_centipawn_score() {
+    fn centipawn_score_passthrough() {
         assert!(matches!(
             convert_centipawn_score(100),
             Score::Centipawns(100)

@@ -3,15 +3,15 @@ use std::time::Instant;
 
 use ahash::AHashSet;
 use cozy_chess::Board;
-use evaluation::{HCE, NNUE};
 use uci::{UciOutput, commands::Info, pv_to_uci};
 
-use crate::pv::{MultiPvSearchContext, PvLine, PvTable};
+use config::EngineConfig;
 
+use crate::pv::{MultiPvSearchContext, PvLine, PvTable};
 use crate::{
-    EngineConfig,
     history::{CaptureHistory, ContinuationHistory, HistoryHeuristic},
     lmr::LmrTable,
+    scores::MATE_VALUE,
     stack::SearchStack,
     utils::{convert_centipawn_score, convert_mate_score},
 };
@@ -39,10 +39,8 @@ pub struct Searcher {
     /// Configuration for the engine
     config: EngineConfig,
 
-    /// Hand-crafted evaluation
-    hce: Box<dyn HCE>,
     /// Neural network evaluation
-    nnue: Option<Box<dyn NNUE>>,
+    evaluator: nnue::Evaluator,
 
     /// Multi-PV search context (exclusions, PVs, etc)
     multi_pv: MultiPvSearchContext,
@@ -57,6 +55,9 @@ pub struct Searcher {
 
     /// Selective depth (max ply reached including quiescence - deepest we have gotten)
     max_ply_reached: u8,
+
+    /// Current iterative deepening depth
+    root_depth: u8,
 
     /// Tracks active search path - used for repetition, improving, etc.
     search_stack: SearchStack,
@@ -76,6 +77,10 @@ pub struct Searcher {
 
     /// Hard time deadline for the search (main searcher).
     deadline: Option<Instant>,
+
+    /// Hard node-count limit for the search. When the cumulative node count
+    /// (across all threads) reaches this, the search is stopped.
+    node_limit: Option<u64>,
 }
 
 impl Searcher {
@@ -89,16 +94,14 @@ impl Searcher {
         shared: Arc<SharedSearcherState>,
         thread_id: usize,
         config: &EngineConfig,
-        hce: Box<dyn HCE>,
-        nnue: Option<Box<dyn NNUE>>,
+        evaluator: nnue::Evaluator,
     ) -> Self {
         let mut instance = Self {
             shared,
             thread_id,
             config: config.clone(),
 
-            hce,
-            nnue,
+            evaluator,
 
             multi_pv: MultiPvSearchContext::new(),
 
@@ -106,18 +109,20 @@ impl Searcher {
             game_history: AHashSet::new(),
             nodes: 0,
             max_ply_reached: 1,
+            root_depth: 0,
 
             search_stack: SearchStack::with_capacity(MAX_DEPTH),
 
-            history_heuristic: HistoryHeuristic::new(1, 1, 1, 1, 1, 1),
+            history_heuristic: HistoryHeuristic::new(1, 1, 1),
             capture_history: CaptureHistory::new(1, 1, 1),
             continuation_history: Box::new(ContinuationHistory::new(1, 1, 1, 1)),
 
-            lmr: LmrTable::new(config.lmr_divisor.value as f32 / 100.0),
+            lmr: LmrTable::new(config.lmr_divisor.value),
 
             pv_table: PvTable::new(),
 
             deadline: None,
+            node_limit: None,
         };
 
         instance.configure(config);
@@ -126,7 +131,6 @@ impl Searcher {
 
     pub fn configure(&mut self, config: &EngineConfig) {
         self.config = config.clone();
-        self.hce = Box::new(hce::Evaluator::new(config.get_hce_config()));
 
         if !self.history_heuristic.matches_config(config) {
             self.history_heuristic.configure(config);
@@ -137,12 +141,8 @@ impl Searcher {
         if !self.continuation_history.matches_config(config) {
             self.continuation_history.configure(config);
         }
-    }
-
-    pub fn name(&self) -> String {
-        match &self.nnue {
-            Some(nnue) => format!("Negamax ({})", nnue.name()),
-            None => format!("Negamax ({})", self.hce.name()),
+        if !self.lmr.matches_config(config) {
+            self.lmr.configure(config);
         }
     }
 
@@ -172,10 +172,25 @@ impl Searcher {
         }
     }
 
-    /// Checks if the hard time deadline has been reached.
-    fn check_time(&self) {
+    /// Checks if any hard search limit has been reached (time deadline or
+    /// total node count). Sets the shared stop flag when triggered.
+    fn check_limits(&self) {
+        if !self.nodes.is_multiple_of(Self::TIME_CHECK_INTERVAL) {
+            return;
+        }
+
         if let Some(deadline) = self.deadline {
-            if self.nodes.is_multiple_of(Self::TIME_CHECK_INTERVAL) && Instant::now() >= deadline {
+            if Instant::now() >= deadline {
+                self.shared.set_stop(true);
+                return;
+            }
+        }
+
+        if let Some(node_limit) = self.node_limit {
+            // shared.total_nodes() lags by up to NODE_SYNC_INTERVAL per worker,
+            // so add the local count for an accurate-enough estimate.
+            let total = self.shared.total_nodes() + self.nodes;
+            if total >= node_limit {
                 self.shared.set_stop(true);
             }
         }
@@ -192,7 +207,7 @@ impl Searcher {
         pv: &PvLine,
         elapsed: std::time::Duration,
     ) {
-        let found_checkmate = pv.score.abs() >= evaluation::scores::MATE_VALUE - MAX_DEPTH as i16;
+        let found_checkmate = pv.score.abs() >= MATE_VALUE - MAX_DEPTH as i16;
         let total = self.total_nodes();
         let secs = elapsed.as_secs_f64();
         let nps = if secs > 0.0 {

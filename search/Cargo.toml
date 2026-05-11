@@ -8,11 +8,11 @@ description = { workspace = true }
 repository = { workspace = true }
 
 [features]
-tuning = []
+tuning = ["config/tuning"]
 
 [dependencies]
-evaluation = { path = "../evaluation" }
-hce = { path = "../hce" }
+config = { path = "../config" }
+nnue = { path = "../nnue" }
 uci = { path = "../uci" }
 utils = { path = "../utils" }
 
@@ -21,6 +21,7 @@ cozy-chess = { workspace = true }
 ahash = { workspace = true }
 log = { workspace = true }
 rand = { workspace = true }
+pyrrhic-rs = "0.2"
 
 [lib]
 name = "search"

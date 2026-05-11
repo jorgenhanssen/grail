@@ -6,7 +6,10 @@ use crate::encoding::NUM_FEATURES;
 use super::{EMBEDDING_SIZE, HIDDEN_SIZE, OUTPUT_BUCKETS};
 
 /// Full-precision network for training and weight loading.
-/// Shared embedding layer with phase-specific output stacks.
+///
+/// A single embedding layer is run over both perspectives and the outputs are
+/// concatenated [...stm, ...nstm] before being fed to the phase-specific hidden
+/// stack.
 pub struct Network {
     pub embedding: Linear,
     pub buckets: [OutputStack; OUTPUT_BUCKETS],
@@ -14,12 +17,10 @@ pub struct Network {
 
 impl Network {
     pub fn new(vs: &VarBuilder) -> Result<Self> {
-        // Note: unwrap() is used here because layer creation only fails on programmer error
-        // (wrong dimensions). This keeps the array initialization clean.
         let buckets: [OutputStack; OUTPUT_BUCKETS] = std::array::from_fn(|i| {
             let bvs = vs.pp(format!("bucket_{}", i));
             OutputStack {
-                hidden1: linear(EMBEDDING_SIZE, HIDDEN_SIZE, bvs.pp("hidden1")).unwrap(),
+                hidden1: linear(2 * EMBEDDING_SIZE, HIDDEN_SIZE, bvs.pp("hidden1")).unwrap(),
                 hidden2: linear(HIDDEN_SIZE, HIDDEN_SIZE, bvs.pp("hidden2")).unwrap(),
                 output: linear(HIDDEN_SIZE, 1, bvs.pp("output")).unwrap(),
             }
@@ -31,16 +32,15 @@ impl Network {
         })
     }
 
-    /// Forward pass for training.
-    ///
-    /// Computes all bucket outputs, then gathers the correct one per sample.
-    /// During backprop, `gather` scatters gradients only to each sample's
-    /// selected bucket—unused buckets receive zero gradient for that sample.
-    #[inline]
-    pub fn forward(&self, x: &Tensor, buckets: &[usize]) -> Result<Tensor> {
-        let embedding_out = x.apply(&self.embedding)?.relu()?;
+    /// Training forward pass. Runs every bucket and then gathers the one each
+    /// sample actually wants (unused buckets get zero gradient through gather).
+    /// stm/nstm are the position encoded from each side, output is in stm
+    /// space so the caller has to sign-flip if they want it as white.
+    pub fn forward(&self, stm: &Tensor, nstm: &Tensor, buckets: &[usize]) -> Result<Tensor> {
+        let stm_embed = stm.apply(&self.embedding)?.relu()?;
+        let nstm_embed = nstm.apply(&self.embedding)?.relu()?;
+        let embedding_out = Tensor::cat(&[stm_embed, nstm_embed], 1)?;
 
-        // Compute all bucket outputs: [batch, OUTPUT_BUCKETS]
         let all_outputs: Vec<_> = self
             .buckets
             .iter()
@@ -48,12 +48,12 @@ impl Network {
             .collect::<Result<_>>()?;
         let stacked = Tensor::cat(&all_outputs, 1)?;
 
-        // Select each sample's bucket output: [batch, 1]
         let indices = Tensor::from_vec(
             buckets.iter().map(|&i| i as u32).collect::<Vec<_>>(),
             (buckets.len(), 1),
             stacked.device(),
         )?;
+
         stacked.gather(&indices, 1)
     }
 }

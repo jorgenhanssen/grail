@@ -1,11 +1,12 @@
+use crate::scores::MATE_VALUE;
 use cozy_chess::{Board, Color, Move, Square};
-use evaluation::scores::MATE_VALUE;
 use utils::{
     MINOR_PIECES, NON_PAWN_PIECES, PAWN_PIECES, generate_zobrist_table, is_capture, zobrist_key,
 };
 
+use config::EngineConfig;
+
 use super::utils::apply_gravity;
-use crate::EngineConfig;
 
 // Zobrist tables for correction history indexing.
 const PAWN_ZOBRIST: [u64; Square::NUM * Color::NUM * PAWN_PIECES.len()] =
@@ -17,9 +18,9 @@ const NON_PAWN_ZOBRIST: [u64; Square::NUM * NON_PAWN_PIECES.len()] =
 
 /// Static evaluation correction history.
 ///
-/// Records the difference between static evaluation and search scores,
-/// indexed by board features. Used to adjust future static evaluations
-/// in positions with similar features.
+/// Tracks the gap between static eval and what the search actually returns,
+/// bucketed by board features. Future evals in similar positions get nudged
+/// toward the searched value.
 ///
 /// Based on Stockfish's implementation.
 /// <https://www.chessprogramming.org/Static_Evaluation_Correction_History>
@@ -30,11 +31,8 @@ pub struct CorrectionHistory {
     white_nonpawn_correction: Vec<i16>,
     black_nonpawn_correction: Vec<i16>,
 
-    /// Table size per color
     table_size: usize,
-
-    /// Maximum absolute correction value
-    max_value: i32,
+    max_correction: i32,
 
     // Weights for combining corrections
     pawn_weight: i32,
@@ -50,7 +48,7 @@ pub struct CorrectionHistory {
 impl CorrectionHistory {
     pub fn new(
         table_size: usize,
-        max_value: i32,
+        max_correction: i32,
         pawn_weight: i32,
         minor_weight: i32,
         nonpawn_weight: i32,
@@ -65,7 +63,7 @@ impl CorrectionHistory {
             white_nonpawn_correction: vec![0; total_size],
             black_nonpawn_correction: vec![0; total_size],
             table_size,
-            max_value,
+            max_correction,
             pawn_weight,
             minor_weight,
             nonpawn_weight,
@@ -85,7 +83,7 @@ impl CorrectionHistory {
             self.black_nonpawn_correction = vec![0; total_size];
             self.table_size = new_table_size;
         }
-        self.max_value = config.correction_history_max_value.value;
+        self.max_correction = config.correction_history_max_correction.value;
         self.pawn_weight = config.correction_pawn_weight.value;
         self.minor_weight = config.correction_minor_weight.value;
         self.nonpawn_weight = config.correction_nonpawn_weight.value;
@@ -97,7 +95,7 @@ impl CorrectionHistory {
 
     pub fn matches_config(&self, config: &EngineConfig) -> bool {
         self.table_size == config.correction_table_size.value
-            && self.max_value == config.correction_history_max_value.value
+            && self.max_correction == config.correction_history_max_correction.value
             && self.pawn_weight == config.correction_pawn_weight.value
             && self.minor_weight == config.correction_minor_weight.value
             && self.nonpawn_weight == config.correction_nonpawn_weight.value
@@ -165,16 +163,11 @@ impl CorrectionHistory {
             }
         }
 
-        // Check score/eval consistency based on bound type
-        // Lower bound (fail high): score should not be below corrected eval
-        // Upper bound (fail low): score should not be above corrected eval
-        let is_lower_bound = best_value >= beta;
-        let is_upper_bound = best_value <= alpha;
-
-        if is_lower_bound && best_value < corrected_eval {
+        // Skip when the search bound disagrees with the eval signal.
+        if best_value >= beta && best_value < corrected_eval {
             return;
         }
-        if is_upper_bound && best_value > corrected_eval {
+        if best_value <= alpha && best_value > corrected_eval {
             return;
         }
 
@@ -191,29 +184,31 @@ impl CorrectionHistory {
             zobrist_key!(board, NON_PAWN_ZOBRIST, NON_PAWN_PIECES, Color::Black),
         );
 
-        // Stockfish's formula:
-        // clamp((bestValue - correctedEval) * depth / 8, -limit/4, +limit/4)
+        // Stockfish bonus: clamp((bestValue - correctedEval) * depth / 8, +- limit/4).
         let diff = (best_value as i32) - (corrected_eval as i32);
         let scaled_diff = (diff * depth as i32) / 8;
-        let limit_quarter = self.max_value / 4;
+        let limit_quarter = self.max_correction / 4;
         let bonus = scaled_diff.clamp(-limit_quarter, limit_quarter);
 
-        // Weighted updates.
-        apply_gravity(&mut self.pawn_correction[pawn_idx], bonus, self.max_value);
+        apply_gravity(
+            &mut self.pawn_correction[pawn_idx],
+            bonus,
+            self.max_correction,
+        );
         apply_gravity(
             &mut self.minor_correction[minor_idx],
             bonus * self.minor_update_weight / 128,
-            self.max_value,
+            self.max_correction,
         );
         apply_gravity(
             &mut self.white_nonpawn_correction[white_np_idx],
             bonus * self.nonpawn_update_weight / 128,
-            self.max_value,
+            self.max_correction,
         );
         apply_gravity(
             &mut self.black_nonpawn_correction[black_np_idx],
             bonus * self.nonpawn_update_weight / 128,
-            self.max_value,
+            self.max_correction,
         );
     }
 

@@ -12,7 +12,7 @@ impl SearchResultMeta {
     }
 
     pub fn top_moves(&self) -> Vec<Move> {
-        self.lines.iter().filter_map(|pv| pv.best_move()).collect()
+        self.lines.iter().filter_map(PvLine::best_move).collect()
     }
 
     pub fn scores_white(&self) -> impl Iterator<Item = i16> + '_ {

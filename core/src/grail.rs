@@ -6,7 +6,7 @@ use std::sync::{
 };
 use std::thread::{self, JoinHandle};
 
-use search::EngineConfig;
+use config::EngineConfig;
 use uci::{Decoder, UciConnection, UciInput, UciOutput};
 
 use crate::engine::create_engine;
@@ -86,11 +86,11 @@ impl Grail {
             UciInput::IsReady => {
                 let _ = self.output.send(UciOutput::ReadyOk);
             }
-            // TODO: Implement debug mode - send extra info via `info string` when enabled
+            // TODO: Implement debug mode: send extra info via "info string" when enabled
             UciInput::Debug(_enabled) => {}
             UciInput::SetOption { name, value } => {
                 if let Err(e) = self.config.update_from_uci(&name, &value) {
-                    let _ = self.output.send(UciOutput::InfoString(e.to_string()));
+                    let _ = self.output.send(UciOutput::InfoString(e));
                 } else {
                     let _ = self
                         .cmd_tx

@@ -1,16 +1,13 @@
 use utils::{Node, cap_eval_by_material, flip_eval_perspective};
 
+use crate::tablebase;
+
 use super::Searcher;
 
 impl Searcher {
     /// Get the static evaluation from the perspective of the side to move.
     pub(super) fn static_eval(&mut self, node: &Node) -> i16 {
-        let phase = node.game_phase();
-
-        let mut score = match self.nnue.as_mut().filter(|_| self.config.nnue.value) {
-            Some(nnue) => nnue.evaluate(node),
-            None => self.hce.evaluate(node, phase),
-        };
+        let mut score = self.evaluator.evaluate(node);
 
         score = cap_eval_by_material(node.board(), score);
 
@@ -33,5 +30,17 @@ impl Searcher {
     /// Check if the position is a forced draw (fifty-move rule or repetition).
     pub(super) fn is_forced_draw(&self, node: &Node) -> bool {
         node.is_fifty_move_draw() || self.search_stack.is_repetition(&self.game_history)
+    }
+
+    /// Probe Syzygy tablebases for an exact WDL score. Returns None if
+    /// tablebases aren't loaded, the position has too many pieces, or depth
+    /// is below the configured probe threshold.
+    pub(super) fn probe_tb_wdl(&self, node: &Node, depth: u8) -> Option<i16> {
+        let tb = self.shared.tb()?;
+        if depth < self.config.syzygy_probe_depth.value {
+            return None;
+        }
+        let wdl = tablebase::probe_wdl(tb, node.board())?;
+        Some(tablebase::wdl_to_score(wdl, self.draw_value()))
     }
 }

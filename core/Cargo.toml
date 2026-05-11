@@ -9,14 +9,13 @@ repository = { workspace = true }
 
 [features]
 default = []
-tuning = ["uci/tuning", "search/tuning"]
+tuning = ["config/tuning", "search/tuning"]
 
 [dependencies]
+config = { path = "../config" }
 search = { path = "../search" }
 nnue = { path = "../nnue" }
-hce = { path = "../hce" }
 uci = { path = "../uci" }
-evaluation = { path = "../evaluation" }
 
 ahash = { workspace = true }
 cozy-chess = { workspace = true }

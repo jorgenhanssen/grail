@@ -8,27 +8,12 @@ description = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-search = { path = "../search" }
-evaluation = { path = "../evaluation" }
-hce = { path = "../hce" }
-uci = { path = "../uci" }
 utils = { path = "../utils" }
 
-ahash = { workspace = true }
 cozy-chess = { workspace = true }
-chrono = { workspace = true }
-ctrlc = { workspace = true }
 log = { workspace = true }
-rayon = { workspace = true }
-rand = { workspace = true }
-num_cpus = { workspace = true }
-simplelog = { workspace = true }
-clap = { workspace = true }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
-indicatif = { workspace = true }
-tempfile = { workspace = true }
-hyperloglogplus = { workspace = true }
 
 [features]
 default = []
@@ -45,12 +30,8 @@ metal = [
 name = "nnue"
 
 [[bin]]
-name = "generate"
-path = "src/bin/generate/main.rs"
-
-[[bin]]
-name = "train"
-path = "src/bin/train/main.rs"
+name = "nnue-analysis"
+path = "src/bin/analysis/main.rs"
 
 [lints]
 workspace = true

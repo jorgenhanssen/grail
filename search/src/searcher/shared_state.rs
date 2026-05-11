@@ -4,8 +4,11 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
-use crate::EngineConfig;
+use config::EngineConfig;
+use pyrrhic_rs::TableBases;
+
 use crate::history::CorrectionHistory;
+use crate::tablebase::CozyAdapter;
 use crate::transposition::TranspositionTable;
 
 /// Shared mutable state for searchers.
@@ -14,9 +17,11 @@ use crate::transposition::TranspositionTable;
 /// the exact same entry at the same time is rare, and even when it happens:
 /// - tt: just a cache. Worst case is a super super rare mixed entry (from different writes).
 /// - correction: statistical hint, so one wrong value out of thousands doesn't matter
+/// - tb: configured outside search, then read by workers
 pub struct SharedSearcherState {
     tt: UnsafeCell<TranspositionTable>,
     correction: UnsafeCell<CorrectionHistory>,
+    tb: UnsafeCell<Option<TableBases<CozyAdapter>>>,
     stop: Arc<AtomicBool>,
     total_nodes: AtomicU64,
 }
@@ -29,7 +34,7 @@ impl SharedSearcherState {
         let tt = TranspositionTable::new(config.hash_size.value as usize);
         let correction = CorrectionHistory::new(
             config.correction_table_size.value,
-            config.correction_history_max_value.value,
+            config.correction_history_max_correction.value,
             config.correction_pawn_weight.value,
             config.correction_minor_weight.value,
             config.correction_nonpawn_weight.value,
@@ -41,6 +46,7 @@ impl SharedSearcherState {
         Self {
             tt: UnsafeCell::new(tt),
             correction: UnsafeCell::new(correction),
+            tb: UnsafeCell::new(None),
             stop,
             total_nodes: AtomicU64::new(0),
         }
@@ -74,5 +80,32 @@ impl SharedSearcherState {
 
     pub fn reset_nodes(&self) {
         self.total_nodes.store(0, Ordering::Relaxed);
+    }
+
+    pub fn init_tablebases(&self, path: &str) {
+        let path = path.replace(';', ":");
+        match TableBases::<CozyAdapter>::new(path) {
+            Ok(tb) => {
+                log::info!("Syzygy tablebases loaded: up to {} pieces", tb.max_pieces());
+                unsafe { *self.tb.get() = Some(tb) }
+            }
+            Err(e) => {
+                log::warn!("Failed to load Syzygy tablebases: {:?}", e);
+                unsafe { *self.tb.get() = None }
+            }
+        }
+    }
+
+    pub fn clear_tablebases(&self) {
+        unsafe { *self.tb.get() = None }
+    }
+
+    /// Inject an already-loaded handle (data gen workers share one instance via clone).
+    pub fn set_tablebases(&self, tb: TableBases<CozyAdapter>) {
+        unsafe { *self.tb.get() = Some(tb) }
+    }
+
+    pub fn tb(&self) -> Option<&TableBases<CozyAdapter>> {
+        unsafe { (*self.tb.get()).as_ref() }
     }
 }
