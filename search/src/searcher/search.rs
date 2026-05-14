@@ -303,8 +303,17 @@ impl Searcher {
 
         let corrected_eval = self.shared.correction().adjust(node.board(), static_eval);
 
-        self.search_stack
-            .current_mut(|n| n.static_eval = Some(corrected_eval));
+        // Prefer the TT score over static eval so trend sees what search already found.
+        let stack_eval = tt_info
+            .map(|tt| match tt.bound {
+                Bound::Exact => tt.value,
+                Bound::Lower if tt.value > corrected_eval => tt.value,
+                Bound::Upper if tt.value < corrected_eval => tt.value,
+                _ => corrected_eval,
+            })
+            .unwrap_or(corrected_eval);
+
+        self.search_stack.current_mut(|n| n.eval = Some(stack_eval));
 
         // Stockfish skips NMP during singular searches.
         // Likely because NMP can raise beta without searching any actual moves,
