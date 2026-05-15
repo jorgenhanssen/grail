@@ -296,6 +296,7 @@ impl Searcher {
 
         let in_check = node.in_check();
         let tt_move = tt_info.and_then(|t| t.best_move);
+        let tt_move_is_capture = tt_move.is_some_and(|m| node.is_capture(m));
 
         let static_eval = tt_info
             .and_then(|t| t.static_eval)
@@ -441,6 +442,7 @@ impl Searcher {
                 in_check,
                 move_index,
                 is_improving,
+                tt_move_is_capture,
                 corrected_eval,
                 singular_result.extension,
             ) {
@@ -522,6 +524,7 @@ impl Searcher {
         in_check: bool,
         move_index: i32,
         is_improving: bool,
+        tt_move_is_capture: bool,
         static_eval: i16,
         extra_extension: i8,
     ) -> Option<(i16, bool, u8)> {
@@ -587,6 +590,7 @@ impl Searcher {
             &child,
             hist,
             cont_hist,
+            tt_move_is_capture,
         );
 
         let extension = self.get_extension(node, &m, moved_piece, is_cap);

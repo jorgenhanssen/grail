@@ -22,6 +22,7 @@ impl Searcher {
         child: &Node,
         hist: i16,
         cont_hist: i16,
+        tt_move_is_capture: bool,
     ) -> u8 {
         let mut reduction = self.lmr.get(depth, move_index);
 
@@ -31,6 +32,9 @@ impl Searcher {
         }
         if !is_improving {
             reduction += FracPly(self.config.reduction_not_improving.value);
+        }
+        if tt_move_is_capture && !is_capture {
+            reduction += FracPly(self.config.reduction_quiets_if_tt_capture.value);
         }
 
         let hist_divisor = if is_capture {
