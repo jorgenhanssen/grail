@@ -322,7 +322,7 @@ impl Searcher {
         // I also saw success skipping razoring.
         if singular.is_none() {
             if let Some(score) =
-                self.try_razor_prune(node, depth, bounds.alpha, ply, in_check, corrected_eval)
+                self.try_razor_prune(node, depth, bounds.alpha, ply, in_check, stack_eval)
             {
                 return score;
             }
