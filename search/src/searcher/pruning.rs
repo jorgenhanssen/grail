@@ -56,14 +56,14 @@ impl Searcher {
         alpha: i16,
         ply: u8,
         in_check: bool,
-        static_eval: i16,
+        eval: i16,
     ) -> Option<i16> {
         if depth == 0 || depth > self.config.razor_max_depth.value || in_check {
             return None;
         }
         let margin = self.config.razor_base_margin.value
             + self.config.razor_depth_coefficient.value * (depth as i16 * depth as i16);
-        if static_eval >= alpha - margin {
+        if eval >= alpha - margin {
             return None;
         }
         let value = self.quiescence_search(node, Bounds::null(alpha - 1), ply);
