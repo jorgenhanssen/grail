@@ -302,7 +302,14 @@ impl Searcher {
             .and_then(|t| t.static_eval)
             .unwrap_or_else(|| self.static_eval(node));
 
-        let corrected_eval = self.shared.correction().adjust(node.board(), static_eval);
+        let prev_moves = self
+            .continuation_history
+            .get_prev_moves(self.search_stack.as_slice());
+
+        let corrected_eval =
+            self.shared
+                .correction()
+                .adjust(node.board(), &prev_moves, static_eval);
 
         // Prefer the TT score over static eval so trend sees what search already found.
         let stack_eval = tt_info
@@ -370,10 +377,6 @@ impl Searcher {
 
         let threats = node.threats();
 
-        let prev_moves = self
-            .continuation_history
-            .get_prev_moves(self.search_stack.as_slice());
-
         let best_move_hint = if ply == 0 {
             // At root we can use the currently best move for ordering
             self.multi_pv.best_move_hint()
@@ -384,7 +387,7 @@ impl Searcher {
         let enemy_attacks = node.attacks_for(!node.side_to_move());
         let mut movegen = MainMoveGenerator::new(
             best_move_hint,
-            prev_moves,
+            prev_moves.clone(),
             self.config.quiet_check_bonus.value,
             self.config.quiet_check_see_margin.value,
             self.config.bad_quiet_threshold.value,
@@ -499,6 +502,7 @@ impl Searcher {
 
         self.shared.correction().update(
             node.board(),
+            &prev_moves,
             in_check,
             best_move,
             best_value,

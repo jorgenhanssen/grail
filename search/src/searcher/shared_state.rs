@@ -7,7 +7,7 @@ use std::sync::{
 use config::EngineConfig;
 use pyrrhic_rs::TableBases;
 
-use crate::history::CorrectionHistory;
+use crate::correction::Correction;
 use crate::tablebase::CozyAdapter;
 use crate::transposition::TranspositionTable;
 
@@ -20,7 +20,7 @@ use crate::transposition::TranspositionTable;
 /// - tb: configured outside search, then read by workers
 pub struct SharedSearcherState {
     tt: UnsafeCell<TranspositionTable>,
-    correction: UnsafeCell<CorrectionHistory>,
+    correction: UnsafeCell<Correction>,
     tb: UnsafeCell<Option<TableBases<CozyAdapter>>>,
     stop: Arc<AtomicBool>,
     total_nodes: AtomicU64,
@@ -31,21 +31,9 @@ unsafe impl Sync for SharedSearcherState {}
 
 impl SharedSearcherState {
     pub fn new(config: &EngineConfig, stop: Arc<AtomicBool>) -> Self {
-        let tt = TranspositionTable::new(config.hash_size.value as usize);
-        let correction = CorrectionHistory::new(
-            config.correction_table_size.value,
-            config.correction_history_max_correction.value,
-            config.correction_pawn_weight.value,
-            config.correction_minor_weight.value,
-            config.correction_nonpawn_weight.value,
-            config.correction_combined_divisor.value,
-            config.correction_minor_update_weight.value,
-            config.correction_nonpawn_update_weight.value,
-        );
-
         Self {
-            tt: UnsafeCell::new(tt),
-            correction: UnsafeCell::new(correction),
+            tt: UnsafeCell::new(TranspositionTable::new(config.hash_size.value as usize)),
+            correction: UnsafeCell::new(Correction::new(config)),
             tb: UnsafeCell::new(None),
             stop,
             total_nodes: AtomicU64::new(0),
@@ -58,7 +46,7 @@ impl SharedSearcherState {
     }
 
     #[allow(clippy::mut_from_ref)]
-    pub fn correction(&self) -> &mut CorrectionHistory {
+    pub fn correction(&self) -> &mut Correction {
         unsafe { &mut *self.correction.get() }
     }
 
