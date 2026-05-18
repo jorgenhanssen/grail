@@ -36,7 +36,8 @@ impl Searcher {
 
         // Ply limit - return static eval if we've hit max ply
         if ply as usize >= MAX_DEPTH {
-            return self.corrected_static_eval(node);
+            let raw_eval = self.static_eval(node);
+            return self.shared.correction().adjust(node.board(), raw_eval);
         }
 
         let hash = node.hash();
@@ -49,7 +50,8 @@ impl Searcher {
 
         let original_bounds = bounds;
 
-        if let Some(tt) = self.shared.tt().probe(hash, ply) {
+        let tt_info = self.shared.tt().probe(hash, ply);
+        if let Some(tt) = tt_info {
             if !node.is_pv() {
                 match tt.bound {
                     Bound::Exact => return tt.value,
@@ -60,7 +62,12 @@ impl Searcher {
             }
         }
 
-        let stand_pat = self.corrected_static_eval(node);
+        // Reuse the cached NNUE result from the TT when available; the corrected
+        // value is derived freshly so the cache stays semantically "raw eval".
+        let static_eval = tt_info
+            .and_then(|t| t.static_eval)
+            .unwrap_or_else(|| self.static_eval(node));
+        let stand_pat = self.shared.correction().adjust(board, static_eval);
 
         let board_material = node.total_material();
 
@@ -77,7 +84,7 @@ impl Searcher {
                     ply,
                     0, // Prefer deeper entries rather than QS entries
                     stand_pat,
-                    Some(stand_pat),
+                    Some(static_eval),
                     original_bounds.alpha,
                     original_bounds.beta,
                     None,
@@ -106,7 +113,7 @@ impl Searcher {
                         ply,
                         0, // Prefer deeper entries rather than QS entries
                         stand_pat,
-                        Some(stand_pat),
+                        Some(static_eval),
                         original_bounds.alpha,
                         original_bounds.beta,
                         None,
@@ -197,7 +204,7 @@ impl Searcher {
             ply,
             0,
             best_eval,
-            Some(stand_pat),
+            Some(static_eval),
             original_bounds.alpha,
             original_bounds.beta,
             None,

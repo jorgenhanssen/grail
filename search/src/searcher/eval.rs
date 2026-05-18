@@ -14,12 +14,6 @@ impl Searcher {
         flip_eval_perspective(node.side_to_move(), score)
     }
 
-    /// Get the static evaluation with correction history applied.
-    pub(super) fn corrected_static_eval(&mut self, node: &Node) -> i16 {
-        let eval = self.static_eval(node);
-        self.shared.correction().adjust(node.board(), eval)
-    }
-
     /// Returns a small random value for draws to avoid draw blindness.
     /// Based on Stockfish's approach: VALUE_DRAW - 1 + (nodes & 0x2)
     /// Returns -1 or +1 to break symmetry and prevent repetitive play.
