@@ -8,12 +8,19 @@ use nnue::encoding::{NUM_FEATURES, encode_board};
 use nnue::network::{FV_SCALE, output_bucket};
 use utils::board_metrics::BoardMetrics;
 
+#[derive(Debug, Clone, Copy)]
+pub enum Outcome {
+    WhiteWin,
+    Draw,
+    BlackWin,
+}
+
 /// A single sample from a shard file.
 #[derive(Debug, Clone)]
 pub struct Sample {
     pub fen: String,
     pub score: i16,
-    pub outcome: f32,
+    pub outcome: Outcome,
 }
 
 pub struct EncodedSample {
@@ -25,7 +32,7 @@ pub struct EncodedSample {
 }
 
 impl Sample {
-    pub fn encode(&self) -> Option<EncodedSample> {
+    pub fn encode(&self, draw_target: f32) -> Option<EncodedSample> {
         let board = Board::from_str(&self.fen).ok()?;
         let metrics = BoardMetrics::new(&board);
         let stm = board.side_to_move();
@@ -53,10 +60,14 @@ impl Sample {
         );
 
         let white_score = self.score as f32 / FV_SCALE;
-        let white_outcome = self.outcome;
-        let (score, outcome) = match stm {
-            Color::White => (white_score, white_outcome),
-            Color::Black => (-white_score, 1.0 - white_outcome),
+        let score = match stm {
+            Color::White => white_score,
+            Color::Black => -white_score,
+        };
+        let outcome = match (self.outcome, stm) {
+            (Outcome::Draw, _) => draw_target,
+            (Outcome::WhiteWin, Color::White) | (Outcome::BlackWin, Color::Black) => 1.0,
+            (Outcome::WhiteWin, Color::Black) | (Outcome::BlackWin, Color::White) => 0.0,
         };
 
         Some(EncodedSample {
@@ -113,11 +124,10 @@ fn parse_line(line: &str) -> Option<Sample> {
     let fen = parts.next()?.to_string();
     let score: i16 = parts.next()?.parse().ok()?;
 
-    // Map game outcomes to white perspective probabilities.
     let outcome = match parts.next()? {
-        "W" => 1.0,
-        "D" => 0.5,
-        "B" => 0.0,
+        "W" => Outcome::WhiteWin,
+        "D" => Outcome::Draw,
+        "B" => Outcome::BlackWin,
         _ => return None,
     };
 

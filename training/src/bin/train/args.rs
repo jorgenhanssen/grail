@@ -45,6 +45,10 @@ pub struct Args {
     #[arg(long, default_value_t = 0.3)]
     pub wdl: f64,
 
+    /// Target win-probability for drawn games (smaller = prefer wins over draws).
+    #[arg(long, default_value_t = 0.5)]
+    pub draw_target: f64,
+
     /// Save a randomly initialized model and exit.
     #[arg(long)]
     pub init_model: bool,

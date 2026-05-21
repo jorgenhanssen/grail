@@ -32,6 +32,7 @@ pub struct Trainer {
     lr_decay: f64,
     patience: u64,
     wdl: f64,
+    draw_target: f32,
     model_path: String,
 }
 
@@ -39,6 +40,7 @@ impl Trainer {
     pub fn new(args: &Args, model_path: &str) -> Result<Self, Box<dyn Error>> {
         let device = get_device()?;
         let wdl = args.wdl.clamp(0.0, 1.0);
+        let draw_target = args.draw_target.clamp(0.0, 1.0) as f32;
 
         let varmap = VarMap::new();
         let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
@@ -62,6 +64,7 @@ impl Trainer {
             lr_decay: args.lr_decay,
             patience: args.patience,
             wdl,
+            draw_target,
             model_path: model_path.to_string(),
         })
     }
@@ -73,9 +76,10 @@ impl Trainer {
     ) -> Result<(), Box<dyn Error>> {
         log::info!("Using device: {:?}", self.device);
         log::info!(
-            "WDL blending: {:.0}% WDL / {:.0}% eval",
+            "WDL blending: {:.0}% WDL / {:.0}% eval, draw target {:.2}",
             self.wdl * 100.0,
-            (1.0 - self.wdl) * 100.0
+            (1.0 - self.wdl) * 100.0,
+            self.draw_target,
         );
 
         let mut metrics = MetricsTracker::new(self.patience);
@@ -119,7 +123,13 @@ impl Trainer {
         shutdown: &Arc<AtomicBool>,
     ) -> Result<Option<f32>, Box<dyn Error>> {
         let reader = Arc::new(ShardReader::new(dataset.train_path(), TRAIN_SHARDS)?);
-        let loader = DataLoader::new(reader, self.batch_size, self.workers, Arc::clone(shutdown));
+        let loader = DataLoader::new(
+            reader,
+            self.batch_size,
+            self.workers,
+            Arc::clone(shutdown),
+            self.draw_target,
+        );
 
         let num_batches = dataset.stats.train_samples.div_ceil(self.batch_size);
         let progress = TrainingProgressBar::new(num_batches)?;
@@ -164,6 +174,7 @@ impl Trainer {
             self.batch_size,
             self.workers,
             Arc::clone(shutdown),
+            self.draw_target,
         );
         let val_loss = evaluate(&self.network, val_loader, &self.device, self.wdl)?;
 
@@ -193,6 +204,7 @@ impl Trainer {
             self.batch_size,
             self.workers,
             Arc::clone(shutdown),
+            self.draw_target,
         );
         let test_loss = evaluate(&self.network, test_loader, &self.device, self.wdl)?;
         log::info!("Test Loss: {:.6}", test_loss);
