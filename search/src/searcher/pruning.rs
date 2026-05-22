@@ -156,6 +156,13 @@ impl Searcher {
             return None;
         }
 
+        // No point proving that our position is too good if we dont even clear beta.
+        if let Some(se) = static_eval {
+            if se < bounds.beta {
+                return None;
+            }
+        }
+
         let nm_child = node.create_null_move_child()?;
 
         // Deeper positions get more reduction
