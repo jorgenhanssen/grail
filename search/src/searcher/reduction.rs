@@ -42,8 +42,8 @@ impl Searcher {
         } else {
             self.config.reduction_history_divisor.value
         };
-        history_reduction(&mut reduction, hist, hist_divisor);
 
+        history_reduction(&mut reduction, hist, hist_divisor);
         history_reduction(
             &mut reduction,
             cont_hist,
