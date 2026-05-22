@@ -3,7 +3,7 @@ set -e
 
 CONCURRENCY=${1:-15}
 ELO0=${ELO0:-0}
-ELO1=${ELO1:-10}
+ELO1=${ELO1:-5}
 
 rm -rf sprt
 mkdir -p sprt
@@ -18,15 +18,17 @@ COMMON=(
   -engine cmd=./target/release/grail name=grail
   -engine cmd=./target/release/grail-next name=grail-next
   -sprt elo0=$ELO0 elo1=$ELO1 alpha=0.05 beta=0.05
-  -rounds 10000
+  -rounds 5000
   -concurrency $CONCURRENCY
 )
 
+trap 'echo; echo "^C — skipping current stage..."' INT
+
 echo "SPRT: STC (10+0.1) [elo0=$ELO0 elo1=$ELO1]"
-fastchess "${COMMON[@]}" -each tc=10+0.1 2>&1 | tee sprt/stc.log
+fastchess "${COMMON[@]}" -each tc=10+0.1 2>&1 | tee sprt/stc.log || true
 
 echo "SPRT: LTC (60+0.6) [elo0=$ELO0 elo1=$ELO1]"
-fastchess "${COMMON[@]}" -each tc=60+0.6 2>&1 | tee sprt/ltc.log
+fastchess "${COMMON[@]}" -each tc=60+0.6 2>&1 | tee sprt/ltc.log || true
 
 echo "SPRT: VLTC (180+1.8) [elo0=$ELO0 elo1=$ELO1]"
-fastchess "${COMMON[@]}" -each tc=180+1.8 2>&1 | tee sprt/vltc.log
+fastchess "${COMMON[@]}" -each tc=180+1.8 2>&1 | tee sprt/vltc.log || true
