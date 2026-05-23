@@ -8,13 +8,13 @@ use super::accumulator::Accumulator;
 use super::linear::LinearLayer;
 use super::model::Network;
 use super::simd::{simd_add, simd_relu};
-use super::{CP_BOUND, EMBEDDING_SIZE, FV_SCALE, HIDDEN_SIZE, OUTPUT_BUCKETS};
+use super::{CP_BOUND, FV_SCALE, HIDDEN_SIZE, OUTPUT_BUCKETS, PAIRWISE_OUT_SIZE};
 
 /// NNUE inference engine with quantized weights and dual-perspective accumulators.
 pub struct NNUENetwork {
     accumulator: Accumulator,
     buckets: [OutputStack; OUTPUT_BUCKETS],
-    embedding_buffer: [f32; 2 * EMBEDDING_SIZE],
+    embedding_buffer: [f32; 2 * PAIRWISE_OUT_SIZE],
 }
 
 impl NNUENetwork {
@@ -39,7 +39,7 @@ impl NNUENetwork {
         Ok(Self {
             accumulator,
             buckets,
-            embedding_buffer: [0.0; 2 * EMBEDDING_SIZE],
+            embedding_buffer: [0.0; 2 * PAIRWISE_OUT_SIZE],
         })
     }
 
@@ -58,9 +58,10 @@ impl NNUENetwork {
         self.accumulator.update(Color::Black, black_bits);
 
         let nstm = !stm;
-        let (stm_half, nstm_half) = self.embedding_buffer.split_at_mut(EMBEDDING_SIZE);
-        self.accumulator.dequantize_and_relu(stm, stm_half);
-        self.accumulator.dequantize_and_relu(nstm, nstm_half);
+        let (stm_half, nstm_half) = self.embedding_buffer.split_at_mut(PAIRWISE_OUT_SIZE);
+        self.accumulator.dequantize_and_pairwise_mul(stm, stm_half);
+        self.accumulator
+            .dequantize_and_pairwise_mul(nstm, nstm_half);
 
         let output = self.buckets[bucket].forward(&self.embedding_buffer);
 

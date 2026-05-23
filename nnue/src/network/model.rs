@@ -4,13 +4,13 @@ use candle_nn::{Linear, VarBuilder, linear};
 use crate::encoding::NUM_FEATURES;
 use crate::kernels::embedding;
 
-use super::{EMBEDDING_SIZE, HIDDEN_SIZE, OUTPUT_BUCKETS};
+use super::{EMBEDDING_SIZE, HIDDEN_SIZE, OUTPUT_BUCKETS, PAIRWISE_OUT_SIZE};
 
 /// Full-precision network for training and weight loading.
 ///
-/// A single embedding layer is run over both perspectives and the outputs are
-/// concatenated [...stm, ...nstm] before being fed to the phase-specific hidden
-/// stack.
+/// A single embedding layer is run over both perspectives. Each side is
+/// pairwise-multiplied, then the two halves are concatenated [...stm, ...nstm]
+/// before being fed to the phase-specific hidden stack.
 pub struct Network {
     pub embedding: Linear,
     pub buckets: OutputBuckets,
@@ -31,7 +31,8 @@ impl Network {
         buckets: &[usize],
     ) -> Result<Tensor> {
         let embedding_out = embedding(stm_indices, nstm_indices, &self.embedding)?;
-        self.buckets.forward(&embedding_out, buckets)
+        self.buckets
+            .forward(&pairwise_perspectives(&embedding_out)?, buckets)
     }
 }
 
@@ -44,7 +45,7 @@ impl OutputBuckets {
         let stacks = std::array::from_fn(|i| {
             let bvs = vs.pp(format!("bucket_{}", i));
             OutputStack {
-                hidden1: linear(2 * EMBEDDING_SIZE, HIDDEN_SIZE, bvs.pp("hidden1")).unwrap(),
+                hidden1: linear(2 * PAIRWISE_OUT_SIZE, HIDDEN_SIZE, bvs.pp("hidden1")).unwrap(),
                 hidden2: linear(HIDDEN_SIZE, HIDDEN_SIZE, bvs.pp("hidden2")).unwrap(),
                 output: linear(HIDDEN_SIZE, 1, bvs.pp("output")).unwrap(),
             }
@@ -102,6 +103,25 @@ impl OutputBuckets {
     pub fn iter(&self) -> impl Iterator<Item = &OutputStack> {
         self.stacks.iter()
     }
+}
+
+/// Pairwise-multiply each perspective of a concatenated [...stm, ...nstm]
+/// embedding. The embedding kernel already ReLUs, so clamp here adds the
+/// CReLU upper bound of 1 before the split-and-multiply.
+fn pairwise_perspectives(embedding_out: &Tensor) -> Result<Tensor> {
+    let stm = embedding_out.narrow(1, 0, EMBEDDING_SIZE)?;
+    let nstm = embedding_out.narrow(1, EMBEDDING_SIZE, EMBEDDING_SIZE)?;
+    Tensor::cat(&[pairwise_mul(&stm)?, pairwise_mul(&nstm)?], 1)
+}
+
+/// Pairwise multiplication: clamp each lane to [0, 1], split into two equal
+/// parts, multiply corresponding elements.
+/// <https://www.chessprogramming.org/NNUE#Pairwise_Multiplication>
+fn pairwise_mul(embedding: &Tensor) -> Result<Tensor> {
+    let activated = embedding.clamp(0.0f32, 1.0f32)?;
+    let first = activated.narrow(1, 0, PAIRWISE_OUT_SIZE)?;
+    let second = activated.narrow(1, PAIRWISE_OUT_SIZE, PAIRWISE_OUT_SIZE)?;
+    &first * &second
 }
 
 /// Hidden layers and output head for a single game phase.

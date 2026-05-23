@@ -12,6 +12,10 @@ pub use model::Network;
 /// Size of the accumulator that input features are embedded into.
 pub const EMBEDDING_SIZE: usize = 768;
 
+/// Per-perspective output of the pairwise-multiply step. Half the embedding
+/// width since each pair collapses two lanes into one.
+pub const PAIRWISE_OUT_SIZE: usize = EMBEDDING_SIZE / 2;
+
 /// Size of the hidden layers after the embedding.
 pub const HIDDEN_SIZE: usize = 16;
 
