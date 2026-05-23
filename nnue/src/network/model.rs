@@ -3,13 +3,13 @@ use candle_nn::{Linear, VarBuilder, linear};
 
 use crate::encoding::NUM_FEATURES;
 
-use super::{EMBEDDING_SIZE, HIDDEN_SIZE, OUTPUT_BUCKETS};
+use super::{EMBEDDING_SIZE, HIDDEN_SIZE, OUTPUT_BUCKETS, PAIRWISE_OUT_SIZE};
 
 /// Full-precision network for training and weight loading.
 ///
-/// A single embedding layer is run over both perspectives and the outputs are
-/// concatenated [...stm, ...nstm] before being fed to the phase-specific hidden
-/// stack.
+/// A single embedding layer is run over both perspectives. Each side is
+/// pairwise-multiplied, then the two halves are concatenated [...stm, ...nstm]
+/// before being fed to the phase-specific hidden stack.
 pub struct Network {
     pub embedding: Linear,
     pub buckets: OutputBuckets,
@@ -27,9 +27,9 @@ impl Network {
     /// output is in stm space so the caller has to sign-flip if they want it as
     /// white.
     pub fn forward(&self, stm: &Tensor, nstm: &Tensor, buckets: &[usize]) -> Result<Tensor> {
-        let stm_embed = stm.apply(&self.embedding)?.relu()?;
-        let nstm_embed = nstm.apply(&self.embedding)?.relu()?;
-        let embedding_out = Tensor::cat(&[stm_embed, nstm_embed], 1)?;
+        let stm_pair = pairwise_mul(&stm.apply(&self.embedding)?)?;
+        let nstm_pair = pairwise_mul(&nstm.apply(&self.embedding)?)?;
+        let embedding_out = Tensor::cat(&[stm_pair, nstm_pair], 1)?;
         self.buckets.forward(&embedding_out, buckets)
     }
 }
@@ -43,7 +43,7 @@ impl OutputBuckets {
         let stacks = std::array::from_fn(|i| {
             let bvs = vs.pp(format!("bucket_{}", i));
             OutputStack {
-                hidden1: linear(2 * EMBEDDING_SIZE, HIDDEN_SIZE, bvs.pp("hidden1")).unwrap(),
+                hidden1: linear(2 * PAIRWISE_OUT_SIZE, HIDDEN_SIZE, bvs.pp("hidden1")).unwrap(),
                 hidden2: linear(HIDDEN_SIZE, HIDDEN_SIZE, bvs.pp("hidden2")).unwrap(),
                 output: linear(HIDDEN_SIZE, 1, bvs.pp("output")).unwrap(),
             }
@@ -101,6 +101,16 @@ impl OutputBuckets {
     pub fn iter(&self) -> impl Iterator<Item = &OutputStack> {
         self.stacks.iter()
     }
+}
+
+/// Pairwise multiplication: clamp each lane to [0, 1], split into two equal
+/// parts, multiply corresponding elements.
+/// <https://www.chessprogramming.org/NNUE#Pairwise_Multiplication>
+fn pairwise_mul(embedding: &Tensor) -> Result<Tensor> {
+    let activated = embedding.clamp(0.0f32, 1.0f32)?;
+    let first = activated.narrow(1, 0, PAIRWISE_OUT_SIZE)?;
+    let second = activated.narrow(1, PAIRWISE_OUT_SIZE, PAIRWISE_OUT_SIZE)?;
+    &first * &second
 }
 
 /// Hidden layers and output head for a single game phase.

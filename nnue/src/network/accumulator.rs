@@ -5,7 +5,7 @@ use crate::bitset;
 use crate::encoding::NUM_FEATURES;
 
 use super::simd::{SIMD_WIDTH_F32, SIMD_WIDTH_I16, SimdF32, SimdI16};
-use super::{EMBEDDING_SIZE, QUANTIZATION_PERCENTILE};
+use super::{EMBEDDING_SIZE, PAIRWISE_OUT_SIZE, QUANTIZATION_PERCENTILE};
 
 // Just enforcing the sizes as multiples of the SIMD widths.
 // That way I don't have to do cleanup loops after the SIMD,
@@ -13,9 +13,10 @@ const _: () = assert!(
     EMBEDDING_SIZE.is_multiple_of(SIMD_WIDTH_I16),
     "EMBEDDING_SIZE must be a multiple of SIMD_WIDTH_I16"
 );
+// The pairwise-mul dequant loop walks PAIRWISE_OUT_SIZE in SIMD_WIDTH_F32 steps.
 const _: () = assert!(
-    EMBEDDING_SIZE.is_multiple_of(SIMD_WIDTH_F32),
-    "EMBEDDING_SIZE must be a multiple of SIMD_WIDTH_F32"
+    PAIRWISE_OUT_SIZE.is_multiple_of(SIMD_WIDTH_F32),
+    "PAIRWISE_OUT_SIZE must be a multiple of SIMD_WIDTH_F32"
 );
 
 /// The Accumulator manages the stateful first (embedding) layer of the NNUE.
@@ -119,26 +120,31 @@ impl Accumulator {
         }
     }
 
-    /// Dequantizes one color's i16 buffer into f32 and applies ReLU into output.
-    pub fn dequantize_and_relu(&self, color: Color, output: &mut [f32]) {
-        debug_assert_eq!(output.len(), EMBEDDING_SIZE);
+    /// Dequantizes one color's buffer to f32, clamps to [0, 1], and
+    /// pairwise-multiplies the halves into output.
+    pub fn dequantize_and_pairwise_mul(&self, color: Color, output: &mut [f32]) {
+        debug_assert_eq!(output.len(), PAIRWISE_OUT_SIZE);
         let buffer = match color {
             Color::White => &self.buffer_white,
             Color::Black => &self.buffer_black,
         };
 
-        let zeros = SimdF32::splat(0.0);
-
-        for i in (0..EMBEDDING_SIZE).step_by(SIMD_WIDTH_F32) {
-            let vals_i16 = i16x16::new(buffer[i..i + SIMD_WIDTH_F32].try_into().unwrap());
-            let vals_f32 = f32x16::new(vals_i16.to_array().map(|x| x as f32));
-            let scale_vec =
-                SimdF32::new(self.inv_scales[i..i + SIMD_WIDTH_F32].try_into().unwrap());
-
-            let activated = (vals_f32 * scale_vec).max(zeros);
-            output[i..i + SIMD_WIDTH_F32].copy_from_slice(activated.as_array());
+        for i in (0..PAIRWISE_OUT_SIZE).step_by(SIMD_WIDTH_F32) {
+            let first = dequantize_crelu_chunk(buffer, &self.inv_scales, i);
+            let second = dequantize_crelu_chunk(buffer, &self.inv_scales, i + PAIRWISE_OUT_SIZE);
+            output[i..i + SIMD_WIDTH_F32].copy_from_slice((first * second).as_array());
         }
     }
+}
+
+/// Dequantizes a SIMD chunk's worth of i16 values to f32 and applies CReLU.
+fn dequantize_crelu_chunk(buffer: &[i16], inv_scales: &[f32], offset: usize) -> SimdF32 {
+    let vals_i16 = i16x16::new(buffer[offset..offset + SIMD_WIDTH_F32].try_into().unwrap());
+    let vals_f32 = f32x16::new(vals_i16.to_array().map(|x| x as f32));
+    let scale = SimdF32::new(inv_scales[offset..offset + SIMD_WIDTH_F32].try_into().unwrap());
+    (vals_f32 * scale)
+        .max(SimdF32::splat(0.0))
+        .min(SimdF32::splat(1.0))
 }
 
 /// Computes a per-output scale factor to quantize f32 weights to i8.
