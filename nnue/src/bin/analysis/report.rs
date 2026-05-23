@@ -2,12 +2,15 @@ use candle_nn::Linear;
 use cozy_chess::Square;
 use nnue::encoding::NUM_FEATURES;
 use nnue::network::model::OutputBuckets;
-use nnue::network::{EMBEDDING_SIZE, HIDDEN_SIZE, Network, OUTPUT_BUCKETS};
+use nnue::network::{EMBEDDING_SIZE, HIDDEN_SIZE, Network, OUTPUT_BUCKETS, PAIRWISE_OUT_SIZE};
 use std::error::Error;
 use std::fmt::{self, Write};
 
-use crate::math::{col_norms, cosine, max_of, mean, min_of};
-use crate::stats::{BucketStats, FEATURE_GROUPS, LayerStats, PIECE_TYPES, PIECES_PER_SQUARE};
+use crate::math::{col_norms, cosine, max_of, mean, min_of, row_norms};
+use crate::stats::{
+    ACTIVE_NEURON_THRESHOLD, BucketStats, FEATURE_GROUPS, LayerStats, PIECE_TYPES,
+    PIECES_PER_SQUARE,
+};
 
 /// Total width of the section rulers under each header.
 const HEADER_WIDTH: usize = 68;
@@ -16,6 +19,7 @@ pub fn create(network: &Network) -> Result<String, Box<dyn Error>> {
     let mut out = String::new();
 
     write_embedding(&mut out, &network.embedding)?;
+    write_pairwise_structure(&mut out, &network.embedding)?;
     write_piece_heatmaps(&mut out, &network.embedding)?;
 
     let bucket_stats = write_buckets(&mut out, &network.buckets)?;
@@ -77,6 +81,112 @@ fn write_embedding(out: &mut String, embedding: &Linear) -> Result<(), Box<dyn E
         )?;
     }
     writeln!(out)?;
+    Ok(())
+}
+
+fn write_pairwise_structure(out: &mut String, embedding: &Linear) -> Result<(), Box<dyn Error>> {
+    let weights = embedding.weight().flatten_all()?.to_vec1::<f32>()?;
+    let biases = embedding.bias().unwrap().to_vec1::<f32>()?;
+    let fan_in = embedding.weight().dim(1)?;
+    let half = PAIRWISE_OUT_SIZE;
+    let split = half * fan_in;
+
+    write_header(out, "embedding pairwise structure")?;
+    writeln!(out, "  first half  (rows 0-{}):", half - 1)?;
+    write_layer(
+        out,
+        &LayerStats::from_arrays(&weights[..split], &biases[..half], fan_in),
+        "    ",
+    )?;
+    writeln!(out, "  second half (rows {}-{}):", half, EMBEDDING_SIZE - 1)?;
+    write_layer(
+        out,
+        &LayerStats::from_arrays(&weights[split..], &biases[half..], fan_in),
+        "    ",
+    )?;
+    writeln!(out)?;
+
+    let cosines: Vec<f32> = (0..half)
+        .map(|k| {
+            let first = &weights[k * fan_in..(k + 1) * fan_in];
+            let second = &weights[(k + half) * fan_in..(k + half + 1) * fan_in];
+            cosine(first, second)
+        })
+        .collect();
+    writeln!(out, "  paired row cosine (first[k] vs second[k]):")?;
+    writeln!(
+        out,
+        "    mean {:+.3}, min {:+.3}, max {:+.3}",
+        mean(&cosines),
+        min_of(&cosines),
+        max_of(&cosines),
+    )?;
+    write_cosine_histogram(out, &cosines, "    ")?;
+    writeln!(out)?;
+
+    // A dead row in either half kills the whole pair after the multiply.
+    let norms = row_norms(&weights, fan_in);
+    let mut both_active = 0;
+    let mut one_dead = 0;
+    let mut both_dead = 0;
+    for k in 0..half {
+        let first_alive = norms[k] > ACTIVE_NEURON_THRESHOLD;
+        let second_alive = norms[k + half] > ACTIVE_NEURON_THRESHOLD;
+        match (first_alive, second_alive) {
+            (true, true) => both_active += 1,
+            (false, false) => both_dead += 1,
+            _ => one_dead += 1,
+        }
+    }
+    let pct = |n: usize| n as f32 / half as f32 * 100.0;
+    writeln!(
+        out,
+        "  pair activity (row-norm threshold {ACTIVE_NEURON_THRESHOLD:.2}):",
+    )?;
+    writeln!(
+        out,
+        "    both active: {both_active:>4}/{half} ({:>4.1}%)",
+        pct(both_active)
+    )?;
+    writeln!(
+        out,
+        "    one dead:    {one_dead:>4}/{half} ({:>4.1}%)",
+        pct(one_dead)
+    )?;
+    writeln!(
+        out,
+        "    both dead:   {both_dead:>4}/{half} ({:>4.1}%)",
+        pct(both_dead)
+    )?;
+    writeln!(out)?;
+    Ok(())
+}
+
+// Top bin is closed so a cosine of exactly 1.0 doesn't overflow.
+fn write_cosine_histogram(out: &mut String, values: &[f32], indent: &str) -> fmt::Result {
+    const BIN_COUNT: usize = 10;
+    const BAR_WIDTH: usize = 24;
+    const STEP: f32 = 2.0 / BIN_COUNT as f32;
+
+    let mut bins = [0usize; BIN_COUNT];
+    for &v in values {
+        let idx = (((v.clamp(-1.0, 1.0) + 1.0) / STEP) as usize).min(BIN_COUNT - 1);
+        bins[idx] += 1;
+    }
+    let peak = (*bins.iter().max().unwrap_or(&0)).max(1) as f32;
+
+    writeln!(out, "{indent}histogram ({BIN_COUNT} bins, -1 to +1):")?;
+    for (i, &count) in bins.iter().enumerate() {
+        let lo = -1.0 + STEP * i as f32;
+        let hi = lo + STEP;
+        let close = if i == BIN_COUNT - 1 { ']' } else { ')' };
+        let bar_len = (count as f32 / peak * BAR_WIDTH as f32).round() as usize;
+        writeln!(
+            out,
+            "{indent}  [{lo:>+.2}, {hi:>+.2}{close}: {:<BAR_WIDTH$} {count}",
+            "#".repeat(bar_len),
+        )?;
+    }
     Ok(())
 }
 
@@ -163,7 +273,11 @@ fn write_buckets(
         let stats = BucketStats::from_stack(stack)?;
 
         write_header(out, &format!("bucket {i}"))?;
-        writeln!(out, "  hidden1 ({} -> {HIDDEN_SIZE}):", 2 * EMBEDDING_SIZE)?;
+        writeln!(
+            out,
+            "  hidden1 ({} -> {HIDDEN_SIZE}):",
+            2 * PAIRWISE_OUT_SIZE
+        )?;
         write_layer(out, &stats.h1, "    ")?;
         writeln!(out, "  hidden2 ({HIDDEN_SIZE} -> {HIDDEN_SIZE}):")?;
         write_layer(out, &stats.h2, "    ")?;

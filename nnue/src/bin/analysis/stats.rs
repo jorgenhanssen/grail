@@ -95,9 +95,14 @@ impl LayerStats {
         let weights = linear.weight().flatten_all()?.to_vec1::<f32>()?;
         let biases = linear.bias().unwrap().to_vec1::<f32>()?;
         let fan_in = linear.weight().dim(1)?;
+        Ok(Self::from_arrays(&weights, &biases, fan_in))
+    }
 
-        let weight_mean_abs = math::mean_abs(&weights);
-        let weight_std = math::std_dev(&weights);
+    /// Variant of from_linear that takes raw slices, e.g. for one half of
+    /// the paired embedding.
+    pub fn from_arrays(weights: &[f32], biases: &[f32], fan_in: usize) -> Self {
+        let weight_mean_abs = math::mean_abs(weights);
+        let weight_std = math::std_dev(weights);
         // Kaiming uniform draws from U(-1/sqrt(fan_in), 1/sqrt(fan_in)),
         // so E[|W|] at init is 1/(2*sqrt(fan_in)). Scale is mean|W| / E[|W|_init].
         let scale = weight_mean_abs * 2.0 * (fan_in as f32).sqrt();
@@ -112,20 +117,20 @@ impl LayerStats {
             .count() as f32
             / weights.len() as f32;
 
-        let norms = math::row_norms(&weights, fan_in);
+        let norms = math::row_norms(weights, fan_in);
         let active_neurons = norms
             .iter()
             .filter(|&&n| n > ACTIVE_NEURON_THRESHOLD)
             .count();
 
-        Ok(Self {
+        Self {
             weight_mean_abs,
-            weight_median_abs: math::median_abs(&weights),
+            weight_median_abs: math::median_abs(weights),
             weight_std,
-            weight_max_abs: math::max_abs(&weights),
-            bias_mean_signed: math::mean(&biases),
-            bias_mean_abs: math::mean_abs(&biases),
-            bias_max_abs: math::max_abs(&biases),
+            weight_max_abs: math::max_abs(weights),
+            bias_mean_signed: math::mean(biases),
+            bias_mean_abs: math::mean_abs(biases),
+            bias_max_abs: math::max_abs(biases),
             scale,
             cov,
             dead_fraction,
@@ -135,7 +140,7 @@ impl LayerStats {
             row_norm_max: math::max_of(&norms),
             active_neurons,
             total_neurons: norms.len(),
-        })
+        }
     }
 }
 
