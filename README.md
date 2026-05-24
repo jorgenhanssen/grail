@@ -87,20 +87,6 @@ The project includes a `Makefile` for convenience:
 - **`make nnue-analysis`**: Dumps a human-readable weight analysis of the current NNUE to `nnue/model.analysis.txt`.
 - **`make clean`**: Cleans the build directory.
 
-### Benchmarking
-
-Runs depth-15 searches on standard perft positions:
-
-```bash
-cargo bench --bench search
-```
-
-For profiling with flamegraph:
-
-```bash
-CARGO_PROFILE_BENCH_DEBUG=true cargo flamegraph --bench search -- --bench
-```
-
 ### NNUE Data Generation & Training
 
 Grail includes tools to generate training data and train its own NNUE networks.
