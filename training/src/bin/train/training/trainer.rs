@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::args::Args;
 use crate::dataset::{DataLoader, ShardReader, ShardedDataset};
+use crate::state::{EpochRecord, TrainingState};
 use crate::training::evaluation::evaluate;
-use crate::training::metrics::MetricsTracker;
 use crate::training::progress::TrainingProgressBar;
 use crate::utils::device::get_device;
 use crate::utils::loss::wdl_eval_loss;
@@ -33,11 +33,10 @@ pub struct Trainer {
     patience: u64,
     wdl: f64,
     draw_target: f32,
-    model_path: String,
 }
 
 impl Trainer {
-    pub fn new(args: &Args, model_path: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn new(args: &Args, state: &TrainingState) -> Result<Self, Box<dyn Error>> {
         let device = get_device()?;
         let wdl = args.wdl.clamp(0.0, 1.0);
         let draw_target = args.draw_target.clamp(0.0, 1.0) as f32;
@@ -45,10 +44,16 @@ impl Trainer {
         let varmap = VarMap::new();
         let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
         let network = Network::new(&vs)?;
+
+        let lr = state
+            .last_learning_rate()
+            .map(|prev| prev * args.lr_decay)
+            .unwrap_or(args.learning_rate);
+
         let optimizer = AdamW::new(
             varmap.all_vars(),
             ParamsAdamW {
-                lr: args.learning_rate,
+                lr,
                 ..Default::default()
             },
         )?;
@@ -65,13 +70,15 @@ impl Trainer {
             patience: args.patience,
             wdl,
             draw_target,
-            model_path: model_path.to_string(),
         })
     }
 
     pub fn train(
         &mut self,
         dataset: &ShardedDataset,
+        state: &mut TrainingState,
+        model_path: &Path,
+        state_path: &Path,
         shutdown: Arc<AtomicBool>,
     ) -> Result<(), Box<dyn Error>> {
         log::info!("Using device: {:?}", self.device);
@@ -81,28 +88,42 @@ impl Trainer {
             (1.0 - self.wdl) * 100.0,
             self.draw_target,
         );
+        log::info!(
+            "Starting at epoch {} with LR {:.2e}",
+            state.next_epoch_number(),
+            self.optimizer.learning_rate(),
+        );
 
-        let mut metrics = MetricsTracker::new(self.patience);
-
-        for epoch in 1..=self.epochs {
+        for epoch in state.next_epoch_number()..=self.epochs {
             if shutdown.load(Ordering::Relaxed) {
                 log::info!("Training interrupted at epoch {}", epoch);
                 break;
             }
 
-            let val_loss = self.train_epoch(dataset, &shutdown)?;
+            let prev_best_val = state.best_achieved_val_loss();
 
-            let Some(val_loss) = val_loss else {
+            let Some((train_loss, val_loss)) = self.train_epoch(dataset, &shutdown)? else {
                 log::info!("Epoch {} interrupted", epoch);
                 break;
             };
 
-            let did_improve = metrics.update(val_loss);
-            if did_improve {
-                let _ = self.save_model(Path::new(&self.model_path));
+            if val_loss < prev_best_val {
+                if let Err(e) = self.save_model(model_path) {
+                    log::warn!("Failed to save model: {}", e);
+                }
             }
 
-            if metrics.should_stop() {
+            state.record_epoch(EpochRecord {
+                epoch,
+                train_loss,
+                val_loss,
+                learning_rate: self.optimizer.learning_rate(),
+            });
+            if let Err(e) = state.save(state_path) {
+                log::warn!("Failed to save training state: {}", e);
+            }
+
+            if state.epochs_no_improve() >= self.patience {
                 log::info!("Early stopping after {} epochs", epoch);
                 break;
             }
@@ -111,7 +132,7 @@ impl Trainer {
         }
 
         if !shutdown.load(Ordering::Relaxed) {
-            self.test_model(dataset, &shutdown)?;
+            self.test_model(dataset, model_path, &shutdown)?;
         }
 
         Ok(())
@@ -121,7 +142,7 @@ impl Trainer {
         &mut self,
         dataset: &ShardedDataset,
         shutdown: &Arc<AtomicBool>,
-    ) -> Result<Option<f32>, Box<dyn Error>> {
+    ) -> Result<Option<(f32, f32)>, Box<dyn Error>> {
         let reader = Arc::new(ShardReader::new(dataset.train_path(), TRAIN_SHARDS)?);
         let loader = DataLoader::new(
             reader,
@@ -180,23 +201,22 @@ impl Trainer {
 
         progress.finish(val_loss, train_loss);
 
-        Ok(Some(val_loss))
+        Ok(Some((train_loss, val_loss)))
     }
 
     fn decay_learning_rate(&mut self) {
-        let current_lr = self.optimizer.learning_rate();
-        let new_lr = current_lr * self.lr_decay;
+        let new_lr = self.optimizer.learning_rate() * self.lr_decay;
         self.optimizer.set_learning_rate(new_lr);
     }
 
     fn test_model(
         &mut self,
         dataset: &ShardedDataset,
+        model_path: &Path,
         shutdown: &Arc<AtomicBool>,
     ) -> Result<f32, Box<dyn Error>> {
         log::info!("Running final test set evaluation...");
-        let model_path = self.model_path.clone();
-        self.load_model(Path::new(&model_path))?;
+        self.load_model(model_path)?;
 
         let test_reader = Arc::new(ShardReader::new(dataset.test_path(), EVAL_SHARDS)?);
         let test_loader = DataLoader::new(
@@ -217,10 +237,8 @@ impl Trainer {
         Ok(())
     }
 
-    fn load_model(&mut self, path: &Path) -> Result<(), Box<dyn Error>> {
-        if path.exists() {
-            self.varmap.load(path)?;
-        }
+    pub fn load_model(&mut self, path: &Path) -> Result<(), Box<dyn Error>> {
+        self.varmap.load(path)?;
         Ok(())
     }
 }

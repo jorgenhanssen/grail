@@ -2,6 +2,8 @@ use ahash::AHashMap;
 use cozy_chess::Board;
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
 use nnue::network::{OUTPUT_BUCKETS, output_bucket};
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 use rayon::prelude::*;
 use std::collections::hash_map::RandomState;
 use std::fs::{self, File};
@@ -173,6 +175,7 @@ pub fn build_shards(
     shard_size_mb: usize,
     val_ratio: f64,
     test_ratio: f64,
+    seed: u64,
 ) -> io::Result<(ShardPaths, ShardStats)> {
     let files = get_csv_files(data_dir)?;
     log::info!("Found {} CSV files to process", files.len());
@@ -202,9 +205,12 @@ pub fn build_shards(
 
     let worker_stats: Vec<WorkerStats> = files
         .par_iter()
-        .map(|path| {
+        .enumerate()
+        .map(|(idx, path)| {
             process_file(
+                idx,
                 path,
+                seed,
                 val_ratio,
                 test_ratio,
                 &train_writer,
@@ -269,7 +275,9 @@ pub fn build_shards(
 }
 
 fn process_file(
+    file_index: usize,
     path: &Path,
+    seed: u64,
     val_ratio: f64,
     test_ratio: f64,
     train_writer: &ShardWriter,
@@ -279,7 +287,7 @@ fn process_file(
 ) -> WorkerStats {
     let mut stats = WorkerStats::new();
     let mut game_assignments: AHashMap<u32, Split> = AHashMap::new();
-    let mut rng = rand::rng();
+    let mut rng = StdRng::seed_from_u64(seed.wrapping_add(file_index as u64));
 
     let file = match File::open(path) {
         Ok(f) => f,
@@ -371,4 +379,37 @@ fn get_csv_files(data_dir: &Path) -> io::Result<Vec<PathBuf>> {
 
     files.sort();
     Ok(files)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const VAL_RATIO: f64 = 0.2;
+    const TEST_RATIO: f64 = 0.1;
+    const TRAIN_RATIO: f64 = 1.0 - VAL_RATIO - TEST_RATIO;
+
+    fn split_sequence(seed: u64, n: usize) -> Vec<Split> {
+        let mut rng = StdRng::seed_from_u64(seed);
+        (0..n)
+            .map(|_| pick_split(&mut rng, VAL_RATIO, TEST_RATIO))
+            .collect()
+    }
+
+    #[test]
+    fn pick_split_distribution_matches_ratios() {
+        let n = 50_000;
+        let (mut train, mut val, mut test) = (0, 0, 0);
+        for split in split_sequence(42, n) {
+            match split {
+                Split::Train => train += 1,
+                Split::Val => val += 1,
+                Split::Test => test += 1,
+            }
+        }
+        let n = n as f64;
+        assert!((train as f64 / n - TRAIN_RATIO).abs() < 0.02);
+        assert!((val as f64 / n - VAL_RATIO).abs() < 0.02);
+        assert!((test as f64 / n - TEST_RATIO).abs() < 0.02);
+    }
 }
