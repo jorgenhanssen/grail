@@ -133,7 +133,7 @@ make train  # Auto-detects GPU support (CUDA/Metal)
 ./target/release/train
 ```
 
-The trainer loads all CSV files from `nnue/data/` and saves the best model to `nnue/model.safetensors`.
+Run it again later and it'll pick up where it left off. Pass `--restart` to start fresh.
 
 **Arguments:**
 
@@ -148,7 +148,11 @@ The trainer loads all CSV files from `nnue/data/` and saves the best model to `n
 - `--shard-size-mb`: Size of each data shard in megabytes (default: 500).
 - `--wdl`: WDL blending weight, 0.0 = pure eval, 1.0 = pure WDL (default: 0.3).
 - `--draw-target`: Target win-probability for drawn games, smaller = prefer wins over draws (default: 0.5).
-- `--init-model`: Save a randomly initialized model and exit.
+- `--restart`: Discard saved progress and train from epoch 1.
+
+**Subcommands:**
+
+- `init`: Save a randomly initialized model and exit.
 
 ## Acknowledgements
 

@@ -8,6 +8,8 @@ use std::io;
 use std::path::Path;
 use tempfile::TempDir;
 
+use crate::state::TrainingState;
+
 pub use loader::DataLoader;
 pub use shard_builder::ShardStats;
 pub use shard_reader::ShardReader;
@@ -25,12 +27,7 @@ pub struct ShardedDataset {
 
 impl ShardedDataset {
     /// Builds shards from CSV files in the given directory.
-    pub fn build(
-        data_dir: &Path,
-        shard_size_mb: usize,
-        val_ratio: f64,
-        test_ratio: f64,
-    ) -> io::Result<Self> {
+    pub fn build(data_dir: &Path, shard_size_mb: usize, state: &TrainingState) -> io::Result<Self> {
         let temp_dir = tempfile::tempdir()?;
         log::info!("Building shards from {:?}...", data_dir);
 
@@ -38,8 +35,9 @@ impl ShardedDataset {
             data_dir,
             temp_dir.path(),
             shard_size_mb,
-            val_ratio,
-            test_ratio,
+            state.val_ratio,
+            state.test_ratio,
+            state.seed,
         )?;
 
         stats.log();

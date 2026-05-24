@@ -1778,6 +1778,8 @@ dependencies = [
  "rand",
  "rayon",
  "search",
+ "serde",
+ "serde_json",
  "simplelog",
  "tempfile",
  "uci",
