@@ -7,9 +7,6 @@ license = { workspace = true }
 description = { workspace = true }
 repository = { workspace = true }
 
-[features]
-tuning = []
-
 [dependencies]
 cozy-chess = { workspace = true }
 ahash = { workspace = true }
