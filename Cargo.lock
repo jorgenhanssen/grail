@@ -869,8 +869,6 @@ dependencies = [
  "config",
  "cozy-chess",
  "nnue",
- "rand",
- "rayon",
  "search",
  "uci",
 ]
