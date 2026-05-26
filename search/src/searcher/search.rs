@@ -621,7 +621,12 @@ impl Searcher {
 
         // Re-search without reduction if reduced search beat alpha
         if reduction > 0 && value > bounds.alpha {
-            child.set_type(child.node_type().inverted());
+            // Don't demote the PV move to a Cut node just because we reduced it.
+            if is_pv_move && is_pv_node {
+                child.set_type(NodeType::Pv);
+            } else {
+                child.set_type(child.node_type().inverted());
+            }
 
             // Search at full depth
             adjusted_depth = depth.saturating_add(extension);
