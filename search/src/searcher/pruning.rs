@@ -157,7 +157,7 @@ impl Searcher {
             return None;
         }
 
-        // No point proving that our position is too good if we dont even clear beta.
+        // No point proving that our position is too good if we dont clear beta.
         if let Some(se) = static_eval {
             if se < bounds.beta {
                 return None;
@@ -195,7 +195,7 @@ impl Searcher {
             -self.search_node(&nm_child, reduced_child_depth, ply + 1, null_bounds, false);
         self.search_stack.pop();
 
-        // Opponent beat beta even with a free move = not strong enough to prune
+        // Our position does not hold when giving opponent a free move, so let's not prune.
         if null_value < bounds.beta {
             return None;
         }
@@ -209,14 +209,14 @@ impl Searcher {
             node.hash(),
             ply,
             depth.saturating_sub(r),
-            bounds.beta,
+            null_value,
             static_eval,
             bounds.alpha,
             bounds.beta,
             None,
         );
 
-        Some(bounds.beta)
+        Some(null_value)
     }
 
     /// Reverse futility pruning: if static eval - margin >= beta, the position is too good to search.
