@@ -561,7 +561,14 @@ impl Searcher {
         let gives_check = child.in_check();
         let is_tactical = in_check || gives_check || is_cap || is_promotion;
 
-        if self.try_futility_prune(depth, in_check, is_tactical, bounds.alpha, static_eval) {
+        if self.try_futility_prune(
+            depth,
+            in_check,
+            is_tactical,
+            is_pv_move,
+            bounds.alpha,
+            static_eval,
+        ) {
             return None;
         }
 

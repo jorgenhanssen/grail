@@ -35,10 +35,11 @@ impl Searcher {
         depth: u8,
         in_check: bool,
         is_tactical: bool,
+        is_pv_move: bool,
         alpha: i16,
         static_eval: i16,
     ) -> bool {
-        if depth > self.config.futility_max_depth.value || in_check {
+        if is_pv_move || depth > self.config.futility_max_depth.value || in_check {
             return false;
         }
         let margin = self.config.futility_base_margin.value
