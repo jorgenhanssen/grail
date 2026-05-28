@@ -255,19 +255,22 @@ impl Searcher {
             // missed tactics and can't safely prune the current search.
             //
             // Don't do TT cutoffs in PV nodes or during singular search.
+            let is_cut_node = node.is_cut();
             if !is_pv_node && singular.is_none() && tt.depth >= depth {
                 match tt.bound {
                     // Exact: previous search found true minimax value
                     Bound::Exact => {
-                        if let Some(m) = tt.best_move {
-                            self.pv_table.set_move(ply, m);
+                        if is_cut_node {
+                            if let Some(m) = tt.best_move {
+                                self.pv_table.set_move(ply, m);
+                            }
+                            return tt.value;
                         }
-                        return tt.value;
                     }
                     // Lower: previous search failed high (value >= beta), so value is at least this good
                     Bound::Lower => {
                         bounds.raise_alpha(tt.value);
-                        if bounds.is_cutoff(bounds.alpha) {
+                        if is_cut_node && bounds.is_cutoff(bounds.alpha) {
                             if let Some(m) = tt.best_move {
                                 self.pv_table.set_move(ply, m);
                             }
