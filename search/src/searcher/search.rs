@@ -486,6 +486,11 @@ impl Searcher {
             };
         }
 
+        // Let's not store a partial result in the TT / correction.
+        if self.shared.is_stopped() {
+            return best_value;
+        }
+
         // Use original alpha when storing in tables, since the bound type depends on the original expectation.
         // Alpha may have been raised during search, but the bound type depends on
         // whether we improved.
