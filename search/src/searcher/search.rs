@@ -269,12 +269,14 @@ impl Searcher {
                     }
                     // Lower: previous search failed high (value >= beta), so value is at least this good
                     Bound::Lower => {
-                        bounds.raise_alpha(tt.value);
-                        if is_cut_node && bounds.is_cutoff(bounds.alpha) {
-                            if let Some(m) = tt.best_move {
-                                self.pv_table.set_move(ply, m);
+                        if is_cut_node {
+                            bounds.raise_alpha(tt.value);
+                            if bounds.is_cutoff(bounds.alpha) {
+                                if let Some(m) = tt.best_move {
+                                    self.pv_table.set_move(ply, m);
+                                }
+                                return tt.value;
                             }
-                            return tt.value;
                         }
                     }
                     // Upper: previous search failed low (value <= alpha), so value is at most this bad
