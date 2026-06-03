@@ -16,6 +16,7 @@ sprt/
 
 # NNUE training data and progress
 nnue/data/
+nnue/training.json
 
 # Profiling
 flamegraph.svg
