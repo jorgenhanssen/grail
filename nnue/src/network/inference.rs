@@ -7,7 +7,7 @@ use crate::encoding::NUM_FEATURES;
 use super::accumulator::Accumulator;
 use super::linear::LinearLayer;
 use super::model::Network;
-use super::simd::{simd_add, simd_relu};
+use super::simd::{simd_add, simd_crelu};
 use super::{CP_BOUND, EMBEDDING_SIZE, FV_SCALE, HIDDEN_SIZE, OUTPUT_BUCKETS};
 
 /// NNUE inference engine with quantized weights and dual-perspective accumulators.
@@ -59,8 +59,8 @@ impl NNUENetwork {
 
         let nstm = !stm;
         let (stm_half, nstm_half) = self.embedding_buffer.split_at_mut(EMBEDDING_SIZE);
-        self.accumulator.dequantize_and_relu(stm, stm_half);
-        self.accumulator.dequantize_and_relu(nstm, nstm_half);
+        self.accumulator.dequantize_and_screlu(stm, stm_half);
+        self.accumulator.dequantize_and_screlu(nstm, nstm_half);
 
         let output = self.buckets[bucket].forward(&self.embedding_buffer);
 
@@ -81,11 +81,11 @@ struct OutputStack {
 impl OutputStack {
     fn forward(&mut self, input: &[f32]) -> f32 {
         self.hidden1.forward(input, &mut self.h1_buffer);
-        simd_relu(&mut self.h1_buffer);
+        simd_crelu(&mut self.h1_buffer);
 
         self.hidden2.forward(&self.h1_buffer, &mut self.h2_buffer);
         simd_add(&mut self.h2_buffer, &self.h1_buffer); // residual connection
-        simd_relu(&mut self.h2_buffer);
+        simd_crelu(&mut self.h2_buffer);
 
         self.output.forward(&self.h2_buffer, &mut self.out_buffer);
 

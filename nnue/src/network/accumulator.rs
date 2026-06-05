@@ -125,8 +125,8 @@ impl Accumulator {
         }
     }
 
-    /// Dequantizes one color's i16 buffer into f32 and applies ReLU into output.
-    pub fn dequantize_and_relu(&self, color: Color, output: &mut [f32]) {
+    /// Dequantizes one color's i16 buffer into f32 and applies screlu into output.
+    pub fn dequantize_and_screlu(&self, color: Color, output: &mut [f32]) {
         debug_assert_eq!(output.len(), EMBEDDING_SIZE);
         let buffer = match color {
             Color::White => &self.buffer_white,
@@ -134,6 +134,7 @@ impl Accumulator {
         };
 
         let zeros = SimdF32::splat(0.0);
+        let ones = SimdF32::splat(1.0);
 
         let mut i = 0;
         while i + SIMD_WIDTH_F32 <= EMBEDDING_SIZE {
@@ -142,7 +143,8 @@ impl Accumulator {
             let scale_vec = SimdF32::from_slice(&self.inv_scales[i..i + SIMD_WIDTH_F32]);
 
             let dequantized = vals_f32 * scale_vec;
-            let activated = dequantized.simd_max(zeros); // ReLU
+            let clipped = dequantized.simd_max(zeros).simd_min(ones);
+            let activated = clipped * clipped; // screlu
 
             activated.copy_to_slice(&mut output[i..i + SIMD_WIDTH_F32]);
             i += SIMD_WIDTH_F32;
@@ -150,7 +152,8 @@ impl Accumulator {
 
         // Cleanup remaining outside SIMD width
         while i < EMBEDDING_SIZE {
-            output[i] = (buffer[i] as f32 * self.inv_scales[i]).max(0.0);
+            let clipped = (buffer[i] as f32 * self.inv_scales[i]).clamp(0.0, 1.0);
+            output[i] = clipped * clipped;
             i += 1;
         }
     }

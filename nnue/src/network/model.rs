@@ -27,8 +27,8 @@ impl Network {
     /// output is in stm space so the caller has to sign-flip if they want it as
     /// white.
     pub fn forward(&self, stm: &Tensor, nstm: &Tensor, buckets: &[usize]) -> Result<Tensor> {
-        let stm_embed = stm.apply(&self.embedding)?.relu()?;
-        let nstm_embed = nstm.apply(&self.embedding)?.relu()?;
+        let stm_embed = screlu(&stm.apply(&self.embedding)?)?;
+        let nstm_embed = screlu(&nstm.apply(&self.embedding)?)?;
         let embedding_out = Tensor::cat(&[stm_embed, nstm_embed], 1)?;
         self.buckets.forward(&embedding_out, buckets)
     }
@@ -55,9 +55,7 @@ impl OutputBuckets {
     fn forward(&self, embedding_out: &Tensor, buckets: &[usize]) -> Result<Tensor> {
         // Since the buckets use the same embedding as their input we can
         // perform their multiplications in parallel.
-        let h1 = embedding_out
-            .apply(&self.hidden1_for_all_buckets()?)?
-            .relu()?;
+        let h1 = crelu(&embedding_out.apply(&self.hidden1_for_all_buckets()?)?)?;
 
         // Buuut since the h1 => h2 have different inputs per bucket we kinda need
         // to split it up and compute each h2 separately.
@@ -114,7 +112,15 @@ impl OutputStack {
     /// Runs the individual bucket's layers that cannot be shared from
     /// the embedding.
     fn finish(&self, h1: &Tensor) -> Result<Tensor> {
-        let h2 = (h1.apply(&self.hidden2)? + h1)?.relu()?;
+        let h2 = crelu(&(h1.apply(&self.hidden2)? + h1)?)?;
         h2.apply(&self.output)
     }
+}
+
+fn crelu(x: &Tensor) -> Result<Tensor> {
+    x.clamp(0f32, 1f32)
+}
+
+fn screlu(x: &Tensor) -> Result<Tensor> {
+    x.clamp(0f32, 1f32)?.sqr()
 }
