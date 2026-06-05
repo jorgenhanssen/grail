@@ -10,7 +10,7 @@ impl TrainingProgressBar {
         bar.set_style(
             ProgressStyle::default_bar()
                 .template(
-                    "{spinner:.cyan} {pos}/{len} [{wide_bar:.cyan/blue}] {eta_precise} | {msg}",
+                    "{spinner:.cyan} {pos}/{len} [{wide_bar:.cyan/blue}] {per_sec} {eta_precise} | {msg}",
                 )
                 .unwrap(),
         );
