@@ -9,7 +9,7 @@ pub struct Args {
     pub command: Option<Command>,
 
     /// Number of positions per training batch.
-    #[arg(long, default_value_t = 8192)]
+    #[arg(long, default_value_t = 16384)]
     pub batch_size: usize,
 
     /// Initial learning rate for optimizer.
