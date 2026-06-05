@@ -1,16 +1,17 @@
 mod args;
-mod book;
 mod game;
 mod generator;
 mod histogram;
+mod opening;
 mod samples;
 mod worker;
 
-use args::Args;
+use args::{Args, Opening};
 use chrono::Local;
 use clap::Parser;
 use generator::Generator;
 use log::LevelFilter;
+use opening::OpeningSource;
 use samples::write_samples;
 use simplelog::{Config, SimpleLogger};
 use std::{
@@ -21,6 +22,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
+use utils::Book;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = init()?;
@@ -35,8 +37,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     })?;
 
     let threads = args.threads.unwrap_or_else(num_cpus::get);
-    let generator = Generator::new(threads, args.pv_lines, args.book, args.syzygy_path)?;
-    let samples = generator.run(args.depth, stop_flag);
+    let opening = match args.opening {
+        Opening::Book { path } => OpeningSource::Book(Book::load(&path)?),
+        Opening::Random { plies } => OpeningSource::Random { plies },
+    };
+    let generator = Generator::new(threads, args.pv_lines, opening, args.syzygy_path)?;
+    let samples = generator.run(args.depth, args.max_opening_imbalance, stop_flag);
 
     log::info!("Generated {} samples", samples.len());
 

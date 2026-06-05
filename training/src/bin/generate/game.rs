@@ -4,7 +4,6 @@ use pyrrhic_rs::{TableBases, WdlProbeResult};
 use rand::RngExt;
 use search::{CozyAdapter, Engine, PvLine, SearchResult};
 use std::collections::HashMap;
-use std::str::FromStr;
 use uci::commands::GoParams;
 use utils::{flip_eval_perspective, has_check, has_insufficient_material, has_legal_moves};
 
@@ -18,24 +17,25 @@ pub struct SelfPlayGame {
     position_counts: HashMap<u64, usize>,
     positions: Vec<(String, i16, Move)>, // FEN, eval, best move
     depth: u8,
+    max_opening_imbalance: Option<i16>,
     tablebases: Option<TableBases<CozyAdapter>>,
 }
 
 impl SelfPlayGame {
     pub fn new(
         game_id: usize,
-        opening_fen: &str,
+        board: Board,
         depth: u8,
+        max_opening_imbalance: Option<i16>,
         tablebases: Option<TableBases<CozyAdapter>>,
     ) -> Self {
-        let board = Board::from_str(opening_fen).unwrap();
-
         Self {
             board,
             game_id,
             position_counts: HashMap::new(),
             positions: Vec::new(),
             depth,
+            max_opening_imbalance,
             tablebases,
         }
     }
@@ -58,6 +58,10 @@ impl SelfPlayGame {
             let Some(pv) = result.primary() else {
                 break;
             };
+
+            if self.opening_is_too_imbalanced(pv.score) {
+                return;
+            }
 
             if let Some(mv) = pv.best_move() {
                 self.record_position(pv.score, mv);
@@ -83,6 +87,13 @@ impl SelfPlayGame {
         let white_score = flip_eval_perspective(self.board.side_to_move(), eval);
         self.positions
             .push((format!("{}", self.board), white_score, best_move));
+    }
+
+    fn opening_is_too_imbalanced(&self, score: i16) -> bool {
+        let Some(max) = self.max_opening_imbalance else {
+            return false;
+        };
+        self.positions.is_empty() && score.abs() > max
     }
 
     fn outcome(&self) -> GameOutcome {

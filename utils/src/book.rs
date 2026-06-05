@@ -1,8 +1,10 @@
+use cozy_chess::Board;
 use rand::RngExt;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::str::FromStr;
 
 // EPD has at least 4 fields: board, side, castling, en passant
 const EPD_MIN_FIELDS: usize = 4;
@@ -13,7 +15,7 @@ const DEFAULT_FULLMOVE: u16 = 1;
 /// Opening book loaded from EPD file.
 /// Provides balanced, known opening positions to start self-play from.
 pub struct Book {
-    positions: Vec<String>,
+    positions: Vec<Board>,
 }
 
 impl Book {
@@ -24,7 +26,9 @@ impl Book {
         let mut positions = Vec::new();
         for line in reader.lines() {
             if let Some(fen) = parse_epd_line(&line?) {
-                positions.push(fen);
+                let board = Board::from_str(&fen)
+                    .map_err(|e| format!("invalid FEN in opening book: {fen} ({e})"))?;
+                positions.push(board);
             }
         }
 
@@ -37,10 +41,10 @@ impl Book {
         Ok(Self { positions })
     }
 
-    pub fn random_position(&self) -> &str {
+    pub fn random_position(&self) -> Board {
         let mut rng = rand::rng();
         let index = rng.random_range(0..self.positions.len());
-        &self.positions[index]
+        self.positions[index].clone()
     }
 }
 
