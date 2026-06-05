@@ -9,8 +9,9 @@ use super::shard_reader::ShardReader;
 const CHANNEL_BUFFER_MULTIPLIER: usize = 2;
 
 pub struct Batch {
-    pub stm_features: Vec<f32>,
-    pub nstm_features: Vec<f32>,
+    pub stm_features: Vec<u8>,
+    pub nstm_features: Vec<u8>,
+
     pub scores: Vec<f32>,
     pub outcomes: Vec<f32>,
     pub buckets: Vec<usize>,
@@ -91,8 +92,10 @@ impl DataLoader {
             match reader.next() {
                 Some(sample) => {
                     if let Some(encoded) = sample.encode(draw_target) {
-                        stm_features.extend_from_slice(&encoded.stm_features);
-                        nstm_features.extend_from_slice(&encoded.nstm_features);
+                        // let's convert to u8 to minimize the data sent to gpu.
+                        // (its only 0s or 1s anyway)
+                        stm_features.extend(encoded.stm_features.iter().map(|&v| v as u8));
+                        nstm_features.extend(encoded.nstm_features.iter().map(|&v| v as u8));
                         scores.push(encoded.score);
                         outcomes.push(encoded.outcome);
                         buckets.push(encoded.bucket);
