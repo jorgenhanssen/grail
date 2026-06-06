@@ -144,7 +144,7 @@ impl Accumulator {
 
             let dequantized = vals_f32 * scale_vec;
             let clipped = dequantized.simd_max(zeros).simd_min(ones);
-            let activated = clipped * clipped; // screlu
+            let activated = clipped * clipped;
 
             activated.copy_to_slice(&mut output[i..i + SIMD_WIDTH_F32]);
             i += SIMD_WIDTH_F32;
