@@ -4,6 +4,7 @@ use candle_nn::{Linear, VarBuilder, linear};
 use crate::encoding::NUM_FEATURES;
 
 use super::{EMBEDDING_SIZE, HIDDEN_SIZE, OUTPUT_BUCKETS};
+use crate::kernels::{crelu, screlu};
 
 /// Full-precision network for training and weight loading.
 ///
@@ -115,12 +116,4 @@ impl OutputStack {
         let h2 = crelu(&(h1.apply(&self.hidden2)? + h1)?)?;
         h2.apply(&self.output)
     }
-}
-
-fn crelu(x: &Tensor) -> Result<Tensor> {
-    x.clamp(0f32, 1f32)
-}
-
-fn screlu(x: &Tensor) -> Result<Tensor> {
-    x.clamp(0f32, 1f32)?.sqr()
 }

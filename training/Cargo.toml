@@ -36,10 +36,12 @@ pyrrhic-rs = "0.2"
 [features]
 default = []
 cuda = [
+    "nnue/cuda",
     "candle-core/cuda",
     "candle-nn/cuda",
 ]
 metal = [
+    "nnue/metal",
     "candle-core/metal",
     "candle-nn/metal",
 ]

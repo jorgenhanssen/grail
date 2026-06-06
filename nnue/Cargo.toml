@@ -15,11 +15,15 @@ log = { workspace = true }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
 
+[build-dependencies]
+cudaforge = { version = "0.1.2", optional = true }
+
 [features]
 default = []
 cuda = [
     "candle-core/cuda",
     "candle-nn/cuda",
+    "dep:cudaforge",
 ]
 metal = [
     "candle-core/metal",
