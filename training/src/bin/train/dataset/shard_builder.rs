@@ -2,8 +2,8 @@ use ahash::AHashMap;
 use cozy_chess::Board;
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
 use nnue::network::{OUTPUT_BUCKETS, output_bucket};
-use rand::SeedableRng;
 use rand::rngs::StdRng;
+use rand::{RngExt, SeedableRng};
 use rayon::prelude::*;
 use std::collections::hash_map::RandomState;
 use std::fs::{self, File};
@@ -354,7 +354,7 @@ fn parse_csv_line(line: &str) -> Option<(&str, i16, &str, u32)> {
     Some((fen, score, outcome, game_id))
 }
 
-fn pick_split<R: rand::Rng>(rng: &mut R, val_ratio: f64, test_ratio: f64) -> Split {
+fn pick_split<R: RngExt>(rng: &mut R, val_ratio: f64, test_ratio: f64) -> Split {
     let r: f64 = rng.random();
     if r < test_ratio {
         Split::Test
