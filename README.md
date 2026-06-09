@@ -4,7 +4,7 @@
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-nightly-orange.svg)](https://www.rust-lang.org/)
 
-Grail is a hobby chess engine written in Rust. Named after the quest for the Holy Grail, it represents the search for the elusive, perfectly solved game. It implements modern search techniques and a fully self-taught NNUE that learned chess from 67 million self-play games.
+Grail is a hobby chess engine written in Rust. Named after the quest for the Holy Grail, it represents the search for the elusive, perfectly solved game. It implements modern search techniques and a fully self-taught NNUE that learned chess from 99 million self-play games.
 
 ## Usage
 
