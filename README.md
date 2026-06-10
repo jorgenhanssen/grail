@@ -97,16 +97,28 @@ Generate self-play games to create a dataset:
 
 ```bash
 make generate
-./target/release/generate --book books/your_opening_book.epd
+
+# Openings from an EPD opening book
+./target/release/generate book --path books/your_opening_book.epd
+
+# Openings from startpos + random moves
+./target/release/generate random --plies 8
 ```
+
+**Opening sources (subcommands):**
+
+- `book`: Start games from positions in an opening book.
+  - `--path`: Path to an opening book in EPD format (required).
+- `random`: Start games from startpos plus random moves.
+  - `--plies`: Number of random plies (default: 8). Note: 50% chance an extra ply is added to balance stm.
 
 **Arguments:**
 
-- `--book`: Path to an opening book in EPD format (required).
 - `--depth`: Search depth for each move (default: 8).
 - `--pv-lines`: Number of PV lines to search at each decision point (default: 1).
 - `--threads`: Number of threads (default: number of logical CPUs).
 - `--syzygy-path`: Colon-separated paths to Syzygy tablebase files (optional).
+- `--max-opening-imbalance`: Discard games whose opening eval exceeds this many centipawns in absolute value (optional).
 
 Generated data is saved to `nnue/data/YYYY-MM-DD-HH:MM.csv`.
 
