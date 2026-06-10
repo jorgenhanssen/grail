@@ -498,7 +498,7 @@ impl Searcher {
             self.shared.tt().store(
                 hash,
                 ply,
-                best_move_depth,
+                depth,
                 best_value,
                 Some(static_eval),
                 original_bounds.alpha,
