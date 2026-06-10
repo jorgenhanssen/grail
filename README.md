@@ -53,7 +53,7 @@ Once added to your GUI, you can configure the engine via the UCI options:
 - **SyzygyPath**: Paths to Syzygy tablebase files (separated by `;` on Windows, `:` on Linux/macOS).
 - **SyzygyProbeDepth**: Minimum depth to probe tablebases (Default: 1).
 
-The engine supports standard time controls (increment, sudden death, moves to go) and analysis modes (fixed depth, infinite).
+The engine supports standard time controls (increment, sudden death, moves to go) and analysis modes (fixed depth, fixed nodes, soft nodes, infinite).
 
 ## Play Against Grail Online
 
