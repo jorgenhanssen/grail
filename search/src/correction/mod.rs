@@ -7,7 +7,7 @@ use utils::is_capture;
 use config::EngineConfig;
 
 use crate::history::PieceTo;
-use crate::scores::MATE_VALUE;
+use crate::scores::{MATE_SCORE_BOUND, MATE_VALUE};
 
 use continuation::ContinuationCorrection;
 use position::PositionCorrection;
@@ -89,6 +89,10 @@ impl Correction {
             if is_capture(board, mv) || mv.promotion.is_some() {
                 return;
             }
+        }
+
+        if best_value.abs() >= MATE_SCORE_BOUND {
+            return;
         }
 
         // Don't update if the search and the eval disagree on the direction.
