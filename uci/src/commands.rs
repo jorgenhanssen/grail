@@ -108,4 +108,7 @@ pub struct GoParams {
     pub move_time: Option<u64>,
     /// Stop after searching this many total nodes.
     pub nodes: Option<u64>,
+    /// Don't start a new iteration after this many total nodes,
+    /// but let the current iteration finish
+    pub soft_nodes: Option<u64>,
 }

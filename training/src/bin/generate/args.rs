@@ -13,6 +13,10 @@ pub struct Args {
     #[arg(long, global = true, default_value_t = 8)]
     pub depth: u8,
 
+    /// Soft node limit per position (finishes the ongoing iteration).
+    #[arg(long, global = true, conflicts_with = "depth")]
+    pub nodes: Option<u64>,
+
     /// Number of PV lines to search at each decision point.
     #[arg(long, global = true, default_value_t = 1)]
     pub pv_lines: u8,
@@ -24,6 +28,10 @@ pub struct Args {
     /// Skip openings where the abs eval exceeds this (centipawns).
     #[arg(long, global = true)]
     pub max_opening_imbalance: Option<i16>,
+
+    /// Max plies to teleport along a PV between recorded positions.
+    #[arg(long, global = true, default_value_t = 8, value_parser = clap::value_parser!(u64).range(1..))]
+    pub max_teleport_plies: u64,
 
     /// Source openings used for self-play games.
     #[command(subcommand)]

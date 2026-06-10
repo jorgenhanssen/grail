@@ -2,6 +2,7 @@ mod args;
 mod game;
 mod generator;
 mod histogram;
+mod limit;
 mod opening;
 mod samples;
 mod worker;
@@ -10,6 +11,7 @@ use args::{Args, Opening};
 use chrono::Local;
 use clap::Parser;
 use generator::Generator;
+use limit::SearchLimit;
 use log::LevelFilter;
 use opening::OpeningSource;
 use samples::write_samples;
@@ -41,8 +43,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         Opening::Book { path } => OpeningSource::Book(Book::load(&path)?),
         Opening::Random { plies } => OpeningSource::Random { plies },
     };
+    let limit = match args.nodes {
+        Some(nodes) => SearchLimit::SoftNodes(nodes),
+        None => SearchLimit::Depth(args.depth),
+    };
     let generator = Generator::new(threads, args.pv_lines, opening, args.syzygy_path)?;
-    let samples = generator.run(args.depth, args.max_opening_imbalance, stop_flag);
+    let samples = generator.run(
+        limit,
+        args.max_opening_imbalance,
+        args.max_teleport_plies as usize,
+        stop_flag,
+    );
 
     log::info!("Generated {} samples", samples.len());
 
