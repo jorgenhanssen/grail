@@ -70,11 +70,14 @@ impl TimeControlStats {
 
     /// Returns true if the score dropped significantly in the last iteration.
     pub fn has_score_drop(&self) -> bool {
-        if self.scores.len() < 2 {
+        let iterations = self.scores.len();
+        if iterations < 2 {
             return false;
         }
 
-        let last_two = &self.scores[self.scores.len() - 2..];
-        (last_two[0] - last_two[1]) >= SCORE_DROP_THRESHOLD
+        let prev = self.scores[iterations - 2];
+        let curr = self.scores[iterations - 1];
+
+        prev.saturating_sub(curr) >= SCORE_DROP_THRESHOLD
     }
 }

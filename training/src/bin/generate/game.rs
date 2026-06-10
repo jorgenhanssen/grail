@@ -1,7 +1,7 @@
 use crate::samples::{GameOutcome, Sample};
 use cozy_chess::{Board, Color, Move};
 use pyrrhic_rs::{TableBases, WdlProbeResult};
-use rand::Rng;
+use rand::RngExt;
 use search::{CozyAdapter, Engine, PvLine, SearchResult};
 use std::collections::HashMap;
 use std::str::FromStr;

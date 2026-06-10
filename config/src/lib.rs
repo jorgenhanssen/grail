@@ -47,6 +47,7 @@ define_config!(
 
     (reduction_cut_node: u16, "Reduction Cut Node", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (reduction_not_improving: u16, "Reduction Not Improving", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
+    (reduction_quiets_if_tt_capture: u16, "Reduction Quiets If TT Capture", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_near_root: u16, "Anti Reduction Near Root", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_pv_node: u16, "Anti Reduction PV Node", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_pv_move: u16, "Anti Reduction PV Move", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
@@ -103,10 +104,13 @@ define_config!(
     (correction_history_max_correction: i32, "Correction History Max Correction", UciOptionType::Spin { min: 128, max: 2048 }, 1024, cfg!(feature = "tuning")),
     (correction_table_size: usize, "Correction Table Size", UciOptionType::Spin { min: 1024, max: 65536 }, 16384, cfg!(feature = "tuning")),
 
-    (correction_pawn_weight: i32, "Correction Pawn Weight", UciOptionType::Spin { min: 0, max: 20000 }, 10347, cfg!(feature = "tuning")),
-    (correction_minor_weight: i32, "Correction Minor Weight", UciOptionType::Spin { min: 0, max: 20000 }, 8821, cfg!(feature = "tuning")),
-    (correction_nonpawn_weight: i32, "Correction NonPawn Weight", UciOptionType::Spin { min: 0, max: 20000 }, 11665, cfg!(feature = "tuning")),
-    (correction_combined_divisor: i32, "Correction Combined Divisor", UciOptionType::Spin { min: 1024, max: 262144 }, 131072, cfg!(feature = "tuning")),
-    (correction_minor_update_weight: i32, "Correction Minor Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 156, cfg!(feature = "tuning")),
-    (correction_nonpawn_update_weight: i32, "Correction NonPawn Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 178, cfg!(feature = "tuning")),
+    (correction_pawn_weight: i32, "Correction Pawn Weight", UciOptionType::Spin { min: 0, max: 20000 }, 10460, cfg!(feature = "tuning")),
+    (correction_minor_weight: i32, "Correction Minor Weight", UciOptionType::Spin { min: 0, max: 20000 }, 8136, cfg!(feature = "tuning")),
+    (correction_nonpawn_weight: i32, "Correction NonPawn Weight", UciOptionType::Spin { min: 0, max: 20000 }, 11468, cfg!(feature = "tuning")),
+    (correction_continuation_weight: i32, "Correction Continuation Weight", UciOptionType::Spin { min: 0, max: 20000 }, 4472, cfg!(feature = "tuning")),
+    (correction_combined_divisor: i32, "Correction Combined Divisor", UciOptionType::Spin { min: 1024, max: 500000 }, 134500, cfg!(feature = "tuning")),
+    (correction_minor_update_weight: i32, "Correction Minor Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 150, cfg!(feature = "tuning")),
+    (correction_nonpawn_update_weight: i32, "Correction NonPawn Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 180, cfg!(feature = "tuning")),
+    (correction_continuation_update_weight: i32, "Correction Continuation Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 160, cfg!(feature = "tuning")),
+    (correction_continuation_max_moves: usize, "Correction Continuation Max Moves", UciOptionType::Spin { min: 1, max: 4 }, 2, cfg!(feature = "tuning")),
 );

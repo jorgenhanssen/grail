@@ -9,8 +9,9 @@ use super::shard_reader::ShardReader;
 const CHANNEL_BUFFER_MULTIPLIER: usize = 2;
 
 pub struct Batch {
-    pub stm_features: Vec<f32>,
-    pub nstm_features: Vec<f32>,
+    pub stm_features: Vec<u8>,
+    pub nstm_features: Vec<u8>,
+
     pub scores: Vec<f32>,
     pub outcomes: Vec<f32>,
     pub buckets: Vec<usize>,
@@ -31,6 +32,7 @@ impl DataLoader {
         batch_size: usize,
         num_workers: usize,
         shutdown: Arc<AtomicBool>,
+        draw_target: f32,
     ) -> Self {
         let (sender, receiver) = mpsc::sync_channel(num_workers * CHANNEL_BUFFER_MULTIPLIER);
 
@@ -41,6 +43,7 @@ impl DataLoader {
                     sender.clone(),
                     Arc::clone(&shutdown),
                     batch_size,
+                    draw_target,
                 )
             })
             .collect();
@@ -56,10 +59,11 @@ impl DataLoader {
         tx: mpsc::SyncSender<Batch>,
         shutdown: Arc<AtomicBool>,
         batch_size: usize,
+        draw_target: f32,
     ) -> thread::JoinHandle<()> {
         thread::spawn(move || {
             while !shutdown.load(Ordering::Relaxed) {
-                let batch = Self::collect_batch(&reader, batch_size, &shutdown);
+                let batch = Self::collect_batch(&reader, batch_size, &shutdown, draw_target);
 
                 if batch.scores.is_empty() || tx.send(batch).is_err() {
                     break;
@@ -68,7 +72,12 @@ impl DataLoader {
         })
     }
 
-    fn collect_batch(reader: &ShardReader, batch_size: usize, shutdown: &AtomicBool) -> Batch {
+    fn collect_batch(
+        reader: &ShardReader,
+        batch_size: usize,
+        shutdown: &AtomicBool,
+        draw_target: f32,
+    ) -> Batch {
         let mut stm_features = Vec::with_capacity(batch_size * NUM_FEATURES);
         let mut nstm_features = Vec::with_capacity(batch_size * NUM_FEATURES);
         let mut scores = Vec::with_capacity(batch_size);
@@ -82,9 +91,11 @@ impl DataLoader {
 
             match reader.next() {
                 Some(sample) => {
-                    if let Some(encoded) = sample.encode() {
-                        stm_features.extend_from_slice(&encoded.stm_features);
-                        nstm_features.extend_from_slice(&encoded.nstm_features);
+                    if let Some(encoded) = sample.encode(draw_target) {
+                        // let's convert to u8 to minimize the data sent to gpu.
+                        // (its only 0s or 1s anyway)
+                        stm_features.extend(encoded.stm_features.iter().map(|&v| v as u8));
+                        nstm_features.extend(encoded.nstm_features.iter().map(|&v| v as u8));
                         scores.push(encoded.score);
                         outcomes.push(encoded.outcome);
                         buckets.push(encoded.bucket);

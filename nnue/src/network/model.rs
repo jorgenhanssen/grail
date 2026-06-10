@@ -12,12 +12,35 @@ use super::{EMBEDDING_SIZE, HIDDEN_SIZE, OUTPUT_BUCKETS};
 /// stack.
 pub struct Network {
     pub embedding: Linear,
-    pub buckets: [OutputStack; OUTPUT_BUCKETS],
+    pub buckets: OutputBuckets,
 }
 
 impl Network {
     pub fn new(vs: &VarBuilder) -> Result<Self> {
-        let buckets: [OutputStack; OUTPUT_BUCKETS] = std::array::from_fn(|i| {
+        Ok(Self {
+            embedding: linear(NUM_FEATURES, EMBEDDING_SIZE, vs.pp("embedding"))?,
+            buckets: OutputBuckets::new(vs)?,
+        })
+    }
+
+    /// Training forward pass. stm/nstm are the position encoded from each side,
+    /// output is in stm space so the caller has to sign-flip if they want it as
+    /// white.
+    pub fn forward(&self, stm: &Tensor, nstm: &Tensor, buckets: &[usize]) -> Result<Tensor> {
+        let stm_embed = stm.apply(&self.embedding)?.relu()?;
+        let nstm_embed = nstm.apply(&self.embedding)?.relu()?;
+        let embedding_out = Tensor::cat(&[stm_embed, nstm_embed], 1)?;
+        self.buckets.forward(&embedding_out, buckets)
+    }
+}
+
+pub struct OutputBuckets {
+    stacks: [OutputStack; OUTPUT_BUCKETS],
+}
+
+impl OutputBuckets {
+    fn new(vs: &VarBuilder) -> Result<Self> {
+        let stacks = std::array::from_fn(|i| {
             let bvs = vs.pp(format!("bucket_{}", i));
             OutputStack {
                 hidden1: linear(2 * EMBEDDING_SIZE, HIDDEN_SIZE, bvs.pp("hidden1")).unwrap(),
@@ -25,36 +48,58 @@ impl Network {
                 output: linear(HIDDEN_SIZE, 1, bvs.pp("output")).unwrap(),
             }
         });
-
-        Ok(Self {
-            embedding: linear(NUM_FEATURES, EMBEDDING_SIZE, vs.pp("embedding"))?,
-            buckets,
-        })
+        Ok(Self { stacks })
     }
 
-    /// Training forward pass. Runs every bucket and then gathers the one each
-    /// sample actually wants (unused buckets get zero gradient through gather).
-    /// stm/nstm are the position encoded from each side, output is in stm
-    /// space so the caller has to sign-flip if they want it as white.
-    pub fn forward(&self, stm: &Tensor, nstm: &Tensor, buckets: &[usize]) -> Result<Tensor> {
-        let stm_embed = stm.apply(&self.embedding)?.relu()?;
-        let nstm_embed = nstm.apply(&self.embedding)?.relu()?;
-        let embedding_out = Tensor::cat(&[stm_embed, nstm_embed], 1)?;
+    /// Runs every bucket and then gathers the one each sample actually wants
+    fn forward(&self, embedding_out: &Tensor, buckets: &[usize]) -> Result<Tensor> {
+        // Since the buckets use the same embedding as their input we can
+        // perform their multiplications in parallel.
+        let h1 = embedding_out
+            .apply(&self.hidden1_for_all_buckets()?)?
+            .relu()?;
 
-        let all_outputs: Vec<_> = self
-            .buckets
+        // Buuut since the h1 => h2 have different inputs per bucket we kinda need
+        // to split it up and compute each h2 separately.
+        let scores: Vec<_> = self
+            .stacks
             .iter()
-            .map(|b| b.forward(&embedding_out))
+            .enumerate()
+            .map(|(i, stack)| {
+                stack.finish(&h1.narrow(1, i * HIDDEN_SIZE, HIDDEN_SIZE)?.contiguous()?)
+            })
             .collect::<Result<_>>()?;
-        let stacked = Tensor::cat(&all_outputs, 1)?;
+        let scores = Tensor::cat(&scores, 1)?;
 
+        // Finally we gather the scores for the buckets we want to compute gradients for.
         let indices = Tensor::from_vec(
             buckets.iter().map(|&i| i as u32).collect::<Vec<_>>(),
             (buckets.len(), 1),
-            stacked.device(),
+            scores.device(),
         )?;
+        scores.gather(&indices, 1)
+    }
 
-        stacked.gather(&indices, 1)
+    fn hidden1_for_all_buckets(&self) -> Result<Linear> {
+        let weights: Vec<_> = self.stacks.iter().map(|s| s.hidden1.weight()).collect();
+        let biases: Vec<_> = self
+            .stacks
+            .iter()
+            .map(|s| s.hidden1.bias().unwrap())
+            .collect();
+
+        Ok(Linear::new(
+            Tensor::cat(&weights, 0)?,
+            Some(Tensor::cat(&biases, 0)?),
+        ))
+    }
+
+    pub fn get(&self, index: usize) -> &OutputStack {
+        &self.stacks[index]
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &OutputStack> {
+        self.stacks.iter()
     }
 }
 
@@ -66,9 +111,10 @@ pub struct OutputStack {
 }
 
 impl OutputStack {
-    fn forward(&self, input: &Tensor) -> Result<Tensor> {
-        let h1 = input.apply(&self.hidden1)?.relu()?;
-        let h2 = (h1.apply(&self.hidden2)? + &h1)?.relu()?;
+    /// Runs the individual bucket's layers that cannot be shared from
+    /// the embedding.
+    fn finish(&self, h1: &Tensor) -> Result<Tensor> {
+        let h2 = (h1.apply(&self.hidden2)? + h1)?.relu()?;
         h2.apply(&self.output)
     }
 }

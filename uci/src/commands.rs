@@ -109,6 +109,3 @@ pub struct GoParams {
     /// Stop after searching this many total nodes.
     pub nodes: Option<u64>,
 }
-
-#[derive(Debug, Default)]
-pub struct EngineOptions {}

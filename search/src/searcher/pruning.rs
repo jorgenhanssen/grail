@@ -35,10 +35,11 @@ impl Searcher {
         depth: u8,
         in_check: bool,
         is_tactical: bool,
+        is_pv_move: bool,
         alpha: i16,
         static_eval: i16,
     ) -> bool {
-        if depth > self.config.futility_max_depth.value || in_check {
+        if is_pv_move || depth > self.config.futility_max_depth.value || in_check {
             return false;
         }
         let margin = self.config.futility_base_margin.value
@@ -56,14 +57,14 @@ impl Searcher {
         alpha: i16,
         ply: u8,
         in_check: bool,
-        static_eval: i16,
+        eval: i16,
     ) -> Option<i16> {
         if depth == 0 || depth > self.config.razor_max_depth.value || in_check {
             return None;
         }
         let margin = self.config.razor_base_margin.value
             + self.config.razor_depth_coefficient.value * (depth as i16 * depth as i16);
-        if static_eval >= alpha - margin {
+        if eval >= alpha - margin {
             return None;
         }
         let value = self.quiescence_search(node, Bounds::null(alpha - 1), ply);
@@ -156,6 +157,13 @@ impl Searcher {
             return None;
         }
 
+        // No point proving that our position is too good if we dont clear beta.
+        if let Some(se) = static_eval {
+            if se < bounds.beta {
+                return None;
+            }
+        }
+
         let nm_child = node.create_null_move_child()?;
 
         // Deeper positions get more reduction
@@ -187,7 +195,7 @@ impl Searcher {
             -self.search_node(&nm_child, reduced_child_depth, ply + 1, null_bounds, false);
         self.search_stack.pop();
 
-        // Opponent beat beta even with a free move = not strong enough to prune
+        // Our position does not hold when giving opponent a free move, so let's not prune.
         if null_value < bounds.beta {
             return None;
         }
@@ -201,14 +209,14 @@ impl Searcher {
             node.hash(),
             ply,
             depth.saturating_sub(r),
-            bounds.beta,
+            null_value,
             static_eval,
             bounds.alpha,
             bounds.beta,
             None,
         );
 
-        Some(bounds.beta)
+        Some(null_value)
     }
 
     /// Reverse futility pruning: if static eval - margin >= beta, the position is too good to search.

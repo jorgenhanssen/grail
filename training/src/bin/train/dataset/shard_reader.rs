@@ -1,4 +1,4 @@
-use rand::Rng;
+use rand::RngExt;
 use rand::seq::SliceRandom;
 use std::fs;
 use std::io;

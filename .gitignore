@@ -14,7 +14,7 @@ target/
 # SPRT test results
 sprt/
 
-# NNUE training data (large, regenerated locally)
+# NNUE training data and progress
 nnue/data/
 
 # Profiling

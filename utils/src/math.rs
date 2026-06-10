@@ -1,10 +1,10 @@
-use rand::Rng;
+use rand::RngExt;
 
 /// Select an index from scores using softmax probabilities.
 /// Higher scores are more likely to be selected.
 ///
 /// Uses numerically stable softmax: https://jaykmody.com/blog/stable-softmax/
-pub fn select_softmax(scores: &[f32], rng: &mut impl Rng) -> usize {
+pub fn select_softmax(scores: &[f32], rng: &mut impl RngExt) -> usize {
     let max = scores.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
     let weights: Vec<f32> = scores.iter().map(|&s| (s - max).exp()).collect();
     let total: f32 = weights.iter().sum();

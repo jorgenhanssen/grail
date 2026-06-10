@@ -1,12 +1,15 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug, Clone)]
 #[command(name = "NNUE Trainer")]
 #[command(author = "Jørgen Hanssen <jorgen@hanssen.io>")]
 #[command(version = "0.1.0")]
 pub struct Args {
+    #[command(subcommand)]
+    pub command: Option<Command>,
+
     /// Number of positions per training batch.
-    #[arg(long, default_value_t = 8192)]
+    #[arg(long, default_value_t = 16384)]
     pub batch_size: usize,
 
     /// Initial learning rate for optimizer.
@@ -45,7 +48,17 @@ pub struct Args {
     #[arg(long, default_value_t = 0.3)]
     pub wdl: f64,
 
-    /// Save a randomly initialized model and exit.
+    /// Target win-probability for drawn games (smaller = prefer wins over draws).
+    #[arg(long, default_value_t = 0.5)]
+    pub draw_target: f64,
+
+    /// Discard any saved progress and train from epoch 1.
     #[arg(long)]
-    pub init_model: bool,
+    pub restart: bool,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum Command {
+    /// Save a randomly initialized model and exit.
+    Init,
 }

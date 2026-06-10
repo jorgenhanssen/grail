@@ -1,4 +1,4 @@
-use rand::Rng;
+use rand::RngExt;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};

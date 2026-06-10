@@ -19,8 +19,8 @@ pub struct SearchNode {
     pub piece: Option<Piece>,
     /// Color of the piece that moved (for continuation history)
     pub color: Option<Color>,
-    /// Cached static eval (for improving detection)
-    pub static_eval: Option<i16>,
+    /// Best-known eval at this ply (TT score when available, else corrected static eval)
+    pub eval: Option<i16>,
     /// Singular extension context (if in singular search)
     pub singular: Option<SingularSearch>,
 }
@@ -32,7 +32,7 @@ impl SearchNode {
             last_move: None,
             piece: None,
             color: None,
-            static_eval: None,
+            eval: None,
             singular: None,
         }
     }
@@ -43,7 +43,7 @@ impl SearchNode {
             last_move: Some(mv),
             piece: Some(piece),
             color: Some(color),
-            static_eval: None,
+            eval: None,
             singular: None,
         }
     }
@@ -102,8 +102,8 @@ impl SearchStack {
             return false;
         }
 
-        if let Some(current_eval) = self.nodes[len - 1].static_eval {
-            if let Some(prev_eval) = self.nodes[len - 3].static_eval {
+        if let Some(current_eval) = self.nodes[len - 1].eval {
+            if let Some(prev_eval) = self.nodes[len - 3].eval {
                 return current_eval > prev_eval - IMPROVING_MARGIN;
             }
         }

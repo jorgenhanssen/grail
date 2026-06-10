@@ -1,7 +1,7 @@
 use candle_nn::Linear;
 use cozy_chess::Square;
 use nnue::encoding::NUM_FEATURES;
-use nnue::network::model::OutputStack;
+use nnue::network::model::OutputBuckets;
 use nnue::network::{EMBEDDING_SIZE, HIDDEN_SIZE, Network, OUTPUT_BUCKETS};
 use std::error::Error;
 use std::fmt::{self, Write};
@@ -156,7 +156,7 @@ fn write_rank(
 
 fn write_buckets(
     out: &mut String,
-    buckets: &[OutputStack; OUTPUT_BUCKETS],
+    buckets: &OutputBuckets,
 ) -> Result<Vec<BucketStats>, Box<dyn Error>> {
     let mut all = Vec::with_capacity(OUTPUT_BUCKETS);
     for (i, stack) in buckets.iter().enumerate() {
@@ -283,10 +283,10 @@ fn summary_row(
 // Diagonal is always 1.00 and the matrix is symmetric, so we skip both.
 fn write_bucket_similarity(
     out: &mut String,
-    buckets: &[OutputStack; OUTPUT_BUCKETS],
+    buckets: &OutputBuckets,
 ) -> Result<(), Box<dyn Error>> {
     let mut weights: Vec<Vec<f32>> = Vec::with_capacity(OUTPUT_BUCKETS);
-    for b in buckets {
+    for b in buckets.iter() {
         weights.push(b.output.weight().flatten_all()?.to_vec1::<f32>()?);
     }
 

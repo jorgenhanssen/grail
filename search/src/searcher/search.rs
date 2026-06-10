@@ -296,15 +296,32 @@ impl Searcher {
 
         let in_check = node.in_check();
         let tt_move = tt_info.and_then(|t| t.best_move);
+        let tt_move_is_capture = tt_move.is_some_and(|m| node.is_capture(m));
 
         let static_eval = tt_info
             .and_then(|t| t.static_eval)
             .unwrap_or_else(|| self.static_eval(node));
 
-        let corrected_eval = self.shared.correction().adjust(node.board(), static_eval);
+        let prev_moves = self
+            .continuation_history
+            .get_prev_moves(self.search_stack.as_slice());
 
-        self.search_stack
-            .current_mut(|n| n.static_eval = Some(corrected_eval));
+        let corrected_eval =
+            self.shared
+                .correction()
+                .adjust(node.board(), &prev_moves, static_eval);
+
+        // Prefer the TT score over static eval so trend sees what search already found.
+        let stack_eval = tt_info
+            .map(|tt| match tt.bound {
+                Bound::Exact => tt.value,
+                Bound::Lower if tt.value > corrected_eval => tt.value,
+                Bound::Upper if tt.value < corrected_eval => tt.value,
+                _ => corrected_eval,
+            })
+            .unwrap_or(corrected_eval);
+
+        self.search_stack.current_mut(|n| n.eval = Some(stack_eval));
 
         // Stockfish skips NMP during singular searches.
         // Likely because NMP can raise beta without searching any actual moves,
@@ -312,7 +329,7 @@ impl Searcher {
         // I also saw success skipping razoring.
         if singular.is_none() {
             if let Some(score) =
-                self.try_razor_prune(node, depth, bounds.alpha, ply, in_check, corrected_eval)
+                self.try_razor_prune(node, depth, bounds.alpha, ply, in_check, stack_eval)
             {
                 return score;
             }
@@ -360,10 +377,6 @@ impl Searcher {
 
         let threats = node.threats();
 
-        let prev_moves = self
-            .continuation_history
-            .get_prev_moves(self.search_stack.as_slice());
-
         let best_move_hint = if ply == 0 {
             // At root we can use the currently best move for ordering
             self.multi_pv.best_move_hint()
@@ -374,7 +387,7 @@ impl Searcher {
         let enemy_attacks = node.attacks_for(!node.side_to_move());
         let mut movegen = MainMoveGenerator::new(
             best_move_hint,
-            prev_moves,
+            prev_moves.clone(),
             self.config.quiet_check_bonus.value,
             self.config.quiet_check_see_margin.value,
             self.config.bad_quiet_threshold.value,
@@ -432,6 +445,7 @@ impl Searcher {
                 in_check,
                 move_index,
                 is_improving,
+                tt_move_is_capture,
                 corrected_eval,
                 singular_result.extension,
             ) {
@@ -472,6 +486,11 @@ impl Searcher {
             };
         }
 
+        // Let's not store a partial result in the TT / correction.
+        if self.shared.is_stopped() {
+            return best_value;
+        }
+
         // Use original alpha when storing in tables, since the bound type depends on the original expectation.
         // Alpha may have been raised during search, but the bound type depends on
         // whether we improved.
@@ -488,6 +507,7 @@ impl Searcher {
 
         self.shared.correction().update(
             node.board(),
+            &prev_moves,
             in_check,
             best_move,
             best_value,
@@ -513,6 +533,7 @@ impl Searcher {
         in_check: bool,
         move_index: i32,
         is_improving: bool,
+        tt_move_is_capture: bool,
         static_eval: i16,
         extra_extension: i8,
     ) -> Option<(i16, bool, u8)> {
@@ -545,7 +566,14 @@ impl Searcher {
         let gives_check = child.in_check();
         let is_tactical = in_check || gives_check || is_cap || is_promotion;
 
-        if self.try_futility_prune(depth, in_check, is_tactical, bounds.alpha, static_eval) {
+        if self.try_futility_prune(
+            depth,
+            in_check,
+            is_tactical,
+            is_pv_move,
+            bounds.alpha,
+            static_eval,
+        ) {
             return None;
         }
 
@@ -578,6 +606,7 @@ impl Searcher {
             &child,
             hist,
             cont_hist,
+            tt_move_is_capture,
         );
 
         let extension = self.get_extension(node, &m, moved_piece, is_cap);
@@ -604,7 +633,12 @@ impl Searcher {
 
         // Re-search without reduction if reduced search beat alpha
         if reduction > 0 && value > bounds.alpha {
-            child.set_type(child.node_type().inverted());
+            // Don't demote the PV move to a Cut node just because we reduced it.
+            if is_pv_move && is_pv_node {
+                child.set_type(NodeType::Pv);
+            } else {
+                child.set_type(child.node_type().inverted());
+            }
 
             // Search at full depth
             adjusted_depth = depth.saturating_add(extension);

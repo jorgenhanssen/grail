@@ -226,7 +226,7 @@ impl TranspositionTable {
         let cluster = &mut self.entries[base..end];
         let current_gen = self.generation;
 
-        let new_entry = TTEntry {
+        let mut new_entry = TTEntry {
             key: key32,
             value: stored_value,
             bound,
@@ -253,6 +253,11 @@ impl TranspositionTable {
                     (bound == Bound::Exact && e.bound != Bound::Exact) || new_value >= old_value;
 
                 if should_replace {
+                    if new_entry.best_move_packed == 0 {
+                        // In some cases (NMP, RFP etc) the move is not stored
+                        // and in such cases we should just keep the old one.
+                        new_entry.best_move_packed = e.best_move_packed;
+                    }
                     *e = new_entry;
                 }
                 return;

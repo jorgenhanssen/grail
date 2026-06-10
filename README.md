@@ -1,10 +1,10 @@
 # Grail
 
-[![CCRL 40/15](https://img.shields.io/badge/CCRL%2040%2F15-3320%20Elo-%23DAA520.svg)](https://computerchess.org.uk/ccrl/4040/cgi/compare_engines.cgi?family=Grail&print=Rating+list)
+[![CCRL 40/15](https://img.shields.io/badge/CCRL%2040%2F15-3378%20Elo-%23DAA520.svg)](https://computerchess.org.uk/ccrl/4040/cgi/compare_engines.cgi?family=Grail&print=Rating+list)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-nightly-orange.svg)](https://www.rust-lang.org/)
 
-Grail is a hobby chess engine written in Rust. Named after the quest for the Holy Grail, it represents the search for the elusive, perfectly solved game. It implements modern search techniques and a fully self-taught NNUE that learned chess from 67 million self-play games.
+Grail is a hobby chess engine written in Rust. Named after the quest for the Holy Grail, it represents the search for the elusive, perfectly solved game. It implements modern search techniques and a fully self-taught NNUE that learned chess from 99 million self-play games.
 
 ## Usage
 
@@ -87,20 +87,6 @@ The project includes a `Makefile` for convenience:
 - **`make nnue-analysis`**: Dumps a human-readable weight analysis of the current NNUE to `nnue/model.analysis.txt`.
 - **`make clean`**: Cleans the build directory.
 
-### Benchmarking
-
-Runs depth-15 searches on standard perft positions:
-
-```bash
-cargo bench --bench search
-```
-
-For profiling with flamegraph:
-
-```bash
-CARGO_PROFILE_BENCH_DEBUG=true cargo flamegraph --bench search -- --bench
-```
-
 ### NNUE Data Generation & Training
 
 Grail includes tools to generate training data and train its own NNUE networks.
@@ -133,7 +119,7 @@ make train  # Auto-detects GPU support (CUDA/Metal)
 ./target/release/train
 ```
 
-The trainer loads all CSV files from `nnue/data/` and saves the best model to `nnue/model.safetensors`.
+Run it again later and it'll pick up where it left off. Pass `--restart` to start fresh.
 
 **Arguments:**
 
@@ -147,7 +133,12 @@ The trainer loads all CSV files from `nnue/data/` and saves the best model to `n
 - `--patience`: Epochs without improvement before early stopping (default: 5).
 - `--shard-size-mb`: Size of each data shard in megabytes (default: 500).
 - `--wdl`: WDL blending weight, 0.0 = pure eval, 1.0 = pure WDL (default: 0.3).
-- `--init-model`: Save a randomly initialized model and exit.
+- `--draw-target`: Target win-probability for drawn games, smaller = prefer wins over draws (default: 0.5).
+- `--restart`: Discard saved progress and train from epoch 1.
+
+**Subcommands:**
+
+- `init`: Save a randomly initialized model and exit.
 
 ## Acknowledgements
 
