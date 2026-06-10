@@ -11,7 +11,7 @@ use utils::{Node, NodeType, has_legal_moves};
 
 use crate::{
     aspiration::Pass,
-    history::PieceTo,
+    history::{PieceTo, PrevMoves},
     move_ordering::{MAX_CAPTURES, MAX_QUIETS, MainMoveGenerator},
     pv::PvLine,
     result::SearchResult,
@@ -302,9 +302,7 @@ impl Searcher {
             .and_then(|t| t.static_eval)
             .unwrap_or_else(|| self.static_eval(node));
 
-        let prev_moves = self
-            .continuation_history
-            .get_prev_moves(self.search_stack.as_slice());
+        let prev_moves = self.search_stack.prev_moves();
 
         let corrected_eval =
             self.shared
@@ -387,7 +385,7 @@ impl Searcher {
         let enemy_attacks = node.attacks_for(!node.side_to_move());
         let mut movegen = MainMoveGenerator::new(
             best_move_hint,
-            prev_moves.clone(),
+            prev_moves,
             self.config.quiet_check_bonus.value,
             self.config.quiet_check_see_margin.value,
             self.config.bad_quiet_threshold.value,
@@ -448,6 +446,7 @@ impl Searcher {
                 tt_move_is_capture,
                 corrected_eval,
                 singular_result.extension,
+                &prev_moves,
             ) {
                 if self.shared.is_stopped() {
                     break;
@@ -462,7 +461,14 @@ impl Searcher {
 
                 bounds.raise_alpha(best_value);
                 if bounds.is_cutoff(bounds.alpha) {
-                    self.on_fail_high(node, m, depth, &quiets_searched, &captures_searched);
+                    self.on_fail_high(
+                        node,
+                        m,
+                        depth,
+                        &quiets_searched,
+                        &captures_searched,
+                        &prev_moves,
+                    );
                     break;
                 }
 
@@ -538,6 +544,7 @@ impl Searcher {
         tt_move_is_capture: bool,
         static_eval: i16,
         extra_extension: i8,
+        prev_moves: &PrevMoves,
     ) -> Option<(i16, bool, u8)> {
         let moved_color = node.board().side_to_move();
         let moved_piece = node.piece_on(m.from).unwrap();
@@ -585,11 +592,8 @@ impl Searcher {
             self.history_heuristic.get(moved_color, m.from, m.to)
         };
         let cont_hist = {
-            let prev_moves = self
-                .continuation_history
-                .get_prev_moves(self.search_stack.as_slice());
             let pt = PieceTo::new(moved_color, moved_piece, m.to);
-            self.continuation_history.get(&prev_moves, pt)
+            self.continuation_history.get(prev_moves, pt)
         };
 
         if self.try_history_prune(depth, is_pv_move, is_cap, is_improving, hist, cont_hist) {
@@ -687,13 +691,10 @@ impl Searcher {
         depth: u8,
         quiets_searched: &[Move],
         captures_searched: &[Move],
+        prev_moves: &PrevMoves,
     ) {
         let board = node.board();
         let is_quiet = !node.is_capture(mv);
-
-        let prev_moves = self
-            .continuation_history
-            .get_prev_moves(self.search_stack.as_slice());
 
         if is_quiet {
             let bonus = self.history_heuristic.get_bonus(depth);
@@ -701,7 +702,7 @@ impl Searcher {
 
             let cont_bonus = self.continuation_history.get_bonus(depth);
             self.continuation_history
-                .update_quiet_all(board, &prev_moves, mv, cont_bonus);
+                .update_quiet_all(board, prev_moves, mv, cont_bonus);
         } else {
             let bonus = self.capture_history.get_bonus(depth);
             self.capture_history.update_capture(board, mv, bonus);
@@ -713,7 +714,7 @@ impl Searcher {
             for &q in quiets_searched {
                 self.history_heuristic.update(board, q, quiet_malus);
                 self.continuation_history
-                    .update_quiet_all(board, &prev_moves, q, cont_malus);
+                    .update_quiet_all(board, prev_moves, q, cont_malus);
             }
         }
 

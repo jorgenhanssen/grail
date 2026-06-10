@@ -37,9 +37,7 @@ impl Searcher {
         // Ply limit - return static eval if we've hit max ply
         if ply as usize >= MAX_DEPTH {
             let raw_eval = self.static_eval(node);
-            let prev_moves = self
-                .continuation_history
-                .get_prev_moves(self.search_stack.as_slice());
+            let prev_moves = self.search_stack.prev_moves();
             return self
                 .shared
                 .correction()
@@ -73,9 +71,7 @@ impl Searcher {
         let static_eval = tt_info
             .and_then(|t| t.static_eval)
             .unwrap_or_else(|| self.static_eval(node));
-        let prev_moves = self
-            .continuation_history
-            .get_prev_moves(self.search_stack.as_slice());
+        let prev_moves = self.search_stack.prev_moves();
         let stand_pat = self
             .shared
             .correction()

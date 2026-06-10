@@ -7,6 +7,8 @@ pub use param::ConfigParam;
 
 use macros::define_config;
 
+pub const MAX_CONTINUATION_LOOKBACK: usize = 4;
+
 define_config!(
     // Public UCI options
     (hash_size: i32, "Hash", UciOptionType::Spin { min: 1, max: 16384 }, 256, true),
@@ -33,7 +35,7 @@ define_config!(
     (capture_history_malus_multiplier: i32, "Capture History Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 2, cfg!(feature = "tuning")),
 
     (continuation_max_value: i32, "Continuation Max Value", UciOptionType::Spin { min: 128, max: 1024 }, 512, cfg!(feature = "tuning")),
-    (continuation_max_moves: usize, "Continuation Max Moves", UciOptionType::Spin { min: 1, max: 4 }, 4, cfg!(feature = "tuning")),
+    (continuation_max_moves: usize, "Continuation Max Moves", UciOptionType::Spin { min: 1, max: MAX_CONTINUATION_LOOKBACK as i32 }, 4, cfg!(feature = "tuning")),
     (continuation_bonus_multiplier: i32, "Continuation Bonus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 9, cfg!(feature = "tuning")),
     (continuation_malus_multiplier: i32, "Continuation Malus Multiplier", UciOptionType::Spin { min: 0, max: 30 }, 10, cfg!(feature = "tuning")),
 
@@ -112,5 +114,5 @@ define_config!(
     (correction_minor_update_weight: i32, "Correction Minor Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 150, cfg!(feature = "tuning")),
     (correction_nonpawn_update_weight: i32, "Correction NonPawn Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 180, cfg!(feature = "tuning")),
     (correction_continuation_update_weight: i32, "Correction Continuation Update Weight", UciOptionType::Spin { min: 64, max: 256 }, 160, cfg!(feature = "tuning")),
-    (correction_continuation_max_moves: usize, "Correction Continuation Max Moves", UciOptionType::Spin { min: 1, max: 4 }, 2, cfg!(feature = "tuning")),
+    (correction_continuation_max_moves: usize, "Correction Continuation Max Moves", UciOptionType::Spin { min: 1, max: MAX_CONTINUATION_LOOKBACK as i32 }, 2, cfg!(feature = "tuning")),
 );

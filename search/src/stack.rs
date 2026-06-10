@@ -1,6 +1,8 @@
 use cozy_chess::{Color, Move, Piece};
 use utils::Node;
 
+use crate::history::{PieceTo, PrevMoves};
+
 /// Context for singular extension search.
 #[derive(Clone, Copy)]
 pub struct SingularSearch {
@@ -131,7 +133,17 @@ impl SearchStack {
         false
     }
 
-    pub fn as_slice(&self) -> &[SearchNode] {
-        &self.nodes
+    /// Previous-move context for continuation history/correction.
+    /// Slot i holds the move made i plies ago (0 = opponent last move).
+    pub fn prev_moves(&self) -> PrevMoves {
+        let mut prev_moves: PrevMoves = Default::default();
+        let len = self.nodes.len();
+        for (i, slot) in prev_moves.iter_mut().enumerate().take(len) {
+            let node = &self.nodes[len - 1 - i];
+            if let (Some(mv), Some(piece), Some(color)) = (node.last_move, node.piece, node.color) {
+                *slot = Some(PieceTo::new(color, piece, mv.to));
+            }
+        }
+        prev_moves
     }
 }

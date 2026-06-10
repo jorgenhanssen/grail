@@ -6,7 +6,7 @@ use utils::is_capture;
 
 use config::EngineConfig;
 
-use crate::history::PieceTo;
+use crate::history::PrevMoves;
 use crate::scores::{MATE_SCORE_BOUND, MATE_VALUE};
 
 use continuation::ContinuationCorrection;
@@ -59,7 +59,7 @@ impl Correction {
     }
 
     /// Returns the static eval adjusted by the correction history.
-    pub fn adjust(&self, board: &Board, prev_moves: &[Option<PieceTo>], eval: i16) -> i16 {
+    pub fn adjust(&self, board: &Board, prev_moves: &PrevMoves, eval: i16) -> i16 {
         let total =
             self.position.weighted_value(board) + self.continuation.weighted_value(prev_moves);
         let adjustment = (total / self.combined_divisor) as i16;
@@ -73,7 +73,7 @@ impl Correction {
     pub fn update(
         &mut self,
         board: &Board,
-        prev_moves: &[Option<PieceTo>],
+        prev_moves: &PrevMoves,
         in_check: bool,
         best_move: Option<Move>,
         best_value: i16,

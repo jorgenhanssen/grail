@@ -2,7 +2,7 @@ use arrayvec::ArrayVec;
 use cozy_chess::{BitBoard, Move, Piece};
 use utils::{PAWN_VALUE, captured_piece, gives_check, piece_value};
 
-use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic, PieceTo};
+use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic, PieceTo, PrevMoves};
 use crate::utils::see::see;
 use utils::Node;
 
@@ -39,7 +39,7 @@ pub struct MainMoveGenerator {
     best_move: Option<Move>,
 
     // Continuation history context
-    prev_moves: Vec<Option<PieceTo>>,
+    prev_moves: PrevMoves,
 
     good_captures: ArrayVec<ScoredMove, MAX_CAPTURES>,
     bad_captures: ArrayVec<ScoredMove, MAX_CAPTURES>,
@@ -59,7 +59,7 @@ impl MainMoveGenerator {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         best_move: Option<Move>,
-        prev_moves: Vec<Option<PieceTo>>,
+        prev_moves: PrevMoves,
         quiet_check_bonus: i16,
         quiet_check_see_margin: i16,
         bad_quiet_threshold: i16,

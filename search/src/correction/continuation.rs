@@ -1,6 +1,6 @@
 use config::EngineConfig;
 
-use crate::history::{PieceTo, apply_gravity};
+use crate::history::{PieceTo, PrevMoves, apply_gravity};
 
 /// Correction indexed by move continuations.
 #[derive(Clone)]
@@ -45,7 +45,7 @@ impl ContinuationCorrection {
     }
 
     /// Sum of the table entries for each filled lookback slot.
-    pub(super) fn weighted_value(&self, prev_moves: &[Option<PieceTo>]) -> i32 {
+    pub(super) fn weighted_value(&self, prev_moves: &PrevMoves) -> i32 {
         let mut sum: i32 = 0;
         for (lookback, slot) in prev_moves.iter().enumerate().take(self.max_moves) {
             if let Some(prev_move) = *slot {
@@ -56,7 +56,7 @@ impl ContinuationCorrection {
     }
 
     /// Update the slot for each filled lookback with a scaled bonus.
-    pub(super) fn apply_bonus(&mut self, prev_moves: &[Option<PieceTo>], bonus: i32, limit: i32) {
+    pub(super) fn apply_bonus(&mut self, prev_moves: &PrevMoves, bonus: i32, limit: i32) {
         let scaled = bonus * self.update_weight / 128;
         for (lookback, slot) in prev_moves.iter().enumerate().take(self.max_moves) {
             if let Some(prev_move) = *slot {

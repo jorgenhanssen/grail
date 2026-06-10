@@ -1,11 +1,12 @@
 use cozy_chess::{Board, Move};
 
-use config::EngineConfig;
+use config::{EngineConfig, MAX_CONTINUATION_LOOKBACK};
 
 use super::piece_to::PieceTo;
 use super::utils::apply_gravity;
 use crate::MAX_DEPTH;
-use crate::stack::SearchNode;
+
+pub type PrevMoves = [Option<PieceTo>; MAX_CONTINUATION_LOOKBACK];
 
 /// Continuation history: scores moves based on the sequence of prior moves.
 /// Indexing: [lookback][prev: PieceTo][curr: PieceTo]
@@ -80,7 +81,7 @@ impl ContinuationHistory {
         self.continuations[self.index(lookback, prev, curr)]
     }
 
-    pub fn get(&self, prev_moves: &[Option<PieceTo>], curr: PieceTo) -> i16 {
+    pub fn get(&self, prev_moves: &PrevMoves, curr: PieceTo) -> i16 {
         let mut score = 0;
         for (lookback, prev_move) in prev_moves.iter().enumerate().take(self.max_moves) {
             if let Some(prev) = *prev_move {
@@ -98,23 +99,7 @@ impl ContinuationHistory {
         -self.malus_multiplier * depth.min(MAX_DEPTH as u8) as i32
     }
 
-    pub fn get_prev_moves(&self, search_stack: &[SearchNode]) -> Vec<Option<PieceTo>> {
-        let len = search_stack.len();
-        let mut vec = vec![None; self.max_moves];
-        for i in 0..self.max_moves {
-            if i < len {
-                let node = &search_stack[len - 1 - i];
-                if let (Some(mv), Some(piece), Some(color)) =
-                    (node.last_move, node.piece, node.color)
-                {
-                    vec[i] = Some(PieceTo::new(color, piece, mv.to));
-                }
-            }
-        }
-        vec
-    }
-
-    fn update_continuations(&mut self, prev_moves: &[Option<PieceTo>], curr: PieceTo, delta: i32) {
+    fn update_continuations(&mut self, prev_moves: &PrevMoves, curr: PieceTo, delta: i32) {
         for (lookback, prev_move) in prev_moves.iter().enumerate().take(self.max_moves) {
             if let Some(prev) = *prev_move {
                 let idx = self.index(lookback, prev, curr);
@@ -126,7 +111,7 @@ impl ContinuationHistory {
     pub fn update_quiet_all(
         &mut self,
         board: &Board,
-        prev_moves: &[Option<PieceTo>],
+        prev_moves: &PrevMoves,
         mv: Move,
         delta: i32,
     ) {
