@@ -494,16 +494,18 @@ impl Searcher {
         // Use original alpha when storing in tables, since the bound type depends on the original expectation.
         // Alpha may have been raised during search, but the bound type depends on
         // whether we improved.
-        self.shared.tt().store(
-            hash,
-            ply,
-            best_move_depth,
-            best_value,
-            Some(static_eval),
-            original_bounds.alpha,
-            bounds.beta,
-            best_move,
-        );
+        if singular.is_none() {
+            self.shared.tt().store(
+                hash,
+                ply,
+                best_move_depth,
+                best_value,
+                Some(static_eval),
+                original_bounds.alpha,
+                bounds.beta,
+                best_move,
+            );
+        }
 
         self.shared.correction().update(
             node.board(),
