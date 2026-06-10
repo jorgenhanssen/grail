@@ -96,6 +96,14 @@ impl Searcher {
                 );
             }
 
+            // Soft node limit: finish the current iteration, but don't start
+            // a new one once the budget is spent.
+            if let Some(soft_limit) = params.soft_nodes {
+                if self.shared.total_nodes() + self.nodes >= soft_limit {
+                    break;
+                }
+            }
+
             depth += 1;
         }
 

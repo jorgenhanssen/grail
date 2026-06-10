@@ -1,4 +1,5 @@
 use crate::histogram::ScoreHistogram;
+use crate::limit::SearchLimit;
 use crate::opening::OpeningSource;
 use crate::samples::Sample;
 use crate::worker::SelfPlayWorker;
@@ -60,13 +61,14 @@ impl Generator {
 
     pub fn run(
         &self,
-        depth: u8,
+        limit: SearchLimit,
         max_opening_imbalance: Option<i16>,
+        max_teleport_plies: usize,
         stop_flag: Arc<AtomicBool>,
     ) -> Vec<Sample> {
         log::info!(
-            "Generating samples (depth={}, multi_pv={}, threads={}) - Press Ctrl+C to stop",
-            depth,
+            "Generating samples ({}, multi_pv={}, threads={}) - Press Ctrl+C to stop",
+            limit,
             self.pv_lines,
             self.threads,
         );
@@ -94,8 +96,9 @@ impl Generator {
                         tid,
                         sample_counter,
                         game_id_counter,
-                        depth,
+                        limit,
                         max_opening_imbalance,
+                        max_teleport_plies,
                         pv_lines,
                         Self::load_nnue,
                         opening_source,

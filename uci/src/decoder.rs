@@ -113,6 +113,7 @@ impl Decoder {
             depth: extract_numeric_param(input, "depth").map(|d| d as u8),
             move_time: extract_numeric_param(input, "movetime"),
             nodes: extract_numeric_param(input, "nodes"),
+            soft_nodes: extract_numeric_param(input, "softnodes"),
         })
     }
 }
@@ -186,10 +187,14 @@ mod tests {
         assert_eq!(go("go depth 20").depth, Some(20));
         assert_eq!(go("go movetime 5000").move_time, Some(5000));
 
-        let nodes = go("go nodes 100000");
-        assert_eq!(nodes.nodes, Some(100000));
-        assert!(nodes.depth.is_none());
-        assert!(nodes.move_time.is_none());
+        let hard_nodes = go("go nodes 100000");
+        assert_eq!(hard_nodes.nodes, Some(100000));
+        assert!(hard_nodes.depth.is_none());
+        assert!(hard_nodes.move_time.is_none());
+
+        let soft_nodes = go("go softnodes 30000");
+        assert_eq!(soft_nodes.soft_nodes, Some(30000));
+        assert!(soft_nodes.nodes.is_none());
     }
 
     #[test]

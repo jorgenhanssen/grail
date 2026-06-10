@@ -1,10 +1,10 @@
+use crate::limit::SearchLimit;
 use crate::samples::{GameOutcome, Sample};
 use cozy_chess::{Board, Color, Move};
 use pyrrhic_rs::{TableBases, WdlProbeResult};
 use rand::RngExt;
 use search::{CozyAdapter, Engine, PvLine, SearchResult};
 use std::collections::HashMap;
-use uci::commands::GoParams;
 use utils::{flip_eval_perspective, has_check, has_insufficient_material, has_legal_moves};
 
 /// A self-play game that generates training samples.
@@ -16,8 +16,9 @@ pub struct SelfPlayGame {
     game_id: usize,
     position_counts: HashMap<u64, usize>,
     positions: Vec<(String, i16, Move)>, // FEN, eval, best move
-    depth: u8,
+    limit: SearchLimit,
     max_opening_imbalance: Option<i16>,
+    max_teleport_plies: usize,
     tablebases: Option<TableBases<CozyAdapter>>,
 }
 
@@ -25,8 +26,9 @@ impl SelfPlayGame {
     pub fn new(
         game_id: usize,
         board: Board,
-        depth: u8,
+        limit: SearchLimit,
         max_opening_imbalance: Option<i16>,
+        max_teleport_plies: usize,
         tablebases: Option<TableBases<CozyAdapter>>,
     ) -> Self {
         Self {
@@ -34,8 +36,9 @@ impl SelfPlayGame {
             game_id,
             position_counts: HashMap::new(),
             positions: Vec::new(),
-            depth,
+            limit,
             max_opening_imbalance,
+            max_teleport_plies,
             tablebases,
         }
     }
@@ -74,13 +77,7 @@ impl SelfPlayGame {
 
     fn search(&self, engine: &mut Engine) -> Option<SearchResult> {
         engine.set_position(self.board.clone(), Some(self.history()));
-
-        let params = GoParams {
-            depth: Some(self.depth),
-            ..Default::default()
-        };
-
-        engine.search(&params, None)
+        engine.search(&self.limit.go_params(), None)
     }
 
     fn record_position(&mut self, eval: i16, best_move: Move) {
@@ -110,17 +107,17 @@ impl SelfPlayGame {
 
     /// Teleport along a PV line by playing moves without searching.
     ///
-    /// Picks a random teleport length from 1 to depth, then plays that many
-    /// moves from the PV. If the PV is shorter than the teleport distance
-    /// (e.g. TB positions where the PV is only 1 move), continues teleporting
-    /// by searching for the best move at each step.
+    /// Picks a random teleport length, then plays that many moves from the
+    /// PV. If the PV is shorter than the teleport distance (e.g. TB positions
+    /// where the PV is only 1 move), continues teleporting by searching for
+    /// the best move at each step.
     fn teleport(&mut self, pv: &PvLine, engine: &mut Engine) {
         if pv.line.is_empty() {
             return;
         }
 
         let mut rng = rand::rng();
-        let teleport_len = rng.random_range(1..=self.depth as usize);
+        let teleport_len = rng.random_range(1..=self.max_teleport_plies);
 
         let mut steps = 0;
 

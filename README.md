@@ -115,10 +115,12 @@ make generate
 **Arguments:**
 
 - `--depth`: Search depth for each move (default: 8).
+- `--nodes`: Soft node limit for each move.
 - `--pv-lines`: Number of PV lines to search at each decision point (default: 1).
 - `--threads`: Number of threads (default: number of logical CPUs).
 - `--syzygy-path`: Colon-separated paths to Syzygy tablebase files (optional).
 - `--max-opening-imbalance`: Discard games whose opening eval exceeds this many centipawns in absolute value (optional).
+- `--max-teleport-plies`: Max plies to teleport along a PV between recorded positions (default: 8).
 
 Generated data is saved to `nnue/data/YYYY-MM-DD-HH:MM.csv`.
 

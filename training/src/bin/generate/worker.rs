@@ -1,5 +1,6 @@
 use crate::game::SelfPlayGame;
 use crate::histogram::HistogramHandle;
+use crate::limit::SearchLimit;
 use crate::opening::OpeningSource;
 use crate::samples::Sample;
 use config::EngineConfig;
@@ -18,8 +19,9 @@ pub struct SelfPlayWorker {
     sample_counter: Arc<AtomicUsize>,
     game_id_counter: Arc<AtomicUsize>,
     engine: Engine,
-    depth: u8,
+    limit: SearchLimit,
     max_opening_imbalance: Option<i16>,
+    max_teleport_plies: usize,
     opening_source: Arc<OpeningSource>,
     histogram: HistogramHandle,
     tablebases: Option<TableBases<CozyAdapter>>,
@@ -32,8 +34,9 @@ impl SelfPlayWorker {
         tid: usize,
         sample_counter: Arc<AtomicUsize>,
         game_id_counter: Arc<AtomicUsize>,
-        depth: u8,
+        limit: SearchLimit,
         max_opening_imbalance: Option<i16>,
+        max_teleport_plies: usize,
         multi_pv: u8,
         create_evaluator: fn() -> nnue::Evaluator,
         opening_source: Arc<OpeningSource>,
@@ -56,8 +59,9 @@ impl SelfPlayWorker {
             _tid: tid,
             sample_counter,
             game_id_counter,
-            depth,
+            limit,
             max_opening_imbalance,
+            max_teleport_plies,
             engine,
             opening_source,
             histogram,
@@ -75,8 +79,9 @@ impl SelfPlayWorker {
             let mut game = SelfPlayGame::new(
                 game_id,
                 opening,
-                self.depth,
+                self.limit,
                 self.max_opening_imbalance,
+                self.max_teleport_plies,
                 self.tablebases.clone(),
             );
             game.play(&mut self.engine);
