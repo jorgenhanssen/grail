@@ -1,5 +1,5 @@
-use crate::book::Book;
 use crate::histogram::ScoreHistogram;
+use crate::opening::OpeningSource;
 use crate::samples::Sample;
 use crate::worker::SelfPlayWorker;
 use candle_core::Device;
@@ -20,7 +20,7 @@ const PROGRESS_UPDATE_INTERVAL_MS: u64 = 200;
 pub struct Generator {
     threads: usize,
     pv_lines: u8,
-    opening_book: Arc<Book>,
+    opening_source: Arc<OpeningSource>,
     tablebases: Option<TableBases<CozyAdapter>>,
 }
 
@@ -28,11 +28,9 @@ impl Generator {
     pub fn new(
         threads: usize,
         pv_lines: u8,
-        opening_book_path: String,
+        opening_source: OpeningSource,
         syzygy_path: Option<String>,
     ) -> Result<Self, Box<dyn Error>> {
-        let opening_book = Arc::new(Book::load(&opening_book_path)?);
-
         if !PathBuf::from(MODEL_PATH).exists() {
             return Err(format!(
                 "NNUE model not found at {}. Create an initial model first.",
@@ -55,12 +53,17 @@ impl Generator {
         Ok(Self {
             threads,
             pv_lines,
-            opening_book,
+            opening_source: Arc::new(opening_source),
             tablebases,
         })
     }
 
-    pub fn run(&self, depth: u8, stop_flag: Arc<AtomicBool>) -> Vec<Sample> {
+    pub fn run(
+        &self,
+        depth: u8,
+        max_opening_imbalance: Option<i16>,
+        stop_flag: Arc<AtomicBool>,
+    ) -> Vec<Sample> {
         log::info!(
             "Generating samples (depth={}, multi_pv={}, threads={}) - Press Ctrl+C to stop",
             depth,
@@ -81,7 +84,7 @@ impl Generator {
                 let pv_lines = self.pv_lines;
                 let sample_counter = Arc::clone(&sample_counter);
                 let game_id_counter = Arc::clone(&game_id_counter);
-                let opening_book = Arc::clone(&self.opening_book);
+                let opening_source = Arc::clone(&self.opening_source);
                 let stop_flag = Arc::clone(&stop_flag);
                 let histogram_handle = histogram.clone_handle();
                 let tb = self.tablebases.clone();
@@ -92,9 +95,10 @@ impl Generator {
                         sample_counter,
                         game_id_counter,
                         depth,
+                        max_opening_imbalance,
                         pv_lines,
                         Self::load_nnue,
-                        opening_book,
+                        opening_source,
                         histogram_handle,
                         tb,
                     );

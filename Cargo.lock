@@ -2454,6 +2454,7 @@ name = "utils"
 version = "2.0.1"
 dependencies = [
  "cozy-chess",
+ "log",
  "rand 0.10.1",
 ]
 
