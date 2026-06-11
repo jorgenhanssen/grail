@@ -63,7 +63,7 @@ impl SelfPlayGame {
             };
 
             if self.opening_is_too_imbalanced(pv.score) {
-                return;
+                break;
             }
 
             if let Some(mv) = pv.best_move() {
@@ -158,6 +158,9 @@ impl SelfPlayGame {
             return true;
         }
         if has_insufficient_material(&self.board) {
+            return true;
+        }
+        if self.board.halfmove_clock() >= 100 {
             return true;
         }
         // Any repetition ends game for training purposes
