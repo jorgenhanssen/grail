@@ -146,7 +146,8 @@ impl Searcher {
         bounds: Bounds,
         in_check: bool,
         try_null_move: bool,
-        static_eval: Option<i16>,
+        corrected_eval: Option<i16>,
+        static_eval: i16,
     ) -> Option<i16> {
         if !try_null_move
             || in_check
@@ -158,7 +159,7 @@ impl Searcher {
         }
 
         // No point proving that our position is too good if we dont clear beta.
-        if let Some(se) = static_eval {
+        if let Some(se) = corrected_eval {
             if se < bounds.beta {
                 return None;
             }
@@ -170,7 +171,7 @@ impl Searcher {
         let base_r = self.config.nmp_base_reduction.value;
         let mut r = base_r + (depth / self.config.nmp_depth_divisor.value);
 
-        if let Some(se) = static_eval {
+        if let Some(se) = corrected_eval {
             let margin = self.config.nmp_eval_margin.value;
             if se >= bounds.beta + margin {
                 // Strong positions get extra reduction
@@ -210,7 +211,7 @@ impl Searcher {
             ply,
             depth.saturating_sub(r),
             null_value,
-            static_eval,
+            Some(static_eval),
             bounds.alpha,
             bounds.beta,
             None,
@@ -227,6 +228,7 @@ impl Searcher {
         node: &Node,
         depth: u8,
         in_check: bool,
+        corrected_eval: i16,
         static_eval: i16,
         bounds: Bounds,
         ply: u8,
@@ -242,7 +244,7 @@ impl Searcher {
             margin -= self.config.rfp_improving_bonus.value;
         }
 
-        if static_eval - margin >= bounds.beta && static_eval.abs() < NEAR_MATE_VALUE {
+        if corrected_eval - margin >= bounds.beta && corrected_eval.abs() < NEAR_MATE_VALUE {
             self.shared.tt().store(
                 node.hash(),
                 ply,

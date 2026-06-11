@@ -348,6 +348,7 @@ impl Searcher {
                 in_check,
                 null_move_allowed,
                 Some(corrected_eval),
+                static_eval,
             ) {
                 return score;
             }
@@ -360,6 +361,7 @@ impl Searcher {
             depth,
             in_check,
             corrected_eval,
+            static_eval,
             bounds,
             ply,
             is_improving,
