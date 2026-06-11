@@ -48,7 +48,17 @@ impl Searcher {
         let mut controller =
             SearchController::new(params, &self.board, self.config.move_overhead.value as u64);
         self.deadline = controller.deadline();
-        self.node_limit = params.nodes;
+
+        // Oh boy...
+        // During datagen with softnodes (10k), several threads would hang
+        // for an hour inside a single search. Best guess: tb/tt makes
+        // a bunch of iterations cheap, depth climbs up, and then one
+        // iteration is a bit more expensive and the deep iteration explodes.
+        // So as a pragmatic failsafe I present a (generous) hard node limit,
+        // and datagen has worked fine since I added it, so here it will stay.
+        self.node_limit = params
+            .nodes
+            .or_else(|| params.soft_nodes.map(|n| n.saturating_mul(16)));
 
         let pv_count = self.config.multi_pv.value as usize;
         let root = Node::new(self.board.clone(), NodeType::Pv);
