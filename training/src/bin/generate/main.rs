@@ -52,6 +52,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         limit,
         args.max_opening_imbalance,
         args.max_teleport_plies as usize,
+        args.max_game_plies as usize,
         stop_flag,
     );
 

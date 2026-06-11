@@ -33,6 +33,10 @@ pub struct Args {
     #[arg(long, global = true, default_value_t = 8, value_parser = clap::value_parser!(u64).range(1..))]
     pub max_teleport_plies: u64,
 
+    /// Discard games lasting longer than this many plies
+    #[arg(long, global = true, default_value_t = 300, value_parser = clap::value_parser!(u64).range(1..))]
+    pub max_game_plies: u64,
+
     /// Source openings used for self-play games.
     #[command(subcommand)]
     pub opening: Opening,

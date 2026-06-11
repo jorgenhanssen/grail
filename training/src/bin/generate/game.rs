@@ -16,9 +16,11 @@ pub struct SelfPlayGame {
     game_id: usize,
     position_counts: HashMap<u64, usize>,
     positions: Vec<(String, i16, Move)>, // FEN, eval, best move
+    plies_played: usize,
     limit: SearchLimit,
     max_opening_imbalance: Option<i16>,
     max_teleport_plies: usize,
+    max_game_plies: usize,
     tablebases: Option<TableBases<CozyAdapter>>,
 }
 
@@ -29,6 +31,7 @@ impl SelfPlayGame {
         limit: SearchLimit,
         max_opening_imbalance: Option<i16>,
         max_teleport_plies: usize,
+        max_game_plies: usize,
         tablebases: Option<TableBases<CozyAdapter>>,
     ) -> Self {
         Self {
@@ -36,9 +39,11 @@ impl SelfPlayGame {
             game_id,
             position_counts: HashMap::new(),
             positions: Vec::new(),
+            plies_played: 0,
             limit,
             max_opening_imbalance,
             max_teleport_plies,
+            max_game_plies,
             tablebases,
         }
     }
@@ -51,6 +56,12 @@ impl SelfPlayGame {
         engine.new_game();
 
         loop {
+            // Cursed long game... no trustworthy outcome, discard the game.
+            if self.plies_played >= self.max_game_plies {
+                self.positions.clear();
+                return;
+            }
+
             if self.is_terminal() {
                 break;
             }
@@ -147,6 +158,7 @@ impl SelfPlayGame {
     /// Play a single move, updating all game state.
     fn play_move(&mut self, mv: Move) {
         self.board.play_unchecked(mv);
+        self.plies_played += 1;
 
         // Track position for repetition detection
         let hash = self.board.hash();

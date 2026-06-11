@@ -22,6 +22,7 @@ pub struct SelfPlayWorker {
     limit: SearchLimit,
     max_opening_imbalance: Option<i16>,
     max_teleport_plies: usize,
+    max_game_plies: usize,
     opening_source: Arc<OpeningSource>,
     histogram: HistogramHandle,
     tablebases: Option<TableBases<CozyAdapter>>,
@@ -37,6 +38,7 @@ impl SelfPlayWorker {
         limit: SearchLimit,
         max_opening_imbalance: Option<i16>,
         max_teleport_plies: usize,
+        max_game_plies: usize,
         multi_pv: u8,
         create_evaluator: fn() -> nnue::Evaluator,
         opening_source: Arc<OpeningSource>,
@@ -62,6 +64,7 @@ impl SelfPlayWorker {
             limit,
             max_opening_imbalance,
             max_teleport_plies,
+            max_game_plies,
             engine,
             opening_source,
             histogram,
@@ -82,6 +85,7 @@ impl SelfPlayWorker {
                 self.limit,
                 self.max_opening_imbalance,
                 self.max_teleport_plies,
+                self.max_game_plies,
                 self.tablebases.clone(),
             );
             game.play(&mut self.engine);

@@ -121,6 +121,7 @@ make generate
 - `--syzygy-path`: Colon-separated paths to Syzygy tablebase files (optional).
 - `--max-opening-imbalance`: Discard games whose opening eval exceeds this many centipawns in absolute value (optional).
 - `--max-teleport-plies`: Max plies to teleport along a PV between recorded positions (default: 8).
+- `--max-game-plies`: Discard games lasting longer than this many plies (default: 300).
 
 Generated data is saved to `nnue/data/YYYY-MM-DD-HH:MM.csv`.
 

@@ -64,6 +64,7 @@ impl Generator {
         limit: SearchLimit,
         max_opening_imbalance: Option<i16>,
         max_teleport_plies: usize,
+        max_game_plies: usize,
         stop_flag: Arc<AtomicBool>,
     ) -> Vec<Sample> {
         log::info!(
@@ -99,6 +100,7 @@ impl Generator {
                         limit,
                         max_opening_imbalance,
                         max_teleport_plies,
+                        max_game_plies,
                         pv_lines,
                         Self::load_nnue,
                         opening_source,
