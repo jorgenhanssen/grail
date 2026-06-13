@@ -148,6 +148,7 @@ impl Searcher {
         try_null_move: bool,
         corrected_eval: Option<i16>,
         static_eval: i16,
+        tt_pv: bool,
     ) -> Option<i16> {
         if !try_null_move
             || in_check
@@ -215,6 +216,7 @@ impl Searcher {
             bounds.alpha,
             bounds.beta,
             None,
+            tt_pv,
         );
 
         Some(null_value)
@@ -233,6 +235,7 @@ impl Searcher {
         bounds: Bounds,
         ply: u8,
         is_improving: bool,
+        tt_pv: bool,
     ) -> Option<i16> {
         if depth == 0 || depth > self.config.rfp_max_depth.value || in_check || node.is_pv() {
             return None;
@@ -254,6 +257,7 @@ impl Searcher {
                 bounds.alpha,
                 bounds.beta,
                 None,
+                tt_pv,
             );
             return Some(bounds.beta);
         }

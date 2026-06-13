@@ -55,6 +55,7 @@ impl Searcher {
         let original_bounds = bounds;
 
         let tt_info = self.shared.tt().probe(hash, ply);
+        let tt_pv = node.is_pv() || tt_info.is_some_and(|t| t.pv);
         if let Some(tt) = tt_info {
             if !node.is_pv() {
                 match tt.bound {
@@ -96,6 +97,7 @@ impl Searcher {
                     original_bounds.alpha,
                     original_bounds.beta,
                     None,
+                    tt_pv,
                 );
                 return stand_pat;
             }
@@ -125,6 +127,7 @@ impl Searcher {
                         original_bounds.alpha,
                         original_bounds.beta,
                         None,
+                        tt_pv,
                     );
                     return stand_pat;
                 }
@@ -216,6 +219,7 @@ impl Searcher {
             original_bounds.alpha,
             original_bounds.beta,
             None,
+            tt_pv,
         );
         best_eval
     }

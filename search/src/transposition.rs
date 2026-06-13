@@ -33,6 +33,8 @@ pub struct ProbeResult {
     pub static_eval: Option<i16>,
     /// Depth of the search that produced this entry.
     pub depth: u8,
+    /// Whether this position has been a PV node before.
+    pub pv: bool,
 }
 
 /// A single TT entry (16 bytes, fits 4 per cache line).
@@ -53,6 +55,8 @@ pub struct TTEntry {
     pub best_move_packed: u16,
     /// Generation for age-based replacement.
     pub generation: u8,
+    /// Whether this position has been a PV node before.
+    pub pv: bool,
 }
 
 const CLUSTER_SIZE: usize = 4;
@@ -180,6 +184,7 @@ impl TranspositionTable {
             best_move: unpack_move(entry.best_move_packed),
             static_eval,
             depth: entry.depth,
+            pv: entry.pv,
         })
     }
 
@@ -195,6 +200,7 @@ impl TranspositionTable {
         alpha: i16,
         beta: i16,
         best_move: Option<Move>,
+        pv: bool,
     ) {
         let best_move_packed = pack_move(best_move);
         let key32 = hash as u32;
@@ -234,6 +240,7 @@ impl TranspositionTable {
             depth,
             best_move_packed,
             generation: current_gen,
+            pv,
         };
 
         // Exact bounds are more useful than upper bounds at the same depth.
@@ -258,6 +265,9 @@ impl TranspositionTable {
                         // and in such cases we should just keep the old one.
                         new_entry.best_move_packed = e.best_move_packed;
                     }
+
+                    new_entry.pv |= e.pv; // (is/was PV)
+
                     *e = new_entry;
                 }
                 return;

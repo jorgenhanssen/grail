@@ -1,7 +1,5 @@
 use utils::{FracPly, Node, creates_threat, evades_threat};
 
-use crate::utils::near_root;
-
 use super::Searcher;
 
 impl Searcher {
@@ -23,6 +21,7 @@ impl Searcher {
         hist: i16,
         cont_hist: i16,
         tt_move_is_capture: bool,
+        tt_pv: bool,
     ) -> u8 {
         let mut reduction = self.lmr.get(depth, move_index);
 
@@ -52,14 +51,17 @@ impl Searcher {
 
         // Reduce less
         if reduction > FracPly(0) {
-            if is_pv_move {
-                reduction -= FracPly(self.config.anti_reduction_pv_move.value);
-            }
             if near_root(ply, depth) {
                 reduction -= FracPly(self.config.anti_reduction_near_root.value);
             }
+            if is_pv_move {
+                reduction -= FracPly(self.config.anti_reduction_pv_move.value);
+            }
             if parent.is_pv() {
                 reduction -= FracPly(self.config.anti_reduction_pv_node.value);
+            } else if tt_pv {
+                // Node that has been a PV earlier
+                reduction -= FracPly(self.config.anti_reduction_tt_pv.value);
             }
             if parent.in_check() || child.in_check() {
                 reduction -= FracPly(self.config.anti_reduction_check.value);
@@ -84,4 +86,9 @@ fn history_reduction(reduction: &mut FracPly, score: i16, divisor: i32) {
     } else {
         *reduction += delta
     }
+}
+
+pub fn near_root(ply: u8, depth: u8) -> bool {
+    let total_depth = depth + ply;
+    ply <= total_depth >> 3 // 12.5% of the total depth
 }
