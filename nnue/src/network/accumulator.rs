@@ -1,6 +1,6 @@
-use std::simd::i8x32;
 use std::simd::num::SimdInt;
 use std::simd::prelude::SimdFloat;
+use std::simd::{i8x32, i16x16};
 
 use cozy_chess::Color;
 use utils::bitset::Bitset;
@@ -137,8 +137,7 @@ impl Accumulator {
 
         let mut i = 0;
         while i + SIMD_WIDTH_F32 <= EMBEDDING_SIZE {
-            let vals_i16 = &buffer[i..i + SIMD_WIDTH_F32];
-            let vals_f32 = SimdF32::from_array(std::array::from_fn(|j| vals_i16[j] as f32));
+            let vals_f32 = i16x16::from_slice(&buffer[i..i + SIMD_WIDTH_F32]).cast();
             let scale_vec = SimdF32::from_slice(&self.inv_scales[i..i + SIMD_WIDTH_F32]);
 
             let dequantized = vals_f32 * scale_vec;
