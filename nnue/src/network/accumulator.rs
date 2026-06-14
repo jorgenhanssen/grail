@@ -10,6 +10,17 @@ use crate::encoding::NUM_FEATURES;
 use super::simd::{SIMD_WIDTH_F32, SIMD_WIDTH_I16, SimdF32, SimdI16};
 use super::{EMBEDDING_SIZE, QUANTIZATION_PERCENTILE};
 
+// Just enforcing the sizes as multiples of the SIMD widths.
+// That way I don't have to do cleanup loops after the SIMD,
+const _: () = assert!(
+    EMBEDDING_SIZE.is_multiple_of(SIMD_WIDTH_I16),
+    "EMBEDDING_SIZE must be a multiple of SIMD_WIDTH_I16"
+);
+const _: () = assert!(
+    EMBEDDING_SIZE.is_multiple_of(SIMD_WIDTH_F32),
+    "EMBEDDING_SIZE must be a multiple of SIMD_WIDTH_F32"
+);
+
 /// The Accumulator manages the stateful first (embedding) layer of the NNUE.
 ///
 /// Instead of recomputing the full embedding from scratch on each move,
@@ -96,9 +107,7 @@ impl Accumulator {
             Color::Black => &mut self.buffer_black,
         };
 
-        let mut i = 0;
-
-        while i + SIMD_WIDTH_I16 <= EMBEDDING_SIZE {
+        for i in (0..EMBEDDING_SIZE).step_by(SIMD_WIDTH_I16) {
             let mut buffer_vec = SimdI16::from_slice(&buffer[i..i + SIMD_WIDTH_I16]);
             let weights_i8 = i8x32::from_slice(&weights_row[i..i + SIMD_WIDTH_I16]);
             let weights_i16: SimdI16 = weights_i8.cast();
@@ -110,18 +119,6 @@ impl Accumulator {
             }
 
             buffer_vec.copy_to_slice(&mut buffer[i..i + SIMD_WIDTH_I16]);
-            i += SIMD_WIDTH_I16;
-        }
-
-        // Cleanup remaining outside SIMD width
-        while i < EMBEDDING_SIZE {
-            let w = weights_row[i] as i16;
-            if add {
-                buffer[i] += w;
-            } else {
-                buffer[i] -= w;
-            }
-            i += 1;
         }
     }
 
@@ -135,8 +132,7 @@ impl Accumulator {
 
         let zeros = SimdF32::splat(0.0);
 
-        let mut i = 0;
-        while i + SIMD_WIDTH_F32 <= EMBEDDING_SIZE {
+        for i in (0..EMBEDDING_SIZE).step_by(SIMD_WIDTH_F32) {
             let vals_f32 = i16x16::from_slice(&buffer[i..i + SIMD_WIDTH_F32]).cast();
             let scale_vec = SimdF32::from_slice(&self.inv_scales[i..i + SIMD_WIDTH_F32]);
 
@@ -144,13 +140,6 @@ impl Accumulator {
             let activated = dequantized.simd_max(zeros); // ReLU
 
             activated.copy_to_slice(&mut output[i..i + SIMD_WIDTH_F32]);
-            i += SIMD_WIDTH_F32;
-        }
-
-        // Cleanup remaining outside SIMD width
-        while i < EMBEDDING_SIZE {
-            output[i] = (buffer[i] as f32 * self.inv_scales[i]).max(0.0);
-            i += 1;
         }
     }
 }
