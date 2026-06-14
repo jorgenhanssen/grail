@@ -587,6 +587,20 @@ impl Searcher {
             return None;
         }
 
+        let hist = if is_cap {
+            self.capture_history.get(node.board(), m)
+        } else {
+            self.history_heuristic.get(moved_color, m.from, m.to)
+        };
+        let cont_hist = {
+            let pt = PieceTo::new(moved_color, moved_piece, m.to);
+            self.continuation_history.get(prev_moves, pt)
+        };
+
+        if self.try_history_prune(depth, is_pv_move, is_cap, is_improving, hist, cont_hist) {
+            return None;
+        }
+
         let mut child = node.create_child(m, move_index);
         let child_hash = child.hash();
 
@@ -603,20 +617,6 @@ impl Searcher {
             bounds.alpha,
             static_eval,
         ) {
-            return None;
-        }
-
-        let hist = if is_cap {
-            self.capture_history.get(node.board(), m)
-        } else {
-            self.history_heuristic.get(moved_color, m.from, m.to)
-        };
-        let cont_hist = {
-            let pt = PieceTo::new(moved_color, moved_piece, m.to);
-            self.continuation_history.get(prev_moves, pt)
-        };
-
-        if self.try_history_prune(depth, is_pv_move, is_cap, is_improving, hist, cont_hist) {
             return None;
         }
 
