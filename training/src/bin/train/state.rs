@@ -23,13 +23,18 @@ pub struct TrainingState {
 }
 
 impl TrainingState {
-    /// Load state from disk if present, otherwise build a fresh one with a new seed.
-    pub fn new(path: &Path, val_ratio: f64, test_ratio: f64) -> Result<Self, Box<dyn Error>> {
+    /// Load state from disk if present, otherwise build a fresh one with a random/provided seed.
+    pub fn new(
+        path: &Path,
+        val_ratio: f64,
+        test_ratio: f64,
+        seed: Option<u64>,
+    ) -> Result<Self, Box<dyn Error>> {
         if path.exists() {
             Self::load(path)
         } else {
             Ok(Self {
-                seed: rand::rng().random(),
+                seed: seed.unwrap_or_else(|| rand::rng().random()),
                 val_ratio,
                 test_ratio,
                 history: Vec::new(),
@@ -151,7 +156,7 @@ mod tests {
     fn new_returns_fresh_when_missing() {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("missing.json");
-        let s = TrainingState::new(&path, VAL_RATIO, TEST_RATIO).unwrap();
+        let s = TrainingState::new(&path, VAL_RATIO, TEST_RATIO, None).unwrap();
         assert_eq!(s.val_ratio, VAL_RATIO);
         assert_eq!(s.test_ratio, TEST_RATIO);
         assert!(!s.has_history());
@@ -165,7 +170,7 @@ mod tests {
         original.record_epoch(record(1, 0.5));
         original.save(&path).unwrap();
 
-        let s = TrainingState::new(&path, 0.0, 0.0).unwrap();
+        let s = TrainingState::new(&path, 0.0, 0.0, Some(99999)).unwrap();
         assert_eq!(s.seed, SEED);
         assert!(s.has_history());
     }

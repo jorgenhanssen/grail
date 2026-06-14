@@ -52,6 +52,14 @@ pub struct Args {
     #[arg(long, default_value_t = 0.5)]
     pub draw_target: f64,
 
+    /// Skip samples that are in check, captures, or promotes.
+    #[arg(long)]
+    pub quiets_only: bool,
+
+    /// Random seed for train/val/test split assignment.
+    #[arg(long, requires = "restart")]
+    pub seed: Option<u64>,
+
     /// Discard any saved progress and train from epoch 1.
     #[arg(long)]
     pub restart: bool,

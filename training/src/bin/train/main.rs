@@ -59,10 +59,15 @@ fn train(args: Args) -> Result<(), Box<dyn Error>> {
         log::warn!("Discarded existing training state at {}", STATE_PATH);
     }
 
-    let mut state = TrainingState::new(state_path, args.val_ratio, args.test_ratio)?;
+    let mut state = TrainingState::new(state_path, args.val_ratio, args.test_ratio, args.seed)?;
 
     let shutdown = setup_shutdown_handler()?;
-    let dataset = ShardedDataset::build(Path::new(DATA_DIR), args.shard_size_mb, &state)?;
+    let dataset = ShardedDataset::build(
+        Path::new(DATA_DIR),
+        args.shard_size_mb,
+        args.quiets_only,
+        &state,
+    )?;
     let mut trainer = Trainer::new(&args, &state)?;
 
     if state.has_history() {

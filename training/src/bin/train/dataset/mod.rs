@@ -27,7 +27,12 @@ pub struct ShardedDataset {
 
 impl ShardedDataset {
     /// Builds shards from CSV files in the given directory.
-    pub fn build(data_dir: &Path, shard_size_mb: usize, state: &TrainingState) -> io::Result<Self> {
+    pub fn build(
+        data_dir: &Path,
+        shard_size_mb: usize,
+        quiets_only: bool,
+        state: &TrainingState,
+    ) -> io::Result<Self> {
         let temp_dir = tempfile::tempdir()?;
         log::info!("Building shards from {:?}...", data_dir);
 
@@ -35,6 +40,7 @@ impl ShardedDataset {
             data_dir,
             temp_dir.path(),
             shard_size_mb,
+            quiets_only,
             state.val_ratio,
             state.test_ratio,
             state.seed,

@@ -1,5 +1,5 @@
 use ahash::AHashMap;
-use cozy_chess::Board;
+use cozy_chess::{Board, Move};
 use hyperloglogplus::{HyperLogLog, HyperLogLogPlus};
 use nnue::network::{OUTPUT_BUCKETS, output_bucket};
 use rand::rngs::StdRng;
@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use utils::is_capture;
 
 use super::progress::ShardProgressBar;
 
@@ -35,11 +36,22 @@ pub struct ShardStats {
     pub white_wins: usize,
     pub draws: usize,
     pub black_wins: usize,
+    pub nonquiets_skipped: usize,
 }
 
 impl ShardStats {
     pub fn log(&self) {
         log::info!("Total samples: {}", self.total_samples);
+        if self.nonquiets_skipped > 0 {
+            let as_percentage = 100.0 * self.nonquiets_skipped as f64
+                / (self.total_samples + self.nonquiets_skipped) as f64;
+
+            log::info!(
+                "Skipped {} non-quiet samples ({:.1}%)",
+                self.nonquiets_skipped,
+                as_percentage
+            );
+        }
         log::info!(
             "Unique positions: ~{:.2}%",
             (self.unique_fens as f64 / self.total_samples as f64) * 100.0
@@ -121,6 +133,7 @@ struct WorkerStats {
     white_wins: usize,
     draws: usize,
     black_wins: usize,
+    nonquiets_skipped: usize,
 }
 
 impl WorkerStats {
@@ -134,6 +147,7 @@ impl WorkerStats {
             white_wins: 0,
             draws: 0,
             black_wins: 0,
+            nonquiets_skipped: 0,
         }
     }
 
@@ -173,6 +187,7 @@ pub fn build_shards(
     data_dir: &Path,
     temp_dir: &Path,
     shard_size_mb: usize,
+    quiets_only: bool,
     val_ratio: f64,
     test_ratio: f64,
     seed: u64,
@@ -211,6 +226,7 @@ pub fn build_shards(
                 idx,
                 path,
                 seed,
+                quiets_only,
                 val_ratio,
                 test_ratio,
                 &train_writer,
@@ -231,6 +247,7 @@ pub fn build_shards(
     let mut white_wins = 0;
     let mut draws = 0;
     let mut black_wins = 0;
+    let mut nonquiets_skipped = 0;
     let mut combined_hll: HyperLogLogPlus<String, RandomState> =
         HyperLogLogPlus::new(HLL_PRECISION, RandomState::new()).unwrap();
 
@@ -241,6 +258,7 @@ pub fn build_shards(
         white_wins += stats.white_wins;
         draws += stats.draws;
         black_wins += stats.black_wins;
+        nonquiets_skipped += stats.nonquiets_skipped;
         combined_hll.merge(&stats.unique_fens).unwrap();
 
         for (i, count) in stats.bucket_counts.iter().enumerate() {
@@ -269,6 +287,7 @@ pub fn build_shards(
         white_wins,
         draws,
         black_wins,
+        nonquiets_skipped,
     };
 
     Ok((shard_paths, stats))
@@ -278,6 +297,7 @@ fn process_file(
     file_index: usize,
     path: &Path,
     seed: u64,
+    quiets_only: bool,
     val_ratio: f64,
     test_ratio: f64,
     train_writer: &ShardWriter,
@@ -312,11 +332,18 @@ fn process_file(
         let line_len = line.len() as u64;
         let trimmed = line.trim();
 
-        if let Some((fen, score, outcome, game_id)) = parse_csv_line(trimmed) {
+        if let Some((fen, score, best_move, outcome, game_id)) = parse_csv_line(trimmed) {
             let split = *game_assignments.entry(game_id).or_insert_with(|| {
                 stats.register_game();
                 pick_split(&mut rng, val_ratio, test_ratio)
             });
+
+            if quiets_only && !is_quiet_sample(fen, best_move) {
+                stats.nonquiets_skipped += 1;
+                bytes_since_update += line_len;
+                line.clear();
+                continue;
+            }
 
             stats.register_sample(fen, outcome, split);
 
@@ -344,14 +371,29 @@ fn process_file(
     stats
 }
 
-fn parse_csv_line(line: &str) -> Option<(&str, i16, &str, u32)> {
+fn parse_csv_line(line: &str) -> Option<(&str, i16, &str, &str, u32)> {
     let mut parts = line.split(',');
     let fen = parts.next()?;
     let score: i16 = parts.next()?.parse().ok()?;
-    let _best_move = parts.next()?;
+    let best_move = parts.next()?;
     let outcome = parts.next()?;
     let game_id: u32 = parts.next()?.parse().ok()?;
-    Some((fen, score, outcome, game_id))
+    Some((fen, score, best_move, outcome, game_id))
+}
+
+fn is_quiet_sample(fen: &str, best_move: &str) -> bool {
+    let Ok(board) = Board::from_str(fen) else {
+        return false;
+    };
+    let Ok(mv) = best_move.parse::<Move>() else {
+        return false;
+    };
+
+    if !board.checkers().is_empty() {
+        return false;
+    }
+
+    mv.promotion.is_none() && !is_capture(&board, mv)
 }
 
 fn pick_split<R: RngExt>(rng: &mut R, val_ratio: f64, test_ratio: f64) -> Split {
