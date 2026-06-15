@@ -53,15 +53,22 @@ impl Grail {
     }
 
     /// Runs the UCI protocol loop until quit.
-    pub fn run(mut self) -> Result<(), Box<dyn std::error::Error>> {
+    /// If an initial line is provided, it is executed and the program exits.
+    pub fn run(mut self, initial: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         let decoder = Decoder::new();
-        let stdin = std::io::stdin();
 
-        for line in stdin.lock().lines() {
-            let line = line?;
-            let input = decoder.decode(line.trim());
-            if !self.handle(input) {
-                break;
+        match initial {
+            Some(line) => {
+                self.handle(decoder.decode(line.trim()));
+            }
+            None => {
+                let stdin = std::io::stdin();
+                for line in stdin.lock().lines() {
+                    let line = line?;
+                    if !self.handle(decoder.decode(line.trim())) {
+                        break;
+                    }
+                }
             }
         }
 
@@ -118,6 +125,9 @@ impl Grail {
             }
             UciInput::Display => {
                 let _ = self.cmd_tx.send(EngineCommand::Display);
+            }
+            UciInput::Bench => {
+                let _ = self.cmd_tx.send(EngineCommand::Bench);
             }
             UciInput::Quit => return false,
             UciInput::Unknown(_) => {} // Ignore unknown commands per UCI spec
