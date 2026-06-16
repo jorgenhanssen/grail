@@ -6,6 +6,7 @@ use cozy_chess::Board;
 use search::Engine;
 use uci::{NULL_MOVE, UciOutput, move_to_uci};
 
+use crate::bench::run_benchmark;
 use crate::display::display_position;
 use crate::search_metadata::SearchResultMeta;
 
@@ -24,6 +25,8 @@ pub enum EngineCommand {
     Go(uci::commands::GoParams),
     /// Display current position.
     Display,
+    /// Run the engine benchmark.
+    Bench,
     /// Shut down the worker thread.
     Quit,
 }
@@ -86,6 +89,7 @@ impl EngineWorker {
                 EngineCommand::Display => {
                     display_position(self.engine.board(), self.last_search.as_ref())
                 }
+                EngineCommand::Bench => run_benchmark(&mut self.engine),
                 EngineCommand::Quit => break,
             }
         }

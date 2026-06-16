@@ -33,6 +33,7 @@ impl Decoder {
 
             // Non-standard commands
             "d" => UciInput::Display,
+            "bench" => UciInput::Bench,
 
             _ => UciInput::Unknown(input.to_string()),
         }

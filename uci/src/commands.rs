@@ -25,6 +25,7 @@ pub enum UciInput {
 
     /// Non-standard commands
     Display,
+    Bench,
 }
 
 /// Commands sent to the UCI GUI.
