@@ -81,11 +81,12 @@ This builds the release binary at `target/release/grail`.
 The project includes a `Makefile` for convenience:
 
 - **`make grail`** (default): Builds the release binary.
+- **`make grail-pgo`**: Builds a PGO release of Grail.
 - **`make tunable`**: Builds with exposed parameters for SPSA tuning.
 - **`make generate`**: Builds the data generation tool for NNUE training.
+- **`make generate-pgo`**: Builds a PGO release of the datagen.
 - **`make train`**: Builds the NNUE trainer (auto-detects CUDA/Metal).
 - **`make nnue-analysis`**: Dumps a human-readable weight analysis of the current NNUE to `nnue/model.analysis.txt`.
-- **`make pgo`**: Builds a PGO release.
 - **`make profile`**: Records the built-in benchmark with [`samply`](https://github.com/mstange/samply) (install required).
 - **`make clean`**: Cleans the build directory.
 
