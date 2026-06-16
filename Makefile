@@ -2,7 +2,7 @@ SHELL = /bin/bash
 
 .ONESHELL:
 
-.PHONY: grail tunable generate train clean nnue-analysis flamegraph
+.PHONY: grail tunable generate train clean nnue-analysis profile
 
 # Default to native optimization for local development.
 RUSTFLAGS = -C target-cpu=native
@@ -30,9 +30,9 @@ train:
 nnue-analysis:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo run --release -p nnue --bin nnue-analysis
 
-flamegraph:
-	@ROOT=$$([ "$$(uname -s)" = "Linux" ] && echo --root); \
-	RUSTFLAGS="$(RUSTFLAGS)" cargo flamegraph --profile profiling -p grail --bin grail $$ROOT -o flamegraph.svg -- bench
+profile:
+	RUSTFLAGS="$(RUSTFLAGS)" cargo build --profile profiling -p grail --bin grail
+	samply record -o profile.json.gz -- ./target/profiling/grail bench
 
 clean:
 	cargo clean

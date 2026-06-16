@@ -18,7 +18,6 @@ sprt/
 nnue/data/
 
 # Profiling
-flamegraph.svg
-cargo-flamegraph.trace/
+profile.json.gz
 
 config.json

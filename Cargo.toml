@@ -49,7 +49,7 @@ codegen-units = 1
 panic = "abort"
 incremental = false
 
-# Release build with debug symbols (flamegraph).
+# Release build with debug symbols (samply).
 [profile.profiling]
 inherits = "release"
 debug = true
