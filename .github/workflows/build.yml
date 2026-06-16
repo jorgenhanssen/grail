@@ -63,7 +63,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PGO_DIR="target/pgo-data"
+          ROOT="$(pwd -W 2>/dev/null || pwd)"
+          PGO_DIR="$ROOT/target/pgo-data"
           rm -rf "$PGO_DIR"
           mkdir -p "$PGO_DIR"
 
