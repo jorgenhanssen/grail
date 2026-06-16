@@ -23,6 +23,7 @@ pub struct SelfPlayWorker {
     max_opening_imbalance: Option<i16>,
     max_teleport_plies: usize,
     max_game_plies: usize,
+    max_games: Option<usize>,
     opening_source: Arc<OpeningSource>,
     histogram: HistogramHandle,
     tablebases: Option<TableBases<CozyAdapter>>,
@@ -39,6 +40,7 @@ impl SelfPlayWorker {
         max_opening_imbalance: Option<i16>,
         max_teleport_plies: usize,
         max_game_plies: usize,
+        max_games: Option<usize>,
         multi_pv: u8,
         create_evaluator: fn() -> nnue::Evaluator,
         opening_source: Arc<OpeningSource>,
@@ -65,6 +67,7 @@ impl SelfPlayWorker {
             max_opening_imbalance,
             max_teleport_plies,
             max_game_plies,
+            max_games,
             engine,
             opening_source,
             histogram,
@@ -77,6 +80,13 @@ impl SelfPlayWorker {
 
         while !stop_flag.load(Ordering::Relaxed) {
             let game_id = self.game_id_counter.fetch_add(1, Ordering::Relaxed);
+
+            if let Some(max) = self.max_games {
+                if game_id >= max {
+                    break;
+                }
+            }
+
             let opening = self.opening_source.next_opening();
 
             let mut game = SelfPlayGame::new(

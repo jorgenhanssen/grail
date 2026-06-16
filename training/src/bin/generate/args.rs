@@ -37,6 +37,14 @@ pub struct Args {
     #[arg(long, global = true, default_value_t = 300, value_parser = clap::value_parser!(u64).range(1..))]
     pub max_game_plies: u64,
 
+    /// Stop after this many games
+    #[arg(long, global = true, value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..))]
+    pub max_games: Option<usize>,
+
+    /// Generate samples but don't write the dataset to disk.
+    #[arg(long, global = true)]
+    pub dry_run: bool,
+
     /// Source openings used for self-play games.
     #[command(subcommand)]
     pub opening: Opening,

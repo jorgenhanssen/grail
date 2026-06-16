@@ -123,6 +123,8 @@ make generate
 - `--max-opening-imbalance`: Discard games whose opening eval exceeds this many centipawns in absolute value (optional).
 - `--max-teleport-plies`: Max plies to teleport along a PV between recorded positions (default: 8).
 - `--max-game-plies`: Discard games lasting longer than this many plies (default: 300).
+- `--max-games`: Stop after this many games total (optional).
+- `--dry-run`: Generate samples but don't write the dataset to disk.
 
 Generated data is saved to `nnue/data/YYYY-MM-DD-HH:MM.csv`.
 

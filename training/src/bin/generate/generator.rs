@@ -65,6 +65,7 @@ impl Generator {
         max_opening_imbalance: Option<i16>,
         max_teleport_plies: usize,
         max_game_plies: usize,
+        max_games: Option<usize>,
         stop_flag: Arc<AtomicBool>,
     ) -> Vec<Sample> {
         log::info!(
@@ -101,6 +102,7 @@ impl Generator {
                         max_opening_imbalance,
                         max_teleport_plies,
                         max_game_plies,
+                        max_games,
                         pv_lines,
                         Self::load_nnue,
                         opening_source,
@@ -113,7 +115,8 @@ impl Generator {
             .collect();
 
         // Spawn progress update thread
-        let progress_handle = Self::spawn_progress_updater(sample_counter, histogram, stop_flag);
+        let progress_handle =
+            Self::spawn_progress_updater(sample_counter, histogram, Arc::clone(&stop_flag));
 
         // Wait for all workers to complete
         let samples: Vec<_> = worker_handles
@@ -121,6 +124,7 @@ impl Generator {
             .flat_map(|h| h.join().unwrap())
             .collect();
 
+        stop_flag.store(true, Ordering::Relaxed);
         progress_handle.join().unwrap();
 
         samples

@@ -53,10 +53,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         args.max_opening_imbalance,
         args.max_teleport_plies as usize,
         args.max_game_plies as usize,
+        args.max_games,
         stop_flag,
     );
 
     log::info!("Generated {} samples", samples.len());
+
+    if args.dry_run {
+        log::info!("Skipping dataset write (dry run)");
+        return Ok(());
+    }
 
     fs::create_dir_all("nnue/data")?;
 
