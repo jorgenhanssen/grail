@@ -85,6 +85,7 @@ The project includes a `Makefile` for convenience:
 - **`make generate`**: Builds the data generation tool for NNUE training.
 - **`make train`**: Builds the NNUE trainer (auto-detects CUDA/Metal).
 - **`make nnue-analysis`**: Dumps a human-readable weight analysis of the current NNUE to `nnue/model.analysis.txt`.
+- **`make flamegraph`**: Profiles the built-in benchmark using [`flamegraph`](https://github.com/flamegraph-rs/flamegraph) (install required).
 - **`make clean`**: Cleans the build directory.
 
 ### NNUE Data Generation & Training

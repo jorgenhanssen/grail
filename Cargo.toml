@@ -48,3 +48,8 @@ lto = true
 codegen-units = 1
 panic = "abort"
 incremental = false
+
+# Release build with debug symbols (flamegraph).
+[profile.profiling]
+inherits = "release"
+debug = true

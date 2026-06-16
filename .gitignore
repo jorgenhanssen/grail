@@ -19,5 +19,6 @@ nnue/data/
 
 # Profiling
 flamegraph.svg
+cargo-flamegraph.trace/
 
 config.json
