@@ -2,7 +2,7 @@ SHELL = /bin/bash
 
 .ONESHELL:
 
-.PHONY: grail tunable generate train clean nnue-analysis profile pgo
+.PHONY: grail grail-pgo tunable generate generate-pgo train clean nnue-analysis profile
 
 # Default to native optimization for local development.
 RUSTFLAGS = -C target-cpu=native
@@ -10,23 +10,18 @@ RUSTFLAGS = -C target-cpu=native
 grail:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin grail
 
-# PGO build (used for releases).
-# Needs llvm-profdata from the llvm-tools-preview component (rustup component add llvm-tools-preview).
-pgo:
-	PGO_DIR="$(CURDIR)/target/pgo-data"
-	rm -rf "$$PGO_DIR"
-	mkdir -p "$$PGO_DIR"
-	PROFDATA="$$(dirname "$$(rustc --print target-libdir)")/bin/llvm-profdata"
-	RUSTFLAGS="$(RUSTFLAGS) -C profile-generate=$$PGO_DIR" cargo build --release --bin grail
-	LLVM_PROFILE_FILE="$$PGO_DIR/grail-%p-%m.profraw" ./target/release/grail bench
-	"$$PROFDATA" merge -o "$$PGO_DIR/merged.profdata" "$$PGO_DIR"
-	RUSTFLAGS="$(RUSTFLAGS) -C profile-use=$$PGO_DIR/merged.profdata -C llvm-args=-pgo-warn-missing-function=false" cargo build --release --bin grail
+grail-pgo:
+	RUSTFLAGS="$(RUSTFLAGS)" bash scripts/pgo.sh "--bin grail" "./target/release/grail bench"
 
 tunable:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release --bin grail --features tuning
 
 generate:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin generate
+
+generate-pgo:
+	RUSTFLAGS="$(RUSTFLAGS)" bash scripts/pgo.sh "-p training --bin generate" \
+		"./target/release/generate random --plies 8 --nodes 10000 --threads 1 --max-games 100 --dry-run"
 
 test:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo test
