@@ -1,5 +1,8 @@
 name: Build binaries
 
+# note: pgo_cpu is used to build the instrumented binary for pgo builds.
+# - no guarantee that the CI runner has the same CPU as the target CPU.
+
 on:
   workflow_dispatch: # Allow manual runs from Actions tab
   push:
@@ -16,11 +19,13 @@ jobs:
             name: linux
             rust_target: x86_64-unknown-linux-gnu
             cpu: x86-64-v4
+            pgo_cpu: x86-64-v3
             binary_name: grail-x86-64-v4
           - os: ubuntu-latest
             name: linux
             rust_target: x86_64-unknown-linux-gnu
             cpu: x86-64-v3
+            pgo_cpu: x86-64-v3
             binary_name: grail-x86-64-v3
 
           # Windows builds
@@ -28,11 +33,13 @@ jobs:
             name: windows
             rust_target: x86_64-pc-windows-msvc
             cpu: x86-64-v4
+            pgo_cpu: x86-64-v3
             binary_name: grail-x86-64-v4
           - os: windows-latest
             name: windows
             rust_target: x86_64-pc-windows-msvc
             cpu: x86-64-v3
+            pgo_cpu: x86-64-v3
             binary_name: grail-x86-64-v3
 
           # macOS Apple Silicon
@@ -40,6 +47,7 @@ jobs:
             name: macos
             rust_target: aarch64-apple-darwin
             cpu: native
+            pgo_cpu: native
             binary_name: grail-arm64
 
     runs-on: ${{ matrix.os }}
@@ -49,11 +57,30 @@ jobs:
           lfs: true
       - run: rustup default nightly
       - run: rustup target add ${{ matrix.rust_target }}
-      - run: cargo build --release --target ${{ matrix.rust_target }}
-        env:
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: "-C target-cpu=${{ matrix.cpu }}"
-          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: "-C target-cpu=${{ matrix.cpu }}"
-          CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS: "-C target-cpu=${{ matrix.cpu }}"
+      - run: rustup component add llvm-tools-preview
+
+      - name: PGO build
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$(pwd -W 2>/dev/null || pwd)"
+          PGO_DIR="$ROOT/target/pgo-data"
+          rm -rf "$PGO_DIR"
+          mkdir -p "$PGO_DIR"
+
+          PROFDATA="$(dirname "$(rustc --print target-libdir)")/bin/llvm-profdata"
+          [ -x "$PROFDATA.exe" ] && PROFDATA="$PROFDATA.exe"
+
+          RUSTFLAGS="-C target-cpu=${{ matrix.pgo_cpu }} -C profile-generate=$PGO_DIR" \
+            cargo build --release --target ${{ matrix.rust_target }} -p grail --bin grail
+
+          LLVM_PROFILE_FILE="$PGO_DIR/grail-%p-%m.profraw" \
+            "target/${{ matrix.rust_target }}/release/grail" bench
+
+          "$PROFDATA" merge -o "$PGO_DIR/merged.profdata" "$PGO_DIR"
+
+          RUSTFLAGS="-C target-cpu=${{ matrix.cpu }} -C profile-use=$PGO_DIR/merged.profdata -C llvm-args=-pgo-warn-missing-function=false" \
+            cargo build --release --target ${{ matrix.rust_target }} -p grail --bin grail
 
       # Rename binary to include CPU info
       - name: Rename binary (Unix)
