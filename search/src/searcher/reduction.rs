@@ -22,6 +22,7 @@ impl Searcher {
         cont_hist: i16,
         tt_move_is_capture: bool,
         tt_pv: bool,
+        tt_age: u8,
     ) -> u8 {
         let mut reduction = self.lmr.get(depth, move_index);
 
@@ -60,8 +61,10 @@ impl Searcher {
             if parent.is_pv() {
                 reduction -= FracPly(self.config.anti_reduction_pv_node.value);
             } else if tt_pv {
-                // Node that has been a PV earlier
-                reduction -= FracPly(self.config.anti_reduction_tt_pv.value);
+                // Node that has been a PV earlier (tapers off as the TT entry goes stale)
+                let base = self.config.anti_reduction_tt_pv.value as u32;
+                let falloff = tt_age as u32 * self.config.anti_reduction_tt_pv_decay.value as u32;
+                reduction -= FracPly(base.saturating_sub(falloff) as u16);
             }
             if parent.in_check() || child.in_check() {
                 reduction -= FracPly(self.config.anti_reduction_check.value);

@@ -35,6 +35,8 @@ pub struct ProbeResult {
     pub depth: u8,
     /// Whether this position has been a PV node before.
     pub pv: bool,
+    /// How many searches ago this entry was last written
+    pub age: u8,
 }
 
 /// A single TT entry (16 bytes, fits 4 per cache line).
@@ -185,6 +187,7 @@ impl TranspositionTable {
             static_eval,
             depth: entry.depth,
             pv: entry.pv,
+            age: self.generation.wrapping_sub(entry.generation),
         })
     }
 

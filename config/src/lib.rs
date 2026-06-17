@@ -54,6 +54,7 @@ define_config!(
     (anti_reduction_pv_node: u16, "Anti Reduction PV Node", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_pv_move: u16, "Anti Reduction PV Move", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_tt_pv: u16, "Anti Reduction TT PV", UciOptionType::Spin { min: 0, max: 4096 }, 512, cfg!(feature = "tuning")),
+    (anti_reduction_tt_pv_decay: u16, "Anti Reduction TT PV Decay", UciOptionType::Spin { min: 0, max: 4096 }, 128, cfg!(feature = "tuning")),
     (anti_reduction_tactical: u16, "Anti Reduction Tactical", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_threat: u16, "Anti Reduction Threat", UciOptionType::Spin { min: 0, max: 4096 }, 1024, cfg!(feature = "tuning")),
     (anti_reduction_check: u16, "Anti Reduction Check", UciOptionType::Spin { min: 0, max: 4096 }, 1500, cfg!(feature = "tuning")),
