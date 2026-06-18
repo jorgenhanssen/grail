@@ -1,3 +1,5 @@
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use std::sync::mpsc::channel;
 
@@ -36,29 +38,36 @@ pub fn run_benchmark(engine: &mut Engine) {
 
 #[derive(Default)]
 struct Stats {
+    max_sel_depth: u8,
+    total_sel_depth: u64,
     total_nodes: u64,
     total_time: u64,
     total_branch_factor: f64,
+    hash: u64,
 }
 
 impl Stats {
     fn record(&mut self, index: usize, fen: &str, info: &Info) {
         let branch_factor = (info.nodes as f64).powf(1.0 / info.depth as f64);
 
+        self.max_sel_depth = self.max_sel_depth.max(info.sel_depth);
+        self.total_sel_depth += info.sel_depth as u64;
         self.total_nodes += info.nodes;
         self.total_time += info.time as u64;
         self.total_branch_factor += branch_factor;
+        self.hash = hash_info(self.hash, info);
 
         let best_move = info.pv.first().map(String::as_str).unwrap_or("-");
 
         println!(
-            "[{:>2}/{}]   bestmove {:<4} {:>8}   nodes {:>7}   time {:>4} ms   bf {:>3.2}   {}",
+            "[{:>2}/{}]   bestmove {:<4} {:>8}   nodes {:>7}   time {:>4} ms   sd {:>2}   bf {:>3.2}   {}",
             index + 1,
             POSITIONS.len(),
             best_move,
             format_score(&info.score),
             info.nodes,
             info.time,
+            info.sel_depth,
             branch_factor,
             fen,
         );
@@ -69,14 +78,35 @@ impl Stats {
         let ms = self.total_time;
         let nps = nodes * 1000 / ms;
         let branch_factor = self.total_branch_factor / POSITIONS.len() as f64;
+        let avg_sel_depth = self.total_sel_depth as f64 / POSITIONS.len() as f64;
 
         println!();
         println!("Depth        : {DEPTH}");
+        println!("Max seldepth : {}", self.max_sel_depth);
+        println!("Avg seldepth : {avg_sel_depth:.1}");
         println!("Total time   : {ms} ms");
         println!("Total nodes  : {nodes}");
         println!("Avg NPS      : {nps}");
         println!("Avg branching: {branch_factor:.2}");
+        println!("Bench hash   : {:016X}", self.hash);
     }
+}
+
+fn hash_info(prev: u64, info: &Info) -> u64 {
+    let mut hasher = DefaultHasher::new();
+
+    prev.hash(&mut hasher);
+    info.depth.hash(&mut hasher);
+    info.sel_depth.hash(&mut hasher);
+    info.nodes.hash(&mut hasher);
+    info.pv.hash(&mut hasher);
+
+    match info.score {
+        Score::Centipawns(cp) => (0u8, cp).hash(&mut hasher),
+        Score::Mate(n) => (1u8, n).hash(&mut hasher),
+    }
+
+    hasher.finish()
 }
 
 fn format_score(score: &Score) -> String {
