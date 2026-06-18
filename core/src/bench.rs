@@ -52,11 +52,10 @@ impl Stats {
         let best_move = info.pv.first().map(String::as_str).unwrap_or("-");
 
         println!(
-            "[{:>2}/{}]  bestmove {:<5}  depth {:>2}  score {:>9}  nodes {:>9}  time {:>6} ms  bf {:>5.2}  {}",
+            "[{:>2}/{}]   bestmove {:<4} {:>8}   nodes {:>7}   time {:>4} ms   bf {:>3.2}   {}",
             index + 1,
             POSITIONS.len(),
             best_move,
-            info.depth,
             format_score(&info.score),
             info.nodes,
             info.time,
@@ -72,10 +71,11 @@ impl Stats {
         let branch_factor = self.total_branch_factor / POSITIONS.len() as f64;
 
         println!();
-        println!("Total time          : {ms} ms");
-        println!("Total nodes         : {nodes}");
-        println!("Avg NPS             : {nps}");
-        println!("Avg branching factor: {branch_factor:.2}");
+        println!("Depth        : {DEPTH}");
+        println!("Total time   : {ms} ms");
+        println!("Total nodes  : {nodes}");
+        println!("Avg NPS      : {nps}");
+        println!("Avg branching: {branch_factor:.2}");
     }
 }
 
