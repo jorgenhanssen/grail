@@ -60,7 +60,7 @@ impl Stats {
         let best_move = info.pv.first().map(String::as_str).unwrap_or("-");
 
         println!(
-            "[{:>2}/{}]   bestmove {:<4} {:>8}   nodes {:>7}   time {:>4} ms   sd {:>2}   bf {:>3.2}   {}",
+            "[{:>2}/{}]   bestmove {:<5} {:>8}   nodes {:>7}   time {:>4} ms   sd {:>2}   bf {:>3.2}   {}",
             index + 1,
             POSITIONS.len(),
             best_move,
@@ -162,4 +162,10 @@ const POSITIONS: &[&str] = &[
     "8/R7/2q5/8/6k1/8/1P5p/K6R w - - 0 124",
     "6k1/3b3r/1p1p4/p1n2p2/1PPNpP1q/P3Q1p1/1R1RB1P1/5K2 b - - 0 1",
     "r2r1n2/pp2bk2/2p1p2p/3q4/3PN1QP/2P3R1/P4PP1/5RK1 w - - 0 1",
+    "8/k7/3p4/p2P1p2/P2P1P2/8/8/K7 w - - 0 1",
+    "8/Pk6/8/8/8/8/6Kp/8 w - - 0 1",
+    "r1bqk2r/pp2nppp/2n1p3/2ppP3/3P4/2PB1N2/PP3PPP/RNBQK2R w KQkq - 0 1",
+    "6k1/5p2/6p1/8/8/6P1/5PK1/1q4Q1 w - - 0 1",
+    "8/8/8/4k3/8/8/8/3BKN2 w - - 0 1",
+    "8/4P1k1/3q4/6P1/7P/8/8/6K1 w - - 0 1",
 ];
