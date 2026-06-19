@@ -1,6 +1,5 @@
-use crate::game::SelfPlayGame;
+use crate::game::{GameConfig, SelfPlayGame};
 use crate::histogram::HistogramHandle;
-use crate::limit::SearchLimit;
 use crate::opening::OpeningSource;
 use crate::samples::Sample;
 use config::EngineConfig;
@@ -19,10 +18,7 @@ pub struct SelfPlayWorker {
     sample_counter: Arc<AtomicUsize>,
     game_id_counter: Arc<AtomicUsize>,
     engine: Engine,
-    limit: SearchLimit,
-    max_opening_imbalance: Option<i16>,
-    max_teleport_plies: usize,
-    max_game_plies: usize,
+    game_config: GameConfig,
     max_games: Option<usize>,
     opening_source: Arc<OpeningSource>,
     histogram: HistogramHandle,
@@ -36,10 +32,7 @@ impl SelfPlayWorker {
         tid: usize,
         sample_counter: Arc<AtomicUsize>,
         game_id_counter: Arc<AtomicUsize>,
-        limit: SearchLimit,
-        max_opening_imbalance: Option<i16>,
-        max_teleport_plies: usize,
-        max_game_plies: usize,
+        game_config: GameConfig,
         max_games: Option<usize>,
         multi_pv: u8,
         create_evaluator: fn() -> nnue::Evaluator,
@@ -63,10 +56,7 @@ impl SelfPlayWorker {
             _tid: tid,
             sample_counter,
             game_id_counter,
-            limit,
-            max_opening_imbalance,
-            max_teleport_plies,
-            max_game_plies,
+            game_config,
             max_games,
             engine,
             opening_source,
@@ -89,15 +79,8 @@ impl SelfPlayWorker {
 
             let opening = self.opening_source.next_opening();
 
-            let mut game = SelfPlayGame::new(
-                game_id,
-                opening,
-                self.limit,
-                self.max_opening_imbalance,
-                self.max_teleport_plies,
-                self.max_game_plies,
-                self.tablebases.clone(),
-            );
+            let mut game =
+                SelfPlayGame::new(game_id, opening, self.game_config, self.tablebases.clone());
             game.play(&mut self.engine);
 
             let (samples, scores) = game.get_samples();

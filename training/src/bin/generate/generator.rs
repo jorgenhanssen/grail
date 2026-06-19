@@ -1,5 +1,5 @@
+use crate::game::GameConfig;
 use crate::histogram::ScoreHistogram;
-use crate::limit::SearchLimit;
 use crate::opening::OpeningSource;
 use crate::samples::Sample;
 use crate::worker::SelfPlayWorker;
@@ -61,18 +61,16 @@ impl Generator {
 
     pub fn run(
         &self,
-        limit: SearchLimit,
-        max_opening_imbalance: Option<i16>,
-        max_teleport_plies: usize,
-        max_game_plies: usize,
+        game_config: GameConfig,
         max_games: Option<usize>,
         stop_flag: Arc<AtomicBool>,
     ) -> Vec<Sample> {
         log::info!(
-            "Generating samples ({}, multi_pv={}, threads={}) - Press Ctrl+C to stop",
-            limit,
+            "Generating samples ({}, multi_pv={}, threads={}, dense={}) - Press Ctrl+C to stop",
+            game_config.limit,
             self.pv_lines,
             self.threads,
+            game_config.dense_sampling,
         );
 
         let sample_counter = Arc::new(AtomicUsize::new(0));
@@ -98,10 +96,7 @@ impl Generator {
                         tid,
                         sample_counter,
                         game_id_counter,
-                        limit,
-                        max_opening_imbalance,
-                        max_teleport_plies,
-                        max_game_plies,
+                        game_config,
                         max_games,
                         pv_lines,
                         Self::load_nnue,

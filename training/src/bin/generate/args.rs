@@ -45,6 +45,10 @@ pub struct Args {
     #[arg(long, global = true)]
     pub dry_run: bool,
 
+    /// Record only anchor/decision nodes.
+    #[arg(long, global = true)]
+    pub sparse_samples: bool,
+
     /// Source openings used for self-play games.
     #[command(subcommand)]
     pub opening: Opening,

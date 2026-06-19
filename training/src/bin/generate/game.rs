@@ -2,25 +2,31 @@ use crate::limit::SearchLimit;
 use crate::samples::{GameOutcome, Sample};
 use cozy_chess::{Board, Color, Move};
 use pyrrhic_rs::{TableBases, WdlProbeResult};
-use rand::RngExt;
-use search::{CozyAdapter, Engine, PvLine, SearchResult};
+use rand::{RngExt, rng};
+use search::{CozyAdapter, Engine, SearchResult};
 use std::collections::HashMap;
 use utils::{flip_eval_perspective, has_check, has_insufficient_material, has_legal_moves};
+
+#[derive(Clone, Copy)]
+pub struct GameConfig {
+    pub limit: SearchLimit,
+    pub max_opening_imbalance: Option<i16>,
+    pub max_teleport_plies: usize,
+    pub max_game_plies: usize,
+    pub dense_sampling: bool,
+}
 
 /// A self-play game that generates training samples.
 ///
 /// Uses MultiPV search at decision points and teleports along chosen PV lines
-/// to reduce sample correlation and increase game diversity.
+/// to produce varied games from the same openings.
 pub struct SelfPlayGame {
     board: Board,
     game_id: usize,
     position_counts: HashMap<u64, usize>,
     positions: Vec<(String, i16, Move)>, // FEN, eval, best move
     plies_played: usize,
-    limit: SearchLimit,
-    max_opening_imbalance: Option<i16>,
-    max_teleport_plies: usize,
-    max_game_plies: usize,
+    config: GameConfig,
     tablebases: Option<TableBases<CozyAdapter>>,
 }
 
@@ -28,10 +34,7 @@ impl SelfPlayGame {
     pub fn new(
         game_id: usize,
         board: Board,
-        limit: SearchLimit,
-        max_opening_imbalance: Option<i16>,
-        max_teleport_plies: usize,
-        max_game_plies: usize,
+        config: GameConfig,
         tablebases: Option<TableBases<CozyAdapter>>,
     ) -> Self {
         Self {
@@ -40,10 +43,7 @@ impl SelfPlayGame {
             position_counts: HashMap::new(),
             positions: Vec::new(),
             plies_played: 0,
-            limit,
-            max_opening_imbalance,
-            max_teleport_plies,
-            max_game_plies,
+            config,
             tablebases,
         }
     }
@@ -51,13 +51,16 @@ impl SelfPlayGame {
     /// Play the game using MultiPV search and teleporting.
     ///
     /// At each decision point: search, record sample, select PV via softmax,
-    /// then teleport along the chosen PV.
+    /// then teleport along the chosen PV. With sparse sampling, only the
+    /// anchor/decision nodes are searched and recorded.
     pub fn play(&mut self, engine: &mut Engine) {
         engine.new_game();
 
+        let mut line: Vec<Move> = Vec::new();
+
         loop {
             // Cursed long game... no trustworthy outcome, discard the game.
-            if self.plies_played >= self.max_game_plies {
+            if self.plies_played >= self.config.max_game_plies {
                 self.positions.clear();
                 return;
             }
@@ -66,29 +69,42 @@ impl SelfPlayGame {
                 break;
             }
 
-            let Some(result) = self.search(engine) else {
-                break;
-            };
-            let Some(pv) = result.primary() else {
-                break;
-            };
+            let is_anchor = line.is_empty();
 
-            if self.opening_is_too_imbalanced(pv.score) {
+            if is_anchor || self.config.dense_sampling {
+                let Some(result) = self.search(engine) else {
+                    break;
+                };
+                let Some(pv) = result.primary() else {
+                    break;
+                };
+
+                if self.opening_is_too_imbalanced(pv.score) {
+                    break;
+                }
+
+                if let Some(mv) = pv.best_move() {
+                    self.record_position(pv.score, mv);
+                }
+
+                if is_anchor {
+                    let chosen = result.select_softmax().expect("has lines");
+                    let len = rng().random_range(1..=self.config.max_teleport_plies);
+                    line = chosen.line.iter().take(len).copied().collect();
+                }
+            }
+
+            if line.is_empty() {
                 break;
             }
 
-            if let Some(mv) = pv.best_move() {
-                self.record_position(pv.score, mv);
-            }
-
-            let chosen_pv = result.select_softmax().expect("has lines");
-            self.teleport(chosen_pv, engine);
+            self.play_move(line.remove(0));
         }
     }
 
     fn search(&self, engine: &mut Engine) -> Option<SearchResult> {
         engine.set_position(self.board.clone(), Some(self.history()));
-        engine.search(&self.limit.go_params(), None)
+        engine.search(&self.config.limit.go_params(), None)
     }
 
     fn record_position(&mut self, eval: i16, best_move: Move) {
@@ -98,7 +114,7 @@ impl SelfPlayGame {
     }
 
     fn opening_is_too_imbalanced(&self, score: i16) -> bool {
-        let Some(max) = self.max_opening_imbalance else {
+        let Some(max) = self.config.max_opening_imbalance else {
             return false;
         };
         self.positions.is_empty() && score.abs() > max
@@ -114,45 +130,6 @@ impl SelfPlayGame {
         }
 
         GameOutcome::Draw
-    }
-
-    /// Teleport along a PV line by playing moves without searching.
-    ///
-    /// Picks a random teleport length, then plays that many moves from the
-    /// PV. If the PV is shorter than the teleport distance (e.g. TB positions
-    /// where the PV is only 1 move), continues teleporting by searching for
-    /// the best move at each step.
-    fn teleport(&mut self, pv: &PvLine, engine: &mut Engine) {
-        if pv.line.is_empty() {
-            return;
-        }
-
-        let mut rng = rand::rng();
-        let teleport_len = rng.random_range(1..=self.max_teleport_plies);
-
-        let mut steps = 0;
-
-        for mv in pv.line.iter().take(teleport_len) {
-            self.play_move(*mv);
-            steps += 1;
-            if self.is_terminal() {
-                return;
-            }
-        }
-
-        while steps < teleport_len {
-            let Some(result) = self.search(engine) else {
-                return;
-            };
-            let Some(mv) = result.primary().and_then(PvLine::best_move) else {
-                return;
-            };
-            self.play_move(mv);
-            steps += 1;
-            if self.is_terminal() {
-                return;
-            }
-        }
     }
 
     /// Play a single move, updating all game state.
