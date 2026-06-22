@@ -1,0 +1,31 @@
+{
+  "seed": 5244147853439124908,
+  "val_ratio": 0.05,
+  "test_ratio": 0.01,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.06266839,
+      "val_loss": 0.062135283,
+      "learning_rate": 0.001
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.061987456,
+      "val_loss": 0.06226228,
+      "learning_rate": 0.00095
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.061580744,
+      "val_loss": 0.062434033,
+      "learning_rate": 0.0009025
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.061274566,
+      "val_loss": 0.06258389,
+      "learning_rate": 0.000857375
+    }
+  ]
+}
