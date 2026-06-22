@@ -10,6 +10,7 @@ mod worker;
 use args::{Args, Opening};
 use chrono::Local;
 use clap::Parser;
+use game::GameConfig;
 use generator::Generator;
 use limit::SearchLimit;
 use log::LevelFilter;
@@ -48,14 +49,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         None => SearchLimit::Depth(args.depth),
     };
     let generator = Generator::new(threads, args.pv_lines, opening, args.syzygy_path)?;
-    let samples = generator.run(
+    let game_config = GameConfig {
         limit,
-        args.max_opening_imbalance,
-        args.max_teleport_plies as usize,
-        args.max_game_plies as usize,
-        args.max_games,
-        stop_flag,
-    );
+        max_opening_imbalance: args.max_opening_imbalance,
+        max_teleport_plies: args.max_teleport_plies as usize,
+        max_game_plies: args.max_game_plies as usize,
+        dense_sampling: !args.sparse_samples,
+    };
+    let samples = generator.run(game_config, args.max_games, stop_flag);
 
     log::info!("Generated {} samples", samples.len());
 
