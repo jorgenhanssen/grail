@@ -1,31 +1,49 @@
 {
-  "seed": 5244147853439124908,
+  "seed": 3430309689124371738,
   "val_ratio": 0.05,
   "test_ratio": 0.01,
   "history": [
     {
       "epoch": 1,
-      "train_loss": 0.06266839,
-      "val_loss": 0.062135283,
+      "train_loss": 0.097098105,
+      "val_loss": 0.09293435,
       "learning_rate": 0.001
     },
     {
       "epoch": 2,
-      "train_loss": 0.061987456,
-      "val_loss": 0.06226228,
+      "train_loss": 0.0927508,
+      "val_loss": 0.09247551,
       "learning_rate": 0.00095
     },
     {
       "epoch": 3,
-      "train_loss": 0.061580744,
-      "val_loss": 0.062434033,
+      "train_loss": 0.091397814,
+      "val_loss": 0.0925129,
       "learning_rate": 0.0009025
     },
     {
       "epoch": 4,
-      "train_loss": 0.061274566,
-      "val_loss": 0.06258389,
+      "train_loss": 0.09023958,
+      "val_loss": 0.09253457,
       "learning_rate": 0.000857375
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.08944368,
+      "val_loss": 0.09282453,
+      "learning_rate": 0.0008145062499999999
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.088774286,
+      "val_loss": 0.09272825,
+      "learning_rate": 0.0007737809374999998
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.08820567,
+      "val_loss": 0.09326697,
+      "learning_rate": 0.0007350918906249997
     }
   ]
 }
