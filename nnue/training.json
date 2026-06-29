@@ -1,37 +1,79 @@
 {
-  "seed": 11706313715553710252,
+  "seed": 17084795909380786755,
   "val_ratio": 0.05,
   "test_ratio": 0.01,
   "history": [
     {
       "epoch": 1,
-      "train_loss": 0.061140724,
-      "val_loss": 0.057748463,
+      "train_loss": 0.04811801,
+      "val_loss": 0.04625206,
       "learning_rate": 0.001
     },
     {
       "epoch": 2,
-      "train_loss": 0.05712067,
-      "val_loss": 0.05710536,
+      "train_loss": 0.04464593,
+      "val_loss": 0.045306224,
       "learning_rate": 0.00095
     },
     {
       "epoch": 3,
-      "train_loss": 0.056004927,
-      "val_loss": 0.056957018,
+      "train_loss": 0.043674033,
+      "val_loss": 0.04503153,
       "learning_rate": 0.0009025
     },
     {
       "epoch": 4,
-      "train_loss": 0.055229172,
-      "val_loss": 0.05696625,
+      "train_loss": 0.0430167,
+      "val_loss": 0.044921037,
       "learning_rate": 0.000857375
     },
     {
       "epoch": 5,
-      "train_loss": 0.054725964,
-      "val_loss": 0.056922697,
+      "train_loss": 0.04249968,
+      "val_loss": 0.044919074,
       "learning_rate": 0.0008145062499999999
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.042265866,
+      "val_loss": 0.04483085,
+      "learning_rate": 0.0007737809374999998
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.04197441,
+      "val_loss": 0.044838548,
+      "learning_rate": 0.0007350918906249997
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.041756008,
+      "val_loss": 0.044683915,
+      "learning_rate": 0.0006983372960937497
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.04157437,
+      "val_loss": 0.04468192,
+      "learning_rate": 0.0006634204312890621
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.041500084,
+      "val_loss": 0.044560608,
+      "learning_rate": 0.000630249409724609
+    },
+    {
+      "epoch": 11,
+      "train_loss": 0.041239113,
+      "val_loss": 0.044635106,
+      "learning_rate": 0.0005987369392383785
+    },
+    {
+      "epoch": 12,
+      "train_loss": 0.04106062,
+      "val_loss": 0.04462456,
+      "learning_rate": 0.0005688000922764595
     }
   ]
 }
