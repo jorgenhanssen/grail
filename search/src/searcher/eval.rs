@@ -34,6 +34,9 @@ impl Searcher {
         if depth < self.config.syzygy_probe_depth.value {
             return None;
         }
+        if node.board().halfmove_clock() != 0 {
+            return None;
+        }
         let wdl = tablebase::probe_wdl(tb, node.board())?;
         Some(tablebase::wdl_to_score(wdl, self.draw_value()))
     }

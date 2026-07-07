@@ -157,13 +157,14 @@ impl SelfPlayGame {
         if self.position_counts.get(&hash).copied().unwrap_or(0) >= 2 {
             return true;
         }
-        // Adjudicate theoretical draws via tablebases (wins/losses play on naturally)
-        if let Some(tb) = self.tablebases.as_ref() {
-            if let Some(
-                WdlProbeResult::Draw | WdlProbeResult::CursedWin | WdlProbeResult::BlessedLoss,
-            ) = search::tablebase::probe_wdl(tb, &self.board)
-            {
-                return true;
+        if self.board.halfmove_clock() == 0 {
+            if let Some(tb) = self.tablebases.as_ref() {
+                if let Some(
+                    WdlProbeResult::Draw | WdlProbeResult::CursedWin | WdlProbeResult::BlessedLoss,
+                ) = search::tablebase::probe_wdl(tb, &self.board)
+                {
+                    return true;
+                }
             }
         }
         false
