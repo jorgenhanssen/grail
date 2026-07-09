@@ -54,6 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         limit,
         max_opening_imbalance: args.max_opening_imbalance,
         max_teleport_plies: args.max_teleport_plies as usize,
+        max_teleport_pv_fraction: args.max_teleport_pv_fraction,
         max_game_plies: args.max_game_plies as usize,
         dense_sampling: !args.sparse_samples,
     };

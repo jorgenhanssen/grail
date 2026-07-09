@@ -11,8 +11,15 @@ pub struct GameConfig {
     pub limit: SearchLimit,
     pub max_opening_imbalance: Option<i16>,
     pub max_teleport_plies: usize,
+    pub max_teleport_pv_fraction: f64,
     pub max_game_plies: usize,
     pub dense_sampling: bool,
+}
+impl GameConfig {
+    fn max_teleport_len(&self, pv_len: usize) -> usize {
+        let pv_cap = ((pv_len as f64) * self.max_teleport_pv_fraction).floor() as usize;
+        self.max_teleport_plies.min(pv_cap.max(1))
+    }
 }
 
 /// A recorded position/sample (outcomes are labelled in the refinery).
@@ -86,7 +93,8 @@ impl SelfPlayGame {
 
                 if is_anchor {
                     let chosen = result.select_softmax().expect("has lines");
-                    let len = rng().random_range(1..=self.config.max_teleport_plies);
+                    let max_len = self.config.max_teleport_len(chosen.line.len());
+                    let len = rng().random_range(1..=max_len);
                     line = chosen.line.iter().take(len).copied().collect();
                 }
             }
