@@ -4,6 +4,7 @@ mod generator;
 mod histogram;
 mod limit;
 mod opening;
+mod refinery;
 mod samples;
 mod worker;
 
