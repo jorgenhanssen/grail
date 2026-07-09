@@ -63,13 +63,13 @@ def main():
 
     disagreements = draw_disagreements + decisive_disagreements
 
-    print(f"files:                 {len(files)}")
-    print(f"threshold:             {threshold} cp")
-    print(f"total samples:         {total:,}")
-    print(f"draws:                 {draws:,} ({100 * draws / total:.3f}%)")
-    print(f"draw + |score| > T:    {draw_disagreements:,} ({100 * draw_disagreements / total:.3f}%)")
-    print(f"decisive + opposite:   {decisive_disagreements:,} ({100 * decisive_disagreements / total:.3f}%)")
-    print(f"total disagreements:   {disagreements:,} ({100 * disagreements / total:.3f}%)")
+    print(f"Files:                 {len(files)}")
+    print(f"Threshold:             {threshold} cp")
+    print(f"Total samples:         {total:,}")
+    print(f"Draws:                 {draws:,} ({100 * draws / total:.3f}%)")
+    print(f"Draw disagreements:    {draw_disagreements:,} ({100 * draw_disagreements / total:.3f}%)")
+    print(f"Decisive opposites:    {decisive_disagreements:,} ({100 * decisive_disagreements / total:.3f}%)")
+    print(f"Total disagreements:   {disagreements:,} ({100 * disagreements / total:.3f}%)")
 
     print_examples("Draw disagreements", draw_hits, draw_disagreements)
     print_examples("Decisive opposites", decisive_hits, decisive_disagreements)
