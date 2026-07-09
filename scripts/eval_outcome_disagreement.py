@@ -38,7 +38,8 @@ def main():
     draws = 0
     draw_disagreements = 0
     decisive_disagreements = 0
-    hits = []
+    draw_hits = []
+    decisive_hits = []
 
     for path in files:
         df = pd.read_csv(path, usecols=[FEN, SCORE, OUTCOME])
@@ -57,7 +58,8 @@ def main():
 
         draw_disagreements += int(high_eval_draw.sum())
         decisive_disagreements += int(opposite_eval.sum())
-        hits.append(df.loc[high_eval_draw | opposite_eval, [SCORE, OUTCOME, FEN]])
+        draw_hits.append(df.loc[high_eval_draw, [SCORE, OUTCOME, FEN]])
+        decisive_hits.append(df.loc[opposite_eval, [SCORE, OUTCOME, FEN]])
 
     disagreements = draw_disagreements + decisive_disagreements
 
@@ -70,11 +72,18 @@ def main():
     print(f"total disagreements:   {disagreements:,} ({100 * disagreements / total:.3f}%)")
     print(f"of draws disagreeing:  {100 * draw_disagreements / draws:.3f}%")
 
-    if disagreements:
-        examples = pd.concat(hits).sample(n=min(EXAMPLES, disagreements))
-        print("\nexamples:")
-        for row in examples.itertuples(index=False):
-            print(f"  {int(row.score):+5d}  {row.outcome}  {row.fen}")
+    print_examples("Draw disagreements", draw_hits, draw_disagreements)
+    print_examples("Decisive opposites", decisive_hits, decisive_disagreements)
+
+
+def print_examples(title, hits, count):
+    if not count:
+        return
+
+    examples = pd.concat(hits).sample(n=min(EXAMPLES, count))
+    print(f"\n{title}:")
+    for row in examples.itertuples(index=False):
+        print(f"  {int(row.score):+5d}  {row.outcome}  {row.fen}")
 
 
 if __name__ == "__main__":
