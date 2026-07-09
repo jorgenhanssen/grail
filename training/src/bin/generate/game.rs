@@ -1,9 +1,8 @@
 use crate::limit::SearchLimit;
-use crate::samples::{GameOutcome, Sample};
-use cozy_chess::{Board, Color, Move};
-use pyrrhic_rs::{TableBases, WdlProbeResult};
+use crate::samples::GameOutcome;
+use cozy_chess::{Board, Move};
 use rand::{RngExt, rng};
-use search::{CozyAdapter, Engine, SearchResult};
+use search::{Engine, SearchResult};
 use std::collections::HashMap;
 use utils::{flip_eval_perspective, has_check, has_insufficient_material, has_legal_moves};
 
@@ -16,35 +15,33 @@ pub struct GameConfig {
     pub dense_sampling: bool,
 }
 
-/// A self-play game that generates training samples.
+/// A recorded position/sample (outcomes are labelled in the refinery).
+pub struct Position {
+    pub fen: String,
+    pub score: i16,
+    pub best_move: Move,
+}
+
+/// A self-play game that records positions for training.
 ///
 /// Uses MultiPV search at decision points and teleports along chosen PV lines
 /// to produce varied games from the same openings.
 pub struct SelfPlayGame {
     board: Board,
-    game_id: usize,
     position_counts: HashMap<u64, usize>,
-    positions: Vec<(String, i16, Move)>, // FEN, eval, best move
+    positions: Vec<Position>,
     plies_played: usize,
     config: GameConfig,
-    tablebases: Option<TableBases<CozyAdapter>>,
 }
 
 impl SelfPlayGame {
-    pub fn new(
-        game_id: usize,
-        board: Board,
-        config: GameConfig,
-        tablebases: Option<TableBases<CozyAdapter>>,
-    ) -> Self {
+    pub fn new(board: Board, config: GameConfig) -> Self {
         Self {
             board,
-            game_id,
             position_counts: HashMap::new(),
             positions: Vec::new(),
             plies_played: 0,
             config,
-            tablebases,
         }
     }
 
@@ -109,8 +106,11 @@ impl SelfPlayGame {
 
     fn record_position(&mut self, eval: i16, best_move: Move) {
         let white_score = flip_eval_perspective(self.board.side_to_move(), eval);
-        self.positions
-            .push((format!("{}", self.board), white_score, best_move));
+        self.positions.push(Position {
+            fen: format!("{}", self.board),
+            score: white_score,
+            best_move,
+        });
     }
 
     fn opening_is_too_imbalanced(&self, score: i16) -> bool {
@@ -120,16 +120,24 @@ impl SelfPlayGame {
         self.positions.is_empty() && score.abs() > max
     }
 
-    fn outcome(&self) -> GameOutcome {
-        if !has_legal_moves(&self.board) && has_check(&self.board) {
-            return if self.board.side_to_move() == Color::White {
-                GameOutcome::Black
+    /// The game outcome. Returns None for speculative draws (50-move rule / repetition)
+    pub fn outcome(&self) -> Option<GameOutcome> {
+        if !has_legal_moves(&self.board) {
+            return Some(if has_check(&self.board) {
+                GameOutcome::win(!self.board.side_to_move())
             } else {
-                GameOutcome::White
-            };
+                GameOutcome::Draw
+            });
         }
 
-        GameOutcome::Draw
+        if has_insufficient_material(&self.board) {
+            return Some(GameOutcome::Draw);
+        }
+
+        // During some testing, I found that a winning game can still end in a draw in datagen.
+        // Looked like it could shuffle won endgames into draws somehow.
+        // Anyways, in these games it is better to have the tb define the outcome.
+        None
     }
 
     /// Play a single move, updating all game state.
@@ -157,16 +165,6 @@ impl SelfPlayGame {
         if self.position_counts.get(&hash).copied().unwrap_or(0) >= 2 {
             return true;
         }
-        if self.board.halfmove_clock() == 0 {
-            if let Some(tb) = self.tablebases.as_ref() {
-                if let Some(
-                    WdlProbeResult::Draw | WdlProbeResult::CursedWin | WdlProbeResult::BlessedLoss,
-                ) = search::tablebase::probe_wdl(tb, &self.board)
-                {
-                    return true;
-                }
-            }
-        }
         false
     }
 
@@ -180,22 +178,7 @@ impl SelfPlayGame {
             .collect()
     }
 
-    pub fn get_samples(&mut self) -> (Vec<Sample>, Vec<i16>) {
-        let outcome = self.outcome();
-        let (samples, scores): (Vec<_>, Vec<_>) = self
-            .positions
-            .drain(..)
-            .map(|(fen, score, best_move)| {
-                let sample = Sample {
-                    fen,
-                    score,
-                    game_id: self.game_id,
-                    best_move,
-                    outcome,
-                };
-                (sample, score)
-            })
-            .unzip();
-        (samples, scores)
+    pub fn into_positions(self) -> Vec<Position> {
+        self.positions
     }
 }
