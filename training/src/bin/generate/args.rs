@@ -35,7 +35,7 @@ pub struct Args {
     pub max_teleport_plies: u64,
 
     /// Max fraction of the PV length allowed when teleporting.
-    #[arg(long, global = true, default_value_t = 0.5, value_parser = |s: &str| parse_f64_range(s, 0.0..=1.0))]
+    #[arg(long, global = true, default_value_t = 0.4, value_parser = |s: &str| parse_f64_range(s, 0.0..=1.0))]
     pub max_teleport_pv_fraction: f64,
 
     /// Discard games lasting longer than this many plies
