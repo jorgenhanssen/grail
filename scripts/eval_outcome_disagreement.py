@@ -70,7 +70,6 @@ def main():
     print(f"draw + |score| > T:    {draw_disagreements:,} ({100 * draw_disagreements / total:.3f}%)")
     print(f"decisive + opposite:   {decisive_disagreements:,} ({100 * decisive_disagreements / total:.3f}%)")
     print(f"total disagreements:   {disagreements:,} ({100 * disagreements / total:.3f}%)")
-    print(f"of draws disagreeing:  {100 * draw_disagreements / draws:.3f}%")
 
     print_examples("Draw disagreements", draw_hits, draw_disagreements)
     print_examples("Decisive opposites", decisive_hits, decisive_disagreements)
