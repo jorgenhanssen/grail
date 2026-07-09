@@ -1,6 +1,7 @@
 use crate::game::GameConfig;
 use crate::histogram::ScoreHistogram;
 use crate::opening::OpeningSource;
+use crate::refinery::RefinementStats;
 use crate::samples::Sample;
 use crate::worker::SelfPlayWorker;
 use candle_core::Device;
@@ -113,14 +114,18 @@ impl Generator {
         let progress_handle =
             Self::spawn_progress_updater(sample_counter, histogram, Arc::clone(&stop_flag));
 
-        // Wait for all workers to complete
-        let samples: Vec<_> = worker_handles
-            .into_iter()
-            .flat_map(|h| h.join().unwrap())
-            .collect();
+        let mut samples = Vec::new();
+        let mut refinery_stats = RefinementStats::default();
+        for handle in worker_handles {
+            let (worker_samples, worker_stats) = handle.join().unwrap();
+            samples.extend(worker_samples);
+            refinery_stats.merge(&worker_stats);
+        }
 
         stop_flag.store(true, Ordering::Relaxed);
         progress_handle.join().unwrap();
+
+        refinery_stats.log_summary();
 
         samples
     }

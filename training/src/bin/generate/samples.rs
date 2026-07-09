@@ -1,4 +1,4 @@
-use cozy_chess::Move;
+use cozy_chess::{Color, Move};
 use nnue::network::CP_BOUND;
 use std::fmt;
 use std::io::{self, Write};
@@ -8,6 +8,15 @@ pub enum GameOutcome {
     White,
     Draw,
     Black,
+}
+
+impl GameOutcome {
+    pub fn win(color: Color) -> Self {
+        match color {
+            Color::White => GameOutcome::White,
+            Color::Black => GameOutcome::Black,
+        }
+    }
 }
 
 impl fmt::Display for GameOutcome {

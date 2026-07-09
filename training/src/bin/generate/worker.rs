@@ -1,6 +1,7 @@
 use crate::game::{GameConfig, SelfPlayGame};
 use crate::histogram::HistogramHandle;
 use crate::opening::OpeningSource;
+use crate::refinery::{RefinementStats, Refinery};
 use crate::samples::Sample;
 use config::EngineConfig;
 use pyrrhic_rs::TableBases;
@@ -22,7 +23,7 @@ pub struct SelfPlayWorker {
     max_games: Option<usize>,
     opening_source: Arc<OpeningSource>,
     histogram: HistogramHandle,
-    tablebases: Option<TableBases<CozyAdapter>>,
+    refinery: Refinery,
 }
 
 impl SelfPlayWorker {
@@ -61,12 +62,12 @@ impl SelfPlayWorker {
             engine,
             opening_source,
             histogram,
-            tablebases,
+            refinery: Refinery::new(tablebases),
         }
     }
 
-    pub fn play_games(&mut self, stop_flag: Arc<AtomicBool>) -> Vec<Sample> {
-        let mut evaluations = Vec::new();
+    pub fn play_games(&mut self, stop_flag: Arc<AtomicBool>) -> (Vec<Sample>, RefinementStats) {
+        let mut samples = Vec::new();
 
         while !stop_flag.load(Ordering::Relaxed) {
             let game_id = self.game_id_counter.fetch_add(1, Ordering::Relaxed);
@@ -79,24 +80,27 @@ impl SelfPlayWorker {
 
             let opening = self.opening_source.next_opening();
 
-            let mut game =
-                SelfPlayGame::new(game_id, opening, self.game_config, self.tablebases.clone());
+            let mut game = SelfPlayGame::new(opening, self.game_config);
             game.play(&mut self.engine);
 
-            let (samples, scores) = game.get_samples();
-            self.record_statistics(&samples, scores);
+            let outcome = game.outcome();
+            let refined = self
+                .refinery
+                .refine(game_id, game.into_positions(), outcome);
 
-            evaluations.extend(samples);
+            self.record_statistics(&refined);
+
+            samples.extend(refined);
         }
 
-        evaluations
+        (samples, self.refinery.stats())
     }
 
-    fn record_statistics(&self, samples: &[Sample], scores: Vec<i16>) {
-        let num_samples = samples.len();
+    fn record_statistics(&self, samples: &[Sample]) {
+        let scores: Vec<i16> = samples.iter().map(|s| s.score).collect();
 
         self.histogram.record_scores(&scores);
         self.sample_counter
-            .fetch_add(num_samples, Ordering::Relaxed);
+            .fetch_add(samples.len(), Ordering::Relaxed);
     }
 }
