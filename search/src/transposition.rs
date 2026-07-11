@@ -39,7 +39,7 @@ pub struct ProbeResult {
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
 pub struct TTEntry {
-    /// Low 32 bits of the Zobrist hash (checksumed on probe).
+    /// Hash key for verification (0 = empty).
     pub key: u32,
     /// Score from the search.
     pub value: i16,
@@ -128,7 +128,7 @@ impl TranspositionTable {
     pub fn probe(&self, hash: u64, ply: u8) -> Option<ProbeResult> {
         let idx = (hash as usize) % self.buckets;
         let base = idx * CLUSTER_SIZE;
-        let key32 = hash as u32;
+        let key = tt_key(hash);
 
         let cluster = &self.entries[base..base + 4];
         let keys = u32x4::from_array([
@@ -137,7 +137,7 @@ impl TranspositionTable {
             cluster[2].key,
             cluster[3].key,
         ]);
-        let target_keys = u32x4::splat(key32);
+        let target_keys = u32x4::splat(key);
         let key_matches = keys.simd_eq(target_keys);
 
         // Find deepest matching entry
@@ -197,7 +197,7 @@ impl TranspositionTable {
         best_move: Option<Move>,
     ) {
         let best_move_packed = pack_move(best_move);
-        let key32 = hash as u32;
+        let key = tt_key(hash);
 
         let bound = if value <= alpha {
             Bound::Upper
@@ -227,7 +227,7 @@ impl TranspositionTable {
         let current_gen = self.generation;
 
         let mut new_entry = TTEntry {
-            key: key32,
+            key,
             value: stored_value,
             bound,
             static_eval: stored_se,
@@ -246,7 +246,7 @@ impl TranspositionTable {
 
         // Same-key hit: only replace if the new entry beats the old one.
         for e in cluster.iter_mut() {
-            if e.key == key32 {
+            if e.key == key {
                 let new_value = depth as i16 + depth_bonus(bound);
                 let old_value = e.depth as i16 + depth_bonus(e.bound);
                 let should_replace =
@@ -288,6 +288,11 @@ impl TranspositionTable {
 
         cluster[victim_idx] = new_entry;
     }
+}
+
+// Use the high bits for key since the low bits are already used for the bucket index
+fn tt_key(hash: u64) -> u32 {
+    ((hash >> 32) as u32).max(1)
 }
 
 /// Packs a move into 16 bits: [15:12]=promo, [11:6]=to, [5:0]=from
