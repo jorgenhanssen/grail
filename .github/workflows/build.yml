@@ -27,6 +27,14 @@ jobs:
             cpu: x86-64-v3
             pgo_cpu: x86-64-v3
             binary_name: grail-x86-64-v3
+          # Static musl build for Android (https://github.com/jorgenhanssen/grail/issues/227).
+          # TODO: switch to ubuntu-arm-latest when GitHub invents it.......
+          - os: ubuntu-24.04-arm
+            name: linux
+            rust_target: aarch64-unknown-linux-musl
+            cpu: generic
+            pgo_cpu: generic
+            binary_name: grail-aarch64
 
           # Windows builds
           - os: windows-latest
@@ -58,6 +66,18 @@ jobs:
       - run: rustup default nightly
       - run: rustup target add ${{ matrix.rust_target }}
       - run: rustup component add llvm-tools-preview
+
+      # FIXME: candle drags in onig_sys (C code), which needs a musl C compiler here.
+      # The engine only uses candle to load the safetensors weights at startup, so I
+      # could refactor to load them with the safetensors crate directly and drop
+      # candle from the engine entirely... Then this step should go away.
+      - name: Install musl toolchain
+        if: endsWith(matrix.rust_target, '-musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
 
       - name: PGO build
         shell: bash
@@ -113,6 +133,7 @@ jobs:
           mkdir -p package-linux
           cp artifacts/linux-grail-x86-64-v3/grail-x86-64-v3 package-linux/
           cp artifacts/linux-grail-x86-64-v4/grail-x86-64-v4 package-linux/
+          cp artifacts/linux-grail-aarch64/grail-aarch64 package-linux/
           chmod +x package-linux/*
 
       - name: Package Windows binaries
@@ -151,6 +172,7 @@ jobs:
           name: |
             linux-grail-x86-64-v3
             linux-grail-x86-64-v4
+            linux-grail-aarch64
             windows-grail-x86-64-v3
             windows-grail-x86-64-v4
             macos-grail-arm64
