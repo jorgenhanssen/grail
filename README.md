@@ -20,11 +20,12 @@ Grail is a command-line engine designed for **Standard Chess**. It requires a UC
 
 Each release includes builds optimized for different CPU architectures:
 
-| OS                  | Binary      | Supported CPUs                                        |
-| ------------------- | ----------- | ----------------------------------------------------- |
-| **Linux / Windows** | `x86-64-v4` | Intel Skylake-X/Ice Lake+ (2017+), AMD Zen 4+ (2022+) |
-| **Linux / Windows** | `x86-64-v3` | Intel Haswell+ (2013+), AMD Zen 2+ (2019+)            |
-| **macOS**           | `arm64`     | Apple Silicon (M1/M2/M3/M4)                           |
+| OS                      | Binary      | CPU compatibility                                     |
+| ----------------------- | ----------- | ----------------------------------------------------- |
+| **Linux / Windows**     | `x86-64-v4` | Intel Skylake-X/Ice Lake+ (2017+), AMD Zen 4+ (2022+) |
+| **Linux / Windows**     | `x86-64-v3` | Intel Haswell+ (2013+), AMD Zen 2+ (2019+)            |
+| **Linux ARM / Android** | `aarch64`   | Any 64-bit ARM CPU                                    |
+| **macOS**               | `arm64`     | Apple Silicon (M1/M2/M3/M4)                           |
 
 <!-- prettier-ignore -->
 > [!TIP]
