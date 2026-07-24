@@ -67,6 +67,18 @@ jobs:
       - run: rustup target add ${{ matrix.rust_target }}
       - run: rustup component add llvm-tools-preview
 
+      # FIXME: candle drags in onig_sys (C code), which needs a musl C compiler here.
+      # The engine only uses candle to load the safetensors weights at startup, so I
+      # could refactor to load them with the safetensors crate directly and drop
+      # candle from the engine entirely... Then this step should go away.
+      - name: Install musl toolchain
+        if: endsWith(matrix.rust_target, '-musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
+
       - name: PGO build
         shell: bash
         run: |
