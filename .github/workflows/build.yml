@@ -27,6 +27,14 @@ jobs:
             cpu: x86-64-v3
             pgo_cpu: x86-64-v3
             binary_name: grail-x86-64-v3
+          # Static musl build for Android (https://github.com/jorgenhanssen/grail/issues/227).
+          # TODO: switch to ubuntu-arm-latest when GitHub invents it.......
+          - os: ubuntu-24.04-arm
+            name: linux
+            rust_target: aarch64-unknown-linux-musl
+            cpu: generic
+            pgo_cpu: generic
+            binary_name: grail-aarch64
 
           # Windows builds
           - os: windows-latest
@@ -113,6 +121,7 @@ jobs:
           mkdir -p package-linux
           cp artifacts/linux-grail-x86-64-v3/grail-x86-64-v3 package-linux/
           cp artifacts/linux-grail-x86-64-v4/grail-x86-64-v4 package-linux/
+          cp artifacts/linux-grail-aarch64/grail-aarch64 package-linux/
           chmod +x package-linux/*
 
       - name: Package Windows binaries
@@ -151,6 +160,7 @@ jobs:
           name: |
             linux-grail-x86-64-v3
             linux-grail-x86-64-v4
+            linux-grail-aarch64
             windows-grail-x86-64-v3
             windows-grail-x86-64-v4
             macos-grail-arm64
