@@ -53,3 +53,8 @@ incremental = false
 [profile.profiling]
 inherits = "release"
 debug = true
+
+# crates version of pyrrhic-rs is outdated, and the git version has a fix I need...
+# Fixes an issue with aarch64 builds (needs c_char, but 0.2.0 hardcoded i8).
+[patch.crates-io]
+pyrrhic-rs = { git = "https://github.com/Algorhythm-sxv/pyrrhic-rs", rev = "961c059" }

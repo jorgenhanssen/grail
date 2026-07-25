@@ -5,6 +5,10 @@ target/
 # Rustfmt backup files
 **/*.rs.bk
 
+# Python bytecode
+__pycache__/
+*.py[cod]
+
 # MSVC debug info
 *.pdb
 

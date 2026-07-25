@@ -1,6 +1,6 @@
 # Grail
 
-[![CCRL 40/15](https://img.shields.io/badge/CCRL%2040%2F15-3378%20Elo-%23DAA520.svg)](https://computerchess.org.uk/ccrl/4040/cgi/compare_engines.cgi?family=Grail&print=Rating+list)
+[![CCRL 40/15](https://img.shields.io/badge/CCRL%2040%2F15-3395%20Elo-%23DAA520.svg)](https://computerchess.org.uk/ccrl/4040/cgi/compare_engines.cgi?family=Grail&print=Rating+list)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-nightly-orange.svg)](https://www.rust-lang.org/)
 
@@ -20,11 +20,12 @@ Grail is a command-line engine designed for **Standard Chess**. It requires a UC
 
 Each release includes builds optimized for different CPU architectures:
 
-| OS                  | Binary      | Supported CPUs                                        |
-| ------------------- | ----------- | ----------------------------------------------------- |
-| **Linux / Windows** | `x86-64-v4` | Intel Skylake-X/Ice Lake+ (2017+), AMD Zen 4+ (2022+) |
-| **Linux / Windows** | `x86-64-v3` | Intel Haswell+ (2013+), AMD Zen 2+ (2019+)            |
-| **macOS**           | `arm64`     | Apple Silicon (M1/M2/M3/M4)                           |
+| OS                      | Binary      | CPU compatibility                                     |
+| ----------------------- | ----------- | ----------------------------------------------------- |
+| **Linux / Windows**     | `x86-64-v4` | Intel Skylake-X/Ice Lake+ (2017+), AMD Zen 4+ (2022+) |
+| **Linux / Windows**     | `x86-64-v3` | Intel Haswell+ (2013+), AMD Zen 2+ (2019+)            |
+| **Linux ARM / Android** | `aarch64`   | Any 64-bit ARM CPU                                    |
+| **macOS**               | `arm64`     | Apple Silicon (M1/M2/M3/M4)                           |
 
 <!-- prettier-ignore -->
 > [!TIP]
