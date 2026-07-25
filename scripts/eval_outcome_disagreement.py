@@ -10,13 +10,14 @@ Usage:
 import argparse
 from pathlib import Path
 
-import pandas as pd
+import polars as pl
 
 EXAMPLES = 5
 
-FEN = "fen"
-SCORE = "score"
-OUTCOME = "outcome"
+COL_FEN = "fen"
+COL_GAME_ID = "game_id"
+COL_SCORE = "score"
+COL_OUTCOME = "outcome"
 
 WHITE = "W"
 BLACK = "B"
@@ -31,58 +32,81 @@ def main():
     parser.add_argument("-t", "--threshold", type=int, default=THRESHOLD)
     args = parser.parse_args()
 
-    files = args.files or sorted(Path("nnue/data").glob("*.csv"))
+    files = [str(path) for path in (args.files or sorted(Path("nnue/data").glob("*.csv")))]
     threshold = args.threshold
 
-    total = 0
-    draws = 0
-    draw_disagreements = 0
-    decisive_disagreements = 0
-    draw_hits = []
-    decisive_hits = []
-
-    for path in files:
-        df = pd.read_csv(path, usecols=[FEN, SCORE, OUTCOME])
-        total += len(df)
-
-        is_draw = df[OUTCOME] == DRAW
-        draws += int(is_draw.sum())
-
-        # draw, but eval is way off
-        high_eval_draw = is_draw & (df[SCORE].abs() > threshold)
-
-        # game was decisive, but eval strongly favored the other side
-        white_won_but_eval_black = (df[OUTCOME] == WHITE) & (df[SCORE] < -threshold)
-        black_won_but_eval_white = (df[OUTCOME] == BLACK) & (df[SCORE] > threshold)
-        opposite_eval = white_won_but_eval_black | black_won_but_eval_white
-
-        draw_disagreements += int(high_eval_draw.sum())
-        decisive_disagreements += int(opposite_eval.sum())
-        draw_hits.append(df.loc[high_eval_draw, [SCORE, OUTCOME, FEN]])
-        decisive_hits.append(df.loc[opposite_eval, [SCORE, OUTCOME, FEN]])
-
-    disagreements = draw_disagreements + decisive_disagreements
+    total, draw_disagreements, decisive_disagreements = count_disagreements(
+        files, threshold
+    )
 
     print(f"Files:                 {len(files)}")
     print(f"Threshold:             {threshold} cp")
     print(f"Total samples:         {total:,}")
-    print(f"Draws:                 {draws:,} ({100 * draws / total:.3f}%)")
-    print(f"Draw disagreements:    {draw_disagreements:,} ({100 * draw_disagreements / total:.3f}%)")
-    print(f"Decisive opposites:    {decisive_disagreements:,} ({100 * decisive_disagreements / total:.3f}%)")
-    print(f"Total disagreements:   {disagreements:,} ({100 * disagreements / total:.3f}%)")
 
-    print_examples("Draw disagreements", draw_hits, draw_disagreements)
-    print_examples("Decisive opposites", decisive_hits, decisive_disagreements)
+    draw_examples = find_examples(files, draw_disagreement(threshold))
+    decisive_examples = find_examples(files, decisive_disagreement(threshold))
+    print_examples("Draw disagreements", draw_disagreements, total, draw_examples)
+    print_examples("Decisive opposites", decisive_disagreements, total, decisive_examples)
 
 
-def print_examples(title, hits, count):
-    if not count:
-        return
+def scan_csv(files, columns):
+    return pl.scan_csv(
+        files,
+        schema_overrides={COL_SCORE: pl.Int32},
+    ).select(columns)
 
-    examples = pd.concat(hits).sample(n=min(EXAMPLES, count))
-    print(f"\n{title}:")
-    for row in examples.itertuples(index=False):
-        print(f"  {int(row.score):+5d}  {row.outcome}  {row.fen}")
+
+def draw_disagreement(threshold):
+    return (pl.col(COL_OUTCOME) == DRAW) & (pl.col(COL_SCORE).abs() > threshold)
+
+
+def decisive_disagreement(threshold):
+    white_won_but_eval_black = (pl.col(COL_OUTCOME) == WHITE) & (
+        pl.col(COL_SCORE) < -threshold
+    )
+    black_won_but_eval_white = (pl.col(COL_OUTCOME) == BLACK) & (
+        pl.col(COL_SCORE) > threshold
+    )
+    return white_won_but_eval_black | black_won_but_eval_white
+
+
+def count_disagreements(files, threshold):
+    data = scan_csv(files, [COL_SCORE, COL_OUTCOME])
+    stats = data.select(
+        pl.len().alias("total"),
+        draw_disagreement(threshold).sum().alias("draw_disagreements"),
+        decisive_disagreement(threshold).sum().alias("decisive_disagreements"),
+    ).collect(engine="streaming")
+    return stats.row(0)
+
+# Find examples from different games without keeping all disagreements in memory.
+def find_examples(files, condition):
+    # game_id starts over in each file so the source file is part of the id.
+    source_file = "_source_file"
+    data = pl.scan_csv(
+        files,
+        schema_overrides={COL_SCORE: pl.Int32},
+        include_file_paths=source_file,
+    ).select([COL_SCORE, COL_OUTCOME, COL_FEN, COL_GAME_ID, source_file])
+
+    # Without this the five examples can just be five moves from the same game (which is often take case).
+    return (
+        data.filter(condition)
+        .unique(
+            subset=[source_file, COL_GAME_ID],
+            keep="first",
+            maintain_order=True,
+        )
+        .head(EXAMPLES)
+        .select([COL_SCORE, COL_OUTCOME, COL_FEN])
+        .collect(engine="streaming")
+    )
+
+
+def print_examples(title, count, total, examples):
+    print(f"\n{title}: {count:,} ({100 * count / total:.3f}%)")
+    for score, outcome, fen in examples.iter_rows():
+        print(f"  {int(score):+5d}  {outcome}  {fen}")
 
 
 if __name__ == "__main__":
