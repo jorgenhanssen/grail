@@ -1,6 +1,6 @@
 # Grail
 
-[![CCRL 40/15](https://img.shields.io/badge/CCRL%2040%2F15-3395%20Elo-%23DAA520.svg)](https://computerchess.org.uk/ccrl/4040/cgi/compare_engines.cgi?family=Grail&print=Rating+list)
+[![CCRL 40/15](https://img.shields.io/badge/CCRL%2040%2F15-3389%20Elo-%23DAA520.svg)](https://computerchess.org.uk/ccrl/4040/cgi/compare_engines.cgi?family=Grail&print=Rating+list)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-nightly-orange.svg)](https://www.rust-lang.org/)
 
