@@ -133,9 +133,11 @@ impl Searcher {
         }
 
         let mut best_eval = if in_check { -SCORE_INF } else { stand_pat };
+        let mut best_move = None;
         let mut captures_searched: ArrayVec<Move, 32> = ArrayVec::new();
 
-        let mut moves = QMoveGenerator::new(node, &self.capture_history);
+        let best_move_hint = tt_info.and_then(|t| t.best_move);
+        let mut moves = QMoveGenerator::new(node, &self.capture_history, best_move_hint);
 
         while let Some(mv) = moves.next() {
             // Per-move delta pruning (skip if capture can't possibly improve alpha)
@@ -189,6 +191,7 @@ impl Searcher {
 
             if value > best_eval {
                 best_eval = value;
+                best_move = Some(mv);
                 self.pv_table.update(ply, mv);
                 bounds.raise_alpha(best_eval);
             }
@@ -214,7 +217,7 @@ impl Searcher {
             Some(static_eval),
             original_bounds.alpha,
             original_bounds.beta,
-            None,
+            best_move,
         );
         best_eval
     }

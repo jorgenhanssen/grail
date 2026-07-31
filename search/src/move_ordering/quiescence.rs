@@ -16,15 +16,19 @@ pub struct QMoveGenerator {
 }
 
 impl QMoveGenerator {
-    pub fn new(node: &Node, capture_history: &CaptureHistory) -> Self {
+    pub fn new(node: &Node, capture_history: &CaptureHistory, best_move: Option<Move>) -> Self {
         if node.in_check() {
-            Self::gen_evasions(node)
+            Self::gen_evasions(node, best_move)
         } else {
-            Self::gen_captures(node, capture_history)
+            Self::gen_captures(node, capture_history, best_move)
         }
     }
 
-    fn gen_captures(node: &Node, capture_history: &CaptureHistory) -> Self {
+    fn gen_captures(
+        node: &Node,
+        capture_history: &CaptureHistory,
+        best_move: Option<Move>,
+    ) -> Self {
         let board = node.board();
         let mut forcing_moves = ArrayVec::new();
         let enemy_pieces = board.colors(!board.side_to_move());
@@ -38,8 +42,12 @@ impl QMoveGenerator {
                     return true;
                 }
 
-                // MVV-LVA + capture history: prefer capturing valuable pieces with cheap ones
-                let score = capture_score(board, mov, capture_history);
+                let score = if Some(mov) == best_move {
+                    i16::MAX
+                } else {
+                    // MVV-LVA + capture history: prefer capturing valuable pieces with cheap ones
+                    capture_score(board, mov, capture_history)
+                };
 
                 forcing_moves.push(ScoredMove { mov, score });
             }
@@ -49,7 +57,7 @@ impl QMoveGenerator {
         Self { forcing_moves }
     }
 
-    fn gen_evasions(node: &Node) -> Self {
+    fn gen_evasions(node: &Node, best_move: Option<Move>) -> Self {
         let board = node.board();
         let mut forcing_moves = ArrayVec::new();
 
@@ -59,11 +67,14 @@ impl QMoveGenerator {
                     return true;
                 }
 
-                // Evasion ordering by negated piece value: king (0) first, then
-                // cheapest pieces. This prioritizes safe king escapes and risks
-                // the least valuable material when blocking or capturing.
-                let moved_piece = board.piece_on(mov.from).unwrap();
-                let score: i16 = -piece_value(moved_piece);
+                let score = if Some(mov) == best_move {
+                    i16::MAX
+                } else {
+                    // Evasion ordering by negated piece value: king (0) first, then
+                    // cheapest pieces. This prioritizes safe king escapes and risks
+                    // the least valuable material when blocking or capturing.
+                    -piece_value(board.piece_on(mov.from).unwrap())
+                };
 
                 forcing_moves.push(ScoredMove { mov, score });
             }
@@ -74,10 +85,7 @@ impl QMoveGenerator {
     }
 
     pub fn next(&mut self) -> Option<Move> {
-        if let Some(index) = select_highest(&self.forcing_moves) {
-            let scored_move = self.forcing_moves.swap_remove(index);
-            return Some(scored_move.mov);
-        }
-        None
+        let index = select_highest(&self.forcing_moves)?;
+        Some(self.forcing_moves.swap_remove(index).mov)
     }
 }

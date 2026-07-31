@@ -24,13 +24,6 @@ enum Phase {
 
 /// Staged move generator for main search. Based on Black Marlin.
 ///
-/// Generates and sorts moves lazily in phases to avoid doing it all upfront:
-/// 1. BestMove (TT/PV move) - most likely to cause cutoff
-/// 2. GoodCaptures - winning/equal captures by SEE (includes capture promotions)
-/// 3. GoodQuiets - quiet moves with good score (queen promos first)
-/// 4. BadCaptures - losing captures, tried late
-/// 5. BadQuiets - quiet moves with bad score (underpromos last)
-///
 /// <https://www.chessprogramming.org/Move_Ordering>
 /// <https://github.com/jnlt3/blackmarlin>
 pub struct MainMoveGenerator {
@@ -153,7 +146,6 @@ impl MainMoveGenerator {
                     return Some(scored_move.mov);
                 }
 
-                // Only run expensive SEE if capture seems questionable
                 if !see(board, scored_move.mov, 0) {
                     self.bad_captures.push(scored_move);
                     continue;
@@ -214,7 +206,7 @@ impl MainMoveGenerator {
                                 score += value / self.escape_divisor;
                             }
 
-                            // A valuable piece moving to an attacked square = bad
+                            // Hanging a valuable piece = bad
                             if to_unsafe && value > PAWN_VALUE {
                                 score -= value / self.unsafe_square_divisor;
                             }
