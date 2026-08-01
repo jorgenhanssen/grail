@@ -34,7 +34,7 @@ jobs:
             rust_target: aarch64-unknown-linux-musl
             cpu: generic
             pgo_cpu: generic
-            binary_name: grail-aarch64
+            binary_name: grail-arm64
 
           # Windows builds
           - os: windows-latest
@@ -133,7 +133,7 @@ jobs:
           mkdir -p package-linux
           cp artifacts/linux-grail-x86-64-v3/grail-x86-64-v3 package-linux/
           cp artifacts/linux-grail-x86-64-v4/grail-x86-64-v4 package-linux/
-          cp artifacts/linux-grail-aarch64/grail-aarch64 package-linux/
+          cp artifacts/linux-grail-arm64/grail-arm64 package-linux/
           chmod +x package-linux/*
 
       - name: Package Windows binaries
@@ -172,7 +172,7 @@ jobs:
           name: |
             linux-grail-x86-64-v3
             linux-grail-x86-64-v4
-            linux-grail-aarch64
+            linux-grail-arm64
             windows-grail-x86-64-v3
             windows-grail-x86-64-v4
             macos-grail-arm64
