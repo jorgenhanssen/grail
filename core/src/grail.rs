@@ -7,7 +7,7 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 
 use config::EngineConfig;
-use uci::{Decoder, UciConnection, UciInput, UciOutput};
+use uci::{Decoder, UciConnection, UciInput, UciOutput, list_uci_options, set_uci_option};
 
 use crate::engine::create_engine;
 use crate::worker::{EngineCommand, EngineWorker};
@@ -87,7 +87,9 @@ impl Grail {
                 let _ = self
                     .output
                     .send(UciOutput::IdAuthor(ENGINE_AUTHOR.to_string()));
-                let _ = self.config.to_uci(&self.output);
+                for option in list_uci_options(&self.config) {
+                    let _ = self.output.send(UciOutput::Option(option));
+                }
                 let _ = self.output.send(UciOutput::UciOk);
             }
             UciInput::IsReady => {
@@ -96,7 +98,7 @@ impl Grail {
             // TODO: Implement debug mode: send extra info via "info string" when enabled
             UciInput::Debug(_enabled) => {}
             UciInput::SetOption { name, value } => {
-                if let Err(e) = self.config.update_from_uci(&name, &value) {
+                if let Err(e) = set_uci_option(&mut self.config, &name, &value) {
                     let _ = self.output.send(UciOutput::InfoString(e));
                 } else {
                     let _ = self

@@ -31,7 +31,7 @@ impl Searcher {
     /// is below the configured probe threshold.
     pub(super) fn probe_tb_wdl(&self, node: &Node, depth: u8) -> Option<i16> {
         let tb = self.shared.tb()?;
-        if depth < self.config.syzygy_probe_depth.value {
+        if depth < self.config.syzygy_probe_depth {
             return None;
         }
         if node.board().halfmove_clock() != 0 {

@@ -7,11 +7,5 @@ license = { workspace = true }
 description = { workspace = true }
 repository = { workspace = true }
 
-[features]
-tuning = []
-
-[dependencies]
-uci = { path = "../uci" }
-
 [lints]
 workspace = true

@@ -50,19 +50,19 @@ impl ContinuationHistory {
     }
 
     pub fn configure(&mut self, config: &EngineConfig) {
-        self.max_moves = config.continuation_max_moves.value;
-        self.max_history = config.continuation_max_value.value;
-        self.bonus_multiplier = config.continuation_bonus_multiplier.value;
-        self.malus_multiplier = config.continuation_malus_multiplier.value;
+        self.max_moves = config.continuation_max_moves;
+        self.max_history = config.continuation_max_value;
+        self.bonus_multiplier = config.continuation_bonus_multiplier;
+        self.malus_multiplier = config.continuation_malus_multiplier;
 
         self.reset();
     }
 
     pub fn matches_config(&self, config: &EngineConfig) -> bool {
-        self.max_moves == config.continuation_max_moves.value
-            && self.max_history == config.continuation_max_value.value
-            && self.bonus_multiplier == config.continuation_bonus_multiplier.value
-            && self.malus_multiplier == config.continuation_malus_multiplier.value
+        self.max_moves == config.continuation_max_moves
+            && self.max_history == config.continuation_max_value
+            && self.bonus_multiplier == config.continuation_bonus_multiplier
+            && self.malus_multiplier == config.continuation_malus_multiplier
     }
 
     pub fn reset(&mut self) {

@@ -15,29 +15,29 @@ pub(super) struct ContinuationCorrection {
 
 impl ContinuationCorrection {
     pub(super) fn new(config: &EngineConfig) -> Self {
-        let max_moves = config.correction_continuation_max_moves.value;
+        let max_moves = config.correction_continuation_max_moves;
         Self {
             table: vec![0; Self::table_size(max_moves)],
             max_moves,
-            weight: config.correction_continuation_weight.value,
-            update_weight: config.correction_continuation_update_weight.value,
+            weight: config.correction_continuation_weight,
+            update_weight: config.correction_continuation_update_weight,
         }
     }
 
     pub(super) fn configure(&mut self, config: &EngineConfig) {
-        let new_max_moves = config.correction_continuation_max_moves.value;
+        let new_max_moves = config.correction_continuation_max_moves;
         if self.max_moves != new_max_moves {
             self.table = vec![0; Self::table_size(new_max_moves)];
             self.max_moves = new_max_moves;
         }
-        self.weight = config.correction_continuation_weight.value;
-        self.update_weight = config.correction_continuation_update_weight.value;
+        self.weight = config.correction_continuation_weight;
+        self.update_weight = config.correction_continuation_update_weight;
     }
 
     pub(super) fn matches_config(&self, config: &EngineConfig) -> bool {
-        self.max_moves == config.correction_continuation_max_moves.value
-            && self.weight == config.correction_continuation_weight.value
-            && self.update_weight == config.correction_continuation_update_weight.value
+        self.max_moves == config.correction_continuation_max_moves
+            && self.weight == config.correction_continuation_weight
+            && self.update_weight == config.correction_continuation_update_weight
     }
 
     pub(super) fn reset(&mut self) {

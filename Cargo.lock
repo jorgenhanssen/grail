@@ -384,9 +384,6 @@ dependencies = [
 [[package]]
 name = "config"
 version = "2.0.1"
-dependencies = [
- "uci",
-]
 
 [[package]]
 name = "console"
@@ -2346,6 +2343,7 @@ name = "uci"
 version = "2.0.1"
 dependencies = [
  "ahash",
+ "config",
  "cozy-chess",
 ]
 

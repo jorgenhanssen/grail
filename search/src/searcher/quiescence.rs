@@ -81,8 +81,7 @@ impl Searcher {
 
         // Delta pruning: skip captures that can't possibly improve alpha
         // https://www.chessprogramming.org/Delta_Pruning
-        let can_delta =
-            !in_check && board_material >= self.config.qs_delta_material_threshold.value;
+        let can_delta = !in_check && board_material >= self.config.qs_delta_material_threshold;
 
         // Do a "stand-pat" evaluation if not in check
         if !in_check {
@@ -143,7 +142,7 @@ impl Searcher {
             if can_delta {
                 let captured = board.piece_on(mv.to);
                 if let Some(piece) = captured {
-                    let mut delta = piece_value(piece) + self.config.qs_delta_margin.value;
+                    let mut delta = piece_value(piece) + self.config.qs_delta_margin;
                     if let Some(promotion) = mv.promotion {
                         delta += piece_value(promotion) - piece_value(Piece::Pawn);
                     }

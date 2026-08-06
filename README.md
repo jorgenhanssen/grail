@@ -81,7 +81,6 @@ The project includes a `Makefile` for convenience:
 
 - **`make` or `make grail`**: Release build
 - **`make grail-pgo`**: Release build with PGO.
-- **`make tunable`**: Release build with internal parameters exposed for SPSA tuning (as UCI options).
 - **`make generate`**: Builds the NNUE self-play datagen.
 - **`make generate-pgo`**: Builds the NNUE self-play datagen with PGO.
 - **`make train`**: Builds the NNUE trainer (auto-detects CUDA/Metal).

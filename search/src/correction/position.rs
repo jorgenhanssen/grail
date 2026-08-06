@@ -37,7 +37,7 @@ pub(super) struct PositionCorrection {
 
 impl PositionCorrection {
     pub(super) fn new(config: &EngineConfig) -> Self {
-        let table_size = config.correction_table_size.value;
+        let table_size = config.correction_table_size;
         let total_size = Color::NUM * table_size;
         Self {
             pawn: vec![0; total_size],
@@ -45,16 +45,16 @@ impl PositionCorrection {
             white_nonpawn: vec![0; total_size],
             black_nonpawn: vec![0; total_size],
             table_size,
-            pawn_weight: config.correction_pawn_weight.value,
-            minor_weight: config.correction_minor_weight.value,
-            nonpawn_weight: config.correction_nonpawn_weight.value,
-            minor_update_weight: config.correction_minor_update_weight.value,
-            nonpawn_update_weight: config.correction_nonpawn_update_weight.value,
+            pawn_weight: config.correction_pawn_weight,
+            minor_weight: config.correction_minor_weight,
+            nonpawn_weight: config.correction_nonpawn_weight,
+            minor_update_weight: config.correction_minor_update_weight,
+            nonpawn_update_weight: config.correction_nonpawn_update_weight,
         }
     }
 
     pub(super) fn configure(&mut self, config: &EngineConfig) {
-        let new_table_size = config.correction_table_size.value;
+        let new_table_size = config.correction_table_size;
         if self.table_size != new_table_size {
             let total_size = Color::NUM * new_table_size;
             self.pawn = vec![0; total_size];
@@ -63,20 +63,20 @@ impl PositionCorrection {
             self.black_nonpawn = vec![0; total_size];
             self.table_size = new_table_size;
         }
-        self.pawn_weight = config.correction_pawn_weight.value;
-        self.minor_weight = config.correction_minor_weight.value;
-        self.nonpawn_weight = config.correction_nonpawn_weight.value;
-        self.minor_update_weight = config.correction_minor_update_weight.value;
-        self.nonpawn_update_weight = config.correction_nonpawn_update_weight.value;
+        self.pawn_weight = config.correction_pawn_weight;
+        self.minor_weight = config.correction_minor_weight;
+        self.nonpawn_weight = config.correction_nonpawn_weight;
+        self.minor_update_weight = config.correction_minor_update_weight;
+        self.nonpawn_update_weight = config.correction_nonpawn_update_weight;
     }
 
     pub(super) fn matches_config(&self, config: &EngineConfig) -> bool {
-        self.table_size == config.correction_table_size.value
-            && self.pawn_weight == config.correction_pawn_weight.value
-            && self.minor_weight == config.correction_minor_weight.value
-            && self.nonpawn_weight == config.correction_nonpawn_weight.value
-            && self.minor_update_weight == config.correction_minor_update_weight.value
-            && self.nonpawn_update_weight == config.correction_nonpawn_update_weight.value
+        self.table_size == config.correction_table_size
+            && self.pawn_weight == config.correction_pawn_weight
+            && self.minor_weight == config.correction_minor_weight
+            && self.nonpawn_weight == config.correction_nonpawn_weight
+            && self.minor_update_weight == config.correction_minor_update_weight
+            && self.nonpawn_update_weight == config.correction_nonpawn_update_weight
     }
 
     pub(super) fn reset(&mut self) {

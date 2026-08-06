@@ -7,10 +7,6 @@ license = { workspace = true }
 description = { workspace = true }
 repository = { workspace = true }
 
-[features]
-default = []
-tuning = ["config/tuning", "search/tuning"]
-
 [dependencies]
 config = { path = "../config" }
 search = { path = "../search" }

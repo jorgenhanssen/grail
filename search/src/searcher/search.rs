@@ -46,7 +46,7 @@ impl Searcher {
         self.init_search();
 
         let mut controller =
-            SearchController::new(params, &self.board, self.config.move_overhead.value as u64);
+            SearchController::new(params, &self.board, self.config.move_overhead as u64);
         self.deadline = controller.deadline();
 
         // Oh boy...
@@ -60,7 +60,7 @@ impl Searcher {
             .nodes
             .or_else(|| params.soft_nodes.map(|n| n.saturating_mul(16)));
 
-        let pv_count = self.config.multi_pv.value as usize;
+        let pv_count = self.config.multi_pv as usize;
         let root = Node::new(self.board.clone(), NodeType::Pv);
         let mut depth = 1u8;
 
@@ -102,7 +102,7 @@ impl Searcher {
                     depth,
                     pv.score,
                     pv.best_move(),
-                    self.config.multi_pv.value,
+                    self.config.multi_pv,
                 );
             }
 
@@ -193,7 +193,7 @@ impl Searcher {
                 _ => {
                     failures += 1;
                     retries += 1;
-                    if retries >= self.config.aspiration_window_retries.value {
+                    if retries >= self.config.aspiration_window_retries {
                         self.multi_pv.lines[pv_index].window.fully_extend();
                         retries = 0;
                     }
@@ -211,11 +211,11 @@ impl Searcher {
         self.search_stack.push(SearchNode::new(self.board.hash()));
 
         self.multi_pv.init(
-            self.config.multi_pv.value as usize,
-            self.config.aspiration_window_size.value,
-            self.config.aspiration_window_widen.value,
-            self.config.aspiration_window_depth.value,
-            self.config.aspiration_score_divisor.value,
+            self.config.multi_pv as usize,
+            self.config.aspiration_window_size,
+            self.config.aspiration_window_widen,
+            self.config.aspiration_window_depth,
+            self.config.aspiration_score_divisor,
         );
     }
 
@@ -381,8 +381,8 @@ impl Searcher {
 
         // Internal Iterative Reduction: reduce depth when no TT move is found.
         // https://www.chessprogramming.org/Internal_Iterative_Reductions
-        let depth = if ply > 0 && tt_move.is_none() && depth >= self.config.iir_min_depth.value {
-            depth.saturating_sub(self.config.iir_reduction.value)
+        let depth = if ply > 0 && tt_move.is_none() && depth >= self.config.iir_min_depth {
+            depth.saturating_sub(self.config.iir_reduction)
         } else {
             depth
         };
@@ -406,11 +406,11 @@ impl Searcher {
         let mut movegen = MainMoveGenerator::new(
             best_move_hint,
             prev_moves,
-            self.config.quiet_check_bonus.value,
-            self.config.quiet_check_see_margin.value,
-            self.config.bad_quiet_threshold.value,
-            self.config.escape_divisor.value,
-            self.config.unsafe_square_divisor.value,
+            self.config.quiet_check_bonus,
+            self.config.quiet_check_see_margin,
+            self.config.bad_quiet_threshold,
+            self.config.escape_divisor,
+            self.config.unsafe_square_divisor,
             threats,
             enemy_attacks,
         );
