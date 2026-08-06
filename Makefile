@@ -2,7 +2,7 @@ SHELL = /bin/bash
 
 .ONESHELL:
 
-.PHONY: grail grail-pgo generate generate-pgo train clean nnue-analysis profile
+.PHONY: grail grail-pgo generate generate-pgo train clean nnue-analysis profile tuner
 
 # Default to native optimization for local development.
 RUSTFLAGS = -C target-cpu=native
@@ -30,6 +30,11 @@ train:
 	else \
 		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin train; \
 	fi
+
+tuner:
+	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p tuning --bin tuner
+
+# TODO: add tuner-pgo
 
 nnue-analysis:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo run --release -p nnue --bin nnue-analysis

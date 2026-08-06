@@ -1,0 +1,15 @@
+[package]
+name = "tuning"
+description = "SPSA tuning for Grail"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[[bin]]
+name = "tuner"
+path = "src/bin/tuner.rs"
+
+[lints]
+workspace = true
