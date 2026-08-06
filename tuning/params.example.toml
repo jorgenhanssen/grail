@@ -1,0 +1,9 @@
+# SPSA parameter file for `tuner --params`.
+#
+# Each parameter must match an EngineConfig field (config/src/lib.rs).
+# Just copy this file to tuning/params.toml, setup parameters, and feed it to the tuner.
+
+[lmr_divisor]
+step = 20
+min = 100
+max = 400

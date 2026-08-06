@@ -2329,6 +2329,10 @@ dependencies = [
 [[package]]
 name = "tuning"
 version = "2.0.1"
+dependencies = [
+ "clap",
+ "num_cpus",
+]
 
 [[package]]
 name = "typed-path"

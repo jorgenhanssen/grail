@@ -7,9 +7,13 @@ edition = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 
+[dependencies]
+clap = { workspace = true }
+num_cpus = { workspace = true }
+
 [[bin]]
 name = "tuner"
-path = "src/bin/tuner.rs"
+path = "src/bin/tuner/main.rs"
 
 [lints]
 workspace = true
