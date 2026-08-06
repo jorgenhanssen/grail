@@ -7,7 +7,7 @@ use crate::gradient::Gradient;
 use crate::params::{Parameters, Tunable};
 
 pub struct State {
-    pub values: HashMap<String, i64>,
+    pub values: HashMap<String, f64>,
 }
 
 impl State {
@@ -17,7 +17,7 @@ impl State {
         let mut values = HashMap::new();
 
         for (name, tunable) in params.iter() {
-            let value = json[name].as_i64().unwrap();
+            let value = json[name].as_i64().unwrap() as f64;
             values.insert(name.clone(), validate(name, value, tunable)?);
         }
 
@@ -28,7 +28,7 @@ impl State {
         let mut json = serde_json::to_value(config).unwrap();
 
         for (name, value) in &self.values {
-            json[name.as_str()] = (*value).into();
+            json[name.as_str()] = (value.round() as i64).into();
         }
 
         serde_json::from_value(json).unwrap()
@@ -39,8 +39,11 @@ impl State {
 
         for (name, delta) in &gradient.deltas {
             let tunable = params.get(name).unwrap();
-            let value = values[name] + delta;
-            values.insert(name.clone(), value.clamp(tunable.min, tunable.max));
+            let value = values[name] + *delta as f64;
+            values.insert(
+                name.clone(),
+                value.clamp(tunable.min as f64, tunable.max as f64),
+            );
         }
 
         Self { values }
@@ -52,17 +55,19 @@ impl State {
 
         for (name, delta) in &grad.deltas {
             let tunable = params.get(name).unwrap();
-            let next = self.values[name] as f64 + ak * result / (*delta as f64);
+            let next = self.values[name] + ak * result / (*delta as f64);
             self.values.insert(
                 name.clone(),
-                (next.round() as i64).clamp(tunable.min, tunable.max),
+                next.clamp(tunable.min as f64, tunable.max as f64),
             );
         }
     }
 }
 
-fn validate(name: &str, value: i64, tunable: &Tunable) -> Result<i64, String> {
-    if !(tunable.min..=tunable.max).contains(&value) {
+fn validate(name: &str, value: f64, tunable: &Tunable) -> Result<f64, String> {
+    let min = tunable.min as f64;
+    let max = tunable.max as f64;
+    if !(min..=max).contains(&value) {
         return Err(format!(
             "{name} default value ({value}) outside [{}, {}]",
             tunable.min, tunable.max
