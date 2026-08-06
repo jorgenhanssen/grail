@@ -8,8 +8,18 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+config = { path = "../config" }
+# crates.io `config` — load TOML/JSON/YAML and `.get()` / try_deserialize.
+# Renamed so it doesn't clash with our EngineConfig crate.
+settings = { package = "config", version = "0.15", default-features = false, features = [
+    "toml",
+    "json",
+    "yaml",
+] }
 clap = { workspace = true }
 num_cpus = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [[bin]]
 name = "tuner"

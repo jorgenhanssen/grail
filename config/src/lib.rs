@@ -1,6 +1,6 @@
 pub const MAX_CONTINUATION_LOOKBACK: usize = 4;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct EngineConfig {
     pub hash_size: i32,
     pub threads: usize,
