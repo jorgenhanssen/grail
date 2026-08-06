@@ -33,6 +33,6 @@ pub struct Args {
 
     /// SPSA ak
     /// https://www.chessprogramming.org/SPSA
-    #[arg(long, default_value_t = 1.0)]
+    #[arg(long, default_value_t = 10.0)]
     pub ak: f64,
 }
