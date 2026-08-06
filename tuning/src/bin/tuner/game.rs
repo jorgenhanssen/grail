@@ -5,7 +5,9 @@ use ahash::AHashSet;
 use cozy_chess::{Board, Color, Move};
 use search::Engine;
 use uci::commands::GoParams;
-use utils::{has_check, has_insufficient_material, has_legal_moves};
+use utils::{Book, has_check, has_insufficient_material, has_legal_moves};
+
+use crate::args::Args;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -133,5 +135,88 @@ impl Game {
             .copied()
             .filter(|&hash| hash != current)
             .collect()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Score {
+    pub wins: usize,
+    pub losses: usize,
+    pub draws: usize,
+}
+
+impl Score {
+    fn record(&mut self, outcome: Outcome, a_is_white: bool) {
+        match (outcome, a_is_white) {
+            (Outcome::Draw, _) => self.draws += 1,
+            (Outcome::White, true) | (Outcome::Black, false) => self.wins += 1,
+            (Outcome::White, false) | (Outcome::Black, true) => self.losses += 1,
+        }
+    }
+
+    pub fn played(&self) -> usize {
+        self.wins + self.losses + self.draws
+    }
+
+    pub fn points(&self) -> f64 {
+        self.wins as f64 + 0.5 * self.draws as f64
+    }
+}
+
+impl fmt::Display for Score {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let played = self.played();
+        let ratio = if played == 0 {
+            0.0
+        } else {
+            self.points() / played as f64
+        };
+
+        write!(
+            f,
+            "{} - {} - {}  [{:.3}] {}",
+            self.wins, self.losses, self.draws, ratio, played
+        )
+    }
+}
+
+pub struct Match {
+    games: usize,
+    nodes: u64,
+    max_plies: usize,
+}
+
+impl Match {
+    pub fn new(args: &Args) -> Self {
+        Self {
+            games: args.games,
+            nodes: args.nodes,
+            max_plies: args.max_plies,
+        }
+    }
+
+    pub fn play(&self, a: &mut Engine, b: &mut Engine, book: &Book) -> Score {
+        let mut score = Score::default();
+        let mut played = 0;
+
+        while played < self.games {
+            let opening = book.random_position();
+
+            let outcome = Game::new(opening.clone(), self.nodes, self.max_plies).play(a, b);
+            score.record(outcome, true);
+            played += 1;
+            println!("{score}");
+
+            if played >= self.games {
+                break;
+            }
+
+            let outcome = Game::new(opening, self.nodes, self.max_plies).play(b, a);
+            score.record(outcome, false);
+            played += 1;
+            println!("{score}");
+        }
+
+        score
     }
 }

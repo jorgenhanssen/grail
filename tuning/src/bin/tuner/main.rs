@@ -11,7 +11,7 @@ use candle_core::Device;
 use candle_nn::VarMap;
 use clap::Parser;
 use config::EngineConfig;
-use game::Game;
+use game::Match;
 use gradient::Gradient;
 use params::Parameters;
 use search::Engine;
@@ -40,20 +40,21 @@ fn main() -> Result<(), String> {
     }
 
     let book = Book::load(&args.book).unwrap();
-    let opening = book.random_position();
-    println!("opening: {opening}");
-
-    let config_a = a.to_config(EngineConfig::default());
-    let config_b = b.to_config(EngineConfig::default());
 
     let stop = Arc::new(AtomicBool::new(false));
-    let mut white = Engine::new(&config_a, Arc::clone(&stop), load_nnue);
-    let mut black = Engine::new(&config_b, stop, load_nnue);
 
-    let mut game = Game::new(opening, args.nodes, args.max_plies);
-    let outcome = game.play(&mut white, &mut black);
+    let mut engine_a = Engine::new(
+        &a.to_config(EngineConfig::default()),
+        Arc::clone(&stop),
+        load_nnue,
+    );
+    let mut engine_b = Engine::new(
+        &b.to_config(EngineConfig::default()),
+        Arc::clone(&stop),
+        load_nnue,
+    );
 
-    println!("result: {outcome}");
+    Match::new(&args).play(&mut engine_a, &mut engine_b, &book);
 
     Ok(())
 }
