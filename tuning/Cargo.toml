@@ -9,6 +9,11 @@ repository = { workspace = true }
 
 [dependencies]
 config = { path = "../config" }
+search = { path = "../search" }
+nnue = { path = "../nnue" }
+uci = { path = "../uci" }
+utils = { path = "../utils" }
+
 # crates.io `config` — load TOML/JSON/YAML and `.get()` / try_deserialize.
 # Renamed so it doesn't clash with our EngineConfig crate.
 settings = { package = "config", version = "0.15", default-features = false, features = [
@@ -16,7 +21,11 @@ settings = { package = "config", version = "0.15", default-features = false, fea
     "json",
     "yaml",
 ] }
+ahash = { workspace = true }
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
 clap = { workspace = true }
+cozy-chess = { workspace = true }
 num_cpus = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }

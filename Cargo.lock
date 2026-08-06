@@ -2417,13 +2417,21 @@ dependencies = [
 name = "tuning"
 version = "2.0.1"
 dependencies = [
+ "ahash",
+ "candle-core",
+ "candle-nn",
  "clap",
  "config 0.15.25",
  "config 2.0.1",
+ "cozy-chess",
+ "nnue",
  "num_cpus",
  "rand 0.10.1",
+ "search",
  "serde",
  "serde_json",
+ "uci",
+ "utils",
 ]
 
 [[package]]

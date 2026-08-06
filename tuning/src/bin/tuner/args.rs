@@ -7,18 +7,27 @@ use clap::Parser;
 #[command(author = "Jørgen Hanssen")]
 #[command(about = "SPSA tuning for Grail")]
 pub struct Args {
-    #[arg(long, value_name = "TOML", help = "Path to config parameter file")]
+    /// Path to config parameter file.
+    #[arg(long, value_name = "TOML")]
     pub params: PathBuf,
 
-    #[arg(long, default_value_t = 100, help = "Games per iteration")]
+    /// Games per iteration.
+    #[arg(long, default_value_t = 100)]
     pub games: usize,
 
-    #[arg(long, default_value_t = 10_000, help = "Soft node limit per move")]
+    /// Soft node limit per move.
+    #[arg(long, default_value_t = 10_000)]
     pub nodes: u64,
 
-    #[arg(long, value_name = "EPD", help = "Path to the opening book")]
+    /// Path to the opening book.
+    #[arg(long, value_name = "EPD")]
     pub book: PathBuf,
 
-    #[arg(long, help = "Number of parallel matches")]
+    /// Abort as draw after this many plies.
+    #[arg(long, default_value_t = 300)]
+    pub max_plies: usize,
+
+    /// Number of parallel matches.
+    #[arg(long)]
     pub workers: Option<usize>,
 }
