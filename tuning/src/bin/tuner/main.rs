@@ -59,6 +59,7 @@ fn main() -> Result<(), String> {
             &a.to_config(EngineConfig::default()),
             &b.to_config(EngineConfig::default()),
             &book,
+            &args,
         );
 
         state.update(&grad, &score, &params, args.ak);

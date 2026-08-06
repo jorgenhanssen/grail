@@ -36,12 +36,18 @@ pub struct Game {
     plies: u64,
     nodes: u64,
     max_plies: u64,
+    resign_score: i16,
+    resign_moves: u64,
+    draw_score: i16,
+    draw_moves: u64,
+    draw_after: u64,
+    resign_streak: u64,
+    draw_streak: u64,
 }
 
 impl Game {
-    pub fn new(opening: Board, nodes: u64, max_plies: u64) -> Self {
+    pub fn new(opening: Board, args: &Args) -> Self {
         let mut position_counts = HashMap::new();
-
         // Count the opening as a position we have seen (for threefold)
         position_counts.insert(opening.hash(), 1);
 
@@ -49,8 +55,15 @@ impl Game {
             board: opening,
             position_counts,
             plies: 0,
-            nodes,
-            max_plies,
+            nodes: args.nodes,
+            max_plies: args.max_plies,
+            resign_score: args.resign_score,
+            resign_moves: args.resign_moves,
+            draw_score: args.draw_score,
+            draw_moves: args.draw_moves,
+            draw_after: args.draw_after,
+            resign_streak: 0,
+            draw_streak: 0,
         }
     }
 
@@ -64,14 +77,12 @@ impl Game {
         };
 
         loop {
-            if let Some(outcome) = self.outcome() {
-                return outcome;
-            }
             if self.plies >= self.max_plies {
                 return Outcome::Draw;
             }
 
-            let engine = match self.board.side_to_move() {
+            let mover = self.board.side_to_move();
+            let engine = match mover {
                 Color::White => &mut *white,
                 Color::Black => &mut *black,
             };
@@ -79,13 +90,45 @@ impl Game {
             engine.set_position(self.board.clone(), Some(self.history()));
 
             let result = engine.search(&go, None).expect("search returned nothing");
-            let mv = result
-                .primary()
-                .and_then(|pv| pv.best_move())
-                .expect("search returned no move");
+            let pv = result.primary().expect("search returned no move");
+            let mv = pv.best_move().expect("search returned no move");
+            let score = pv.score;
 
             self.play_move(mv);
+
+            if let Some(outcome) = self.outcome() {
+                return outcome;
+            }
+            if let Some(outcome) = self.adjudicate(score, mover) {
+                return outcome;
+            }
         }
+    }
+
+    fn adjudicate(&mut self, score: i16, mover: Color) -> Option<Outcome> {
+        if score.abs() >= self.resign_score {
+            self.resign_streak += 1;
+        } else {
+            self.resign_streak = 0;
+        }
+        if score < 0 && self.resign_streak >= self.resign_moves * 2 {
+            return Some(Outcome::Win(!mover));
+        }
+
+        if self.board.halfmove_clock() == 0 {
+            self.draw_streak = 0;
+        }
+
+        if score.abs() <= self.draw_score {
+            self.draw_streak += 1;
+        } else {
+            self.draw_streak = 0;
+        }
+        if self.plies >= self.draw_after * 2 && self.draw_streak >= self.draw_moves * 2 {
+            return Some(Outcome::Draw);
+        }
+
+        None
     }
 
     fn play_move(&mut self, mv: Move) {
@@ -176,33 +219,31 @@ impl fmt::Display for Score {
 }
 
 pub struct Match {
-    pairs: u64,
-    nodes: u64,
-    max_plies: u64,
     workers: u64,
 }
 
 impl Match {
     pub fn new(args: &Args) -> Self {
-        let default_workers = || {
-            thread::available_parallelism()
-                .map(|n| n.get() as u64)
-                .unwrap_or(1)
-        };
+        let workers = args
+            .workers
+            .or_else(|| thread::available_parallelism().ok().map(|n| n.get() as u64))
+            .unwrap_or(1)
+            .max(1);
 
-        Self {
-            pairs: args.pairs,
-            nodes: args.nodes,
-            max_plies: args.max_plies,
-            workers: args.workers.unwrap_or_else(default_workers).max(1),
-        }
+        Self { workers }
     }
 
-    pub fn play(&self, config_a: &EngineConfig, config_b: &EngineConfig, book: &Book) -> Score {
-        let workers = self.workers.min(self.pairs) as usize;
+    pub fn play(
+        &self,
+        config_a: &EngineConfig,
+        config_b: &EngineConfig,
+        book: &Book,
+        args: &Args,
+    ) -> Score {
+        let workers = self.workers.min(args.pairs) as usize;
         let next = AtomicUsize::new(0);
         let score = Mutex::new(Score::default());
-        let progress = MatchProgress::new(self.pairs as usize * 2);
+        let progress = MatchProgress::new(args.pairs as usize * 2);
 
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(workers)
@@ -213,10 +254,10 @@ impl Match {
             let mut a = Engine::new(config_a, Arc::new(AtomicBool::new(false)), load_nnue);
             let mut b = Engine::new(config_b, Arc::new(AtomicBool::new(false)), load_nnue);
 
-            while (next.fetch_add(1, Ordering::Relaxed) as u64) < self.pairs {
+            while (next.fetch_add(1, Ordering::Relaxed) as u64) < args.pairs {
                 let opening = book.random_position();
 
-                let mut game = Game::new(opening.clone(), self.nodes, self.max_plies);
+                let mut game = Game::new(opening.clone(), args);
                 let outcome = game.play(&mut a, &mut b);
                 {
                     let mut score = score.lock().unwrap();
@@ -224,7 +265,7 @@ impl Match {
                     progress.update(&score);
                 }
 
-                let mut game = Game::new(opening, self.nodes, self.max_plies);
+                let mut game = Game::new(opening, args);
                 let outcome = game.play(&mut b, &mut a);
                 {
                     let mut score = score.lock().unwrap();

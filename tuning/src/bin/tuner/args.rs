@@ -35,4 +35,24 @@ pub struct Args {
     /// https://www.chessprogramming.org/SPSA
     #[arg(long, default_value_t = 10.0)]
     pub ak: f64,
+
+    /// Resign score (cp).
+    #[arg(long, default_value_t = 400)]
+    pub resign_score: i16,
+
+    /// Resign movecount.
+    #[arg(long, default_value_t = 3)]
+    pub resign_moves: u64,
+
+    /// Draw score (cp).
+    #[arg(long, default_value_t = 10)]
+    pub draw_score: i16,
+
+    /// Draw movecount.
+    #[arg(long, default_value_t = 8)]
+    pub draw_moves: u64,
+
+    /// Moves after opening before draw adj.
+    #[arg(long, default_value_t = 40)]
+    pub draw_after: u64,
 }
