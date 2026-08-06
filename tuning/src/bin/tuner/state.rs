@@ -2,29 +2,43 @@ use std::collections::HashMap;
 
 use config::EngineConfig;
 
-use crate::params::{Tunable, read_param, write_param};
+use crate::params::Tunable;
 
 pub struct State {
     pub values: HashMap<String, i64>,
 }
 
 impl State {
-    pub fn from_params(params: &HashMap<String, Tunable>) -> Self {
-        let config = EngineConfig::default();
+    pub fn from_params(params: &HashMap<String, Tunable>) -> Result<Self, String> {
+        let json = serde_json::to_value(EngineConfig::default()).unwrap();
+
         let mut values = HashMap::new();
 
         for (name, tunable) in params {
-            let value = read_param(&config, name).clamp(tunable.min, tunable.max);
-            values.insert(name.clone(), value);
+            let value = json[name].as_i64().unwrap();
+            values.insert(name.clone(), validate(name, value, tunable)?);
         }
 
-        Self { values }
+        Ok(Self { values })
     }
 
-    pub fn to_config(&self, mut config: EngineConfig) -> EngineConfig {
+    pub fn to_config(&self, config: EngineConfig) -> EngineConfig {
+        let mut json = serde_json::to_value(config).unwrap();
+
         for (name, value) in &self.values {
-            write_param(&mut config, name, *value);
+            json[name.as_str()] = (*value).into();
         }
-        config
+
+        serde_json::from_value(json).unwrap()
     }
+}
+
+fn validate(name: &str, value: i64, tunable: &Tunable) -> Result<i64, String> {
+    if !(tunable.min..=tunable.max).contains(&value) {
+        return Err(format!(
+            "{name} default value ({value}) outside [{}, {}]",
+            tunable.min, tunable.max
+        ));
+    }
+    Ok(value)
 }

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use config::EngineConfig;
 use serde::Deserialize;
 use settings::{Config, File};
 
@@ -37,19 +36,4 @@ pub fn load_params(path: &Path) -> HashMap<String, Tunable> {
     }
 
     params
-}
-
-// TODO: Dont unwrap
-pub fn read_param(config: &EngineConfig, name: &str) -> i64 {
-    serde_json::to_value(config).unwrap()[name]
-        .as_i64()
-        .unwrap()
-}
-
-// TODO: Dont unwrap
-pub fn write_param(config: &mut EngineConfig, name: &str, value: i64) {
-    let mut v = serde_json::to_value(&*config).unwrap();
-
-    v[name] = value.into();
-    *config = serde_json::from_value(v).unwrap();
 }
