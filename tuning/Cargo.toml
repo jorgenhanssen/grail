@@ -26,7 +26,7 @@ candle-core = { workspace = true }
 candle-nn = { workspace = true }
 clap = { workspace = true }
 cozy-chess = { workspace = true }
-num_cpus = { workspace = true }
+rayon = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

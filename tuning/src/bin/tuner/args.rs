@@ -11,9 +11,9 @@ pub struct Args {
     #[arg(long, value_name = "TOML")]
     pub params: PathBuf,
 
-    /// Games per iteration.
+    /// Game pairs per iteration.
     #[arg(long, default_value_t = 100)]
-    pub games: usize,
+    pub pairs: usize,
 
     /// Soft node limit per move.
     #[arg(long, default_value_t = 10_000)]
@@ -27,7 +27,7 @@ pub struct Args {
     #[arg(long, default_value_t = 300)]
     pub max_plies: usize,
 
-    /// Number of parallel matches.
+    /// Worker threads. Defaults to logical CPUs.
     #[arg(long)]
     pub workers: Option<usize>,
 }

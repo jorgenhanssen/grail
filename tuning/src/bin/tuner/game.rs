@@ -1,7 +1,11 @@
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 use ahash::AHashSet;
+use config::EngineConfig;
 use cozy_chess::{Board, Color, Move};
 use search::Engine;
 use uci::commands::GoParams;
@@ -11,25 +15,15 @@ use crate::args::Args;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
-    White,
-    Black,
+    Win(Color),
     Draw,
-}
-
-impl Outcome {
-    fn win(color: Color) -> Self {
-        match color {
-            Color::White => Outcome::White,
-            Color::Black => Outcome::Black,
-        }
-    }
 }
 
 impl fmt::Display for Outcome {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Outcome::White => write!(f, "1-0"),
-            Outcome::Black => write!(f, "0-1"),
+            Outcome::Win(Color::White) => write!(f, "1-0"),
+            Outcome::Win(Color::Black) => write!(f, "0-1"),
             Outcome::Draw => write!(f, "1/2-1/2"),
         }
     }
@@ -83,12 +77,11 @@ impl Game {
 
             engine.set_position(self.board.clone(), Some(self.history()));
 
-            let Some(result) = engine.search(&go, None) else {
-                return Outcome::Draw;
-            };
-            let Some(mv) = result.primary().and_then(|pv| pv.best_move()) else {
-                return Outcome::Draw;
-            };
+            let result = engine.search(&go, None).expect("search returned nothing");
+            let mv = result
+                .primary()
+                .and_then(|pv| pv.best_move())
+                .expect("search returned no move");
 
             self.play_move(mv);
         }
@@ -106,7 +99,7 @@ impl Game {
     fn outcome(&self) -> Option<Outcome> {
         if !has_legal_moves(&self.board) {
             if has_check(&self.board) {
-                return Some(Outcome::win(!self.board.side_to_move()));
+                return Some(Outcome::Win(!self.board.side_to_move()));
             }
             return Some(Outcome::Draw);
         }
@@ -138,6 +131,7 @@ impl Game {
     }
 }
 
+// Score is from a's point of view.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Score {
     pub wins: usize,
@@ -146,11 +140,11 @@ pub struct Score {
 }
 
 impl Score {
-    fn record(&mut self, outcome: Outcome, a_is_white: bool) {
-        match (outcome, a_is_white) {
-            (Outcome::Draw, _) => self.draws += 1,
-            (Outcome::White, true) | (Outcome::Black, false) => self.wins += 1,
-            (Outcome::White, false) | (Outcome::Black, true) => self.losses += 1,
+    fn record(&mut self, outcome: Outcome, perspective: Color) {
+        match outcome {
+            Outcome::Draw => self.draws += 1,
+            Outcome::Win(winner) if winner == perspective => self.wins += 1,
+            Outcome::Win(_) => self.losses += 1,
         }
     }
 
@@ -181,42 +175,74 @@ impl fmt::Display for Score {
 }
 
 pub struct Match {
-    games: usize,
+    pairs: usize,
     nodes: u64,
     max_plies: usize,
+    workers: usize,
 }
 
 impl Match {
     pub fn new(args: &Args) -> Self {
+        let default_workers = || {
+            thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1)
+        };
+
         Self {
-            games: args.games,
+            pairs: args.pairs,
             nodes: args.nodes,
             max_plies: args.max_plies,
+            workers: args.workers.unwrap_or_else(default_workers).max(1),
         }
     }
 
-    pub fn play(&self, a: &mut Engine, b: &mut Engine, book: &Book) -> Score {
-        let mut score = Score::default();
-        let mut played = 0;
+    pub fn play(&self, config_a: &EngineConfig, config_b: &EngineConfig, book: &Book) -> Score {
+        let workers = self.workers.min(self.pairs);
+        let next = AtomicUsize::new(0);
+        let score = Mutex::new(Score::default());
 
-        while played < self.games {
-            let opening = book.random_position();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(workers)
+            .build()
+            .expect("failed to build match thread pool");
 
-            let outcome = Game::new(opening.clone(), self.nodes, self.max_plies).play(a, b);
-            score.record(outcome, true);
-            played += 1;
-            println!("{score}");
+        pool.broadcast(|_| {
+            let mut a = Engine::new(config_a, Arc::new(AtomicBool::new(false)), load_nnue);
+            let mut b = Engine::new(config_b, Arc::new(AtomicBool::new(false)), load_nnue);
 
-            if played >= self.games {
-                break;
+            while next.fetch_add(1, Ordering::Relaxed) < self.pairs {
+                let opening = book.random_position();
+
+                let mut game = Game::new(opening.clone(), self.nodes, self.max_plies);
+                let outcome = game.play(&mut a, &mut b);
+                {
+                    let mut score = score.lock().unwrap();
+                    score.record(outcome, Color::White);
+                    println!("{score}");
+                }
+
+                let mut game = Game::new(opening, self.nodes, self.max_plies);
+                let outcome = game.play(&mut b, &mut a);
+                {
+                    let mut score = score.lock().unwrap();
+                    score.record(outcome, Color::Black);
+                    println!("{score}");
+                }
             }
+        });
 
-            let outcome = Game::new(opening, self.nodes, self.max_plies).play(b, a);
-            score.record(outcome, false);
-            played += 1;
-            println!("{score}");
-        }
-
-        score
+        score.into_inner().unwrap()
     }
+}
+
+fn load_nnue() -> nnue::Evaluator {
+    // TODO: Consider sharing the model path everywhere
+    const MODEL_PATH: &str = "nnue/model.safetensors";
+
+    let mut varmap = candle_nn::VarMap::new();
+    let mut evaluator = nnue::Evaluator::new(&varmap, &candle_core::Device::Cpu);
+    varmap.load(MODEL_PATH).unwrap();
+    evaluator.enable_nnue();
+    evaluator
 }
