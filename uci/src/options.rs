@@ -23,6 +23,9 @@ impl UciOption {
                 "option name {} type spin default {} min {} max {}",
                 self.name, current_value, min, max
             ),
+            UciOptionType::String if current_value.is_empty() => {
+                format!("option name {} type string default <empty>", self.name)
+            }
             UciOptionType::String => {
                 format!(
                     "option name {} type string default {}",
