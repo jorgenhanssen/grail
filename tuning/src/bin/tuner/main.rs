@@ -20,26 +20,34 @@ fn main() -> Result<(), String> {
     assert!(!params.is_empty(), "params file is empty");
 
     let mut state = State::from_params(&params)?;
-    let grad = Gradient::random(&params);
-    let a = state.apply(&grad, &params);
-    let b = state.apply(&-&grad, &params);
-
-    for (name, _) in params.iter() {
-        println!(
-            "{}: state={} a={} b={}",
-            name, state.values[name], a.values[name], b.values[name],
-        );
-    }
-
     let book = Book::load(&args.book).unwrap();
-    let config_a = a.to_config(EngineConfig::default());
-    let config_b = b.to_config(EngineConfig::default());
+    let matcher = Match::new(&args);
 
-    let score = Match::new(&args).play(&config_a, &config_b, &book);
-    state.update(&grad, &score, &params, args.ak);
+    for iter in 1..=args.iterations {
+        let grad = Gradient::random(&params);
 
-    for (name, _) in params.iter() {
-        println!("{}: state={}", name, state.values[name]);
+        let a = state.apply(&grad, &params);
+        let b = state.apply(&-&grad, &params);
+
+        println!("Iteration {}/{}", iter, args.iterations);
+
+        for (name, _) in params.iter() {
+            println!(
+                "{}: state={:.3} a={} b={}",
+                name,
+                state.values[name],
+                a.values[name].round() as i64,
+                b.values[name].round() as i64,
+            );
+        }
+
+        let score = matcher.play(
+            &a.to_config(EngineConfig::default()),
+            &b.to_config(EngineConfig::default()),
+            &book,
+        );
+
+        state.update(&grad, &score, &params, args.ak);
     }
 
     Ok(())
