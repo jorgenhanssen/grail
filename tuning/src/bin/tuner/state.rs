@@ -6,6 +6,7 @@ use crate::game::Score;
 use crate::gradient::Gradient;
 use crate::params::{Parameters, Tunable};
 
+#[derive(Clone)]
 pub struct State {
     pub values: HashMap<String, f64>,
 }

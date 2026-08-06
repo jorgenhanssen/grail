@@ -35,8 +35,4 @@ pub struct Args {
     /// https://www.chessprogramming.org/SPSA
     #[arg(long, default_value_t = 1.0)]
     pub ak: f64,
-
-    /// SPSA iterations.
-    #[arg(long, default_value_t = 100)]
-    pub iterations: u64,
 }
