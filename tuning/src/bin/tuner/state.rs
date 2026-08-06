@@ -2,19 +2,20 @@ use std::collections::HashMap;
 
 use config::EngineConfig;
 
-use crate::params::Tunable;
+use crate::gradient::Gradient;
+use crate::params::{Parameters, Tunable};
 
 pub struct State {
     pub values: HashMap<String, i64>,
 }
 
 impl State {
-    pub fn from_params(params: &HashMap<String, Tunable>) -> Result<Self, String> {
+    pub fn from_params(params: &Parameters) -> Result<Self, String> {
         let json = serde_json::to_value(EngineConfig::default()).unwrap();
 
         let mut values = HashMap::new();
 
-        for (name, tunable) in params {
+        for (name, tunable) in params.iter() {
             let value = json[name].as_i64().unwrap();
             values.insert(name.clone(), validate(name, value, tunable)?);
         }
@@ -30,6 +31,18 @@ impl State {
         }
 
         serde_json::from_value(json).unwrap()
+    }
+
+    pub fn apply(&self, gradient: &Gradient, params: &Parameters) -> Self {
+        let mut values = self.values.clone();
+
+        for (name, delta) in &gradient.deltas {
+            let tunable = params.get(name).unwrap();
+            let value = values[name] + delta;
+            values.insert(name.clone(), value.clamp(tunable.min, tunable.max));
+        }
+
+        Self { values }
     }
 }
 

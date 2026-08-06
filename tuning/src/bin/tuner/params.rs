@@ -23,17 +23,35 @@ impl Tunable {
     }
 }
 
-pub fn load_params(path: &Path) -> HashMap<String, Tunable> {
-    let params: HashMap<String, Tunable> = Config::builder()
-        .add_source(File::from(path))
-        .build()
-        .unwrap()
-        .try_deserialize()
-        .unwrap();
+pub struct Parameters {
+    params: HashMap<String, Tunable>,
+}
 
-    for (name, param) in &params {
-        param.validate(name);
+impl Parameters {
+    pub fn load(path: &Path) -> Self {
+        let params: HashMap<String, Tunable> = Config::builder()
+            .add_source(File::from(path))
+            .build()
+            .unwrap()
+            .try_deserialize()
+            .unwrap();
+
+        for (name, param) in &params {
+            param.validate(name);
+        }
+
+        Self { params }
     }
 
-    params
+    pub fn is_empty(&self) -> bool {
+        self.params.is_empty()
+    }
+
+    pub fn get(&self, name: &str) -> Option<&Tunable> {
+        self.params.get(name)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Tunable)> {
+        self.params.iter()
+    }
 }

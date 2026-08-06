@@ -1,29 +1,34 @@
 mod args;
+mod gradient;
 mod params;
 mod state;
 
 use args::Args;
 use clap::Parser;
 use config::EngineConfig;
-use params::load_params;
+use gradient::Gradient;
+use params::Parameters;
 use state::State;
 
 fn main() -> Result<(), String> {
     let args = Args::parse();
 
-    let params = load_params(&args.params);
+    let params = Parameters::load(&args.params);
     assert!(!params.is_empty(), "params file is empty");
 
     let state = State::from_params(&params)?;
-    let config = state.to_config(EngineConfig::default());
+    let grad = Gradient::random(&params);
 
-    let json = serde_json::to_value(config).unwrap();
-    for (name, param) in &params {
-        let value = state.values[name];
-        assert_eq!(json[name].as_i64().unwrap(), value);
+    let a = state.apply(&grad, &params);
+    let b = state.apply(&-grad, &params);
+
+    let _ = a.to_config(EngineConfig::default());
+    let _ = b.to_config(EngineConfig::default());
+
+    for (name, _) in params.iter() {
         println!(
-            "{}: value={} step={} min={} max={}",
-            name, value, param.step, param.min, param.max
+            "{}: state={} a={} b={}",
+            name, state.values[name], a.values[name], b.values[name],
         );
     }
 

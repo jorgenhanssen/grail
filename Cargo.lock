@@ -2421,6 +2421,7 @@ dependencies = [
  "config 0.15.25",
  "config 2.0.1",
  "num_cpus",
+ "rand 0.10.1",
  "serde",
  "serde_json",
 ]
