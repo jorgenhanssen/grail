@@ -30,4 +30,9 @@ pub struct Args {
     /// Worker threads. Defaults to logical CPUs.
     #[arg(long)]
     pub workers: Option<usize>,
+
+    /// SPSA ak
+    /// https://www.chessprogramming.org/SPSA
+    #[arg(long, default_value_t = 1.0)]
+    pub ak: f64,
 }

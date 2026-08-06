@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use config::EngineConfig;
 
+use crate::game::Score;
 use crate::gradient::Gradient;
 use crate::params::{Parameters, Tunable};
 
@@ -43,6 +44,20 @@ impl State {
         }
 
         Self { values }
+    }
+
+    /// In https://www.chessprogramming.org/SPSA we trust!
+    pub fn update(&mut self, grad: &Gradient, score: &Score, params: &Parameters, ak: f64) {
+        let result = (score.wins as f64 - score.losses as f64) / score.played() as f64;
+
+        for (name, delta) in &grad.deltas {
+            let tunable = params.get(name).unwrap();
+            let next = self.values[name] as f64 + ak * result / (*delta as f64);
+            self.values.insert(
+                name.clone(),
+                (next.round() as i64).clamp(tunable.min, tunable.max),
+            );
+        }
     }
 }
 

@@ -19,10 +19,10 @@ fn main() -> Result<(), String> {
     let params = Parameters::load(&args.params);
     assert!(!params.is_empty(), "params file is empty");
 
-    let state = State::from_params(&params)?;
+    let mut state = State::from_params(&params)?;
     let grad = Gradient::random(&params);
     let a = state.apply(&grad, &params);
-    let b = state.apply(&-grad, &params);
+    let b = state.apply(&-&grad, &params);
 
     for (name, _) in params.iter() {
         println!(
@@ -35,7 +35,12 @@ fn main() -> Result<(), String> {
     let config_a = a.to_config(EngineConfig::default());
     let config_b = b.to_config(EngineConfig::default());
 
-    Match::new(&args).play(&config_a, &config_b, &book);
+    let score = Match::new(&args).play(&config_a, &config_b, &book);
+    state.update(&grad, &score, &params, args.ak);
+
+    for (name, _) in params.iter() {
+        println!("{}: state={}", name, state.values[name]);
+    }
 
     Ok(())
 }

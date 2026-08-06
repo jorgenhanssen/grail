@@ -23,15 +23,15 @@ impl Gradient {
     }
 }
 
-impl Neg for Gradient {
-    type Output = Self;
+impl Neg for &Gradient {
+    type Output = Gradient;
 
-    fn neg(self) -> Self {
-        Self {
+    fn neg(self) -> Gradient {
+        Gradient {
             deltas: self
                 .deltas
-                .into_iter()
-                .map(|(name, delta)| (name, -delta))
+                .iter()
+                .map(|(name, delta)| (name.clone(), -delta))
                 .collect(),
         }
     }
