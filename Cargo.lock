@@ -2424,6 +2424,7 @@ dependencies = [
  "config 0.15.25",
  "config 2.0.1",
  "cozy-chess",
+ "indicatif",
  "nnue",
  "rand 0.10.1",
  "rayon",

@@ -12,6 +12,7 @@ use uci::commands::GoParams;
 use utils::{Book, has_check, has_insufficient_material, has_legal_moves};
 
 use crate::args::Args;
+use crate::progress::MatchProgress;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -32,13 +33,13 @@ impl fmt::Display for Outcome {
 pub struct Game {
     board: Board,
     position_counts: HashMap<u64, usize>,
-    plies: usize,
+    plies: u64,
     nodes: u64,
-    max_plies: usize,
+    max_plies: u64,
 }
 
 impl Game {
-    pub fn new(opening: Board, nodes: u64, max_plies: usize) -> Self {
+    pub fn new(opening: Board, nodes: u64, max_plies: u64) -> Self {
         let mut position_counts = HashMap::new();
 
         // Count the opening as a position we have seen (for threefold)
@@ -168,24 +169,24 @@ impl fmt::Display for Score {
 
         write!(
             f,
-            "{} - {} - {}  [{:.3}] {}",
-            self.wins, self.losses, self.draws, ratio, played
+            "{} - {} - {}  [{:.3}]",
+            self.wins, self.losses, self.draws, ratio
         )
     }
 }
 
 pub struct Match {
-    pairs: usize,
+    pairs: u64,
     nodes: u64,
-    max_plies: usize,
-    workers: usize,
+    max_plies: u64,
+    workers: u64,
 }
 
 impl Match {
     pub fn new(args: &Args) -> Self {
         let default_workers = || {
             thread::available_parallelism()
-                .map(|n| n.get())
+                .map(|n| n.get() as u64)
                 .unwrap_or(1)
         };
 
@@ -198,9 +199,10 @@ impl Match {
     }
 
     pub fn play(&self, config_a: &EngineConfig, config_b: &EngineConfig, book: &Book) -> Score {
-        let workers = self.workers.min(self.pairs);
+        let workers = self.workers.min(self.pairs) as usize;
         let next = AtomicUsize::new(0);
         let score = Mutex::new(Score::default());
+        let progress = MatchProgress::new(self.pairs as usize * 2);
 
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(workers)
@@ -211,7 +213,7 @@ impl Match {
             let mut a = Engine::new(config_a, Arc::new(AtomicBool::new(false)), load_nnue);
             let mut b = Engine::new(config_b, Arc::new(AtomicBool::new(false)), load_nnue);
 
-            while next.fetch_add(1, Ordering::Relaxed) < self.pairs {
+            while (next.fetch_add(1, Ordering::Relaxed) as u64) < self.pairs {
                 let opening = book.random_position();
 
                 let mut game = Game::new(opening.clone(), self.nodes, self.max_plies);
@@ -219,7 +221,7 @@ impl Match {
                 {
                     let mut score = score.lock().unwrap();
                     score.record(outcome, Color::White);
-                    println!("{score}");
+                    progress.update(&score);
                 }
 
                 let mut game = Game::new(opening, self.nodes, self.max_plies);
@@ -227,12 +229,15 @@ impl Match {
                 {
                     let mut score = score.lock().unwrap();
                     score.record(outcome, Color::Black);
-                    println!("{score}");
+                    progress.update(&score);
                 }
             }
         });
 
-        score.into_inner().unwrap()
+        let score = score.into_inner().unwrap();
+        progress.finish(&score);
+
+        score
     }
 }
 

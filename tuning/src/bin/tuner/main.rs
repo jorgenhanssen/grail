@@ -2,6 +2,7 @@ mod args;
 mod game;
 mod gradient;
 mod params;
+mod progress;
 mod state;
 
 use args::Args;
@@ -23,13 +24,10 @@ fn main() -> Result<(), String> {
     let book = Book::load(&args.book).unwrap();
     let matcher = Match::new(&args);
 
-    for iter in 1..=args.iterations {
+    for _ in 0..args.iterations {
         let grad = Gradient::random(&params);
-
         let a = state.apply(&grad, &params);
         let b = state.apply(&-&grad, &params);
-
-        println!("Iteration {}/{}", iter, args.iterations);
 
         for (name, _) in params.iter() {
             println!(
@@ -46,7 +44,6 @@ fn main() -> Result<(), String> {
             &b.to_config(EngineConfig::default()),
             &book,
         );
-
         state.update(&grad, &score, &params, args.ak);
     }
 

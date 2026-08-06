@@ -12,8 +12,8 @@ pub struct Args {
     pub params: PathBuf,
 
     /// Game pairs per iteration.
-    #[arg(long, default_value_t = 100)]
-    pub pairs: usize,
+    #[arg(long, default_value_t = 100, value_parser = clap::value_parser!(u64).range(1..))]
+    pub pairs: u64,
 
     /// Soft node limit per move.
     #[arg(long, default_value_t = 10_000)]
@@ -25,11 +25,11 @@ pub struct Args {
 
     /// Abort as draw after this many plies.
     #[arg(long, default_value_t = 300)]
-    pub max_plies: usize,
+    pub max_plies: u64,
 
     /// Worker threads. Defaults to logical CPUs.
     #[arg(long)]
-    pub workers: Option<usize>,
+    pub workers: Option<u64>,
 
     /// SPSA ak
     /// https://www.chessprogramming.org/SPSA
@@ -38,5 +38,5 @@ pub struct Args {
 
     /// SPSA iterations.
     #[arg(long, default_value_t = 100)]
-    pub iterations: usize,
+    pub iterations: u64,
 }
