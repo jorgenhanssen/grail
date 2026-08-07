@@ -93,6 +93,10 @@ impl Parameters {
         Ok(Self { params })
     }
 
+    pub fn params(&self) -> &[Param] {
+        &self.params
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &Param> {
         self.params.iter()
     }

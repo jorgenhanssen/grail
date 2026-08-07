@@ -21,8 +21,9 @@ sprt/
 # NNUE training data and progress
 nnue/data/
 
-# SPSA param file (edited locally between runs)
+# SPSA
 tuning/params.toml
+tuning/plot.png
 
 # Profiling
 profile.json.gz

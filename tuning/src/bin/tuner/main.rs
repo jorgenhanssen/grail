@@ -3,6 +3,7 @@ mod game;
 mod gradient;
 mod matcher;
 mod params;
+mod plot;
 mod progress;
 
 use std::sync::Arc;
@@ -21,7 +22,7 @@ fn main() -> Result<(), String> {
     let args = Args::parse();
 
     let mut params = Parameters::load(&args.params)?;
-    let initial = params.clone();
+    let mut history = vec![params.clone()];
 
     let stop = abort_listener()?;
 
@@ -41,6 +42,8 @@ fn main() -> Result<(), String> {
             draw_after: args.draw_after,
         },
     );
+
+    plot::save_png(&history);
 
     let mut iterations = 0u64;
     while !stop.load(Ordering::Relaxed) {
@@ -62,9 +65,12 @@ fn main() -> Result<(), String> {
         );
 
         params.update(&grad, &score, args.gain);
+        history.push(params.clone());
+
+        plot::save_png(&history);
     }
 
-    print_summary(&initial, &params, iterations);
+    print_summary(&history, iterations);
 
     Ok(())
 }
@@ -95,8 +101,12 @@ fn print_pair(params: &Parameters, a: &Parameters, b: &Parameters) {
     }
 }
 
-fn print_summary(initial: &Parameters, params: &Parameters, iterations: u64) {
+fn print_summary(history: &[Parameters], iterations: u64) {
     println!("\nDone after {iterations} iterations");
+
+    let initial = &history[0];
+    let params = history.last().unwrap();
+
     for param in params.iter() {
         let start = initial.get(&param.name).value;
         let end = param.value;
