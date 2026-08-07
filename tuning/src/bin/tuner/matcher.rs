@@ -43,7 +43,7 @@ impl fmt::Display for Score {
 
         write!(
             f,
-            "{} - {} - {}  [{:.3}]",
+            "{}W {}L {}D [{:.3}]",
             self.wins, self.losses, self.draws, ratio
         )
     }
