@@ -1,9 +1,7 @@
-use std::collections::HashMap;
 use std::path::Path;
 
 use config::EngineConfig;
 use serde::Deserialize;
-use settings::{Config, File};
 
 use crate::gradient::Gradient;
 use crate::matcher::Score;
@@ -42,6 +40,7 @@ impl Tunable {
 /// A tunable parameter with its current SPSA value.
 #[derive(Debug, Clone)]
 pub struct Param {
+    pub name: String,
     pub value: f64,
     pub tuning: Tunable,
 }
@@ -55,58 +54,58 @@ impl Param {
 /// SPSA tunable parameters
 #[derive(Clone)]
 pub struct Parameters {
-    /// A map of parameter names to their values/tunings.
-    ///
-    /// Maybe a slightly irritating structure, but the nicest (imo) toml format
-    /// parses directly into this
-    params: HashMap<String, Param>,
+    params: Vec<Param>,
 }
 
 impl Parameters {
     pub fn load(path: &Path) -> Result<Self, String> {
-        let file: HashMap<String, Tunable> = Config::builder()
-            .add_source(File::from(path))
-            .build()
-            .map_err(|e| e.to_string())?
-            .try_deserialize()
-            .map_err(|e| e.to_string())?;
+        let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        let table: toml::Table = toml::from_str(&text).map_err(|e| e.to_string())?;
 
-        if file.is_empty() {
+        if table.is_empty() {
             return Err("params file is empty".into());
         }
 
         let defaults = serde_json::to_value(EngineConfig::default()).unwrap();
-        let mut params = HashMap::new();
+        let mut params = Vec::new();
 
-        for (name, tuning) in file {
-            let value = defaults[&name]
+        for (name, value) in table {
+            let tuning: Tunable = value
+                .try_into()
+                .map_err(|e| format!("param '{name}': {e}"))?;
+
+            let default = defaults[&name]
                 .as_i64()
                 .ok_or_else(|| format!("'{name}' is not an EngineConfig field"))?
                 as f64;
 
             tuning
-                .validate(value)
+                .validate(default)
                 .map_err(|e| format!("param '{name}': {e}"))?;
 
-            params.insert(name, Param { value, tuning });
+            params.push(Param {
+                name,
+                value: default,
+                tuning,
+            });
         }
 
         Ok(Self { params })
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &Param)> {
+    pub fn iter(&self) -> impl Iterator<Item = &Param> {
         self.params.iter()
     }
 
     pub fn get(&self, name: &str) -> &Param {
-        &self.params[name]
+        self.params.iter().find(|p| p.name == name).unwrap()
     }
 
     pub fn to_config(&self, config: EngineConfig) -> EngineConfig {
         let mut json = serde_json::to_value(config).unwrap();
 
-        for (name, param) in &self.params {
-            json[name.as_str()] = (param.value.round() as i64).into();
+        for param in &self.params {
+            json[param.name.as_str()] = (param.value.round() as i64).into();
         }
 
         serde_json::from_value(json).unwrap()
@@ -116,9 +115,9 @@ impl Parameters {
     pub fn apply(&self, gradient: &Gradient) -> Self {
         let mut params = self.params.clone();
 
-        for (name, delta) in &gradient.deltas {
-            let param = params.get_mut(name).unwrap();
-            param.value = param.clamp(param.value + *delta as f64);
+        for param in &mut params {
+            let delta = gradient.deltas[&param.name];
+            param.value = param.clamp(param.value + delta as f64);
         }
 
         Self { params }
@@ -130,9 +129,9 @@ impl Parameters {
     pub fn update(&mut self, grad: &Gradient, score: &Score, gain: f64) {
         let result = (score.wins as f64 - score.losses as f64) / score.played() as f64;
 
-        for (name, delta) in &grad.deltas {
-            let param = self.params.get_mut(name).unwrap();
-            let next = param.value + gain * result / (*delta as f64);
+        for param in &mut self.params {
+            let delta = grad.deltas[&param.name];
+            let next = param.value + gain * result / (delta as f64);
             param.value = param.clamp(next);
         }
     }

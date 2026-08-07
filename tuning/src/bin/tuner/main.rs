@@ -84,23 +84,23 @@ fn abort_listener() -> Result<Arc<AtomicBool>, String> {
 }
 
 fn print_pair(params: &Parameters, a: &Parameters, b: &Parameters) {
-    for (name, param) in params.iter() {
+    for param in params.iter() {
         println!(
             "{}: {:.3} ({} vs {})",
-            name,
+            param.name,
             param.value,
-            a.get(name).value.round() as i64,
-            b.get(name).value.round() as i64,
+            a.get(&param.name).value.round() as i64,
+            b.get(&param.name).value.round() as i64,
         );
     }
 }
 
 fn print_summary(initial: &Parameters, params: &Parameters, iterations: u64) {
     println!("\nDone after {iterations} iterations");
-    for (name, param) in params.iter() {
-        let start = initial.get(name).value;
+    for param in params.iter() {
+        let start = initial.get(&param.name).value;
         let end = param.value;
         let delta = end - start;
-        println!("{name}: {start:.0} -> {end:.0} ({delta:+.3})");
+        println!("{}: {start:.0} -> {end:.0} ({delta:+.3})", param.name);
     }
 }

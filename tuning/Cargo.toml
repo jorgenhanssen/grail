@@ -14,13 +14,6 @@ nnue = { path = "../nnue" }
 uci = { path = "../uci" }
 utils = { path = "../utils" }
 
-# crates.io `config` — load TOML/JSON/YAML and `.get()` / try_deserialize.
-# Renamed so it doesn't clash with our EngineConfig crate.
-settings = { package = "config", version = "0.15", default-features = false, features = [
-    "toml",
-    "json",
-    "yaml",
-] }
 ahash = { workspace = true }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
@@ -33,6 +26,7 @@ ctrlc = { workspace = true }
 num_cpus = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+toml = { version = "1.1.4", features = ["preserve_order"] }
 
 [[bin]]
 name = "tuner"
