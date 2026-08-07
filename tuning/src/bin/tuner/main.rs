@@ -93,7 +93,7 @@ fn abort_listener() -> Result<Arc<AtomicBool>, String> {
 fn print_pair(params: &Parameters, state: &State, a: &State, b: &State) {
     for (name, _) in params.iter() {
         println!(
-            "{}: state={:.3} a={} b={}",
+            "{}: {:.3} ({} vs {})",
             name,
             state.values[name],
             a.values[name].round() as i64,
