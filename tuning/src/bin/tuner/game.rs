@@ -2,16 +2,15 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::thread;
 
 use ahash::AHashSet;
 use config::EngineConfig;
 use cozy_chess::{Board, Color, Move};
+use rayon::ThreadPoolBuilder;
 use search::Engine;
 use uci::commands::GoParams;
 use utils::{Book, has_check, has_insufficient_material, has_legal_moves};
 
-use crate::args::Args;
 use crate::progress::MatchProgress;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -20,69 +19,72 @@ pub enum Outcome {
     Draw,
 }
 
-impl fmt::Display for Outcome {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Outcome::Win(Color::White) => write!(f, "1-0"),
-            Outcome::Win(Color::Black) => write!(f, "0-1"),
-            Outcome::Draw => write!(f, "1/2-1/2"),
-        }
-    }
+/// Configuration for a game.
+#[derive(Clone, Copy)]
+pub struct GameConfig {
+    pub nodes: u64,
+    pub max_plies: u64,
+
+    // Adjudication
+    pub resign_score: i16,
+    pub resign_moves: u64,
+    pub draw_score: i16,
+    pub draw_moves: u64,
+    pub draw_after: u64,
 }
 
+/// A game between two engines.
 pub struct Game {
+    // Current board
     board: Board,
+
+    // Position counts for threefold repetition + history to engines
     position_counts: HashMap<u64, usize>,
+
+    // Current ply
     plies: u64,
-    nodes: u64,
-    max_plies: u64,
-    resign_score: i16,
-    resign_moves: u64,
-    draw_score: i16,
-    draw_moves: u64,
-    draw_after: u64,
+
+    // Game configuration
+    config: GameConfig,
+
+    // Adjudication states
     resign_streak: u64,
     draw_streak: u64,
 }
 
 impl Game {
-    pub fn new(opening: Board, args: &Args) -> Self {
+    pub fn new(opening: Board, config: GameConfig) -> Self {
         let mut position_counts = HashMap::new();
-        // Count the opening as a position we have seen (for threefold)
+
+        // Count the opening as a position we have seen
         position_counts.insert(opening.hash(), 1);
 
         Self {
             board: opening,
             position_counts,
             plies: 0,
-            nodes: args.nodes,
-            max_plies: args.max_plies,
-            resign_score: args.resign_score,
-            resign_moves: args.resign_moves,
-            draw_score: args.draw_score,
-            draw_moves: args.draw_moves,
-            draw_after: args.draw_after,
+            config,
             resign_streak: 0,
             draw_streak: 0,
         }
     }
 
-    pub fn play(&mut self, white: &mut Engine, black: &mut Engine) -> Outcome {
+    pub fn start(&mut self, white: &mut Engine, black: &mut Engine) -> Outcome {
         white.new_game();
         black.new_game();
 
         let go = GoParams {
-            soft_nodes: Some(self.nodes),
+            soft_nodes: Some(self.config.nodes),
             ..Default::default()
         };
 
         loop {
-            if self.plies >= self.max_plies {
+            if self.plies >= self.config.max_plies {
                 return Outcome::Draw;
             }
 
-            let mover = self.board.side_to_move();
-            let engine = match mover {
+            let stm = self.board.side_to_move();
+            let engine = match stm {
                 Color::White => &mut *white,
                 Color::Black => &mut *black,
             };
@@ -99,32 +101,38 @@ impl Game {
             if let Some(outcome) = self.outcome() {
                 return outcome;
             }
-            if let Some(outcome) = self.adjudicate(score, mover) {
+            if let Some(outcome) = self.adjudicate(score, stm) {
                 return outcome;
             }
         }
     }
 
-    fn adjudicate(&mut self, score: i16, mover: Color) -> Option<Outcome> {
-        if score.abs() >= self.resign_score {
+    /// Check if the game could end early as a win or draw.
+    ///
+    /// Saves time by aborting a game if it is clearly won or drawn.
+    /// Very much inspired by the fastgchess implementation.
+    fn adjudicate(&mut self, score: i16, stm: Color) -> Option<Outcome> {
+        if score.abs() >= self.config.resign_score {
             self.resign_streak += 1;
         } else {
             self.resign_streak = 0;
         }
-        if score < 0 && self.resign_streak >= self.resign_moves * 2 {
-            return Some(Outcome::Win(!mover));
+        if score < 0 && self.resign_streak >= self.config.resign_moves * 2 {
+            return Some(Outcome::Win(!stm));
         }
 
         if self.board.halfmove_clock() == 0 {
             self.draw_streak = 0;
         }
 
-        if score.abs() <= self.draw_score {
+        if score.abs() <= self.config.draw_score {
             self.draw_streak += 1;
         } else {
             self.draw_streak = 0;
         }
-        if self.plies >= self.draw_after * 2 && self.draw_streak >= self.draw_moves * 2 {
+        if self.plies >= self.config.draw_after * 2
+            && self.draw_streak >= self.config.draw_moves * 2
+        {
             return Some(Outcome::Draw);
         }
 
@@ -167,6 +175,7 @@ impl Game {
 
     fn history(&self) -> AHashSet<u64> {
         let current = self.board.hash();
+
         self.position_counts
             .keys()
             .copied()
@@ -175,7 +184,7 @@ impl Game {
     }
 }
 
-// Score is from a's point of view.
+/// Match result from engine A's point of view.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Score {
     pub wins: usize,
@@ -203,12 +212,7 @@ impl Score {
 
 impl fmt::Display for Score {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let played = self.played();
-        let ratio = if played == 0 {
-            0.0
-        } else {
-            self.points() / played as f64
-        };
+        let ratio = self.points() / self.played() as f64;
 
         write!(
             f,
@@ -218,55 +222,54 @@ impl fmt::Display for Score {
     }
 }
 
+/// A match between two engine configurations.
 pub struct Match {
     workers: u64,
+    pairs: u64,
+    game: GameConfig,
 }
 
 impl Match {
-    pub fn new(args: &Args) -> Self {
-        let workers = args
-            .workers
-            .or_else(|| thread::available_parallelism().ok().map(|n| n.get() as u64))
-            .unwrap_or(1)
-            .max(1);
-
-        Self { workers }
+    pub fn new(workers: u64, pairs: u64, game: GameConfig) -> Self {
+        Self {
+            workers,
+            pairs,
+            game,
+        }
     }
 
-    pub fn play(
-        &self,
-        config_a: &EngineConfig,
-        config_b: &EngineConfig,
-        book: &Book,
-        args: &Args,
-    ) -> Score {
-        let workers = self.workers.min(args.pairs) as usize;
+    pub fn play(&self, config_a: &EngineConfig, config_b: &EngineConfig, book: &Book) -> Score {
+        let workers = self.workers.min(self.pairs) as usize;
         let next = AtomicUsize::new(0);
         let score = Mutex::new(Score::default());
-        let progress = MatchProgress::new(args.pairs as usize * 2);
+        let progress = MatchProgress::new(self.pairs as usize * 2);
 
-        let pool = rayon::ThreadPoolBuilder::new()
+        let pool = ThreadPoolBuilder::new()
             .num_threads(workers)
             .build()
             .expect("failed to build match thread pool");
 
+        // Runs the following scope once for each thread in the pool.
+        // This is nice so we only set up engines a and b once per thread per match.
         pool.broadcast(|_| {
             let mut a = Engine::new(config_a, Arc::new(AtomicBool::new(false)), load_nnue);
             let mut b = Engine::new(config_b, Arc::new(AtomicBool::new(false)), load_nnue);
 
-            while (next.fetch_add(1, Ordering::Relaxed) as u64) < args.pairs {
+            while (next.fetch_add(1, Ordering::Relaxed) as u64) < self.pairs {
                 let opening = book.random_position();
 
-                let mut game = Game::new(opening.clone(), args);
-                let outcome = game.play(&mut a, &mut b);
+                // A as white
+                let mut game = Game::new(opening.clone(), self.game);
+                let outcome = game.start(&mut a, &mut b);
                 {
                     let mut score = score.lock().unwrap();
                     score.record(outcome, Color::White);
                     progress.update(&score);
                 }
 
-                let mut game = Game::new(opening, args);
-                let outcome = game.play(&mut b, &mut a);
+                // A as black
+                let mut game = Game::new(opening, self.game);
+                let outcome = game.start(&mut b, &mut a);
                 {
                     let mut score = score.lock().unwrap();
                     score.record(outcome, Color::Black);

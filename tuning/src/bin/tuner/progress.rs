@@ -2,6 +2,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::game::Score;
 
+/// Progress bar for a match.
 pub struct MatchProgress {
     bar: ProgressBar,
 }

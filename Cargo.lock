@@ -2427,6 +2427,7 @@ dependencies = [
  "ctrlc",
  "indicatif",
  "nnue",
+ "num_cpus",
  "rand 0.10.1",
  "rayon",
  "search",

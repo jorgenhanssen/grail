@@ -4,10 +4,16 @@ use std::path::Path;
 use serde::Deserialize;
 use settings::{Config, File};
 
+/// The tunable specification for a single parameter.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Tunable {
+    /// How much the parameter is nudged per gradient.
     pub step: i64,
+
+    /// The minimum value the parameter can be nudged to.
     pub min: i64,
+
+    /// The maximum value the parameter can be nudged to.
     pub max: i64,
 }
 
@@ -23,7 +29,12 @@ impl Tunable {
     }
 }
 
+/// A collection of tunable parameters.
 pub struct Parameters {
+    /// A map of parameter names to their tunable values.
+    ///
+    /// Maybe a slightly irritating structure, but the nicest (imo) toml format
+    /// parses directly into this
     params: HashMap<String, Tunable>,
 }
 

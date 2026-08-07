@@ -5,6 +5,7 @@ use rand::RngExt;
 
 use crate::params::Parameters;
 
+/// A gradient of changes to the parameters.
 pub struct Gradient {
     pub deltas: HashMap<String, i64>,
 }

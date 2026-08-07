@@ -6,6 +6,7 @@ use crate::game::Score;
 use crate::gradient::Gradient;
 use crate::params::{Parameters, Tunable};
 
+/// A snapshot of SPSA parameters.
 #[derive(Clone)]
 pub struct State {
     pub values: HashMap<String, f64>,
@@ -35,6 +36,7 @@ impl State {
         serde_json::from_value(json).unwrap()
     }
 
+    /// Apply a gradient to the state and returns the new state.
     pub fn apply(&self, gradient: &Gradient, params: &Parameters) -> Self {
         let mut values = self.values.clone();
 
@@ -50,13 +52,15 @@ impl State {
         Self { values }
     }
 
+    /// Update the state using the SPSA algorithm.
+    ///
     /// In https://www.chessprogramming.org/SPSA we trust!
-    pub fn update(&mut self, grad: &Gradient, score: &Score, params: &Parameters, ak: f64) {
+    pub fn update(&mut self, grad: &Gradient, score: &Score, params: &Parameters, gain: f64) {
         let result = (score.wins as f64 - score.losses as f64) / score.played() as f64;
 
         for (name, delta) in &grad.deltas {
             let tunable = params.get(name).unwrap();
-            let next = self.values[name] + ak * result / (*delta as f64);
+            let next = self.values[name] + gain * result / (*delta as f64);
             self.values.insert(
                 name.clone(),
                 next.clamp(tunable.min as f64, tunable.max as f64),

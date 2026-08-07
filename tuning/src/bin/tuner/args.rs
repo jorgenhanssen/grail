@@ -24,35 +24,35 @@ pub struct Args {
     pub book: PathBuf,
 
     /// Abort as draw after this many plies.
-    #[arg(long, default_value_t = 300)]
+    #[arg(long, default_value_t = 500)]
     pub max_plies: u64,
 
     /// Worker threads. Defaults to logical CPUs.
     #[arg(long)]
     pub workers: Option<u64>,
 
-    /// SPSA ak
+    /// How hard to nudge the parameters (a_k).
     /// https://www.chessprogramming.org/SPSA
     #[arg(long, default_value_t = 10.0)]
-    pub ak: f64,
+    pub gain: f64,
 
-    /// Resign score (cp).
+    /// Score threshold needed to adjudicate win.
     #[arg(long, default_value_t = 400)]
     pub resign_score: i16,
 
-    /// Resign movecount.
+    /// Number of consecutive with score > 'resign_score' needed to resign.
     #[arg(long, default_value_t = 3)]
     pub resign_moves: u64,
 
-    /// Draw score (cp).
+    /// Draw when |score| stays at or below this.
     #[arg(long, default_value_t = 10)]
     pub draw_score: i16,
 
-    /// Draw movecount.
+    /// Number of consecutive moves with |score| <= 'draw_score' needed to draw.
     #[arg(long, default_value_t = 8)]
     pub draw_moves: u64,
 
-    /// Moves after opening before draw adj.
+    /// Moves after opening before allowing adjudicated draw.
     #[arg(long, default_value_t = 40)]
     pub draw_after: u64,
 }
