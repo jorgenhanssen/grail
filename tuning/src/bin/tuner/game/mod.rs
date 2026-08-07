@@ -31,7 +31,7 @@ pub struct Game {
     config: GameConfig,
 
     // Adjudication states
-    resign_streak: u64,
+    decisive_streak: u64,
     draw_streak: u64,
 }
 
@@ -47,7 +47,7 @@ impl Game {
             position_counts,
             plies: 0,
             config,
-            resign_streak: 0,
+            decisive_streak: 0,
             draw_streak: 0,
         }
     }
@@ -96,14 +96,20 @@ impl Game {
     /// Very much inspired by the fastchess implementation.
     fn adjudicate(&mut self, score: i16, stm: Color) -> Option<Outcome> {
         if score.abs() >= self.config.resign_score {
-            self.resign_streak += 1;
+            self.decisive_streak += 1;
         } else {
-            self.resign_streak = 0;
+            self.decisive_streak = 0;
         }
-        if score < 0 && self.resign_streak >= self.config.resign_moves * 2 {
+
+        // If there has been enough decisive plies in a row and the current
+        // engine agrees it is losing, we adjudicate a win for the other side.
+        let stm_is_losing = score < 0;
+        let has_been_decisive_for_a_while = self.decisive_streak >= self.config.resign_moves * 2;
+        if stm_is_losing && has_been_decisive_for_a_while {
             return Some(Outcome::Win(!stm));
         }
 
+        // Don't consider draws if we have progress
         if self.board.halfmove_clock() == 0 {
             self.draw_streak = 0;
         }
@@ -113,9 +119,12 @@ impl Game {
         } else {
             self.draw_streak = 0;
         }
-        if self.plies >= self.config.draw_after * 2
-            && self.draw_streak >= self.config.draw_moves * 2
-        {
+
+        // If we are far enough into the game and scores have been
+        // near-equal for long enough, we adjudicate a draw.
+        let is_out_of_opening = self.plies >= self.config.draw_after * 2;
+        let has_been_drawish_for_a_while = self.draw_streak >= self.config.draw_moves * 2;
+        if is_out_of_opening && has_been_drawish_for_a_while {
             return Some(Outcome::Draw);
         }
 

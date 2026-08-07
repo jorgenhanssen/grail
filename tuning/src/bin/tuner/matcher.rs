@@ -23,8 +23,13 @@ impl Score {
     fn record(&mut self, outcome: Outcome, perspective: Color) {
         match outcome {
             Outcome::Draw => self.draws += 1,
-            Outcome::Win(winner) if winner == perspective => self.wins += 1,
-            Outcome::Win(_) => self.losses += 1,
+            Outcome::Win(winner) => {
+                if winner == perspective {
+                    self.wins += 1;
+                } else {
+                    self.losses += 1;
+                }
+            }
         }
     }
 
