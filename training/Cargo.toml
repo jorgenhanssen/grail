@@ -1,10 +1,10 @@
 [package]
 name = "training"
+description = "Grail's NNUE training pipeline and datagen"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
-description = "NNUE training and data generation tools"
 repository = { workspace = true }
 
 [dependencies]

@@ -33,24 +33,24 @@ impl Correction {
         Self {
             position: PositionCorrection::new(config),
             continuation: ContinuationCorrection::new(config),
-            combined_divisor: config.correction_combined_divisor.value,
-            max_correction: config.correction_history_max_correction.value,
+            combined_divisor: config.correction_combined_divisor,
+            max_correction: config.correction_history_max_correction,
         }
     }
 
     pub fn configure(&mut self, config: &EngineConfig) {
         self.position.configure(config);
         self.continuation.configure(config);
-        self.combined_divisor = config.correction_combined_divisor.value;
-        self.max_correction = config.correction_history_max_correction.value;
+        self.combined_divisor = config.correction_combined_divisor;
+        self.max_correction = config.correction_history_max_correction;
         self.reset();
     }
 
     pub fn matches_config(&self, config: &EngineConfig) -> bool {
         self.position.matches_config(config)
             && self.continuation.matches_config(config)
-            && self.combined_divisor == config.correction_combined_divisor.value
-            && self.max_correction == config.correction_history_max_correction.value
+            && self.combined_divisor == config.correction_combined_divisor
+            && self.max_correction == config.correction_history_max_correction
     }
 
     pub fn reset(&mut self) {

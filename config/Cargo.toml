@@ -1,17 +1,14 @@
 [package]
 name = "config"
+description = "Engine configuration for Grail"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
-description = { workspace = true }
 repository = { workspace = true }
 
-[features]
-tuning = []
-
 [dependencies]
-uci = { path = "../uci" }
+serde = { workspace = true }
 
 [lints]
 workspace = true

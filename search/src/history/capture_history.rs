@@ -31,16 +31,16 @@ impl CaptureHistory {
     }
 
     pub fn configure(&mut self, config: &EngineConfig) {
-        self.max_value = config.capture_history_max_value.value;
-        self.bonus_multiplier = config.capture_history_bonus_multiplier.value;
-        self.malus_multiplier = config.capture_history_malus_multiplier.value;
+        self.max_value = config.capture_history_max_value;
+        self.bonus_multiplier = config.capture_history_bonus_multiplier;
+        self.malus_multiplier = config.capture_history_malus_multiplier;
         self.reset();
     }
 
     pub fn matches_config(&self, config: &EngineConfig) -> bool {
-        self.max_value == config.capture_history_max_value.value
-            && self.bonus_multiplier == config.capture_history_bonus_multiplier.value
-            && self.malus_multiplier == config.capture_history_malus_multiplier.value
+        self.max_value == config.capture_history_max_value
+            && self.bonus_multiplier == config.capture_history_bonus_multiplier
+            && self.malus_multiplier == config.capture_history_malus_multiplier
     }
 
     pub fn reset(&mut self) {

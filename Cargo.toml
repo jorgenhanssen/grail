@@ -6,7 +6,8 @@ members = [
   "search",
   "nnue",
   "training",
-  "uci", 
+  "tuning",
+  "uci",
   "utils",
 ]
 

@@ -32,7 +32,7 @@ unsafe impl Sync for SharedSearcherState {}
 impl SharedSearcherState {
     pub fn new(config: &EngineConfig, stop: Arc<AtomicBool>) -> Self {
         Self {
-            tt: UnsafeCell::new(TranspositionTable::new(config.hash_size.value as usize)),
+            tt: UnsafeCell::new(TranspositionTable::new(config.hash_size as usize)),
             correction: UnsafeCell::new(Correction::new(config)),
             tb: UnsafeCell::new(None),
             stop,
