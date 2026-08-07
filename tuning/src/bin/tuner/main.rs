@@ -1,6 +1,7 @@
 mod args;
 mod game;
 mod gradient;
+mod matcher;
 mod params;
 mod progress;
 mod state;
@@ -11,8 +12,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use args::Args;
 use clap::Parser;
 use config::EngineConfig;
-use game::{GameConfig, Match};
+use game::GameConfig;
 use gradient::Gradient;
+use matcher::Matcher;
 use params::Parameters;
 use state::State;
 use utils::Book;
@@ -33,7 +35,7 @@ fn main() -> Result<(), String> {
     let book = Book::load(&args.book).unwrap();
     let workers = args.workers.unwrap_or_else(|| num_cpus::get() as u64);
 
-    let matcher = Match::new(
+    let matcher = Matcher::new(
         workers,
         args.pairs,
         GameConfig {
@@ -57,7 +59,7 @@ fn main() -> Result<(), String> {
 
         print_pair(&params, &state, &a, &b);
 
-        let score = matcher.play(
+        let score = matcher.run_match(
             &a.to_config(EngineConfig::default()),
             &b.to_config(EngineConfig::default()),
             &book,

@@ -1,6 +1,6 @@
 use indicatif::{ProgressBar, ProgressStyle};
 
-use crate::game::Score;
+use crate::matcher::Score;
 
 /// Progress bar for a match.
 pub struct MatchProgress {

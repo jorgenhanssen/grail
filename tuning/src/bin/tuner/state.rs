@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use config::EngineConfig;
 
-use crate::game::Score;
+use crate::matcher::Score;
 use crate::gradient::Gradient;
 use crate::params::{Parameters, Tunable};
 
