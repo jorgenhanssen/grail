@@ -52,8 +52,8 @@ impl Searcher {
             tt,
             m,
             depth,
-            self.config.singular_min_depth.value,
-            self.config.singular_depth_margin.value,
+            self.config.singular_min_depth,
+            self.config.singular_depth_margin,
         ) {
             return result;
         }
@@ -61,7 +61,7 @@ impl Searcher {
         let singular_depth = (depth - 1) / 2;
         let singular_beta = tt
             .value
-            .saturating_sub((self.config.singular_beta_margin.value * depth as i16 / 100).max(1));
+            .saturating_sub((self.config.singular_beta_margin * depth as i16 / 100).max(1));
 
         // Reduced null-window search excluding TT move.
         self.search_stack
@@ -81,8 +81,8 @@ impl Searcher {
             // extensions progressively harder deep in the tree.
             // Should help cases where TT hits givve check chains (KQ+K,,, etc).
             let overshoot = ply.saturating_sub(self.root_depth) as i16;
-            let double_margin = self.config.double_ext_margin.value
-                + overshoot * overshoot * self.config.double_ext_overshoot_penalty.value;
+            let double_margin = self.config.double_ext_margin
+                + overshoot * overshoot * self.config.double_ext_overshoot_penalty;
             if singular_value < singular_beta.saturating_sub(double_margin) {
                 result.extension = 2;
                 return result;

@@ -27,11 +27,11 @@ impl LmrTable {
     }
 
     pub fn configure(&mut self, config: &EngineConfig) {
-        *self = Self::new(config.lmr_divisor.value);
+        *self = Self::new(config.lmr_divisor);
     }
 
     pub fn matches_config(&self, config: &EngineConfig) -> bool {
-        self.divisor == config.lmr_divisor.value
+        self.divisor == config.lmr_divisor
     }
 
     pub fn get(&self, depth: u8, move_index: i32) -> FracPly {

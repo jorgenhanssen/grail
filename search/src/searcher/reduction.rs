@@ -28,47 +28,47 @@ impl Searcher {
 
         // Reduce more
         if parent.is_cut() {
-            reduction += FracPly(self.config.reduction_cut_node.value);
+            reduction += FracPly(self.config.reduction_cut_node);
         }
         if !is_improving {
-            reduction += FracPly(self.config.reduction_not_improving.value);
+            reduction += FracPly(self.config.reduction_not_improving);
         }
         if tt_move_is_capture && !is_capture {
-            reduction += FracPly(self.config.reduction_quiets_if_tt_capture.value);
+            reduction += FracPly(self.config.reduction_quiets_if_tt_capture);
         }
 
         let hist_divisor = if is_capture {
-            self.config.reduction_capture_history_divisor.value
+            self.config.reduction_capture_history_divisor
         } else {
-            self.config.reduction_history_divisor.value
+            self.config.reduction_history_divisor
         };
 
         history_reduction(&mut reduction, hist, hist_divisor);
         history_reduction(
             &mut reduction,
             cont_hist,
-            self.config.reduction_cont_hist_divisor.value,
+            self.config.reduction_cont_hist_divisor,
         );
 
         // Reduce less
         if reduction > FracPly(0) {
             if is_pv_move {
-                reduction -= FracPly(self.config.anti_reduction_pv_move.value);
+                reduction -= FracPly(self.config.anti_reduction_pv_move);
             }
             if near_root(ply, depth) {
-                reduction -= FracPly(self.config.anti_reduction_near_root.value);
+                reduction -= FracPly(self.config.anti_reduction_near_root);
             }
             if parent.is_pv() {
-                reduction -= FracPly(self.config.anti_reduction_pv_node.value);
+                reduction -= FracPly(self.config.anti_reduction_pv_node);
             }
             if parent.in_check() || child.in_check() {
-                reduction -= FracPly(self.config.anti_reduction_check.value);
+                reduction -= FracPly(self.config.anti_reduction_check);
             }
             if is_capture || is_promotion {
-                reduction -= FracPly(self.config.anti_reduction_tactical.value);
+                reduction -= FracPly(self.config.anti_reduction_tactical);
             }
             if creates_threat(parent, child) || evades_threat(parent, child) {
-                reduction -= FracPly(self.config.anti_reduction_threat.value);
+                reduction -= FracPly(self.config.anti_reduction_threat);
             }
         }
 

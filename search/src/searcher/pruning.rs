@@ -39,11 +39,11 @@ impl Searcher {
         alpha: i16,
         static_eval: i16,
     ) -> bool {
-        if is_pv_move || depth > self.config.futility_max_depth.value || in_check {
+        if is_pv_move || depth > self.config.futility_max_depth || in_check {
             return false;
         }
-        let margin = self.config.futility_base_margin.value
-            + depth.saturating_sub(1) as i16 * self.config.futility_depth_multiplier.value;
+        let margin = self.config.futility_base_margin
+            + depth.saturating_sub(1) as i16 * self.config.futility_depth_multiplier;
         !is_tactical && static_eval + margin <= alpha
     }
 
@@ -59,11 +59,11 @@ impl Searcher {
         in_check: bool,
         eval: i16,
     ) -> Option<i16> {
-        if depth == 0 || depth > self.config.razor_max_depth.value || in_check {
+        if depth == 0 || depth > self.config.razor_max_depth || in_check {
             return None;
         }
-        let margin = self.config.razor_base_margin.value
-            + self.config.razor_depth_coefficient.value * (depth as i16 * depth as i16);
+        let margin = self.config.razor_base_margin
+            + self.config.razor_depth_coefficient * (depth as i16 * depth as i16);
         if eval >= alpha - margin {
             return None;
         }
@@ -99,7 +99,7 @@ impl Searcher {
         let board = node.board();
 
         if is_capture {
-            if depth > self.config.see_capture_max_depth.value {
+            if depth > self.config.see_capture_max_depth {
                 return false;
             }
 
@@ -110,7 +110,7 @@ impl Searcher {
             // Only run it on questionable captures (SEE is expensive):
             // Skip if victim >= attacker (looks good) or attacker is trivial/invaluable
             if captured_value >= attacker_value
-                || attacker_value < self.config.see_capture_min_attacker_value.value
+                || attacker_value < self.config.see_capture_min_attacker_value
             {
                 return false;
             }
@@ -118,18 +118,18 @@ impl Searcher {
             // When we're behind on eval we need captures to actually win material,
             // but tolerate more at higher depths since there's room to recover.
             let eval_gap = alpha - static_eval;
-            let depth_margin = self.config.see_capture_depth_margin.value * (depth as i16);
+            let depth_margin = self.config.see_capture_depth_margin * (depth as i16);
             let threshold = -(eval_gap.max(0) + depth_margin);
 
             !see(board, m, threshold)
         } else {
-            if depth > self.config.see_quiet_max_depth.value {
+            if depth > self.config.see_quiet_max_depth {
                 return false;
             }
 
             // Catch quiet moves that walk into losing exchanges (hanging, etc)
             // Tolerate more at higher depths since the search can correct mistakes.
-            let threshold = -(self.config.see_quiet_depth_multiplier.value * depth as i16);
+            let threshold = -(self.config.see_quiet_depth_multiplier * depth as i16);
 
             !see(board, m, threshold)
         }
@@ -152,7 +152,7 @@ impl Searcher {
         if !try_null_move
             || in_check
             || !node.is_cut()
-            || depth < self.config.nmp_min_depth.value
+            || depth < self.config.nmp_min_depth
             || node.is_zugzwang()
         {
             return None;
@@ -168,11 +168,11 @@ impl Searcher {
         let nm_child = node.create_null_move_child()?;
 
         // Deeper positions get more reduction
-        let base_r = self.config.nmp_base_reduction.value;
-        let mut r = base_r + (depth / self.config.nmp_depth_divisor.value);
+        let base_r = self.config.nmp_base_reduction;
+        let mut r = base_r + (depth / self.config.nmp_depth_divisor);
 
         if let Some(se) = corrected_eval {
-            let margin = self.config.nmp_eval_margin.value;
+            let margin = self.config.nmp_eval_margin;
             if se >= bounds.beta + margin {
                 // Strong positions get extra reduction
                 r = r.saturating_add(1);
@@ -234,14 +234,14 @@ impl Searcher {
         ply: u8,
         is_improving: bool,
     ) -> Option<i16> {
-        if depth == 0 || depth > self.config.rfp_max_depth.value || in_check || node.is_pv() {
+        if depth == 0 || depth > self.config.rfp_max_depth || in_check || node.is_pv() {
             return None;
         }
 
-        let mut margin = self.config.rfp_base_margin.value
-            + (depth as i16 - 1) * self.config.rfp_depth_multiplier.value;
+        let mut margin =
+            self.config.rfp_base_margin + (depth as i16 - 1) * self.config.rfp_depth_multiplier;
         if is_improving {
-            margin -= self.config.rfp_improving_bonus.value;
+            margin -= self.config.rfp_improving_bonus;
         }
 
         if corrected_eval - margin >= bounds.beta && corrected_eval.abs() < NEAR_MATE_VALUE {
@@ -278,22 +278,17 @@ impl Searcher {
         let is_cap = node.is_capture(mv);
         let is_promotion = mv.promotion == Some(Piece::Queen);
 
-        if in_check
-            || node.is_pv()
-            || is_cap
-            || is_promotion
-            || depth > self.config.lmp_max_depth.value
-        {
+        if in_check || node.is_pv() || is_cap || is_promotion || depth > self.config.lmp_max_depth {
             return false;
         }
 
-        let base = self.config.lmp_base_moves.value;
-        let mult = self.config.lmp_depth_multiplier.value;
+        let base = self.config.lmp_base_moves;
+        let mult = self.config.lmp_depth_multiplier;
         let mut limit = base + (depth as i32 * (depth as i32 + mult)) / 2;
 
         // Be more aggressive (prune earlier) when position isn't improving
         if !is_improving {
-            limit = (limit * self.config.lmp_improving_reduction.value) / 100;
+            limit = (limit * self.config.lmp_improving_reduction) / 100;
         }
 
         move_index > limit
@@ -314,7 +309,7 @@ impl Searcher {
         }
 
         let history_score = hist + cont_hist;
-        let prune_threshold = self.config.history_prune_depth_multiplier.value * depth as i16;
+        let prune_threshold = self.config.history_prune_depth_multiplier * depth as i16;
 
         history_score < prune_threshold
     }

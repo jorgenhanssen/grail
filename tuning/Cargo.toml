@@ -1,0 +1,37 @@
+[package]
+name = "tuning"
+description = "SPSA tuning for Grail"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+config = { path = "../config" }
+search = { path = "../search" }
+nnue = { path = "../nnue" }
+uci = { path = "../uci" }
+utils = { path = "../utils" }
+
+ahash = { workspace = true }
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+clap = { workspace = true }
+cozy-chess = { workspace = true }
+indicatif = { workspace = true }
+rayon = { workspace = true }
+rand = { workspace = true }
+ctrlc = { workspace = true }
+num_cpus = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { version = "1.1.4", features = ["preserve_order"] }
+plotters = { version = "0.3.7", default-features = false, features = ["bitmap_backend", "bitmap_encoder", "line_series", "ttf"] }
+
+[[bin]]
+name = "tuner"
+path = "src/bin/tuner/main.rs"
+
+[lints]
+workspace = true

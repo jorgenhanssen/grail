@@ -41,10 +41,11 @@ impl SelfPlayWorker {
         histogram: HistogramHandle,
         tablebases: Option<TableBases<CozyAdapter>>,
     ) -> Self {
-        let mut config = EngineConfig::default();
-
-        config.hash_size.value = WORKER_HASH_SIZE_MB;
-        config.multi_pv.value = multi_pv;
+        let config = EngineConfig {
+            hash_size: WORKER_HASH_SIZE_MB,
+            multi_pv,
+            ..EngineConfig::default()
+        };
 
         let stop = Arc::new(AtomicBool::new(false));
         let engine = Engine::new(&config, stop, create_evaluator);

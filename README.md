@@ -6,7 +6,7 @@
 
 Grail is a hobby chess engine written in Rust. It began as an attempt to make a chess engine and has since become an elaborate system for turning my sanity and electricity bill into Elo. It uses modern search techniques and a fully self-taught NNUE trained on 99 million self-play games. The name refers to the Holy Grail, which may still be easier to find than perfect chess.
 
-This repository hosts Grail's official releases and source code. The engine is developed entirely within this repository, which contains the self-play datagen, NNUE training pipeline, analysis tools, profiling, and build setup.
+This repository hosts Grail's official releases and source code. The engine is developed entirely within this repository, which contains the self-play datagen, NNUE training pipeline, SPSA tuner, analysis tools, profiling, and build setup.
 
 ## Usage
 
@@ -81,10 +81,11 @@ The project includes a `Makefile` for convenience:
 
 - **`make` or `make grail`**: Release build
 - **`make grail-pgo`**: Release build with PGO.
-- **`make tunable`**: Release build with internal parameters exposed for SPSA tuning (as UCI options).
 - **`make generate`**: Builds the NNUE self-play datagen.
 - **`make generate-pgo`**: Builds the NNUE self-play datagen with PGO.
 - **`make train`**: Builds the NNUE trainer (auto-detects CUDA/Metal).
+- **`make tuner`**: Builds the SPSA tuner.
+- **`make tuner-pgo`**: Builds the SPSA tuner with PGO.
 - **`make nnue-analysis`**: Dumps a analysis of the current NNUE to `nnue/model.analysis.txt`.
 - **`make profile`**: Profiles the built-in benchmark with [`samply`](https://github.com/mstange/samply).
 - **`make clean`**: Remove the build directory.
@@ -154,6 +155,36 @@ If you want to initialize a new/random model without starting training:
 ```bash
 ./target/release/train init
 ```
+
+### SPSA Tuning
+
+There's a small SPSA tuner for optimizing search constants.
+
+Gotcha: it uses [plotters](https://crates.io/crates/plotters) to draw some nice graphs of the params as it is tuning, so make sure to follow their install steps first (Ubuntu requires setup of fontconfig and freetype).
+
+To set up for SPSA tuning, just copy `tuning/params.example.toml` to `tuning/params.toml` and add the `EngineConfig` fields you want to tune following the example format.
+
+```bash
+make tuner
+
+./target/release/tuner --params tuning/params.toml --book books/UHO_Lichess_4852_v1.epd
+```
+
+**Arguments:**
+
+- `--params`: Path to the parameter TOML.
+- `--book`: Path to an EPD opening book.
+- `--pairs`: Game pairs per iteration (default: 100).
+- `--nodes`: Soft node limit per move (default: 25000).
+- `--iterations`: Stop after this many iterations (runs until Ctrl+C if omitted).
+- `--workers`: Worker threads (default: logical CPUs).
+- `--gain`: How hard to nudge parameters.
+- `--max-plies`: Abort game as draw after this many plies (default: 500).
+- `--resign-score`: Score threshold to adjudicate a win (default: 400).
+- `--resign-moves`: Consecutive moves above resign score needed to resign (default: 3).
+- `--draw-score`: Score threshold for adjudicated draws (default: 10).
+- `--draw-moves`: Consecutive moves within draw score needed to draw (default: 8).
+- `--draw-after`: Moves after the opening before adjudicated draws are allowed (default: 40).
 
 ## Acknowledgements
 
