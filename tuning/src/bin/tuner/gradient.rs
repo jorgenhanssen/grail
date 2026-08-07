@@ -15,9 +15,9 @@ impl Gradient {
         let mut rng = rand::rng();
         let mut deltas = HashMap::new();
 
-        for (name, tunable) in params.iter() {
+        for (name, param) in params.iter() {
             let sign = if rng.random_bool(0.5) { 1 } else { -1 };
-            deltas.insert(name.clone(), sign * tunable.step);
+            deltas.insert(name.clone(), sign * param.tuning.step);
         }
 
         Self { deltas }

@@ -4,7 +4,6 @@ mod gradient;
 mod matcher;
 mod params;
 mod progress;
-mod state;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -16,21 +15,15 @@ use game::GameConfig;
 use gradient::Gradient;
 use matcher::Matcher;
 use params::Parameters;
-use state::State;
 use utils::Book;
 
 fn main() -> Result<(), String> {
     let args = Args::parse();
 
-    let params = Parameters::load(&args.params);
-    if params.is_empty() {
-        return Err("params file is empty".into());
-    }
+    let mut params = Parameters::load(&args.params)?;
+    let initial = params.clone();
 
     let stop = abort_listener()?;
-
-    let mut state = State::from_params(&params)?;
-    let initial = state.clone();
 
     let book = Book::load(&args.book).unwrap();
     let workers = args.workers.unwrap_or_else(|| num_cpus::get() as u64);
@@ -57,10 +50,10 @@ fn main() -> Result<(), String> {
         iterations += 1;
 
         let grad = Gradient::random(&params);
-        let a = state.apply(&grad, &params);
-        let b = state.apply(&-&grad, &params);
+        let a = params.apply(&grad);
+        let b = params.apply(&-&grad);
 
-        print_pair(&params, &state, &a, &b);
+        print_pair(&params, &a, &b);
 
         let score = matcher.run_match(
             &a.to_config(EngineConfig::default()),
@@ -68,10 +61,10 @@ fn main() -> Result<(), String> {
             &book,
         );
 
-        state.update(&grad, &score, &params, args.gain);
+        params.update(&grad, &score, args.gain);
     }
 
-    print_summary(&params, &initial, &state, iterations);
+    print_summary(&initial, &params, iterations);
 
     Ok(())
 }
@@ -90,23 +83,23 @@ fn abort_listener() -> Result<Arc<AtomicBool>, String> {
     Ok(stop)
 }
 
-fn print_pair(params: &Parameters, state: &State, a: &State, b: &State) {
-    for (name, _) in params.iter() {
+fn print_pair(params: &Parameters, a: &Parameters, b: &Parameters) {
+    for (name, param) in params.iter() {
         println!(
             "{}: {:.3} ({} vs {})",
             name,
-            state.values[name],
-            a.values[name].round() as i64,
-            b.values[name].round() as i64,
+            param.value,
+            a.get(name).value.round() as i64,
+            b.get(name).value.round() as i64,
         );
     }
 }
 
-fn print_summary(params: &Parameters, initial: &State, state: &State, iterations: u64) {
+fn print_summary(initial: &Parameters, params: &Parameters, iterations: u64) {
     println!("\nDone after {iterations} iterations");
-    for (name, _) in params.iter() {
-        let start = initial.values[name];
-        let end = state.values[name];
+    for (name, param) in params.iter() {
+        let start = initial.get(name).value;
+        let end = param.value;
         let delta = end - start;
         println!("{name}: {start:.0} -> {end:.0} ({delta:+.3})");
     }
