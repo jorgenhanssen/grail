@@ -36,7 +36,7 @@ pub struct Args {
     pub workers: Option<u64>,
 
     /// How hard to nudge the parameters.
-    #[arg(long, default_value_t = 1.0)]
+    #[arg(long, default_value_t = 0.67)]
     pub gain: f64,
 
     /// Score threshold needed to adjudicate win.
