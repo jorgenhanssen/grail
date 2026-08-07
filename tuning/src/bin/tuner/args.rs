@@ -19,6 +19,10 @@ pub struct Args {
     #[arg(long, default_value_t = 10_000)]
     pub nodes: u64,
 
+    /// Stop after this many SPSA iterations. Runs until Ctrl+C if not provided.
+    #[arg(long, value_parser = clap::value_parser!(u64).range(1..))]
+    pub iterations: Option<u64>,
+
     /// Path to the opening book.
     #[arg(long, value_name = "EPD")]
     pub book: PathBuf,

@@ -51,6 +51,9 @@ fn main() -> Result<(), String> {
 
     let mut iterations = 0u64;
     while !stop.load(Ordering::Relaxed) {
+        if args.iterations.is_some_and(|max| iterations >= max) {
+            break;
+        }
         iterations += 1;
 
         let grad = Gradient::random(&params);
