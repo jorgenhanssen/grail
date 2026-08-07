@@ -16,7 +16,7 @@ pub struct Args {
     pub pairs: u64,
 
     /// Soft node limit per move.
-    #[arg(long, default_value_t = 10_000)]
+    #[arg(long, default_value_t = 25_000)]
     pub nodes: u64,
 
     /// Stop after this many SPSA iterations. Runs until Ctrl+C if not provided.
