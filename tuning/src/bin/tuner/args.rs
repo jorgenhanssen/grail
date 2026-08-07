@@ -35,9 +35,8 @@ pub struct Args {
     #[arg(long)]
     pub workers: Option<u64>,
 
-    /// How hard to nudge the parameters (a_k).
-    /// https://www.chessprogramming.org/SPSA
-    #[arg(long, default_value_t = 10.0)]
+    /// How hard to nudge the parameters.
+    #[arg(long, default_value_t = 1.0)]
     pub gain: f64,
 
     /// Score threshold needed to adjudicate win.

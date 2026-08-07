@@ -130,12 +130,14 @@ impl Parameters {
     /// SPSA update from a match score.
     ///
     /// In https://www.chessprogramming.org/SPSA we trust!
+    /// Tweaks:
+    /// - Scaled by step size so that nudges are roughly proportional to step size.
     pub fn update(&mut self, grad: &Gradient, score: &Score, gain: f64) {
         let result = (score.wins as f64 - score.losses as f64) / score.played() as f64;
 
         for param in &mut self.params {
             let delta = grad.deltas[&param.name];
-            let next = param.value + gain * result / (delta as f64);
+            let next = param.value + gain * result * (delta as f64);
             param.value = param.clamp(next);
         }
     }
