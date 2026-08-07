@@ -104,7 +104,7 @@ impl Game {
         // If there has been enough decisive plies in a row and the current
         // engine agrees it is losing, we adjudicate a win for the other side.
         let stm_is_losing = score < 0;
-        let has_been_decisive_for_a_while = self.decisive_streak >= self.config.resign_moves * 2;
+        let has_been_decisive_for_a_while = self.decisive_streak >= self.config.resign_moves * 2; // 2x because moves => plies
         if stm_is_losing && has_been_decisive_for_a_while {
             return Some(Outcome::Win(!stm));
         }
@@ -122,8 +122,8 @@ impl Game {
 
         // If we are far enough into the game and scores have been
         // near-equal for long enough, we adjudicate a draw.
-        let is_out_of_opening = self.plies >= self.config.draw_after * 2;
-        let has_been_drawish_for_a_while = self.draw_streak >= self.config.draw_moves * 2;
+        let is_out_of_opening = self.plies >= self.config.draw_after * 2; // 2x because moves => plies
+        let has_been_drawish_for_a_while = self.draw_streak >= self.config.draw_moves * 2; // 2x because moves => plies
         if is_out_of_opening && has_been_drawish_for_a_while {
             return Some(Outcome::Draw);
         }
