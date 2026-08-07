@@ -76,12 +76,17 @@ fn main() -> Result<(), String> {
 }
 
 /// Sets up a ctrl+c listener and returns a stop flag.
+///
+/// First time = wait for current iteration to finish. Second = die.
 fn abort_listener() -> Result<Arc<AtomicBool>, String> {
     let stop = Arc::new(AtomicBool::new(false));
     let handler = Arc::clone(&stop);
 
     ctrlc::set_handler(move || {
-        println!("\nCtrl+C, finishing current iteration...");
+        if handler.load(Ordering::Relaxed) {
+            std::process::exit(1);
+        }
+        println!("\nCtrl+C, finishing iteration... (press again to kill)");
         handler.store(true, Ordering::Relaxed);
     })
     .map_err(|e| format!("failed to set Ctrl+C handler: {e}"))?;
