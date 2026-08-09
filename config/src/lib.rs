@@ -29,13 +29,11 @@ pub struct EngineConfig {
     pub continuation_bonus_multiplier: i32,
     pub continuation_malus_multiplier: i32,
 
-    // For move ordering
-    // TODO: add an "ordering" prefix to these
-    pub quiet_check_bonus: i16,
-    pub quiet_check_see_margin: i16,
-    pub bad_quiet_threshold: i16,
-    pub escape_divisor: i16,
-    pub unsafe_square_divisor: i16,
+    pub ordering_quiet_check_bonus: i16,
+    pub ordering_quiet_check_see_margin: i16,
+    pub ordering_bad_quiet_threshold: i16,
+    pub ordering_escape_divisor: i16,
+    pub ordering_unsafe_square_divisor: i16,
 
     pub lmr_divisor: i32,
 
@@ -137,11 +135,11 @@ impl Default for EngineConfig {
             continuation_bonus_multiplier: 9,
             continuation_malus_multiplier: 10,
 
-            quiet_check_bonus: 1000,
-            quiet_check_see_margin: 75,
-            bad_quiet_threshold: -150,
-            escape_divisor: 10,
-            unsafe_square_divisor: 20,
+            ordering_quiet_check_bonus: 1000,
+            ordering_quiet_check_see_margin: 75,
+            ordering_bad_quiet_threshold: -150,
+            ordering_escape_divisor: 10,
+            ordering_unsafe_square_divisor: 20,
 
             lmr_divisor: 220,
 
