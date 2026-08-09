@@ -108,7 +108,7 @@ pub struct EngineConfig {
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
-            hash_size: 256,
+            hash_size: 16,
             threads: 1,
             move_overhead: 10,
             multi_pv: 1,

@@ -47,7 +47,7 @@ and you should be able to run it! 🍎
 
 Once added to your GUI, you can configure Grail via the UCI options:
 
-- **Hash**: Size of the transposition table in MB (Default: 256).
+- **Hash**: Size of the transposition table in MB (Default: 16).
 - **Threads**: Number of search threads (Default: 1).
 - **MultiPV**: Number of principal variations to search (Default: 1).
 - **Move Overhead**: Time buffer in milliseconds to account for communication lag (Default: 10).
