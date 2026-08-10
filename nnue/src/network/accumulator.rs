@@ -1,8 +1,5 @@
-use std::simd::num::SimdInt;
-use std::simd::prelude::SimdFloat;
-use std::simd::{i8x32, i16x16};
-
 use cozy_chess::Color;
+use wide::{f32x16, i8x32, i16x16};
 
 use crate::bitset;
 use crate::encoding::NUM_FEATURES;
@@ -108,9 +105,9 @@ impl Accumulator {
         };
 
         for i in (0..EMBEDDING_SIZE).step_by(SIMD_WIDTH_I16) {
-            let mut buffer_vec = SimdI16::from_slice(&buffer[i..i + SIMD_WIDTH_I16]);
-            let weights_i8 = i8x32::from_slice(&weights_row[i..i + SIMD_WIDTH_I16]);
-            let weights_i16: SimdI16 = weights_i8.cast();
+            let mut buffer_vec = SimdI16::new(buffer[i..i + SIMD_WIDTH_I16].try_into().unwrap());
+            let weights_i8 = i8x32::new(weights_row[i..i + SIMD_WIDTH_I16].try_into().unwrap());
+            let weights_i16 = weights_i8.widening_mul(i8x32::splat(1));
 
             if add {
                 buffer_vec += weights_i16;
@@ -118,7 +115,7 @@ impl Accumulator {
                 buffer_vec -= weights_i16;
             }
 
-            buffer_vec.copy_to_slice(&mut buffer[i..i + SIMD_WIDTH_I16]);
+            buffer[i..i + SIMD_WIDTH_I16].copy_from_slice(buffer_vec.as_array());
         }
     }
 
@@ -133,13 +130,13 @@ impl Accumulator {
         let zeros = SimdF32::splat(0.0);
 
         for i in (0..EMBEDDING_SIZE).step_by(SIMD_WIDTH_F32) {
-            let vals_f32 = i16x16::from_slice(&buffer[i..i + SIMD_WIDTH_F32]).cast();
-            let scale_vec = SimdF32::from_slice(&self.inv_scales[i..i + SIMD_WIDTH_F32]);
+            let vals_i16 = i16x16::new(buffer[i..i + SIMD_WIDTH_F32].try_into().unwrap());
+            let vals_f32 = f32x16::new(std::array::from_fn(|j| vals_i16.as_array()[j] as f32));
+            let scale_vec =
+                SimdF32::new(self.inv_scales[i..i + SIMD_WIDTH_F32].try_into().unwrap());
 
-            let dequantized = vals_f32 * scale_vec;
-            let activated = dequantized.simd_max(zeros); // ReLU
-
-            activated.copy_to_slice(&mut output[i..i + SIMD_WIDTH_F32]);
+            let activated = (vals_f32 * scale_vec).max(zeros);
+            output[i..i + SIMD_WIDTH_F32].copy_from_slice(activated.as_array());
         }
     }
 }
