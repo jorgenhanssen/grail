@@ -3,8 +3,8 @@ use std::simd::prelude::SimdFloat;
 use std::simd::{i8x32, i16x16};
 
 use cozy_chess::Color;
-use utils::bitset::Bitset;
 
+use crate::bitset;
 use crate::encoding::NUM_FEATURES;
 
 use super::simd::{SIMD_WIDTH_F32, SIMD_WIDTH_I16, SimdF32, SimdI16};
@@ -43,8 +43,8 @@ pub struct Accumulator {
     buffer_black: [i16; EMBEDDING_SIZE],
 
     // To know which inputs have changed since the last update
-    previous_white: Bitset<NUM_FEATURES>,
-    previous_black: Bitset<NUM_FEATURES>,
+    previous_white: bitset!(NUM_FEATURES),
+    previous_black: bitset!(NUM_FEATURES),
 
     // Per-neuron weight quantization scale factors to convert it back to f32.
     // USes 1/scale to avoid slower division operations.
@@ -68,8 +68,8 @@ impl Accumulator {
             biases: biases_i16,
             buffer_white,
             buffer_black,
-            previous_white: Bitset::default(),
-            previous_black: Bitset::default(),
+            previous_white: Default::default(),
+            previous_black: Default::default(),
             inv_scales,
         }
     }
@@ -77,12 +77,12 @@ impl Accumulator {
     pub fn reset(&mut self) {
         self.buffer_white.copy_from_slice(&self.biases);
         self.buffer_black.copy_from_slice(&self.biases);
-        self.previous_white = Bitset::default();
-        self.previous_black = Bitset::default();
+        self.previous_white = Default::default();
+        self.previous_black = Default::default();
     }
 
     /// Updates the accumulators based on the difference between previous and current inputs.
-    pub fn update(&mut self, color: Color, new_input: &Bitset<NUM_FEATURES>) {
+    pub fn update(&mut self, color: Color, new_input: &bitset!(NUM_FEATURES)) {
         let previous = match color {
             Color::White => self.previous_white,
             Color::Black => self.previous_black,
