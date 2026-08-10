@@ -1,5 +1,3 @@
-#![feature(portable_simd)]
-
 mod aspiration;
 mod correction;
 mod engine;
