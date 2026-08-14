@@ -1,13 +1,16 @@
-/// A packed bit array that holds a specific number of bits.
+/// A packed bit array of `WORDS` u64s.
 #[derive(Clone, Copy)]
-pub struct Bitset<const BITS: usize>([u64; BITS.div_ceil(64)])
-where
-    [(); BITS.div_ceil(64)]:;
+pub struct Bitset<const WORDS: usize>([u64; WORDS]);
 
-impl<const BITS: usize> Bitset<BITS>
-where
-    [(); BITS.div_ceil(64)]:,
-{
+/// Creates a new Bitset for a specified number of bits.
+#[macro_export]
+macro_rules! bitset {
+    ($bits:expr) => {
+        $crate::bitset::Bitset<{ ($bits as usize).div_ceil(64) }>
+    };
+}
+
+impl<const WORDS: usize> Bitset<WORDS> {
     /// Set a bit at the given index.
     pub fn set(&mut self, idx: usize) {
         self.0[idx / 64] |= 1u64 << (idx % 64);
@@ -39,7 +42,7 @@ where
     }
 
     /// Get the underlying u64 array.
-    pub fn as_array(&self) -> &[u64; BITS.div_ceil(64)] {
+    pub fn as_array(&self) -> &[u64; WORDS] {
         &self.0
     }
 
@@ -53,21 +56,15 @@ where
             while changes != 0 {
                 let bit_idx = changes.trailing_zeros() as usize;
                 changes &= changes - 1;
-                let idx = word_idx * 64 + bit_idx;
-                if idx < BITS {
-                    f(idx);
-                }
+                f(word_idx * 64 + bit_idx);
             }
         }
     }
 }
 
-impl<const BITS: usize> Default for Bitset<BITS>
-where
-    [(); BITS.div_ceil(64)]:,
-{
+impl<const WORDS: usize> Default for Bitset<WORDS> {
     fn default() -> Self {
-        Self([0; BITS.div_ceil(64)])
+        Self([0; WORDS])
     }
 }
 
@@ -77,7 +74,7 @@ mod tests {
 
     #[test]
     fn test_set_and_get() {
-        let mut bits: Bitset<128> = Bitset::default();
+        let mut bits: bitset!(128) = Bitset::default();
         assert!(!bits.get(0));
         assert!(!bits.get(127));
 
@@ -92,7 +89,7 @@ mod tests {
 
     #[test]
     fn test_unset() {
-        let mut bits: Bitset<64> = Bitset::default();
+        let mut bits: bitset!(64) = Bitset::default();
         bits.set(10);
         assert!(bits.get(10));
 
@@ -102,7 +99,7 @@ mod tests {
 
     #[test]
     fn test_toggle() {
-        let mut bits: Bitset<64> = Bitset::default();
+        let mut bits: bitset!(64) = Bitset::default();
         assert!(!bits.get(5));
 
         bits.toggle(5);
@@ -114,7 +111,7 @@ mod tests {
 
     #[test]
     fn test_cross_word_boundary() {
-        let mut bits: Bitset<128> = Bitset::default();
+        let mut bits: bitset!(128) = Bitset::default();
         bits.set(63);
         bits.set(64);
 
@@ -126,8 +123,8 @@ mod tests {
 
     #[test]
     fn test_for_each_diff() {
-        let mut a: Bitset<128> = Bitset::default();
-        let mut b: Bitset<128> = Bitset::default();
+        let mut a: bitset!(128) = Bitset::default();
+        let mut b: bitset!(128) = Bitset::default();
 
         a.set(0);
         a.set(10);
@@ -147,7 +144,7 @@ mod tests {
 
     #[test]
     fn test_default_is_all_zeros() {
-        let bits: Bitset<256> = Bitset::default();
+        let bits: bitset!(256) = Bitset::default();
         for i in 0..256 {
             assert!(!bits.get(i));
         }
@@ -155,7 +152,7 @@ mod tests {
 
     #[test]
     fn test_u64_index() {
-        let bits: Bitset<256> = Bitset::default();
+        let bits: bitset!(256) = Bitset::default();
         assert_eq!(bits.u64_index(0), 0);
         assert_eq!(bits.u64_index(63), 0);
         assert_eq!(bits.u64_index(64), 1);
@@ -165,7 +162,7 @@ mod tests {
 
     #[test]
     fn test_set_u64() {
-        let mut bits: Bitset<256> = Bitset::default();
+        let mut bits: bitset!(256) = Bitset::default();
         bits.set_u64(1, u64::MAX);
 
         for i in 0..64 {
@@ -181,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_set_u64_specific_pattern() {
-        let mut bits: Bitset<128> = Bitset::default();
+        let mut bits: bitset!(128) = Bitset::default();
         bits.set_u64(0, 0xAAAAAAAAAAAAAAAA);
 
         for i in 0..64 {

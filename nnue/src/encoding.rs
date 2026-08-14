@@ -1,5 +1,6 @@
 use cozy_chess::{BitBoard, Board, Color, Piece, Square};
-use utils::bitset::Bitset;
+
+use crate::bitset;
 
 const NUM_PIECE_PLACEMENT_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM;
 const NUM_SUPPORT_FEATURES: usize = Square::NUM * 2;
@@ -99,8 +100,8 @@ pub fn encode_board_bitset(
     white_threats: BitBoard,
     black_threats: BitBoard,
     perspective: Color,
-) -> Bitset<NUM_FEATURES> {
-    let mut bitset = Bitset::default();
+) -> bitset!(NUM_FEATURES) {
+    let mut bitset: bitset!(NUM_FEATURES) = Default::default();
 
     // Piece placements
     for color in [Color::White, Color::Black] {
