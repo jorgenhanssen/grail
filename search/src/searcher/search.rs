@@ -206,6 +206,7 @@ impl Searcher {
     fn init_search(&mut self) {
         self.nodes = 0;
         self.max_ply_reached = 1;
+        self.nmp_min_ply = 0;
 
         self.search_stack.clear();
         self.search_stack.push(SearchNode::new(self.board.hash()));
