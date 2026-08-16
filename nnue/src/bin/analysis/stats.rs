@@ -1,8 +1,8 @@
 use candle_nn::Linear;
 use cozy_chess::{Color, Piece};
 use nnue::encoding::{
-    PIECE_FEATURES_END, PIECE_FEATURES_START, THEM_SPACE_END, THEM_SUPPORT_END, THEM_THREATS_END,
-    US_SPACE_START, US_SUPPORT_START, US_THREATS_START,
+    PIECE_FEATURES_END, PIECE_FEATURES_START, THEM_SUPPORT_END, THEM_THREATS_END, US_SUPPORT_START,
+    US_THREATS_START,
 };
 use nnue::network::model::OutputStack;
 use std::error::Error;
@@ -42,11 +42,6 @@ pub const FEATURE_GROUPS: &[FeatureGroup] = &[
         name: "support",
         start: US_SUPPORT_START,
         end: THEM_SUPPORT_END,
-    },
-    FeatureGroup {
-        name: "space",
-        start: US_SPACE_START,
-        end: THEM_SPACE_END,
     },
     FeatureGroup {
         name: "threats",

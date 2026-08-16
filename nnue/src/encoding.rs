@@ -4,11 +4,10 @@ use crate::bitset;
 
 const NUM_PIECE_PLACEMENT_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM;
 const NUM_SUPPORT_FEATURES: usize = Square::NUM * 2;
-const NUM_SPACE_FEATURES: usize = Square::NUM * 2;
 const NUM_THREAT_FEATURES: usize = Square::NUM * 2;
 
 pub const NUM_FEATURES: usize =
-    NUM_PIECE_PLACEMENT_FEATURES + NUM_SUPPORT_FEATURES + NUM_SPACE_FEATURES + NUM_THREAT_FEATURES; // 1152 total
+    NUM_PIECE_PLACEMENT_FEATURES + NUM_SUPPORT_FEATURES + NUM_THREAT_FEATURES; // 1024
 
 // Exported to the analysis tool
 pub const PIECE_FEATURES_START: usize = 0;
@@ -17,11 +16,7 @@ pub const US_SUPPORT_START: usize = PIECE_FEATURES_END;
 pub const US_SUPPORT_END: usize = US_SUPPORT_START + Square::NUM;
 pub const THEM_SUPPORT_START: usize = US_SUPPORT_END;
 pub const THEM_SUPPORT_END: usize = THEM_SUPPORT_START + Square::NUM;
-pub const US_SPACE_START: usize = THEM_SUPPORT_END;
-pub const US_SPACE_END: usize = US_SPACE_START + Square::NUM;
-pub const THEM_SPACE_START: usize = US_SPACE_END;
-pub const THEM_SPACE_END: usize = THEM_SPACE_START + Square::NUM;
-pub const US_THREATS_START: usize = THEM_SPACE_END;
+pub const US_THREATS_START: usize = THEM_SUPPORT_END;
 pub const US_THREATS_END: usize = US_THREATS_START + Square::NUM;
 pub const THEM_THREATS_START: usize = US_THREATS_END;
 pub const THEM_THREATS_END: usize = THEM_THREATS_START + Square::NUM;
@@ -30,8 +25,6 @@ pub const THEM_THREATS_END: usize = THEM_THREATS_START + Square::NUM;
 /// Used during training where f32 tensors are required.
 pub fn encode_board(
     board: &Board,
-    white_attacks: BitBoard,
-    black_attacks: BitBoard,
     white_support: BitBoard,
     black_support: BitBoard,
     white_threats: BitBoard,
@@ -61,19 +54,6 @@ pub fn encode_board(
         features[THEM_SUPPORT_START + sq as usize] = 1.0;
     }
 
-    // Space (controlled non-piece squares)
-    let white_pieces = board.colors(Color::White);
-    let white_space_bb = white_attacks & !white_pieces;
-    let black_pieces = board.colors(Color::Black);
-    let black_space_bb = black_attacks & !black_pieces;
-    let (us_space, them_space) = from_perspective(white_space_bb, black_space_bb, perspective);
-    for sq in us_space {
-        features[US_SPACE_START + sq as usize] = 1.0;
-    }
-    for sq in them_space {
-        features[THEM_SPACE_START + sq as usize] = 1.0;
-    }
-
     // Threats
     let (us_threats, them_threats) = from_perspective(white_threats, black_threats, perspective);
     for sq in us_threats {
@@ -93,8 +73,6 @@ pub fn encode_board(
 /// Training still uses the f32 version above since tensors require floats.
 pub fn encode_board_bitset(
     board: &Board,
-    white_attacks: BitBoard,
-    black_attacks: BitBoard,
     white_support: BitBoard,
     black_support: BitBoard,
     white_threats: BitBoard,
@@ -122,15 +100,6 @@ pub fn encode_board_bitset(
     let (us_support, them_support) = from_perspective(white_support, black_support, perspective);
     bitset.set_u64(bitset.u64_index(US_SUPPORT_START), us_support.0);
     bitset.set_u64(bitset.u64_index(THEM_SUPPORT_START), them_support.0);
-
-    // Space (controlled non-piece squares)
-    let white_pieces = board.colors(Color::White);
-    let white_space_bb = white_attacks & !white_pieces;
-    let black_pieces = board.colors(Color::Black);
-    let black_space_bb = black_attacks & !black_pieces;
-    let (us_space, them_space) = from_perspective(white_space_bb, black_space_bb, perspective);
-    bitset.set_u64(bitset.u64_index(US_SPACE_START), us_space.0);
-    bitset.set_u64(bitset.u64_index(THEM_SPACE_START), them_space.0);
 
     // Threats
     let (us_threats, them_threats) = from_perspective(white_threats, black_threats, perspective);
@@ -172,8 +141,6 @@ mod tests {
             for perspective in [Color::White, Color::Black] {
                 let features = encode_board(
                     &board,
-                    metrics.attacks[Color::White as usize],
-                    metrics.attacks[Color::Black as usize],
                     metrics.support[Color::White as usize],
                     metrics.support[Color::Black as usize],
                     metrics.threats[Color::White as usize],
@@ -183,8 +150,6 @@ mod tests {
 
                 let bitset = encode_board_bitset(
                     &board,
-                    metrics.attacks[Color::White as usize],
-                    metrics.attacks[Color::Black as usize],
                     metrics.support[Color::White as usize],
                     metrics.support[Color::Black as usize],
                     metrics.threats[Color::White as usize],

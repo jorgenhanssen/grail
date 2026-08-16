@@ -40,8 +40,6 @@ impl Sample {
 
         let stm_features = encode_board(
             &board,
-            metrics.attacks[Color::White as usize],
-            metrics.attacks[Color::Black as usize],
             metrics.support[Color::White as usize],
             metrics.support[Color::Black as usize],
             metrics.threats[Color::White as usize],
@@ -50,8 +48,6 @@ impl Sample {
         );
         let nstm_features = encode_board(
             &board,
-            metrics.attacks[Color::White as usize],
-            metrics.attacks[Color::Black as usize],
             metrics.support[Color::White as usize],
             metrics.support[Color::Black as usize],
             metrics.threats[Color::White as usize],

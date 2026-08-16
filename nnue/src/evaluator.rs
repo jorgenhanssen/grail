@@ -39,8 +39,6 @@ impl Evaluator {
         let board = node.board();
         let stm = board.side_to_move();
 
-        let white_attacks = node.attacks_for(Color::White);
-        let black_attacks = node.attacks_for(Color::Black);
         let white_support = node.support_for(Color::White);
         let black_support = node.support_for(Color::Black);
         let white_threats = node.threats_for(Color::White);
@@ -48,8 +46,6 @@ impl Evaluator {
 
         let white_bits = encode_board_bitset(
             board,
-            white_attacks,
-            black_attacks,
             white_support,
             black_support,
             white_threats,
@@ -58,8 +54,6 @@ impl Evaluator {
         );
         let black_bits = encode_board_bitset(
             board,
-            white_attacks,
-            black_attacks,
             white_support,
             black_support,
             white_threats,
