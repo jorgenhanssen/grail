@@ -43,12 +43,9 @@ impl Searcher {
             self.config.reduction_history_divisor
         };
 
-        history_reduction(&mut reduction, hist, hist_divisor);
-        history_reduction(
-            &mut reduction,
-            cont_hist,
-            self.config.reduction_cont_hist_divisor,
-        );
+        reduction -= FracPly(hist as i32 * FracPly::ONE / hist_divisor);
+        reduction -=
+            FracPly(cont_hist as i32 * FracPly::ONE / self.config.reduction_cont_hist_divisor);
 
         // Reduce less
         if reduction > FracPly(0) {
@@ -72,16 +69,6 @@ impl Searcher {
             }
         }
 
-        reduction.whole().min(depth.saturating_sub(2))
-    }
-}
-
-fn history_reduction(reduction: &mut FracPly, score: i16, divisor: i32) {
-    let delta = FracPly((score.abs() as i32 * FracPly::ONE as i32 / divisor) as u16);
-
-    if score > 0 {
-        *reduction -= delta
-    } else {
-        *reduction += delta
+        reduction.whole().clamp(0, depth.saturating_sub(2) as i32) as u8
     }
 }
