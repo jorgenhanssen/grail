@@ -28,3 +28,19 @@ jobs:
 
       - name: Test
         run: cargo test
+
+  bench-hash:
+    name: Verify bench hash
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Verify bench hash
+        run: |
+          cargo build --release --bin grail
+          bash scripts/bench-hash.sh
