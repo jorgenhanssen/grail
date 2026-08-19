@@ -61,8 +61,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
+      # We only need the model (so books don't take up quota...)
+      - run: git lfs pull --include="nnue/model.safetensors"
       - run: rustup target add ${{ matrix.rust_target }}
 
       # FIXME: candle drags in onig_sys (C code), which needs a musl C compiler here.

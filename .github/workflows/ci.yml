@@ -34,8 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
+      # We only need the model (so books don't take up quota...)
+      - run: git lfs pull --include="nnue/model.safetensors"
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
