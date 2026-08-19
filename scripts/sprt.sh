@@ -24,11 +24,11 @@ COMMON=(
 
 trap 'echo; echo "^C — skipping current stage..."' INT
 
-echo "SPRT: STC (10+0.1) [elo0=$ELO0 elo1=$ELO1]"
-fastchess "${COMMON[@]}" -each tc=10+0.1 2>&1 | tee sprt/stc.log || true
+echo "SPRT: STC (10+0.1, Hash=16) [elo0=$ELO0 elo1=$ELO1]"
+fastchess "${COMMON[@]}" -each tc=10+0.1 option.Hash=16 2>&1 | tee sprt/stc.log || true
 
-echo "SPRT: LTC (60+0.6) [elo0=$ELO0 elo1=$ELO1]"
-fastchess "${COMMON[@]}" -each tc=60+0.6 2>&1 | tee sprt/ltc.log || true
+echo "SPRT: LTC (60+0.6, Hash=64) [elo0=$ELO0 elo1=$ELO1]"
+fastchess "${COMMON[@]}" -each tc=60+0.6 option.Hash=64 2>&1 | tee sprt/ltc.log || true
 
-echo "SPRT: VLTC (180+1.8) [elo0=$ELO0 elo1=$ELO1]"
-fastchess "${COMMON[@]}" -each tc=180+1.8 2>&1 | tee sprt/vltc.log || true
+echo "SPRT: VLTC (180+1.8, Hash=192) [elo0=$ELO0 elo1=$ELO1]"
+fastchess "${COMMON[@]}" -each tc=180+1.8 option.Hash=192 2>&1 | tee sprt/vltc.log || true
