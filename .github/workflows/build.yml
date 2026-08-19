@@ -63,9 +63,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           lfs: true
-      - run: rustup default nightly
       - run: rustup target add ${{ matrix.rust_target }}
-      - run: rustup component add llvm-tools-preview
 
       # FIXME: candle drags in onig_sys (C code), which needs a musl C compiler here.
       # The engine only uses candle to load the safetensors weights at startup, so I

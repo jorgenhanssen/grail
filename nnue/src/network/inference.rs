@@ -1,7 +1,7 @@
 use candle_core::Result;
 use cozy_chess::Color;
-use utils::bitset::Bitset;
 
+use crate::bitset;
 use crate::encoding::NUM_FEATURES;
 
 use super::accumulator::Accumulator;
@@ -49,8 +49,8 @@ impl NNUENetwork {
 
     pub fn forward(
         &mut self,
-        white_bits: &Bitset<NUM_FEATURES>,
-        black_bits: &Bitset<NUM_FEATURES>,
+        white_bits: &bitset!(NUM_FEATURES),
+        black_bits: &bitset!(NUM_FEATURES),
         stm: Color,
         bucket: usize,
     ) -> f32 {

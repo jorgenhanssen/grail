@@ -29,25 +29,23 @@ pub struct EngineConfig {
     pub continuation_bonus_multiplier: i32,
     pub continuation_malus_multiplier: i32,
 
-    // For move ordering
-    // TODO: add an "ordering" prefix to these
-    pub quiet_check_bonus: i16,
-    pub quiet_check_see_margin: i16,
-    pub bad_quiet_threshold: i16,
-    pub escape_divisor: i16,
-    pub unsafe_square_divisor: i16,
+    pub ordering_quiet_check_bonus: i16,
+    pub ordering_quiet_check_see_margin: i16,
+    pub ordering_bad_quiet_threshold: i16,
+    pub ordering_escape_divisor: i16,
+    pub ordering_unsafe_square_divisor: i16,
 
     pub lmr_divisor: i32,
 
-    pub reduction_cut_node: u16,
-    pub reduction_not_improving: u16,
-    pub reduction_quiets_if_tt_capture: u16,
-    pub anti_reduction_near_root: u16,
-    pub anti_reduction_pv_node: u16,
-    pub anti_reduction_pv_move: u16,
-    pub anti_reduction_tactical: u16,
-    pub anti_reduction_threat: u16,
-    pub anti_reduction_check: u16,
+    pub reduction_cut_node: i32,
+    pub reduction_not_improving: i32,
+    pub reduction_quiets_if_tt_capture: i32,
+    pub anti_reduction_near_root: i32,
+    pub anti_reduction_pv_node: i32,
+    pub anti_reduction_pv_move: i32,
+    pub anti_reduction_tactical: i32,
+    pub anti_reduction_threat: i32,
+    pub anti_reduction_check: i32,
 
     pub reduction_history_divisor: i32,
     pub reduction_capture_history_divisor: i32,
@@ -110,7 +108,7 @@ pub struct EngineConfig {
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
-            hash_size: 256,
+            hash_size: 16,
             threads: 1,
             move_overhead: 10,
             multi_pv: 1,
@@ -137,11 +135,11 @@ impl Default for EngineConfig {
             continuation_bonus_multiplier: 9,
             continuation_malus_multiplier: 10,
 
-            quiet_check_bonus: 1000,
-            quiet_check_see_margin: 75,
-            bad_quiet_threshold: -150,
-            escape_divisor: 10,
-            unsafe_square_divisor: 20,
+            ordering_quiet_check_bonus: 1000,
+            ordering_quiet_check_see_margin: 75,
+            ordering_bad_quiet_threshold: -150,
+            ordering_escape_divisor: 10,
+            ordering_unsafe_square_divisor: 20,
 
             lmr_divisor: 220,
 

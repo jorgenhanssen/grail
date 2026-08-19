@@ -67,7 +67,7 @@ pub struct Searcher {
     /// Scores captures by search success
     capture_history: CaptureHistory,
     /// Scores based on move sequences
-    continuation_history: Box<ContinuationHistory>,
+    continuation_history: ContinuationHistory,
 
     /// Late Move Reductions table
     lmr: LmrTable,
@@ -115,7 +115,7 @@ impl Searcher {
 
             history_heuristic: HistoryHeuristic::new(1, 1, 1),
             capture_history: CaptureHistory::new(1, 1, 1),
-            continuation_history: Box::new(ContinuationHistory::new(1, 1, 1, 1)),
+            continuation_history: ContinuationHistory::new(1, 1, 1, 1),
 
             lmr: LmrTable::new(config.lmr_divisor),
 

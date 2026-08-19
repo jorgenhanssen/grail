@@ -1,10 +1,7 @@
-use std::simd::num::SimdInt;
-use std::simd::prelude::SimdFloat;
-use std::simd::{i8x32, i16x16};
-
 use cozy_chess::Color;
-use utils::bitset::Bitset;
+use wide::{f32x16, i8x32, i16x16, i16x32};
 
+use crate::bitset;
 use crate::encoding::NUM_FEATURES;
 
 use super::simd::{SIMD_WIDTH_F32, SIMD_WIDTH_I16, SimdF32, SimdI16};
@@ -43,8 +40,8 @@ pub struct Accumulator {
     buffer_black: [i16; EMBEDDING_SIZE],
 
     // To know which inputs have changed since the last update
-    previous_white: Bitset<NUM_FEATURES>,
-    previous_black: Bitset<NUM_FEATURES>,
+    previous_white: bitset!(NUM_FEATURES),
+    previous_black: bitset!(NUM_FEATURES),
 
     // Per-neuron weight quantization scale factors to convert it back to f32.
     // USes 1/scale to avoid slower division operations.
@@ -68,8 +65,8 @@ impl Accumulator {
             biases: biases_i16,
             buffer_white,
             buffer_black,
-            previous_white: Bitset::default(),
-            previous_black: Bitset::default(),
+            previous_white: Default::default(),
+            previous_black: Default::default(),
             inv_scales,
         }
     }
@@ -77,12 +74,12 @@ impl Accumulator {
     pub fn reset(&mut self) {
         self.buffer_white.copy_from_slice(&self.biases);
         self.buffer_black.copy_from_slice(&self.biases);
-        self.previous_white = Bitset::default();
-        self.previous_black = Bitset::default();
+        self.previous_white = Default::default();
+        self.previous_black = Default::default();
     }
 
     /// Updates the accumulators based on the difference between previous and current inputs.
-    pub fn update(&mut self, color: Color, new_input: &Bitset<NUM_FEATURES>) {
+    pub fn update(&mut self, color: Color, new_input: &bitset!(NUM_FEATURES)) {
         let previous = match color {
             Color::White => self.previous_white,
             Color::Black => self.previous_black,
@@ -108,9 +105,9 @@ impl Accumulator {
         };
 
         for i in (0..EMBEDDING_SIZE).step_by(SIMD_WIDTH_I16) {
-            let mut buffer_vec = SimdI16::from_slice(&buffer[i..i + SIMD_WIDTH_I16]);
-            let weights_i8 = i8x32::from_slice(&weights_row[i..i + SIMD_WIDTH_I16]);
-            let weights_i16: SimdI16 = weights_i8.cast();
+            let mut buffer_vec = SimdI16::new(buffer[i..i + SIMD_WIDTH_I16].try_into().unwrap());
+            let weights_i8 = i8x32::new(weights_row[i..i + SIMD_WIDTH_I16].try_into().unwrap());
+            let weights_i16 = i16x32::new(weights_i8.to_array().map(|x| x as i16));
 
             if add {
                 buffer_vec += weights_i16;
@@ -118,7 +115,7 @@ impl Accumulator {
                 buffer_vec -= weights_i16;
             }
 
-            buffer_vec.copy_to_slice(&mut buffer[i..i + SIMD_WIDTH_I16]);
+            buffer[i..i + SIMD_WIDTH_I16].copy_from_slice(buffer_vec.as_array());
         }
     }
 
@@ -133,13 +130,13 @@ impl Accumulator {
         let zeros = SimdF32::splat(0.0);
 
         for i in (0..EMBEDDING_SIZE).step_by(SIMD_WIDTH_F32) {
-            let vals_f32 = i16x16::from_slice(&buffer[i..i + SIMD_WIDTH_F32]).cast();
-            let scale_vec = SimdF32::from_slice(&self.inv_scales[i..i + SIMD_WIDTH_F32]);
+            let vals_i16 = i16x16::new(buffer[i..i + SIMD_WIDTH_F32].try_into().unwrap());
+            let vals_f32 = f32x16::new(vals_i16.to_array().map(|x| x as f32));
+            let scale_vec =
+                SimdF32::new(self.inv_scales[i..i + SIMD_WIDTH_F32].try_into().unwrap());
 
-            let dequantized = vals_f32 * scale_vec;
-            let activated = dequantized.simd_max(zeros); // ReLU
-
-            activated.copy_to_slice(&mut output[i..i + SIMD_WIDTH_F32]);
+            let activated = (vals_f32 * scale_vec).max(zeros);
+            output[i..i + SIMD_WIDTH_F32].copy_from_slice(activated.as_array());
         }
     }
 }

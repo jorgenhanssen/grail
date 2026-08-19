@@ -1,6 +1,3 @@
-#![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
-
 mod attacks;
 pub mod bitset;
 pub mod board_metrics;

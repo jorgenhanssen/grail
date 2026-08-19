@@ -19,7 +19,7 @@ impl LmrTable {
                 let move_factor = (move_index as f32 / divisor_float).ln();
                 let value = 0.5 + depth_factor * move_factor;
                 table[Self::index(depth as u8, move_index as i32)] =
-                    FracPly((value * FracPly::ONE as f32) as u16);
+                    FracPly(((value * FracPly::ONE as f32) as i32).max(0));
             }
         }
 

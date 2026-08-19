@@ -2,7 +2,7 @@
 
 [![CCRL 40/15](https://img.shields.io/badge/CCRL%2040%2F15-3389%20Elo-%23DAA520.svg)](https://computerchess.org.uk/ccrl/4040/cgi/compare_engines.cgi?family=Grail&print=Rating+list)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-nightly-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
 
 Grail is a hobby chess engine written in Rust. It began as an attempt to make a chess engine and has since become an elaborate system for turning my sanity and electricity bill into Elo. It uses modern search techniques and a fully self-taught NNUE trained on 99 million self-play games. The name refers to the Holy Grail, which may still be easier to find than perfect chess.
 
@@ -47,7 +47,7 @@ and you should be able to run it! 🍎
 
 Once added to your GUI, you can configure Grail via the UCI options:
 
-- **Hash**: Size of the transposition table in MB (Default: 256).
+- **Hash**: Size of the transposition table in MB (Default: 16).
 - **Threads**: Number of search threads (Default: 1).
 - **MultiPV**: Number of principal variations to search (Default: 1).
 - **Move Overhead**: Time buffer in milliseconds to account for communication lag (Default: 10).
@@ -64,12 +64,12 @@ You can challenge the latest version of Grail on [Lichess](https://lichess.org/@
 
 ### Building from Source
 
-_Grail requires the Rust nightly toolchain (for `portable_simd` and `generic_const_exprs`)!_
+Grail is built on [Rust](https://www.rust-lang.org/tools/install), so make sure you have it installed.
 
 ```bash
 git clone https://github.com/jorgenhanssen/grail.git
 cd grail
-rustup override set nightly
+
 make grail
 ```
 

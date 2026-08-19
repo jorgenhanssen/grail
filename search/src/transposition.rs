@@ -1,6 +1,4 @@
 use std::mem::size_of;
-use std::simd::prelude::SimdPartialEq;
-use std::simd::u32x4;
 
 use cozy_chess::{Move, Piece, Square};
 use utils::memory::prefetch;
@@ -59,7 +57,7 @@ const CLUSTER_SIZE: usize = 4;
 const MIN_BUCKETS: usize = 1024;
 
 /// Hash table for memoizing search results.
-/// Uses 4-entry clusters for cache efficiency and SIMD probing.
+/// Uses 4-entry clusters for cache efficiency.
 /// Replacement considers depth, age, and bound type.
 ///
 /// <https://www.chessprogramming.org/Transposition_Table>
@@ -130,27 +128,20 @@ impl TranspositionTable {
         let base = idx * CLUSTER_SIZE;
         let key = tt_key(hash);
 
-        let cluster = &self.entries[base..base + 4];
-        let keys = u32x4::from_array([
-            cluster[0].key,
-            cluster[1].key,
-            cluster[2].key,
-            cluster[3].key,
-        ]);
-        let target_keys = u32x4::splat(key);
-        let key_matches = keys.simd_eq(target_keys);
+        let cluster = &self.entries[base..base + CLUSTER_SIZE];
 
         // Find deepest matching entry
         let mut best: Option<(usize, u8)> = None;
         for (i, entry) in cluster.iter().enumerate() {
-            if key_matches.test(i) {
-                if let Some((_, d)) = best {
-                    if entry.depth > d {
-                        best = Some((i, entry.depth));
-                    }
-                } else {
+            if entry.key != key {
+                continue;
+            }
+            if let Some((_, d)) = best {
+                if entry.depth > d {
                     best = Some((i, entry.depth));
                 }
+            } else {
+                best = Some((i, entry.depth));
             }
         }
 

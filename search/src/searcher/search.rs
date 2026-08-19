@@ -406,11 +406,11 @@ impl Searcher {
         let mut movegen = MainMoveGenerator::new(
             best_move_hint,
             prev_moves,
-            self.config.quiet_check_bonus,
-            self.config.quiet_check_see_margin,
-            self.config.bad_quiet_threshold,
-            self.config.escape_divisor,
-            self.config.unsafe_square_divisor,
+            self.config.ordering_quiet_check_bonus,
+            self.config.ordering_quiet_check_see_margin,
+            self.config.ordering_bad_quiet_threshold,
+            self.config.ordering_escape_divisor,
+            self.config.ordering_unsafe_square_divisor,
             threats,
             enemy_attacks,
         );
