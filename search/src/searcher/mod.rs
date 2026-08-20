@@ -81,6 +81,10 @@ pub struct Searcher {
     /// Hard node-count limit for the search. When the cumulative node count
     /// (across all threads) reaches this, the search is stopped.
     node_limit: Option<u64>,
+
+    /// Disable NMP until this ply.
+    /// Only used during nmp verification (so set to 0 in normal search)
+    nmp_min_ply: u8,
 }
 
 impl Searcher {
@@ -123,6 +127,8 @@ impl Searcher {
 
             deadline: None,
             node_limit: None,
+
+            nmp_min_ply: 0,
         };
 
         instance.configure(config);

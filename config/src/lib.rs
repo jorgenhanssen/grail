@@ -55,6 +55,7 @@ pub struct EngineConfig {
     pub nmp_base_reduction: u8,
     pub nmp_depth_divisor: u8,
     pub nmp_eval_margin: i16,
+    pub nmp_verify_min_depth: u8,
 
     pub lmp_max_depth: u8,
     pub lmp_base_moves: i32,
@@ -161,6 +162,7 @@ impl Default for EngineConfig {
             nmp_base_reduction: 2,
             nmp_depth_divisor: 3,
             nmp_eval_margin: 200,
+            nmp_verify_min_depth: 14,
 
             lmp_max_depth: 8,
             lmp_base_moves: 2,

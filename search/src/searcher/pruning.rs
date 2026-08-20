@@ -153,6 +153,7 @@ impl Searcher {
             || in_check
             || !node.is_cut()
             || depth < self.config.nmp_min_depth
+            || ply < self.nmp_min_ply
             || node.is_zugzwang()
         {
             return None;
@@ -191,9 +192,8 @@ impl Searcher {
 
         // Do a reduced depth null search to check if our position is still good enough
         self.search_stack.push_node(&nm_child);
-        let reduced_child_depth = depth.saturating_sub(r + 1);
-        let null_value =
-            -self.search_node(&nm_child, reduced_child_depth, ply + 1, null_bounds, false);
+        let reduced_depth = depth.saturating_sub(r + 1);
+        let null_value = -self.search_node(&nm_child, reduced_depth, ply + 1, null_bounds, false);
         self.search_stack.pop();
 
         // Our position does not hold when giving opponent a free move, so let's not prune.
@@ -204,6 +204,23 @@ impl Searcher {
         // The null move is not realistic, so mates may not exist
         if null_value.abs() >= NEAR_MATE_VALUE {
             return None;
+        }
+
+        // Verify NMP decisions if the branch is big enough.
+        if self.nmp_min_ply == 0 && depth >= self.config.nmp_verify_min_depth {
+            self.nmp_min_ply = ply + 3 * reduced_depth / 4;
+            let verify_value = self.search_node(
+                node,
+                reduced_depth,
+                ply,
+                Bounds::null(bounds.beta.saturating_sub(1)),
+                false,
+            );
+            self.nmp_min_ply = 0;
+
+            if verify_value < bounds.beta {
+                return None;
+            }
         }
 
         self.shared.tt().store(
