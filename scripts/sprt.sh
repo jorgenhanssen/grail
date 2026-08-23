@@ -4,12 +4,13 @@ set -e
 CONCURRENCY=${1:-15}
 ELO0=${ELO0:-0}
 ELO1=${ELO1:-5}
+BOOK=${BOOK:-books/UHO_Lichess_4852_v1.epd}
 
 rm -rf sprt
 mkdir -p sprt
 
 COMMON=(
-  -openings file=books/UHO_Lichess_4852_v1.epd format=epd order=random
+  -openings file=$BOOK format=epd order=random
   -draw movenumber=40 movecount=8 score=10
   -resign movecount=3 score=400
   -ratinginterval 10
