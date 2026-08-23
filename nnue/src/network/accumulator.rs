@@ -1,5 +1,5 @@
 use cozy_chess::Color;
-use wide::{f32x16, i8x32, i16x16, i16x32};
+use wide::{i8x32, i16x16, i16x32, i32x16};
 
 use crate::bitset;
 use crate::encoding::NUM_FEATURES;
@@ -107,7 +107,7 @@ impl Accumulator {
         for i in (0..EMBEDDING_SIZE).step_by(SIMD_WIDTH_I16) {
             let mut buffer_vec = SimdI16::new(buffer[i..i + SIMD_WIDTH_I16].try_into().unwrap());
             let weights_i8 = i8x32::new(weights_row[i..i + SIMD_WIDTH_I16].try_into().unwrap());
-            let weights_i16 = i16x32::new(weights_i8.to_array().map(|x| x as i16));
+            let weights_i16 = i16x32::from_i8x32(weights_i8);
 
             if add {
                 buffer_vec += weights_i16;
@@ -131,7 +131,7 @@ impl Accumulator {
 
         for i in (0..EMBEDDING_SIZE).step_by(SIMD_WIDTH_F32) {
             let vals_i16 = i16x16::new(buffer[i..i + SIMD_WIDTH_F32].try_into().unwrap());
-            let vals_f32 = f32x16::new(vals_i16.to_array().map(|x| x as f32));
+            let vals_f32 = i32x16::from_i16x16(vals_i16).round_float();
             let scale_vec =
                 SimdF32::new(self.inv_scales[i..i + SIMD_WIDTH_F32].try_into().unwrap());
 
