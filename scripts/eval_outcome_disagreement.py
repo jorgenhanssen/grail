@@ -79,7 +79,6 @@ def count_disagreements(files, threshold):
     ).collect(engine="streaming")
     return stats.row(0)
 
-# Find examples from different games without keeping all disagreements in memory.
 def find_examples(files, condition):
     # game_id starts over in each file so the source file is part of the id.
     source_file = "_source_file"
@@ -89,7 +88,7 @@ def find_examples(files, condition):
         include_file_paths=source_file,
     ).select([COL_SCORE, COL_OUTCOME, COL_FEN, COL_GAME_ID, source_file])
 
-    # Without this the five examples can just be five moves from the same game (which is often take case).
+    # Without this the five examples can just be five moves from the same game (which is often the case).
     return (
         data.filter(condition)
         .unique(
@@ -97,7 +96,7 @@ def find_examples(files, condition):
             keep="first",
             maintain_order=True,
         )
-        .head(EXAMPLES)
+        .tail(EXAMPLES)
         .select([COL_SCORE, COL_OUTCOME, COL_FEN])
         .collect(engine="streaming")
     )

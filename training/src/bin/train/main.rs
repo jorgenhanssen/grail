@@ -55,6 +55,12 @@ fn train(args: Args) -> Result<(), Box<dyn Error>> {
     let state_path = Path::new(STATE_PATH);
     let model_path = Path::new(MODEL_PATH);
 
+    if args.seed.is_some() && state_path.exists() && !args.restart {
+        return Err(
+            "--seed does not change an existing split. pass --restart to start a new run.".into(),
+        );
+    }
+
     if args.restart && TrainingState::destroy(state_path)? {
         log::warn!("Discarded existing training state at {}", STATE_PATH);
     }
@@ -70,6 +76,14 @@ fn train(args: Args) -> Result<(), Box<dyn Error>> {
     )?;
     let mut trainer = Trainer::new(&args, &state)?;
 
+    if model_path.exists() {
+        trainer.load_model(model_path)?;
+        log::info!("Loaded weights from {}", MODEL_PATH);
+    } else {
+        trainer.save_model(model_path)?;
+        log::info!("Saved random model to {}", MODEL_PATH);
+    }
+
     if state.has_history() {
         log::info!(
             "Resuming from epoch {} (seed {}, val/test {:.2}/{:.2})",
@@ -78,7 +92,6 @@ fn train(args: Args) -> Result<(), Box<dyn Error>> {
             state.val_ratio,
             state.test_ratio,
         );
-        trainer.load_model(model_path)?;
     } else {
         log::info!(
             "Starting fresh training (seed {}, val/test {:.2}/{:.2})",
@@ -86,7 +99,6 @@ fn train(args: Args) -> Result<(), Box<dyn Error>> {
             state.val_ratio,
             state.test_ratio,
         );
-        trainer.save_model(model_path)?;
     }
 
     trainer.train(&dataset, &mut state, model_path, state_path, shutdown)?;

@@ -57,7 +57,7 @@ pub struct Args {
     pub quiets_only: bool,
 
     /// Random seed for train/val/test split assignment.
-    #[arg(long, requires = "restart")]
+    #[arg(long)]
     pub seed: Option<u64>,
 
     /// Discard any saved progress and train from epoch 1.
