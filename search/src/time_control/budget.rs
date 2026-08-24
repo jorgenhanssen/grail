@@ -63,10 +63,11 @@ impl TimeBudget {
         let time_left = get_time_left(params, side_to_move)?;
         let increment = get_increment(params, side_to_move);
         let opponent_time = get_time_left(params, !side_to_move);
+        let moves_to_go = get_moves_to_go(params);
 
-        let moves_left = params.moves_to_go.unwrap_or(move_margin(board));
+        let moves_left = moves_to_go.unwrap_or(move_margin(board));
 
-        let reserve = if params.moves_to_go.is_some() {
+        let reserve = if moves_to_go.is_some() {
             // Skip reserving time when we know how many moves to the next refill.
             0
         } else {
@@ -167,6 +168,12 @@ fn get_increment(params: &GoParams, color: Color) -> u64 {
         Color::White => params.winc.unwrap_or(0),
         Color::Black => params.binc.unwrap_or(0),
     }
+}
+
+/// Moves to the next time control.
+fn get_moves_to_go(params: &GoParams) -> Option<u64> {
+    // Treat 0 as sudden death in case the GUI somehow sends it since it would divide by 0...
+    params.moves_to_go.filter(|&n| n > 0)
 }
 
 /// Estimates moves remaining based on game phase.
