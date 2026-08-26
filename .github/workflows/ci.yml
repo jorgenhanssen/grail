@@ -28,3 +28,19 @@ jobs:
 
       - name: Test
         run: cargo test
+
+  bench-hash:
+    name: Verify bench hash
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # We only need the model (so books don't take up quota...)
+      - run: git lfs pull --include="nnue/model.safetensors"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Verify bench hash
+        run: |
+          cargo build --release --bin grail
+          bash scripts/bench-hash.sh
