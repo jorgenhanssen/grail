@@ -14,7 +14,7 @@ cozy-chess = { workspace = true }
 log = { workspace = true }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
-wide = "1.6.1"
+wide = "1.7.0"
 
 [features]
 default = []

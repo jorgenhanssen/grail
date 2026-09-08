@@ -2993,8 +2993,9 @@ dependencies = [
 
 [[package]]
 name = "wide"
-version = "1.6.1"
-source = "git+https://github.com/Lokathor/wide?rev=cfe8533#cfe8533315eff03db199ae99c609905e194ee600"
+version = "1.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cf05ca94c9fba0c51316899caa1d1e74a064fc310a5efa7375e614343d415be"
 dependencies = [
  "bytemuck",
  "safe_arch",
