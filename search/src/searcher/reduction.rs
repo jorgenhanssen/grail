@@ -1,5 +1,6 @@
 use utils::{FracPly, Node, creates_threat, evades_threat};
 
+use crate::scores::MATE_SCORE_BOUND;
 use crate::utils::near_root;
 
 use super::Searcher;
@@ -23,6 +24,8 @@ impl Searcher {
         hist: i16,
         cont_hist: i16,
         tt_move_is_capture: bool,
+        alpha: i16,
+        eval: i16,
     ) -> u8 {
         let mut reduction = self.lmr.get(depth, move_index);
 
@@ -33,8 +36,15 @@ impl Searcher {
         if !is_improving {
             reduction += FracPly(self.config.reduction_not_improving);
         }
-        if tt_move_is_capture && !is_capture {
+        if !is_capture && tt_move_is_capture {
             reduction += FracPly(self.config.reduction_quiets_if_tt_capture);
+        }
+        if !is_capture && alpha.abs() < MATE_SCORE_BOUND {
+            let gap = (alpha - eval).clamp(
+                self.config.reduction_alpha_gap_min,
+                self.config.reduction_alpha_gap_max,
+            );
+            reduction += FracPly(self.config.reduction_alpha_gap_scale * gap as i32);
         }
 
         let hist_divisor = if is_capture {

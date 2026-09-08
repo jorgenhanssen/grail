@@ -634,6 +634,8 @@ impl Searcher {
             hist,
             cont_hist,
             tt_move_is_capture,
+            bounds.alpha,
+            static_eval,
         );
 
         let extension = self.get_extension(node, &m, moved_piece, is_cap);

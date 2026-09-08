@@ -50,6 +50,9 @@ pub struct EngineConfig {
     pub reduction_history_divisor: i32,
     pub reduction_capture_history_divisor: i32,
     pub reduction_cont_hist_divisor: i32,
+    pub reduction_alpha_gap_scale: i32,
+    pub reduction_alpha_gap_min: i16,
+    pub reduction_alpha_gap_max: i16,
 
     pub nmp_min_depth: u8,
     pub nmp_base_reduction: u8,
@@ -157,6 +160,9 @@ impl Default for EngineConfig {
             reduction_history_divisor: 987,
             reduction_capture_history_divisor: 820,
             reduction_cont_hist_divisor: 5030,
+            reduction_alpha_gap_scale: 3,
+            reduction_alpha_gap_min: -65,
+            reduction_alpha_gap_max: 92,
 
             nmp_min_depth: 4,
             nmp_base_reduction: 2,
