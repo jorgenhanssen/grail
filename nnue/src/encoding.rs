@@ -1,4 +1,4 @@
-use cozy_chess::{BitBoard, Board, Color, Piece, Square};
+use cozy_chess::{BitBoard, Board, Color, File, Piece, Square};
 
 use crate::bitset;
 
@@ -39,6 +39,7 @@ pub fn encode_board(
     perspective: Color,
 ) -> [f32; NUM_FEATURES] {
     let mut features = [0f32; NUM_FEATURES];
+    let mirror = king_is_on_the_right(board, perspective);
 
     // Piece placements
     for color in [Color::White, Color::Black] {
@@ -46,14 +47,15 @@ pub fn encode_board(
         for piece in Piece::ALL {
             let piece_idx = side_offset + piece as usize;
             for sq in board.colored_pieces(color, piece) {
-                let sq_idx = sq.relative_to(perspective) as usize;
+                let sq_idx = transform_square(sq, perspective, mirror) as usize;
                 features[sq_idx * (Piece::NUM * Color::NUM) + piece_idx] = 1.0;
             }
         }
     }
 
     // Support
-    let (us_support, them_support) = from_perspective(white_support, black_support, perspective);
+    let (us_support, them_support) =
+        from_perspective(white_support, black_support, perspective, mirror);
     for sq in us_support {
         features[US_SUPPORT_START + sq as usize] = 1.0;
     }
@@ -66,7 +68,8 @@ pub fn encode_board(
     let white_space_bb = white_attacks & !white_pieces;
     let black_pieces = board.colors(Color::Black);
     let black_space_bb = black_attacks & !black_pieces;
-    let (us_space, them_space) = from_perspective(white_space_bb, black_space_bb, perspective);
+    let (us_space, them_space) =
+        from_perspective(white_space_bb, black_space_bb, perspective, mirror);
     for sq in us_space {
         features[US_SPACE_START + sq as usize] = 1.0;
     }
@@ -75,7 +78,8 @@ pub fn encode_board(
     }
 
     // Threats
-    let (us_threats, them_threats) = from_perspective(white_threats, black_threats, perspective);
+    let (us_threats, them_threats) =
+        from_perspective(white_threats, black_threats, perspective, mirror);
     for sq in us_threats {
         features[US_THREATS_START + sq as usize] = 1.0;
     }
@@ -102,6 +106,7 @@ pub fn encode_board_bitset(
     perspective: Color,
 ) -> bitset!(NUM_FEATURES) {
     let mut bitset: bitset!(NUM_FEATURES) = Default::default();
+    let mirror = king_is_on_the_right(board, perspective);
 
     // Piece placements
     for color in [Color::White, Color::Black] {
@@ -109,7 +114,7 @@ pub fn encode_board_bitset(
         for piece in Piece::ALL {
             let piece_idx = side_offset + piece as usize;
             for sq in board.colored_pieces(color, piece) {
-                let sq_idx = sq.relative_to(perspective) as usize;
+                let sq_idx = transform_square(sq, perspective, mirror) as usize;
                 bitset.set(sq_idx * (Piece::NUM * Color::NUM) + piece_idx);
             }
         }
@@ -119,7 +124,8 @@ pub fn encode_board_bitset(
     // whole ranks at once instead of iterating per square.
 
     // Support
-    let (us_support, them_support) = from_perspective(white_support, black_support, perspective);
+    let (us_support, them_support) =
+        from_perspective(white_support, black_support, perspective, mirror);
     bitset.set_u64(bitset.u64_index(US_SUPPORT_START), us_support.0);
     bitset.set_u64(bitset.u64_index(THEM_SUPPORT_START), them_support.0);
 
@@ -128,24 +134,50 @@ pub fn encode_board_bitset(
     let white_space_bb = white_attacks & !white_pieces;
     let black_pieces = board.colors(Color::Black);
     let black_space_bb = black_attacks & !black_pieces;
-    let (us_space, them_space) = from_perspective(white_space_bb, black_space_bb, perspective);
+    let (us_space, them_space) =
+        from_perspective(white_space_bb, black_space_bb, perspective, mirror);
     bitset.set_u64(bitset.u64_index(US_SPACE_START), us_space.0);
     bitset.set_u64(bitset.u64_index(THEM_SPACE_START), them_space.0);
 
     // Threats
-    let (us_threats, them_threats) = from_perspective(white_threats, black_threats, perspective);
+    let (us_threats, them_threats) =
+        from_perspective(white_threats, black_threats, perspective, mirror);
     bitset.set_u64(bitset.u64_index(US_THREATS_START), us_threats.0);
     bitset.set_u64(bitset.u64_index(THEM_THREATS_START), them_threats.0);
 
     bitset
 }
 
-/// (us, them) bitboards relative to perspective. Ranks are flipped for black
-/// so that rank 1 is always our back rank.
-fn from_perspective(white: BitBoard, black: BitBoard, perspective: Color) -> (BitBoard, BitBoard) {
-    match perspective {
+/// Returns true if the board should be mirrored based on the king's file.
+/// This way the king will always be on the left side of the board.
+/// This reduces the network's input space and is done in most engines.
+/// https://chessprogramming.org/NNUE#horizontal-mirroring
+fn king_is_on_the_right(board: &Board, perspective: Color) -> bool {
+    board.king(perspective).file() >= File::E
+}
+
+/// Square as seen from our side: ranks flipped for black, files when mirroring.
+fn transform_square(sq: Square, perspective: Color, mirror: bool) -> Square {
+    let sq = sq.relative_to(perspective);
+    if mirror { sq.flip_file() } else { sq }
+}
+
+/// (us, them) bitboards relative to perspective.
+fn from_perspective(
+    white: BitBoard,
+    black: BitBoard,
+    perspective: Color,
+    mirror: bool,
+) -> (BitBoard, BitBoard) {
+    let (us, them) = match perspective {
         Color::White => (white, black),
         Color::Black => (black.flip_ranks(), white.flip_ranks()),
+    };
+
+    if mirror {
+        (us.flip_files(), them.flip_files())
+    } else {
+        (us, them)
     }
 }
 
@@ -204,5 +236,30 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_white_king_mirroring() {
+        // King on E1 should encode to D1 for white.
+        let board: Board = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+            .parse()
+            .unwrap();
+
+        let metrics = BoardMetrics::new(&board);
+        let features = encode_board(
+            &board,
+            metrics.attacks[Color::White as usize],
+            metrics.attacks[Color::Black as usize],
+            metrics.support[Color::White as usize],
+            metrics.support[Color::Black as usize],
+            metrics.threats[Color::White as usize],
+            metrics.threats[Color::Black as usize],
+            Color::White,
+        );
+
+        let king = Piece::King as usize;
+        let per_square = Piece::NUM * Color::NUM;
+        assert_eq!(features[Square::D1 as usize * per_square + king], 1.0);
+        assert_eq!(features[Square::E1 as usize * per_square + king], 0.0);
     }
 }
