@@ -3,19 +3,19 @@ use cozy_chess::{BitBoard, Board, Color, File, Piece, Square};
 use crate::bitset;
 
 const NUM_KING_BUCKETS: usize = 12;
-const NUM_PIECE_PLACEMENT_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM;
+const NUM_PIECE_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM;
 const NUM_SUPPORT_FEATURES: usize = Square::NUM * 2;
 const NUM_SPACE_FEATURES: usize = Square::NUM * 2;
 const NUM_THREAT_FEATURES: usize = Square::NUM * 2;
 
-pub const NUM_FEATURES: usize = NUM_KING_BUCKETS * NUM_PIECE_PLACEMENT_FEATURES
+pub const NUM_FEATURES: usize = NUM_KING_BUCKETS * NUM_PIECE_FEATURES
     + NUM_SUPPORT_FEATURES
     + NUM_SPACE_FEATURES
     + NUM_THREAT_FEATURES;
 
 // Exported to the analysis tool
 pub const PIECE_FEATURES_START: usize = 0;
-pub const PIECE_FEATURES_END: usize = NUM_KING_BUCKETS * NUM_PIECE_PLACEMENT_FEATURES;
+pub const PIECE_FEATURES_END: usize = NUM_KING_BUCKETS * NUM_PIECE_FEATURES;
 pub const US_SUPPORT_START: usize = PIECE_FEATURES_END;
 pub const US_SUPPORT_END: usize = US_SUPPORT_START + Square::NUM;
 pub const THEM_SUPPORT_START: usize = US_SUPPORT_END;
@@ -43,7 +43,7 @@ pub fn encode_board(
 ) -> [f32; NUM_FEATURES] {
     let mut features = [0f32; NUM_FEATURES];
     let mirror = king_is_on_the_right(board, perspective);
-    let bucket_offset = king_bucket(board, perspective) * NUM_PIECE_PLACEMENT_FEATURES;
+    let bucket_offset = king_bucket(board, perspective) * NUM_PIECE_FEATURES;
 
     // Piece placements (per king bucket)
     for color in [Color::White, Color::Black] {
@@ -111,7 +111,7 @@ pub fn encode_board_bitset(
 ) -> bitset!(NUM_FEATURES) {
     let mut bitset: bitset!(NUM_FEATURES) = Default::default();
     let mirror = king_is_on_the_right(board, perspective);
-    let bucket_offset = king_bucket(board, perspective) * NUM_PIECE_PLACEMENT_FEATURES;
+    let bucket_offset = king_bucket(board, perspective) * NUM_PIECE_FEATURES;
 
     // Piece placements (per king bucket)
     for color in [Color::White, Color::Black] {
@@ -171,7 +171,7 @@ const KING_BUCKETS: [u8; Square::NUM] = [
     11, 11, 11, 11, 11, 11, 11, 11,
 ];
 
-/// Which king bucket this position falls into, from "our" perspective.
+/// Which king bucket this position falls into (from "our" perspective).
 fn king_bucket(board: &Board, perspective: Color) -> usize {
     KING_BUCKETS[board.king(perspective).relative_to(perspective) as usize] as usize
 }
@@ -288,7 +288,7 @@ mod tests {
         let king = Piece::King as usize;
         let per_square = Piece::NUM * Color::NUM;
         // e1 (and mirrored d1) should both be in bucket 3.
-        let offset = 3 * NUM_PIECE_PLACEMENT_FEATURES;
+        let offset = 3 * NUM_PIECE_FEATURES;
         assert_eq!(
             features[offset + Square::D1 as usize * per_square + king],
             1.0
