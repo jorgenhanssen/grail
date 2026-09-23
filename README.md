@@ -88,6 +88,8 @@ The project includes a `Makefile` for convenience:
 - **`make tuner-pgo`**: Builds the SPSA tuner with PGO.
 - **`make nnue-analysis`**: Dumps a analysis of the current NNUE to `nnue/model.analysis.txt`.
 - **`make profile`**: Profiles the built-in benchmark with [`samply`](https://github.com/mstange/samply).
+- **`make verify-bench-hash`**: Runs bench and checks the hash against `bench-hash.txt`.
+- **`make update-bench-hash`**: Runs bench and writes the hash to `bench-hash.txt`.
 - **`make clean`**: Remove the build directory.
 
 ### NNUE Data Generation & Training
