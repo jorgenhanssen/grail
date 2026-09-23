@@ -6,7 +6,7 @@
 
 Grail is a hobby chess engine written in Rust. It began as an attempt to make a chess engine and has since become an elaborate system for turning my sanity and electricity bill into Elo. It uses modern search techniques and a fully self-taught NNUE trained on 99 million self-play games. The name refers to the Holy Grail, which may still be easier to find than perfect chess.
 
-This repository hosts Grail's official releases and source code. The engine is developed entirely within this repository, which contains the self-play datagen, NNUE training pipeline, SPSA tuner, analysis tools, profiling, and build setup.
+This repository hosts Grail's official releases and source code. The engine is developed entirely within this repository, which contains the self-play datagen, NNUE training pipeline, SPSA tuner, profiling, and build setup.
 
 ## Usage
 
@@ -86,7 +86,6 @@ The project includes a `Makefile` for convenience:
 - **`make train`**: Builds the NNUE trainer (auto-detects CUDA/Metal).
 - **`make tuner`**: Builds the SPSA tuner.
 - **`make tuner-pgo`**: Builds the SPSA tuner with PGO.
-- **`make nnue-analysis`**: Dumps a analysis of the current NNUE to `nnue/model.analysis.txt`.
 - **`make profile`**: Profiles the built-in benchmark with [`samply`](https://github.com/mstange/samply).
 - **`make clean`**: Remove the build directory.
 

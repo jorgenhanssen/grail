@@ -2,17 +2,20 @@ use cozy_chess::{BitBoard, Board, Color, File, Piece, Square};
 
 use crate::bitset;
 
-const NUM_PIECE_PLACEMENT_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM;
+const NUM_KING_BUCKETS: usize = 12;
+const NUM_PIECE_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM;
 const NUM_SUPPORT_FEATURES: usize = Square::NUM * 2;
 const NUM_SPACE_FEATURES: usize = Square::NUM * 2;
 const NUM_THREAT_FEATURES: usize = Square::NUM * 2;
 
-pub const NUM_FEATURES: usize =
-    NUM_PIECE_PLACEMENT_FEATURES + NUM_SUPPORT_FEATURES + NUM_SPACE_FEATURES + NUM_THREAT_FEATURES; // 1152 total
+pub const NUM_FEATURES: usize = NUM_KING_BUCKETS * NUM_PIECE_FEATURES
+    + NUM_SUPPORT_FEATURES
+    + NUM_SPACE_FEATURES
+    + NUM_THREAT_FEATURES;
 
 // Exported to the analysis tool
 pub const PIECE_FEATURES_START: usize = 0;
-pub const PIECE_FEATURES_END: usize = NUM_PIECE_PLACEMENT_FEATURES;
+pub const PIECE_FEATURES_END: usize = NUM_KING_BUCKETS * NUM_PIECE_FEATURES;
 pub const US_SUPPORT_START: usize = PIECE_FEATURES_END;
 pub const US_SUPPORT_END: usize = US_SUPPORT_START + Square::NUM;
 pub const THEM_SUPPORT_START: usize = US_SUPPORT_END;
@@ -40,15 +43,16 @@ pub fn encode_board(
 ) -> [f32; NUM_FEATURES] {
     let mut features = [0f32; NUM_FEATURES];
     let mirror = king_is_on_the_right(board, perspective);
+    let bucket_offset = king_bucket(board, perspective) * NUM_PIECE_FEATURES;
 
-    // Piece placements
+    // Piece placements (per king bucket)
     for color in [Color::White, Color::Black] {
         let side_offset = if color == perspective { 0 } else { Piece::NUM };
         for piece in Piece::ALL {
             let piece_idx = side_offset + piece as usize;
             for sq in board.colored_pieces(color, piece) {
                 let sq_idx = transform_square(sq, perspective, mirror) as usize;
-                features[sq_idx * (Piece::NUM * Color::NUM) + piece_idx] = 1.0;
+                features[bucket_offset + sq_idx * (Piece::NUM * Color::NUM) + piece_idx] = 1.0;
             }
         }
     }
@@ -107,15 +111,16 @@ pub fn encode_board_bitset(
 ) -> bitset!(NUM_FEATURES) {
     let mut bitset: bitset!(NUM_FEATURES) = Default::default();
     let mirror = king_is_on_the_right(board, perspective);
+    let bucket_offset = king_bucket(board, perspective) * NUM_PIECE_FEATURES;
 
-    // Piece placements
+    // Piece placements (per king bucket)
     for color in [Color::White, Color::Black] {
         let side_offset = if color == perspective { 0 } else { Piece::NUM };
         for piece in Piece::ALL {
             let piece_idx = side_offset + piece as usize;
             for sq in board.colored_pieces(color, piece) {
                 let sq_idx = transform_square(sq, perspective, mirror) as usize;
-                bitset.set(sq_idx * (Piece::NUM * Color::NUM) + piece_idx);
+                bitset.set(bucket_offset + sq_idx * (Piece::NUM * Color::NUM) + piece_idx);
             }
         }
     }
@@ -146,6 +151,29 @@ pub fn encode_board_bitset(
     bitset.set_u64(bitset.u64_index(THEM_THREATS_START), them_threats.0);
 
     bitset
+}
+
+/// King buckets divides the board into regions, and the king's location
+/// in the region determines which set of accumulator weights are used.
+/// https://chessprogramming.org/NNUE#King_Input_Buckets
+///
+/// Buckets based on PlentyChess:
+/// https://github.com/Yoshie2000/PlentyChess/blob/main/src/nnue.h
+#[rustfmt::skip]
+const KING_BUCKETS: [u8; Square::NUM] = [
+    0,  1,  2,  3,  3,  2,  1,  0,
+    4,  5,  6,  7,  7,  6,  5,  4,
+    8,  8,  9,  9,  9,  9,  8,  8,
+    10, 10, 10, 10, 10, 10, 10, 10,
+    11, 11, 11, 11, 11, 11, 11, 11,
+    11, 11, 11, 11, 11, 11, 11, 11,
+    11, 11, 11, 11, 11, 11, 11, 11,
+    11, 11, 11, 11, 11, 11, 11, 11,
+];
+
+/// Which king bucket this position falls into (from "our" perspective).
+fn king_bucket(board: &Board, perspective: Color) -> usize {
+    KING_BUCKETS[board.king(perspective).relative_to(perspective) as usize] as usize
 }
 
 /// Returns true if the board should be mirrored based on the king's file.
@@ -259,7 +287,15 @@ mod tests {
 
         let king = Piece::King as usize;
         let per_square = Piece::NUM * Color::NUM;
-        assert_eq!(features[Square::D1 as usize * per_square + king], 1.0);
-        assert_eq!(features[Square::E1 as usize * per_square + king], 0.0);
+        // e1 (and mirrored d1) should both be in bucket 3.
+        let offset = 3 * NUM_PIECE_FEATURES;
+        assert_eq!(
+            features[offset + Square::D1 as usize * per_square + king],
+            1.0
+        );
+        assert_eq!(
+            features[offset + Square::E1 as usize * per_square + king],
+            0.0
+        );
     }
 }
