@@ -21,7 +21,7 @@ pub struct Args {
     pub epochs: usize,
 
     /// Number of data loader workers.
-    #[arg(long, default_value_t = 4)]
+    #[arg(long, default_value_t = 1)]
     pub workers: usize,
 
     /// Fraction of data for validation set.
