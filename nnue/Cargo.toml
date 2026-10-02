@@ -16,11 +16,15 @@ candle-core = { workspace = true }
 candle-nn = { workspace = true }
 wide = "1.7.0"
 
+[build-dependencies]
+cudaforge = { version = "0.1.5", optional = true }
+
 [features]
 default = []
 cuda = [
     "candle-core/cuda",
     "candle-nn/cuda",
+    "dep:cudaforge",
 ]
 metal = [
     "candle-core/metal",

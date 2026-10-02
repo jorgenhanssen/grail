@@ -1639,6 +1639,7 @@ dependencies = [
  "candle-core",
  "candle-nn",
  "cozy-chess",
+ "cudaforge",
  "log",
  "utils",
  "wide",

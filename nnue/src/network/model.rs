@@ -2,6 +2,7 @@ use candle_core::{Result, Tensor};
 use candle_nn::{Linear, VarBuilder, linear};
 
 use crate::encoding::NUM_FEATURES;
+use crate::kernels::embedding;
 
 use super::{EMBEDDING_SIZE, HIDDEN_SIZE, OUTPUT_BUCKETS};
 
@@ -23,13 +24,13 @@ impl Network {
         })
     }
 
-    /// Training forward pass. stm/nstm are the position encoded from each side,
-    /// output is in stm space so the caller has to sign-flip if they want it as
-    /// white.
-    pub fn forward(&self, stm: &Tensor, nstm: &Tensor, buckets: &[usize]) -> Result<Tensor> {
-        let stm_embed = stm.apply(&self.embedding)?.relu()?;
-        let nstm_embed = nstm.apply(&self.embedding)?.relu()?;
-        let embedding_out = Tensor::cat(&[stm_embed, nstm_embed], 1)?;
+    pub fn forward(
+        &self,
+        stm_indices: &Tensor,
+        nstm_indices: &Tensor,
+        buckets: &[usize],
+    ) -> Result<Tensor> {
+        let embedding_out = embedding(stm_indices, nstm_indices, &self.embedding)?;
         self.buckets.forward(&embedding_out, buckets)
     }
 }

@@ -1,5 +1,6 @@
 pub mod encoding;
 pub mod evaluator;
+pub mod kernels;
 pub mod network;
 
 pub use evaluator::Evaluator;

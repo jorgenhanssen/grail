@@ -15,6 +15,17 @@ pub struct Batch {
     pub buckets: Vec<usize>,
 }
 
+impl Batch {
+    pub fn len(&self) -> usize {
+        self.scores.len()
+    }
+
+    pub fn max_active_features(&self) -> usize {
+        // Samples are padded equal, so we can just get the length of each sample by dividing by num batches.
+        self.stm_features.len().checked_div(self.len()).unwrap_or(0)
+    }
+}
+
 /// Multi-threaded data loader that reads samples from shards.
 ///
 /// Workers read samples from the ShardReader, encode them to features,

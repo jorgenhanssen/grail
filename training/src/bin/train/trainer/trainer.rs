@@ -12,7 +12,6 @@ use crate::state::{EpochRecord, TrainingState};
 use crate::trainer::evaluation::evaluate;
 use crate::trainer::progress::TrainingProgressBar;
 use crate::utils::device::get_device;
-use crate::utils::features::dense_features;
 use crate::utils::loss::wdl_eval_loss;
 
 /// Number of shards to keep loaded for training.
@@ -164,17 +163,28 @@ impl Trainer {
                 return Ok(None);
             }
 
-            let batch_len = batch.scores.len();
+            let batch_len = batch.len();
             if batch_len == 0 {
                 continue;
             }
 
-            let stm = dense_features(batch.stm_features, batch_len, &self.device)?;
-            let nstm = dense_features(batch.nstm_features, batch_len, &self.device)?;
+            let max_active_features = batch.max_active_features();
+            let stm_indices = Tensor::from_vec(
+                batch.stm_features,
+                (batch_len, max_active_features),
+                &self.device,
+            )?;
+            let nstm_indices = Tensor::from_vec(
+                batch.nstm_features,
+                (batch_len, max_active_features),
+                &self.device,
+            )?;
             let y_eval = Tensor::from_vec(batch.scores, (batch_len, 1), &self.device)?;
             let y_outcome = Tensor::from_vec(batch.outcomes, (batch_len, 1), &self.device)?;
 
-            let preds = self.network.forward(&stm, &nstm, &batch.buckets)?;
+            let preds = self
+                .network
+                .forward(&stm_indices, &nstm_indices, &batch.buckets)?;
             let loss = wdl_eval_loss(&preds, &y_eval, &y_outcome, self.wdl)?;
 
             self.optimizer.backward_step(&loss)?;
