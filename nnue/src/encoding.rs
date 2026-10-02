@@ -153,10 +153,7 @@ pub fn encode_board_bitset(
     bitset
 }
 
-/// Max possible length of a perspective's list of active indices.
-pub const MAX_ACTIVE_FEATURES: usize = 192;
-
-/// Encodes a list of feature indices for one perspective. (padded with u32::MAX)
+/// Encodes a list of indices of active features for one perspective.
 pub fn encode_board_indices(
     board: &Board,
     white_attacks: BitBoard,
@@ -166,7 +163,7 @@ pub fn encode_board_indices(
     white_threats: BitBoard,
     black_threats: BitBoard,
     perspective: Color,
-) -> [u32; MAX_ACTIVE_FEATURES] {
+) -> Vec<u32> {
     let bitset = encode_board_bitset(
         board,
         white_attacks,
@@ -178,16 +175,10 @@ pub fn encode_board_indices(
         perspective,
     );
 
-    let mut indices = Vec::with_capacity(MAX_ACTIVE_FEATURES);
+    let mut indices = Vec::new();
     bitset.for_each_active(|index| indices.push(index as u32));
 
-    assert!(
-        indices.len() <= MAX_ACTIVE_FEATURES,
-        "too many active features"
-    );
-
-    indices.resize(MAX_ACTIVE_FEATURES, u32::MAX);
-    indices.try_into().unwrap()
+    indices
 }
 
 /// King buckets divides the board into regions, and the king's location

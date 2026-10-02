@@ -2,8 +2,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread;
 
-use nnue::encoding::MAX_ACTIVE_FEATURES;
-
 use super::shard_reader::ShardReader;
 
 const CHANNEL_BUFFER_MULTIPLIER: usize = 2;
@@ -78,11 +76,7 @@ impl DataLoader {
         shutdown: &AtomicBool,
         draw_target: f32,
     ) -> Batch {
-        let mut stm_features = Vec::with_capacity(batch_size * MAX_ACTIVE_FEATURES);
-        let mut nstm_features = Vec::with_capacity(batch_size * MAX_ACTIVE_FEATURES);
-        let mut scores = Vec::with_capacity(batch_size);
-        let mut outcomes = Vec::with_capacity(batch_size);
-        let mut buckets = Vec::with_capacity(batch_size);
+        let mut samples = Vec::with_capacity(batch_size);
 
         for _ in 0..batch_size {
             if shutdown.load(Ordering::Relaxed) {
@@ -92,15 +86,38 @@ impl DataLoader {
             match reader.next() {
                 Some(sample) => {
                     if let Some(encoded) = sample.encode(draw_target) {
-                        stm_features.extend(encoded.stm_features);
-                        nstm_features.extend(encoded.nstm_features);
-                        scores.push(encoded.score);
-                        outcomes.push(encoded.outcome);
-                        buckets.push(encoded.bucket);
+                        samples.push(encoded);
                     }
                 }
                 None => break,
             }
+        }
+
+        // Find the sample with the most active features and pad all samples to this.
+        let max_active_features = samples
+            .iter()
+            .map(|sample| sample.stm_features.len().max(sample.nstm_features.len()))
+            .max()
+            .unwrap_or(0);
+
+        let mut stm_features = Vec::with_capacity(samples.len() * max_active_features);
+        let mut nstm_features = Vec::with_capacity(samples.len() * max_active_features);
+        let mut scores = Vec::with_capacity(samples.len());
+        let mut outcomes = Vec::with_capacity(samples.len());
+        let mut buckets = Vec::with_capacity(samples.len());
+
+        for (row, sample) in samples.into_iter().enumerate() {
+            let row_end = (row + 1) * max_active_features;
+
+            stm_features.extend(sample.stm_features);
+            stm_features.resize(row_end, u32::MAX);
+
+            nstm_features.extend(sample.nstm_features);
+            nstm_features.resize(row_end, u32::MAX);
+
+            scores.push(sample.score);
+            outcomes.push(sample.outcome);
+            buckets.push(sample.bucket);
         }
 
         Batch {

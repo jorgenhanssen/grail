@@ -4,7 +4,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use cozy_chess::{Board, Color};
-use nnue::encoding::{MAX_ACTIVE_FEATURES, encode_board_indices};
+use nnue::encoding::encode_board_indices;
 use nnue::network::{FV_SCALE, output_bucket};
 use utils::board_metrics::BoardMetrics;
 
@@ -24,8 +24,8 @@ pub struct Sample {
 }
 
 pub struct EncodedSample {
-    pub stm_features: [u32; MAX_ACTIVE_FEATURES],
-    pub nstm_features: [u32; MAX_ACTIVE_FEATURES],
+    pub stm_features: Vec<u32>,
+    pub nstm_features: Vec<u32>,
     pub score: f32,
     pub outcome: f32,
     pub bucket: usize,
