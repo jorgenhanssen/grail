@@ -45,7 +45,7 @@ pub struct Args {
     pub shard_size_mb: usize,
 
     /// WDL blending weight (0.0 = pure eval, 1.0 = pure WDL).
-    #[arg(long, default_value_t = 0.3)]
+    #[arg(long, default_value_t = 0.2)]
     pub wdl: f64,
 
     /// Target win-probability for drawn games (smaller = prefer wins over draws).
