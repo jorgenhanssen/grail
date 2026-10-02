@@ -60,6 +60,21 @@ impl<const WORDS: usize> Bitset<WORDS> {
             }
         }
     }
+
+    /// Call a function for each set bit, in ascending order.
+    pub fn for_each_active<F>(&self, mut f: F)
+    where
+        F: FnMut(usize),
+    {
+        for (word_idx, &word) in self.0.iter().enumerate() {
+            let mut bits = word;
+            while bits != 0 {
+                let bit_idx = bits.trailing_zeros() as usize;
+                bits &= bits - 1;
+                f(word_idx * 64 + bit_idx);
+            }
+        }
+    }
 }
 
 impl<const WORDS: usize> Default for Bitset<WORDS> {

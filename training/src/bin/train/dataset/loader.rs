@@ -2,15 +2,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread;
 
-use nnue::encoding::NUM_FEATURES;
+use nnue::encoding::MAX_ACTIVE_FEATURES;
 
 use super::shard_reader::ShardReader;
 
 const CHANNEL_BUFFER_MULTIPLIER: usize = 2;
 
 pub struct Batch {
-    pub stm_features: Vec<u8>,
-    pub nstm_features: Vec<u8>,
+    pub stm_features: Vec<u32>,
+    pub nstm_features: Vec<u32>,
 
     pub scores: Vec<f32>,
     pub outcomes: Vec<f32>,
@@ -78,8 +78,8 @@ impl DataLoader {
         shutdown: &AtomicBool,
         draw_target: f32,
     ) -> Batch {
-        let mut stm_features = Vec::with_capacity(batch_size * NUM_FEATURES);
-        let mut nstm_features = Vec::with_capacity(batch_size * NUM_FEATURES);
+        let mut stm_features = Vec::with_capacity(batch_size * MAX_ACTIVE_FEATURES);
+        let mut nstm_features = Vec::with_capacity(batch_size * MAX_ACTIVE_FEATURES);
         let mut scores = Vec::with_capacity(batch_size);
         let mut outcomes = Vec::with_capacity(batch_size);
         let mut buckets = Vec::with_capacity(batch_size);
@@ -92,10 +92,8 @@ impl DataLoader {
             match reader.next() {
                 Some(sample) => {
                     if let Some(encoded) = sample.encode(draw_target) {
-                        // let's convert to u8 to minimize the data sent to gpu.
-                        // (its only 0s or 1s anyway)
-                        stm_features.extend(encoded.stm_features.iter().map(|&v| v as u8));
-                        nstm_features.extend(encoded.nstm_features.iter().map(|&v| v as u8));
+                        stm_features.extend(encoded.stm_features);
+                        nstm_features.extend(encoded.nstm_features);
                         scores.push(encoded.score);
                         outcomes.push(encoded.outcome);
                         buckets.push(encoded.bucket);

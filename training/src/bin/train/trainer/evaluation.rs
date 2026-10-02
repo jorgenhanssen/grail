@@ -1,9 +1,9 @@
-use candle_core::{DType, Device, Tensor};
-use nnue::encoding::NUM_FEATURES;
+use candle_core::{Device, Tensor};
 use nnue::network::Network;
 use std::error::Error;
 
 use crate::dataset::DataLoader;
+use crate::utils::features::dense_features;
 use crate::utils::loss::wdl_eval_loss;
 
 pub fn evaluate(
@@ -21,10 +21,8 @@ pub fn evaluate(
             continue;
         }
 
-        let stm = Tensor::from_vec(batch.stm_features, (batch_len, NUM_FEATURES), device)?
-            .to_dtype(DType::F32)?;
-        let nstm = Tensor::from_vec(batch.nstm_features, (batch_len, NUM_FEATURES), device)?
-            .to_dtype(DType::F32)?;
+        let stm = dense_features(batch.stm_features, batch_len, device)?;
+        let nstm = dense_features(batch.nstm_features, batch_len, device)?;
         let y_eval = Tensor::from_vec(batch.scores, (batch_len, 1), device)?;
         let y_outcome = Tensor::from_vec(batch.outcomes, (batch_len, 1), device)?;
 

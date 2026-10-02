@@ -153,6 +153,43 @@ pub fn encode_board_bitset(
     bitset
 }
 
+/// Max possible length of a perspective's list of active indices.
+pub const MAX_ACTIVE_FEATURES: usize = 192;
+
+/// Encodes a list of feature indices for one perspective. (padded with u32::MAX)
+pub fn encode_board_indices(
+    board: &Board,
+    white_attacks: BitBoard,
+    black_attacks: BitBoard,
+    white_support: BitBoard,
+    black_support: BitBoard,
+    white_threats: BitBoard,
+    black_threats: BitBoard,
+    perspective: Color,
+) -> [u32; MAX_ACTIVE_FEATURES] {
+    let bitset = encode_board_bitset(
+        board,
+        white_attacks,
+        black_attacks,
+        white_support,
+        black_support,
+        white_threats,
+        black_threats,
+        perspective,
+    );
+
+    let mut indices = Vec::with_capacity(MAX_ACTIVE_FEATURES);
+    bitset.for_each_active(|index| indices.push(index as u32));
+
+    assert!(
+        indices.len() <= MAX_ACTIVE_FEATURES,
+        "too many active features"
+    );
+
+    indices.resize(MAX_ACTIVE_FEATURES, u32::MAX);
+    indices.try_into().unwrap()
+}
+
 /// King buckets divides the board into regions, and the king's location
 /// in the region determines which set of accumulator weights are used.
 /// https://chessprogramming.org/NNUE#King_Input_Buckets
@@ -221,6 +258,8 @@ mod tests {
         "rnbqkb1r/pp1p1ppp/4pn2/2p5/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 4", // Sicilian
         "8/8/8/8/8/5k2/8/4K2R w - - 0 1",                           // Endgame
         "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", // Kiwipete
+        "q1q1k3/8/8/8/8/8/8/QQ2K3 w - - 0 1",                       // Promoted queens
+        "4k3/8/8/3q1p2/2P1N3/2N5/8/4K3 w - - 0 1",                  // Support, space, and threats
     ];
 
     #[test]

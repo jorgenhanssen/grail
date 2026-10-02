@@ -4,7 +4,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use cozy_chess::{Board, Color};
-use nnue::encoding::{NUM_FEATURES, encode_board};
+use nnue::encoding::{MAX_ACTIVE_FEATURES, encode_board_indices};
 use nnue::network::{FV_SCALE, output_bucket};
 use utils::board_metrics::BoardMetrics;
 
@@ -24,8 +24,8 @@ pub struct Sample {
 }
 
 pub struct EncodedSample {
-    pub stm_features: [f32; NUM_FEATURES],
-    pub nstm_features: [f32; NUM_FEATURES],
+    pub stm_features: [u32; MAX_ACTIVE_FEATURES],
+    pub nstm_features: [u32; MAX_ACTIVE_FEATURES],
     pub score: f32,
     pub outcome: f32,
     pub bucket: usize,
@@ -38,7 +38,7 @@ impl Sample {
         let stm = board.side_to_move();
         let nstm = !stm;
 
-        let stm_features = encode_board(
+        let stm_features = encode_board_indices(
             &board,
             metrics.attacks[Color::White as usize],
             metrics.attacks[Color::Black as usize],
@@ -48,7 +48,7 @@ impl Sample {
             metrics.threats[Color::Black as usize],
             stm,
         );
-        let nstm_features = encode_board(
+        let nstm_features = encode_board_indices(
             &board,
             metrics.attacks[Color::White as usize],
             metrics.attacks[Color::Black as usize],

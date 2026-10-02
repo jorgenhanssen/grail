@@ -1,6 +1,5 @@
 use candle_core::{DType, Device, Tensor};
 use candle_nn::{AdamW, Optimizer, ParamsAdamW, VarBuilder, VarMap};
-use nnue::encoding::NUM_FEATURES;
 use nnue::network::Network;
 use std::error::Error;
 use std::path::Path;
@@ -13,6 +12,7 @@ use crate::state::{EpochRecord, TrainingState};
 use crate::trainer::evaluation::evaluate;
 use crate::trainer::progress::TrainingProgressBar;
 use crate::utils::device::get_device;
+use crate::utils::features::dense_features;
 use crate::utils::loss::wdl_eval_loss;
 
 /// Number of shards to keep loaded for training.
@@ -169,12 +169,8 @@ impl Trainer {
                 continue;
             }
 
-            let stm =
-                Tensor::from_vec(batch.stm_features, (batch_len, NUM_FEATURES), &self.device)?
-                    .to_dtype(DType::F32)?;
-            let nstm =
-                Tensor::from_vec(batch.nstm_features, (batch_len, NUM_FEATURES), &self.device)?
-                    .to_dtype(DType::F32)?;
+            let stm = dense_features(batch.stm_features, batch_len, &self.device)?;
+            let nstm = dense_features(batch.nstm_features, batch_len, &self.device)?;
             let y_eval = Tensor::from_vec(batch.scores, (batch_len, 1), &self.device)?;
             let y_outcome = Tensor::from_vec(batch.outcomes, (batch_len, 1), &self.device)?;
 
