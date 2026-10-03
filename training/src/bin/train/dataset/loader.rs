@@ -117,13 +117,13 @@ impl DataLoader {
         let mut outcomes = Vec::with_capacity(samples.len());
         let mut buckets = Vec::with_capacity(samples.len());
 
-        for (row, sample) in samples.into_iter().enumerate() {
+        for (row, sample) in samples.iter().enumerate() {
             let row_end = (row + 1) * max_active_features;
 
-            stm_features.extend(sample.stm_features);
+            stm_features.extend(&sample.stm_features);
             stm_features.resize(row_end, u32::MAX);
 
-            nstm_features.extend(sample.nstm_features);
+            nstm_features.extend(&sample.nstm_features);
             nstm_features.resize(row_end, u32::MAX);
 
             scores.push(sample.score);

@@ -1641,6 +1641,7 @@ dependencies = [
  "cozy-chess",
  "cudaforge",
  "log",
+ "smallvec",
  "utils",
  "wide",
 ]

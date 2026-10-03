@@ -1,4 +1,5 @@
 use cozy_chess::{BitBoard, Board, Color, File, Piece, Square};
+use utils::board_metrics::BoardMetrics;
 
 use crate::bitset;
 
@@ -30,7 +31,6 @@ pub const THEM_THREATS_START: usize = US_THREATS_END;
 pub const THEM_THREATS_END: usize = THEM_THREATS_START + Square::NUM;
 
 /// Encodes a board position into a dense f32 feature array from a perspective.
-/// Used during training where f32 tensors are required.
 pub fn encode_board(
     board: &Board,
     white_attacks: BitBoard,
@@ -98,7 +98,6 @@ pub fn encode_board(
 ///
 /// Bitset is faster than f32 for inference: XOR finds changed features instantly,
 /// and storage is 64x denser (64 bits per u64 vs one f32 per feature).
-/// Training still uses the f32 version above since tensors require floats.
 pub fn encode_board_bitset(
     board: &Board,
     white_attacks: BitBoard,
@@ -153,29 +152,27 @@ pub fn encode_board_bitset(
     bitset
 }
 
+/// Active feature indices for one perspective.
+pub type FeatureIndices = smallvec::SmallVec<[u32; 128]>;
+
 /// Encodes a list of indices of active features for one perspective.
 pub fn encode_board_indices(
     board: &Board,
-    white_attacks: BitBoard,
-    black_attacks: BitBoard,
-    white_support: BitBoard,
-    black_support: BitBoard,
-    white_threats: BitBoard,
-    black_threats: BitBoard,
+    metrics: &BoardMetrics,
     perspective: Color,
-) -> Vec<u32> {
+) -> FeatureIndices {
     let bitset = encode_board_bitset(
         board,
-        white_attacks,
-        black_attacks,
-        white_support,
-        black_support,
-        white_threats,
-        black_threats,
+        metrics.attacks[Color::White as usize],
+        metrics.attacks[Color::Black as usize],
+        metrics.support[Color::White as usize],
+        metrics.support[Color::Black as usize],
+        metrics.threats[Color::White as usize],
+        metrics.threats[Color::Black as usize],
         perspective,
     );
 
-    let mut indices = Vec::new();
+    let mut indices = FeatureIndices::new();
     bitset.for_each_active(|index| indices.push(index as u32));
 
     indices

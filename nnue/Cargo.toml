@@ -12,6 +12,7 @@ utils = { path = "../utils" }
 
 cozy-chess = { workspace = true }
 log = { workspace = true }
+smallvec = { workspace = true }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
 wide = "1.7.0"

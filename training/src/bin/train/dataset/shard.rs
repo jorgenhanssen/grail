@@ -4,7 +4,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use cozy_chess::{Board, Color};
-use nnue::encoding::encode_board_indices;
+use nnue::encoding::{FeatureIndices, encode_board_indices};
 use nnue::network::{FV_SCALE, output_bucket};
 use utils::board_metrics::BoardMetrics;
 
@@ -24,8 +24,8 @@ pub struct Sample {
 }
 
 pub struct EncodedSample {
-    pub stm_features: Vec<u32>,
-    pub nstm_features: Vec<u32>,
+    pub stm_features: FeatureIndices,
+    pub nstm_features: FeatureIndices,
     pub score: f32,
     pub outcome: f32,
     pub bucket: usize,
@@ -38,26 +38,8 @@ impl Sample {
         let stm = board.side_to_move();
         let nstm = !stm;
 
-        let stm_features = encode_board_indices(
-            &board,
-            metrics.attacks[Color::White as usize],
-            metrics.attacks[Color::Black as usize],
-            metrics.support[Color::White as usize],
-            metrics.support[Color::Black as usize],
-            metrics.threats[Color::White as usize],
-            metrics.threats[Color::Black as usize],
-            stm,
-        );
-        let nstm_features = encode_board_indices(
-            &board,
-            metrics.attacks[Color::White as usize],
-            metrics.attacks[Color::Black as usize],
-            metrics.support[Color::White as usize],
-            metrics.support[Color::Black as usize],
-            metrics.threats[Color::White as usize],
-            metrics.threats[Color::Black as usize],
-            nstm,
-        );
+        let stm_features = encode_board_indices(&board, &metrics, stm);
+        let nstm_features = encode_board_indices(&board, &metrics, nstm);
 
         let white_score = self.score as f32 / FV_SCALE;
         let score = match stm {
