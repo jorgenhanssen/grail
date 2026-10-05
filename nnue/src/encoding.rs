@@ -6,13 +6,10 @@ use crate::bitset;
 const NUM_KING_BUCKETS: usize = 12;
 const NUM_PIECE_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM;
 const NUM_SUPPORT_FEATURES: usize = Square::NUM * 2;
-const NUM_SPACE_FEATURES: usize = Square::NUM * 2;
 const NUM_THREAT_FEATURES: usize = Square::NUM * 2;
 
-pub const NUM_FEATURES: usize = NUM_KING_BUCKETS * NUM_PIECE_FEATURES
-    + NUM_SUPPORT_FEATURES
-    + NUM_SPACE_FEATURES
-    + NUM_THREAT_FEATURES;
+pub const NUM_FEATURES: usize =
+    NUM_KING_BUCKETS * NUM_PIECE_FEATURES + NUM_SUPPORT_FEATURES + NUM_THREAT_FEATURES;
 
 // Exported to the analysis tool
 pub const PIECE_FEATURES_START: usize = 0;
@@ -21,11 +18,7 @@ pub const US_SUPPORT_START: usize = PIECE_FEATURES_END;
 pub const US_SUPPORT_END: usize = US_SUPPORT_START + Square::NUM;
 pub const THEM_SUPPORT_START: usize = US_SUPPORT_END;
 pub const THEM_SUPPORT_END: usize = THEM_SUPPORT_START + Square::NUM;
-pub const US_SPACE_START: usize = THEM_SUPPORT_END;
-pub const US_SPACE_END: usize = US_SPACE_START + Square::NUM;
-pub const THEM_SPACE_START: usize = US_SPACE_END;
-pub const THEM_SPACE_END: usize = THEM_SPACE_START + Square::NUM;
-pub const US_THREATS_START: usize = THEM_SPACE_END;
+pub const US_THREATS_START: usize = THEM_SUPPORT_END;
 pub const US_THREATS_END: usize = US_THREATS_START + Square::NUM;
 pub const THEM_THREATS_START: usize = US_THREATS_END;
 pub const THEM_THREATS_END: usize = THEM_THREATS_START + Square::NUM;
@@ -33,8 +26,6 @@ pub const THEM_THREATS_END: usize = THEM_THREATS_START + Square::NUM;
 /// Encodes a board position into a dense f32 feature array from a perspective.
 pub fn encode_board(
     board: &Board,
-    white_attacks: BitBoard,
-    black_attacks: BitBoard,
     white_support: BitBoard,
     black_support: BitBoard,
     white_threats: BitBoard,
@@ -67,20 +58,6 @@ pub fn encode_board(
         features[THEM_SUPPORT_START + sq as usize] = 1.0;
     }
 
-    // Space (controlled non-piece squares)
-    let white_pieces = board.colors(Color::White);
-    let white_space_bb = white_attacks & !white_pieces;
-    let black_pieces = board.colors(Color::Black);
-    let black_space_bb = black_attacks & !black_pieces;
-    let (us_space, them_space) =
-        from_perspective(white_space_bb, black_space_bb, perspective, mirror);
-    for sq in us_space {
-        features[US_SPACE_START + sq as usize] = 1.0;
-    }
-    for sq in them_space {
-        features[THEM_SPACE_START + sq as usize] = 1.0;
-    }
-
     // Threats
     let (us_threats, them_threats) =
         from_perspective(white_threats, black_threats, perspective, mirror);
@@ -100,8 +77,6 @@ pub fn encode_board(
 /// and storage is 64x denser (64 bits per u64 vs one f32 per feature).
 pub fn encode_board_bitset(
     board: &Board,
-    white_attacks: BitBoard,
-    black_attacks: BitBoard,
     white_support: BitBoard,
     black_support: BitBoard,
     white_threats: BitBoard,
@@ -133,16 +108,6 @@ pub fn encode_board_bitset(
     bitset.set_u64(bitset.u64_index(US_SUPPORT_START), us_support.0);
     bitset.set_u64(bitset.u64_index(THEM_SUPPORT_START), them_support.0);
 
-    // Space (controlled non-piece squares)
-    let white_pieces = board.colors(Color::White);
-    let white_space_bb = white_attacks & !white_pieces;
-    let black_pieces = board.colors(Color::Black);
-    let black_space_bb = black_attacks & !black_pieces;
-    let (us_space, them_space) =
-        from_perspective(white_space_bb, black_space_bb, perspective, mirror);
-    bitset.set_u64(bitset.u64_index(US_SPACE_START), us_space.0);
-    bitset.set_u64(bitset.u64_index(THEM_SPACE_START), them_space.0);
-
     // Threats
     let (us_threats, them_threats) =
         from_perspective(white_threats, black_threats, perspective, mirror);
@@ -163,8 +128,6 @@ pub fn encode_board_indices(
 ) -> FeatureIndices {
     let bitset = encode_board_bitset(
         board,
-        metrics.attacks[Color::White as usize],
-        metrics.attacks[Color::Black as usize],
         metrics.support[Color::White as usize],
         metrics.support[Color::Black as usize],
         metrics.threats[Color::White as usize],
@@ -247,7 +210,7 @@ mod tests {
         "8/8/8/8/8/5k2/8/4K2R w - - 0 1",                           // Endgame
         "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", // Kiwipete
         "q1q1k3/8/8/8/8/8/8/QQ2K3 w - - 0 1",                       // Promoted queens
-        "4k3/8/8/3q1p2/2P1N3/2N5/8/4K3 w - - 0 1",                  // Support, space, and threats
+        "4k3/8/8/3q1p2/2P1N3/2N5/8/4K3 w - - 0 1",                  // Support and threats
     ];
 
     #[test]
@@ -259,8 +222,6 @@ mod tests {
             for perspective in [Color::White, Color::Black] {
                 let features = encode_board(
                     &board,
-                    metrics.attacks[Color::White as usize],
-                    metrics.attacks[Color::Black as usize],
                     metrics.support[Color::White as usize],
                     metrics.support[Color::Black as usize],
                     metrics.threats[Color::White as usize],
@@ -270,8 +231,6 @@ mod tests {
 
                 let bitset = encode_board_bitset(
                     &board,
-                    metrics.attacks[Color::White as usize],
-                    metrics.attacks[Color::Black as usize],
                     metrics.support[Color::White as usize],
                     metrics.support[Color::Black as usize],
                     metrics.threats[Color::White as usize],
@@ -303,8 +262,6 @@ mod tests {
         let metrics = BoardMetrics::new(&board);
         let features = encode_board(
             &board,
-            metrics.attacks[Color::White as usize],
-            metrics.attacks[Color::Black as usize],
             metrics.support[Color::White as usize],
             metrics.support[Color::Black as usize],
             metrics.threats[Color::White as usize],
