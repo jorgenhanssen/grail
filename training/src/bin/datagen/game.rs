@@ -115,7 +115,7 @@ impl SelfPlayGame {
     fn record_position(&mut self, eval: i16, best_move: Move) {
         let white_score = flip_eval_perspective(self.board.side_to_move(), eval);
         self.positions.push(Position {
-            fen: format!("{}", self.board),
+            fen: format!("{:#}", self.board),
             score: white_score,
             best_move,
         });
@@ -188,5 +188,40 @@ impl SelfPlayGame {
 
     pub fn into_positions(self) -> Vec<Position> {
         self.positions
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use cozy_chess::Board;
+
+    use super::*;
+    use crate::limit::SearchLimit;
+
+    #[test]
+    fn recorded_fen_matches_board() {
+        let config = GameConfig {
+            limit: SearchLimit::Depth(1),
+            max_opening_imbalance: None,
+            max_teleport_plies: 1,
+            max_teleport_pv_fraction: 1.0,
+            max_game_plies: 1,
+            dense_sampling: false,
+        };
+        let best_move = "e2e4".parse().unwrap();
+        let fens = [
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "bqnnrkrb/pppppppp/8/8/8/8/PPPPPPPP/BQNNRKRB w GEge - 0 1",
+        ];
+
+        for fen in fens {
+            let board = Board::from_str(fen).unwrap();
+            let mut game = SelfPlayGame::new(board.clone(), config);
+            game.record_position(0, best_move);
+            let recorded = Board::from_str(&game.positions[0].fen).unwrap();
+            assert_eq!(recorded, board);
+        }
     }
 }
