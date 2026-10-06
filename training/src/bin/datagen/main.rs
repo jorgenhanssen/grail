@@ -8,7 +8,7 @@ mod refinery;
 mod samples;
 mod worker;
 
-use args::{Args, Opening};
+use args::Args;
 use chrono::Local;
 use clap::Parser;
 use game::GameConfig;
@@ -42,9 +42,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     })?;
 
     let threads = args.threads.unwrap_or_else(num_cpus::get);
-    let opening = match args.opening {
-        Opening::Book { path } => OpeningSource::Book(Book::load(&path)?),
-        Opening::Random { plies } => OpeningSource::Random { plies },
+    let book = match &args.book {
+        Some(path) => Some(Book::load(path)?),
+        None => None,
+    };
+    let opening = OpeningSource {
+        book,
+        random_plies: args.random_plies,
     };
     let limit = match args.nodes {
         Some(nodes) => SearchLimit::SoftNodes(nodes),

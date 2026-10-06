@@ -18,7 +18,7 @@ datagen:
 
 datagen-pgo:
 	RUSTFLAGS="$(RUSTFLAGS)" bash scripts/pgo.sh "-p training --bin datagen" \
-		"./target/release/datagen random --plies 8 --nodes 10000 --threads 1 --max-games 100 --dry-run"
+		"./target/release/datagen --random-plies 8 --nodes 10000 --threads 1 --max-games 100 --dry-run"
 
 test:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo test

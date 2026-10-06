@@ -96,20 +96,25 @@ Everything needed to generate self-play data and train Grail's NNUE lives in thi
 
 #### Data Generation
 
-Build the generator and choose either an EPD opening book or random moves from startpos:
+Build the generator. Games start from the standard startpos unless `--book` is given. `--random-plies` defaults to zero, but plays `N` or `N+1` random legal plies if set.
 
 ```bash
 make datagen
 
-# Openings from an EPD opening book
-./target/release/datagen book --path books/your_opening_book.epd
+# Generate from startpos + random moves
+./target/release/datagen --random-plies 8
 
-# Openings from startpos + random moves
-./target/release/datagen random --plies 8
+# Generate from openings from book
+./target/release/datagen --book books/your_opening_book.epd
+
+# Generate from book positions + random moves
+./target/release/datagen --book books/your_opening_book.epd --random-plies 8
 ```
 
 **Arguments:**
 
+- `--book`: Path to an EPD opening book. If omitted, games start from the standard startpos.
+- `--random-plies`: Random legal plies from the selected position (default: 0).
 - `--depth`: Search depth for each move (default: 8).
 - `--nodes`: Soft node limit for each move.
 - `--pv-lines`: Number of PV lines to search at each decision point (default: 1).
