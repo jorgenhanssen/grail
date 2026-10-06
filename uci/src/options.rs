@@ -12,6 +12,7 @@ struct UciOption {
 enum UciOptionType {
     Spin { min: i32, max: i32 },
     String,
+    Check,
 }
 
 impl UciOption {
@@ -32,6 +33,10 @@ impl UciOption {
                     self.name, current_value
                 )
             }
+            UciOptionType::Check => format!(
+                "option name {} type check default {}",
+                self.name, current_value
+            ),
         }
     }
 }
@@ -55,12 +60,24 @@ fn parse_spin(option: &UciOption, value: &str) -> Result<i32, String> {
     Ok(parsed)
 }
 
+fn parse_check(option: &UciOption, value: &str) -> Result<bool, String> {
+    if value == "true" {
+        return Ok(true);
+    }
+    if value == "false" {
+        return Ok(false);
+    }
+
+    Err(format!("Invalid boolean for {}: {value}", option.name))
+}
+
 const UCI_NAME_HASH: &str = "Hash";
 const UCI_NAME_THREADS: &str = "Threads";
 const UCI_NAME_MOVE_OVERHEAD: &str = "Move Overhead";
 const UCI_NAME_MULTI_PV: &str = "MultiPV";
 const UCI_NAME_SYZYGY_PATH: &str = "SyzygyPath";
 const UCI_NAME_SYZYGY_PROBE_DEPTH: &str = "SyzygyProbeDepth";
+const UCI_NAME_CHESS960: &str = "UCI_Chess960";
 
 const HASH: UciOption = UciOption {
     name: UCI_NAME_HASH,
@@ -89,6 +106,10 @@ const SYZYGY_PROBE_DEPTH: UciOption = UciOption {
     name: UCI_NAME_SYZYGY_PROBE_DEPTH,
     option_type: UciOptionType::Spin { min: 1, max: 100 },
 };
+const CHESS960: UciOption = UciOption {
+    name: UCI_NAME_CHESS960,
+    option_type: UciOptionType::Check,
+};
 
 /// Update the config with the value of a UCI setoption command.
 pub fn set_uci_option(config: &mut EngineConfig, name: &str, value: &str) -> Result<(), String> {
@@ -111,6 +132,9 @@ pub fn set_uci_option(config: &mut EngineConfig, name: &str, value: &str) -> Res
         UCI_NAME_SYZYGY_PROBE_DEPTH => {
             config.syzygy_probe_depth = parse_spin(&SYZYGY_PROBE_DEPTH, value)? as u8;
         }
+        UCI_NAME_CHESS960 => {
+            config.chess960 = parse_check(&CHESS960, value)?;
+        }
         "" => {
             return Err("Invalid setoption command: missing option name".to_owned());
         }
@@ -131,5 +155,6 @@ pub fn list_uci_options(config: &EngineConfig) -> Vec<String> {
         MULTI_PV.to_uci(config.multi_pv),
         SYZYGY_PATH.to_uci(&config.syzygy_path),
         SYZYGY_PROBE_DEPTH.to_uci(config.syzygy_probe_depth),
+        CHESS960.to_uci(config.chess960),
     ]
 }

@@ -97,6 +97,10 @@ impl Engine {
         &self.board
     }
 
+    pub fn config(&self) -> &EngineConfig {
+        &self.config
+    }
+
     pub fn set_tablebases(&self, tb: TableBases<CozyAdapter>) {
         self.shared.set_tablebases(tb);
     }

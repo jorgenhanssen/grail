@@ -231,4 +231,22 @@ mod tests {
         assert_eq!(board, Board::from_str(fen).unwrap());
         assert!(game_history.is_empty());
     }
+
+    #[test]
+    fn chess960_castling_position() {
+        use cozy_chess::{Color, Piece, Square};
+
+        let UciInput::Position {
+            board,
+            game_history,
+        } = decode("position fen 4k3/8/8/8/8/8/8/1R1K2R1 w GB - 0 1 moves d1g1")
+        else {
+            panic!("expected Position");
+        };
+
+        assert_eq!(board.king(Color::White), Square::G1);
+        assert_eq!(board.piece_on(Square::F1), Some(Piece::Rook));
+        assert_eq!(board.piece_on(Square::B1), Some(Piece::Rook));
+        assert_eq!(game_history.len(), 1);
+    }
 }

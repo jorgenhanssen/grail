@@ -224,7 +224,7 @@ impl Searcher {
                 } else {
                     convert_centipawn_score(pv.score)
                 },
-                pv: pv_to_uci(&self.board, &pv.line),
+                pv: pv_to_uci(&self.board, &pv.line, self.config.chess960),
             }))
             .unwrap();
     }

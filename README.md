@@ -10,7 +10,7 @@ This repository hosts Grail's official releases and source code. The engine is d
 
 ## Usage
 
-Grail is a command-line UCI engine built for **Standard Chess**, so it requires a UCI-compatible chess GUI (such as Arena, BanksiaGUI, or Cutechess) to play.
+Grail is a command-line UCI engine for standard chess and Chess960 (Fischer Random). It requires a UCI-compatible chess GUI (such as Arena, BanksiaGUI, or Cutechess) to play.
 
 1. **Download**: Grab the zip for your OS from the [Releases](../../releases) page and extract it.
 2. **Install**: Open your chess GUI and add the right binary (see table below).
@@ -53,6 +53,7 @@ Once added to your GUI, you can configure Grail via the UCI options:
 - **Move Overhead**: Time buffer in milliseconds to account for communication lag (Default: 10).
 - **SyzygyPath**: Paths to Syzygy tablebase files (separated by `;` on Windows, `:` on Linux/macOS).
 - **SyzygyProbeDepth**: Minimum depth to probe tablebases (Default: 1).
+- **UCI_Chess960**: Enable Chess960 (Default: false).
 
 The engine supports standard time controls (increment, sudden death, moves to go) and analysis modes (fixed depth, fixed nodes, soft nodes, infinite).
 
