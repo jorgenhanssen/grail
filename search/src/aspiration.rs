@@ -19,7 +19,6 @@ pub enum Pass {
 pub struct AspirationWindow {
     bounds: Bounds,
     start_half: i32,
-    depth_multiplier: i32,
     widen: i32,
     enabled_from: u8,
     score_divisor: i32,
@@ -30,7 +29,6 @@ impl AspirationWindow {
         Self {
             bounds: Bounds::FULL,
             start_half: config.aspiration_window_size,
-            depth_multiplier: config.aspiration_window_depth_multiplier,
             widen: config.aspiration_window_widen,
             enabled_from: config.aspiration_window_depth,
             score_divisor: config.aspiration_score_divisor,
@@ -54,9 +52,7 @@ impl AspirationWindow {
         // Quadratic scaling: with divisor=16384: adds ish 0 at score=0, 5 at score=300, 15 at score=500
         let score_squared = (prev_score as i32) * (prev_score as i32);
         let score_adjustment = score_squared / self.score_divisor;
-        let depth_adjustment = self.depth_multiplier * depth as i32;
-
-        let half = self.start_half + depth_adjustment + score_adjustment;
+        let half = self.start_half + score_adjustment;
         let half = half.min(SCORE_INF as i32) as i16;
 
         self.bounds = Bounds::new(
