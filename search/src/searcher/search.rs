@@ -564,7 +564,6 @@ impl Searcher {
         let is_tactical = in_check || gives_check || is_capture || is_promotion;
 
         let reduction = self.get_reduction(
-            ply,
             depth,
             is_pv_move,
             is_improving,

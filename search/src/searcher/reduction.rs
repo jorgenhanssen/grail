@@ -1,7 +1,6 @@
 use utils::{FracPly, Node, creates_threat, evades_threat};
 
 use crate::scores::MATE_SCORE_BOUND;
-use crate::utils::near_root;
 
 use super::Searcher;
 
@@ -12,7 +11,6 @@ impl Searcher {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn get_reduction(
         &self,
-        ply: u8,
         depth: u8,
         is_pv_move: bool,
         is_improving: bool,
@@ -61,9 +59,6 @@ impl Searcher {
         if reduction > FracPly(0) {
             if is_pv_move {
                 reduction -= FracPly(self.config.anti_reduction_pv_move);
-            }
-            if near_root(ply, depth) {
-                reduction -= FracPly(self.config.anti_reduction_near_root);
             }
             if parent.is_pv() {
                 reduction -= FracPly(self.config.anti_reduction_pv_node);
