@@ -29,27 +29,9 @@ impl Evaluator {
         let board = node.board();
         let stm = board.side_to_move();
 
-        let white_support = node.support_for(Color::White);
-        let black_support = node.support_for(Color::Black);
-        let white_threats = node.threats_for(Color::White);
-        let black_threats = node.threats_for(Color::Black);
-
-        let white_bits = encode_board_bitset(
-            board,
-            white_support,
-            black_support,
-            white_threats,
-            black_threats,
-            Color::White,
-        );
-        let black_bits = encode_board_bitset(
-            board,
-            white_support,
-            black_support,
-            white_threats,
-            black_threats,
-            Color::Black,
-        );
+        let metrics = node.metrics();
+        let white_bits = encode_board_bitset(board, metrics, Color::White);
+        let black_bits = encode_board_bitset(board, metrics, Color::Black);
 
         let bucket = output_bucket(board);
 
