@@ -39,7 +39,7 @@ fn init_model() -> Result<(), Box<dyn Error>> {
         log::warn!("Discarded existing training state at {}", STATE_PATH);
     }
 
-    let device = get_device()?;
+    let device = get_device();
     let varmap = VarMap::new();
     let vs = VarBuilder::from_varmap(&varmap, DType::F32, &device);
     Network::new(&vs)?;

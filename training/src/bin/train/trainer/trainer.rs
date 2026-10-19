@@ -36,7 +36,7 @@ pub struct Trainer {
 
 impl Trainer {
     pub fn new(args: &Args, state: &TrainingState) -> Result<Self, Box<dyn Error>> {
-        let device = get_device()?;
+        let device = get_device();
         let wdl = args.wdl.clamp(0.0, 1.0);
         let draw_target = args.draw_target.clamp(0.0, 1.0) as f32;
 

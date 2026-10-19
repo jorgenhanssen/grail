@@ -24,9 +24,8 @@ test:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo test
 
 train:
-	@GPU_FEATURES=$$([ "$$(uname -s)" = "Darwin" ] && echo metal || (command -v nvcc >/dev/null 2>&1 && echo cuda || true)); \
-	if [ -n "$$GPU_FEATURES" ]; then \
-		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin train --features $$GPU_FEATURES; \
+	@if command -v nvcc >/dev/null 2>&1; then \
+		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin train --features cuda; \
 	else \
 		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin train; \
 	fi

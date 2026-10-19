@@ -84,7 +84,7 @@ The project includes a `Makefile` for convenience:
 - **`make grail-pgo`**: Release build with PGO.
 - **`make datagen`**: Builds the NNUE self-play datagen.
 - **`make datagen-pgo`**: Builds the NNUE self-play datagen with PGO.
-- **`make train`**: Builds the NNUE trainer (auto-detects CUDA/Metal).
+- **`make train`**: Builds the NNUE trainer with CUDA if `nvcc` is available.
 - **`make tuner`**: Builds the SPSA tuner.
 - **`make tuner-pgo`**: Builds the SPSA tuner with PGO.
 - **`make profile`**: Profiles the built-in benchmark with [`samply`](https://github.com/mstange/samply).

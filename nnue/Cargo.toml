@@ -27,10 +27,6 @@ cuda = [
     "candle-nn/cuda",
     "dep:cudaforge",
 ]
-metal = [
-    "candle-core/metal",
-    "candle-nn/metal",
-]
 
 [lib]
 name = "nnue"
