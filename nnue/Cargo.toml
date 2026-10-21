@@ -15,10 +15,10 @@ log = { workspace = true }
 smallvec = { workspace = true }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
-wide = "1.7.0"
+wide = "1.7.1"
 
 [build-dependencies]
-cudaforge = { version = "0.1.5", optional = true }
+cudaforge = { version = "0.1.6", optional = true }
 
 [features]
 default = []
