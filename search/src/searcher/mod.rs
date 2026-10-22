@@ -118,7 +118,7 @@ impl Searcher {
             capture_history: CaptureHistory::new(config),
             continuation_history: ContinuationHistory::new(config),
 
-            lmr: LmrTable::new(config.lmr_divisor),
+            lmr: LmrTable::new(config.lmr_base, config.lmr_divisor),
 
             pv_table: PvTable::new(),
 
