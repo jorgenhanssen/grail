@@ -28,6 +28,12 @@ impl Searcher {
         let mut reduction = self.lmr.get(depth, move_index);
 
         // Reduce more
+        if !parent.is_pv() {
+            reduction += FracPly(self.config.reduction_non_pv_node);
+        }
+        if !is_capture && !is_promotion {
+            reduction += FracPly(self.config.reduction_quiet);
+        }
         if parent.is_cut() {
             reduction += FracPly(self.config.reduction_cut_node);
         }
@@ -60,14 +66,8 @@ impl Searcher {
             if is_pv_move {
                 reduction -= FracPly(self.config.anti_reduction_pv_move);
             }
-            if parent.is_pv() {
-                reduction -= FracPly(self.config.anti_reduction_pv_node);
-            }
             if parent.in_check() || child.in_check() {
                 reduction -= FracPly(self.config.anti_reduction_check);
-            }
-            if is_capture || is_promotion {
-                reduction -= FracPly(self.config.anti_reduction_tactical);
             }
             if creates_threat(parent, child) || evades_threat(parent, child) {
                 reduction -= FracPly(self.config.anti_reduction_threat);

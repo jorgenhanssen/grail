@@ -36,14 +36,15 @@ pub struct EngineConfig {
     pub ordering_escape_divisor: i16,
     pub ordering_unsafe_square_divisor: i16,
 
+    pub lmr_base: i32,
     pub lmr_divisor: i32, // in cents
 
     pub reduction_cut_node: i32,
     pub reduction_not_improving: i32,
     pub reduction_quiets_if_tt_capture: i32,
-    pub anti_reduction_pv_node: i32,
+    pub reduction_non_pv_node: i32,
+    pub reduction_quiet: i32,
     pub anti_reduction_pv_move: i32,
-    pub anti_reduction_tactical: i32,
     pub anti_reduction_threat: i32,
     pub anti_reduction_check: i32,
 
@@ -146,20 +147,21 @@ impl Default for EngineConfig {
             ordering_escape_divisor: 4,
             ordering_unsafe_square_divisor: 20,
 
+            lmr_base: 0,
             lmr_divisor: 220, // in cents
 
-            reduction_cut_node: 1024,
-            reduction_not_improving: 1024,
+            reduction_cut_node: 1536,
+            reduction_not_improving: 768,
             reduction_quiets_if_tt_capture: 1024,
-            anti_reduction_pv_node: 1024,
+            reduction_non_pv_node: 1024,
+            reduction_quiet: 512,
             anti_reduction_pv_move: 1024,
-            anti_reduction_tactical: 1024,
-            anti_reduction_threat: 1024,
-            anti_reduction_check: 1500,
+            anti_reduction_threat: 512,
+            anti_reduction_check: 1024,
 
-            reduction_history_divisor: 987,
-            reduction_capture_history_divisor: 820,
-            reduction_cont_hist_divisor: 5030,
+            reduction_history_divisor: 256,
+            reduction_capture_history_divisor: 128,
+            reduction_cont_hist_divisor: 1024,
             reduction_alpha_gap_scale: 3,
             reduction_alpha_gap_min: -65,
             reduction_alpha_gap_max: 92,
