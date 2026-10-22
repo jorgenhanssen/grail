@@ -44,7 +44,6 @@ pub struct EngineConfig {
     pub reduction_quiets_if_tt_capture: i32,
     pub reduction_non_pv_node: i32,
     pub reduction_quiet: i32,
-    pub anti_reduction_pv_move: i32,
     pub anti_reduction_threat: i32,
     pub anti_reduction_check: i32,
 
@@ -148,14 +147,13 @@ impl Default for EngineConfig {
             ordering_unsafe_square_divisor: 20,
 
             lmr_base: 0,
-            lmr_divisor: 220, // in cents
+            lmr_divisor: 212, // in cents
 
             reduction_cut_node: 1536,
             reduction_not_improving: 768,
             reduction_quiets_if_tt_capture: 1024,
             reduction_non_pv_node: 1024,
             reduction_quiet: 512,
-            anti_reduction_pv_move: 1024,
             anti_reduction_threat: 512,
             anti_reduction_check: 1024,
 
