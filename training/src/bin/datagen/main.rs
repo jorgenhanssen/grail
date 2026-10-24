@@ -16,13 +16,14 @@ use generator::Generator;
 use limit::SearchLimit;
 use log::LevelFilter;
 use opening::OpeningSource;
-use samples::write_samples;
+use samples::CSV_HEADER;
 use simplelog::{Config, SimpleLogger};
 use std::{
     error::Error,
     fs::{self, File},
+    io::{BufWriter, Write},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -63,23 +64,28 @@ fn main() -> Result<(), Box<dyn Error>> {
         max_game_plies: args.max_game_plies as usize,
         dense_sampling: !args.sparse_samples,
     };
-    let samples = generator.run(game_config, args.max_games, stop_flag);
+    let writer = if args.dry_run {
+        None
+    } else {
+        fs::create_dir_all(DATA_DIR)?;
 
-    log::info!("Generated {} samples", samples.len());
+        let timestamp = Local::now().format("%Y-%m-%d-%H:%M");
+        let filename = format!("{}/{}.csv", DATA_DIR, timestamp);
+
+        log::info!("Writing samples to {}", filename);
+
+        let mut writer = BufWriter::new(File::create(&filename)?);
+        writeln!(writer, "{CSV_HEADER}")?;
+
+        Some(Arc::new(Mutex::new(writer)))
+    };
+    let samples = generator.run(game_config, args.max_games, stop_flag, writer)?;
+
+    log::info!("Generated {} samples", samples);
 
     if args.dry_run {
         log::info!("Skipping dataset write (dry run)");
-        return Ok(());
     }
-
-    fs::create_dir_all(DATA_DIR)?;
-
-    let timestamp = Local::now().format("%Y-%m-%d-%H:%M");
-    let filename = format!("{}/{}.csv", DATA_DIR, timestamp);
-
-    log::info!("Writing samples to {}", filename);
-    let mut file = File::create(&filename)?;
-    write_samples(&mut file, &samples)?;
 
     Ok(())
 }

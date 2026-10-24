@@ -2,10 +2,11 @@ use crate::game::{GameConfig, SelfPlayGame};
 use crate::histogram::HistogramHandle;
 use crate::opening::OpeningSource;
 use crate::refinery::{RefinementStats, Refinery};
-use crate::samples::Sample;
+use crate::samples::{GameData, SampleWriter, write_game};
 use config::EngineConfig;
 use pyrrhic_rs::TableBases;
 use search::{CozyAdapter, Engine};
+use std::io;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -67,9 +68,11 @@ impl SelfPlayWorker {
         }
     }
 
-    pub fn play_games(&mut self, stop_flag: Arc<AtomicBool>) -> (Vec<Sample>, RefinementStats) {
-        let mut samples = Vec::new();
-
+    pub fn play_games(
+        &mut self,
+        stop_flag: Arc<AtomicBool>,
+        writer: Option<SampleWriter>,
+    ) -> io::Result<RefinementStats> {
         while !stop_flag.load(Ordering::Relaxed) {
             let game_id = self.game_id_counter.fetch_add(1, Ordering::Relaxed);
 
@@ -85,23 +88,32 @@ impl SelfPlayWorker {
             game.play(&mut self.engine);
 
             let outcome = game.outcome();
-            let refined = self
-                .refinery
-                .refine(game_id, game.into_positions(), outcome);
+            let mut data = game.into_data();
+            self.refinery.refine(&mut data, outcome);
 
-            self.record_statistics(&refined);
+            if let Some(writer) = &writer {
+                if let Err(error) = write_game(&mut *writer.lock().unwrap(), &data) {
+                    stop_flag.store(true, Ordering::Relaxed);
+                    return Err(error);
+                }
+            }
 
-            samples.extend(refined);
+            self.record_statistics(&data);
         }
 
-        (samples, self.refinery.stats())
+        Ok(self.refinery.stats())
     }
 
-    fn record_statistics(&self, samples: &[Sample]) {
-        let scores: Vec<i16> = samples.iter().map(|s| s.score).collect();
+    fn record_statistics(&self, game: &GameData) {
+        let scores: Vec<i16> = game
+            .moves
+            .iter()
+            .filter_map(|data| data.sample.as_ref())
+            .map(|sample| sample.score)
+            .collect();
 
         self.histogram.record_scores(&scores);
         self.sample_counter
-            .fetch_add(samples.len(), Ordering::Relaxed);
+            .fetch_add(scores.len(), Ordering::Relaxed);
     }
 }

@@ -1,5 +1,4 @@
-use crate::game::Position;
-use crate::samples::{GameOutcome, Sample};
+use crate::samples::{GameData, GameOutcome};
 use cozy_chess::Board;
 use pyrrhic_rs::{TableBases, WdlProbeResult};
 use search::{CozyAdapter, tablebase};
@@ -51,40 +50,36 @@ impl Refinery {
         self.stats
     }
 
-    pub fn refine(
-        &mut self,
-        game_id: usize,
-        positions: Vec<Position>,
-        proven_outcome: Option<GameOutcome>,
-    ) -> Vec<Sample> {
-        let tb_outcomes: Vec<Option<GameOutcome>> =
-            positions.iter().map(|p| self.tb_probe(p)).collect();
+    pub fn refine(&mut self, game: &mut GameData, proven_outcome: Option<GameOutcome>) {
+        if game.moves.is_empty() {
+            return;
+        }
+
+        let mut board = game.start_position.clone();
+        let mut tb_outcomes = vec![self.tb_probe(&board)];
+        for data in &game.moves {
+            board.play_unchecked(data.mv);
+            tb_outcomes.push(self.tb_probe(&board));
+        }
 
         let (outcomes, stats) = resolve_outcomes(&tb_outcomes, proven_outcome);
 
         self.stats.merge(&stats);
 
-        positions
-            .into_iter()
-            .zip(outcomes)
-            .map(|(position, outcome)| Sample {
-                fen: position.fen,
-                score: position.score,
-                game_id,
-                best_move: position.best_move,
-                outcome,
-            })
-            .collect()
+        for (data, outcome) in game.moves.iter_mut().zip(outcomes) {
+            if let Some(sample) = &mut data.sample {
+                sample.outcome = outcome;
+            }
+        }
     }
 
-    fn tb_probe(&self, position: &Position) -> Option<GameOutcome> {
-        let board: Board = position.fen.parse().ok()?;
+    fn tb_probe(&self, board: &Board) -> Option<GameOutcome> {
         if board.halfmove_clock() != 0 {
             return None;
         }
 
         let tb = self.tablebases.as_ref()?;
-        let wdl = tablebase::probe_wdl(tb, &board)?;
+        let wdl = tablebase::probe_wdl(tb, board)?;
 
         Some(match wdl {
             WdlProbeResult::Win => GameOutcome::win(board.side_to_move()),

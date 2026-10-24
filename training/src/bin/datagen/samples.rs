@@ -1,7 +1,9 @@
-use cozy_chess::{Color, Move};
+use cozy_chess::{Board, Color, Move};
 use nnue::network::EVAL_OUTPUT_BOUND;
 use std::fmt;
-use std::io::{self, Write};
+use std::fs::File;
+use std::io::{self, BufWriter, Write};
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameOutcome {
@@ -29,28 +31,49 @@ impl fmt::Display for GameOutcome {
     }
 }
 
+pub struct GameData {
+    pub start_position: Board,
+    pub moves: Vec<MoveData>,
+}
+
+pub struct MoveData {
+    pub mv: Move,
+    pub sample: Option<Sample>,
+}
+
 pub struct Sample {
-    pub fen: String,
     pub score: i16,
-    pub game_id: usize,
-    pub best_move: Move,
     pub outcome: GameOutcome,
 }
 
-pub fn write_samples<W: Write>(writer: &mut W, samples: &[Sample]) -> io::Result<()> {
-    writeln!(writer, "fen,score,best_move,outcome,game_id")?;
+pub type SampleWriter = Arc<Mutex<BufWriter<File>>>;
 
-    for s in samples {
-        writeln!(
-            writer,
-            "{},{},{},{},{}",
-            s.fen,
-            s.score.clamp(-EVAL_OUTPUT_BOUND, EVAL_OUTPUT_BOUND),
-            s.best_move,
-            s.outcome,
-            s.game_id,
-        )?;
+pub const CSV_HEADER: &str = "position,move,score,outcome";
+
+pub fn write_game<W: Write>(writer: &mut W, game: &GameData) -> io::Result<()> {
+    if game.moves.is_empty() {
+        return Ok(());
     }
 
-    Ok(())
+    // each game starts with the opening
+    writeln!(writer, "{:#},,,", game.start_position)?;
+
+    for data in &game.moves {
+        let mv = data.mv;
+        let mut score = String::new();
+        let mut outcome = String::new();
+
+        if let Some(sample) = &data.sample {
+            score = sample
+                .score
+                .clamp(-EVAL_OUTPUT_BOUND, EVAL_OUTPUT_BOUND)
+                .to_string();
+            outcome = sample.outcome.to_string();
+        }
+
+        // NB: omits the position (these are moves)
+        writeln!(writer, ",{mv},{score},{outcome}")?;
+    }
+
+    writer.flush()
 }
