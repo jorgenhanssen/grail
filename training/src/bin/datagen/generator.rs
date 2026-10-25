@@ -2,7 +2,6 @@ use crate::game::GameConfig;
 use crate::histogram::ScoreHistogram;
 use crate::opening::OpeningSource;
 use crate::refinery::RefinementStats;
-use crate::samples::SampleWriter;
 use crate::worker::SelfPlayWorker;
 use indicatif::MultiProgress;
 use nnue::MODEL_PATH;
@@ -10,9 +9,10 @@ use pyrrhic_rs::TableBases;
 use search::CozyAdapter;
 use std::error::Error;
 use std::io;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use training::dataset::DatasetWriter;
 
 const PROGRESS_UPDATE_INTERVAL_MS: u64 = 200;
 
@@ -62,7 +62,7 @@ impl Generator {
         game_config: GameConfig,
         max_games: Option<usize>,
         stop_flag: Arc<AtomicBool>,
-        writer: Option<SampleWriter>,
+        writer: Option<Arc<Mutex<DatasetWriter>>>,
     ) -> io::Result<usize> {
         log::info!(
             "Generating samples ({}, multi_pv={}, threads={}, dense={}) - Press Ctrl+C to stop",

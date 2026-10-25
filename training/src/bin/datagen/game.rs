@@ -1,9 +1,9 @@
 use crate::limit::SearchLimit;
-use crate::samples::{GameData, GameOutcome, MoveData, Sample};
 use cozy_chess::{Board, Move};
 use rand::{RngExt, rng};
 use search::{Engine, SearchResult};
 use std::collections::HashMap;
+use training::dataset::{GameData, GameOutcome, MoveData, Sample};
 use utils::{flip_eval_perspective, has_check, has_insufficient_material, has_legal_moves};
 
 #[derive(Clone, Copy)]

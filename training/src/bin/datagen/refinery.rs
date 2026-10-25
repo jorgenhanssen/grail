@@ -1,7 +1,7 @@
-use crate::samples::{GameData, GameOutcome};
 use cozy_chess::Board;
 use pyrrhic_rs::{TableBases, WdlProbeResult};
 use search::{CozyAdapter, tablebase};
+use training::dataset::{GameData, GameOutcome};
 
 /// Position/sample cleanup:
 /// - re-label outcomes based on tb

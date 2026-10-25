@@ -2,13 +2,13 @@ use crate::game::{GameConfig, SelfPlayGame};
 use crate::histogram::HistogramHandle;
 use crate::opening::OpeningSource;
 use crate::refinery::{RefinementStats, Refinery};
-use crate::samples::{GameData, SampleWriter, write_game};
 use config::EngineConfig;
 use pyrrhic_rs::TableBases;
 use search::{CozyAdapter, Engine};
 use std::io;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use training::dataset::{DatasetWriter, GameData};
 
 // TT Hash size per worker.
 const WORKER_HASH_SIZE_MB: i32 = 256;
@@ -71,7 +71,7 @@ impl SelfPlayWorker {
     pub fn play_games(
         &mut self,
         stop_flag: Arc<AtomicBool>,
-        writer: Option<SampleWriter>,
+        writer: Option<Arc<Mutex<DatasetWriter>>>,
     ) -> io::Result<RefinementStats> {
         while !stop_flag.load(Ordering::Relaxed) {
             let game_id = self.game_id_counter.fetch_add(1, Ordering::Relaxed);
@@ -92,7 +92,7 @@ impl SelfPlayWorker {
             self.refinery.refine(&mut data, outcome);
 
             if let Some(writer) = &writer {
-                if let Err(error) = write_game(&mut *writer.lock().unwrap(), &data) {
+                if let Err(error) = writer.lock().unwrap().write_game(&data) {
                     stop_flag.store(true, Ordering::Relaxed);
                     return Err(error);
                 }
