@@ -2561,7 +2561,6 @@ dependencies = [
  "serde",
  "serde_json",
  "simplelog",
- "tempfile",
  "uci",
  "utils",
 ]
