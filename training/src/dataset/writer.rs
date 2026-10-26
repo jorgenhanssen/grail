@@ -2,11 +2,8 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
 
-use nnue::network::EVAL_OUTPUT_BOUND;
-
+use super::binary::write_game;
 use super::{GameData, TEST_FILE, TRAIN_FILE, VAL_FILE};
-
-const CSV_HEADER: &str = "position,move,score,outcome";
 
 pub struct DatasetWriter {
     train: SplitWriter,
@@ -51,6 +48,7 @@ impl DatasetWriter {
         };
 
         write_game(&mut split.writer, game)?;
+        split.writer.flush()?;
         split.samples += samples;
 
         Ok(())
@@ -65,8 +63,7 @@ struct SplitWriter {
 
 impl SplitWriter {
     fn new(path: &Path, ratio: f64) -> io::Result<Self> {
-        let mut writer = BufWriter::new(File::create(path)?);
-        writeln!(writer, "{CSV_HEADER}")?;
+        let writer = BufWriter::new(File::create(path)?);
 
         Ok(Self {
             writer,
@@ -82,28 +79,4 @@ impl SplitWriter {
 
         total as f64 * self.ratio - self.samples as f64
     }
-}
-
-fn write_game<W: Write>(writer: &mut W, game: &GameData) -> io::Result<()> {
-    // each game starts with the opening
-    writeln!(writer, "{:#},,,", game.start_position)?;
-
-    for data in &game.moves {
-        let mv = data.mv;
-        let mut score = String::new();
-        let mut outcome = String::new();
-
-        if let Some(sample) = &data.sample {
-            score = sample
-                .score
-                .clamp(-EVAL_OUTPUT_BOUND, EVAL_OUTPUT_BOUND)
-                .to_string();
-            outcome = sample.outcome.to_string();
-        }
-
-        // NB: omits the position (these are moves)
-        writeln!(writer, ",{mv},{score},{outcome}")?;
-    }
-
-    writer.flush()
 }

@@ -70,13 +70,15 @@ impl DatasetCollection {
                 }
 
                 if samples_since_update >= PROGRESS_UPDATE_INTERVAL {
-                    progress.inc(reader.bytes_read() - reported_bytes);
-                    reported_bytes = reader.bytes_read();
+                    let bytes_read = reader.bytes_read()?;
+
+                    progress.inc(bytes_read - reported_bytes);
+                    reported_bytes = bytes_read;
                     samples_since_update = 0;
                 }
             }
 
-            progress.inc(reader.bytes_read() - reported_bytes);
+            progress.inc(reader.bytes_read()? - reported_bytes);
         }
 
         stats.unique_fens = unique_fens.count() as usize;

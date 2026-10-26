@@ -1,13 +1,13 @@
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufReader, Seek};
 use std::path::PathBuf;
 use std::vec::IntoIter;
 
-use cozy_chess::{Board, Move};
 use rand::Rng;
 use rand::seq::SliceRandom;
 
-use super::{GameOutcome, TEST_FILE, TRAIN_FILE, TrainingSample, VAL_FILE};
+use super::binary::read_game;
+use super::{TEST_FILE, TRAIN_FILE, TrainingSample, VAL_FILE};
 
 pub struct DatasetReader {
     pub(super) path: PathBuf,
@@ -34,9 +34,7 @@ impl DatasetReader {
 pub struct GameReader {
     paths: IntoIter<PathBuf>,
     reader: Option<BufReader<File>>,
-    board: Option<Board>,
-    line: String,
-    bytes_read: u64,
+    completed_bytes: u64,
     total_bytes: u64,
 }
 
@@ -50,15 +48,18 @@ impl GameReader {
         Ok(Self {
             paths: paths.into_iter(),
             reader: None,
-            board: None,
-            line: String::new(),
-            bytes_read: 0,
+            completed_bytes: 0,
             total_bytes,
         })
     }
 
-    pub fn bytes_read(&self) -> u64 {
-        self.bytes_read
+    pub fn bytes_read(&mut self) -> io::Result<u64> {
+        let current_bytes = match &mut self.reader {
+            Some(reader) => reader.stream_position()?,
+            None => 0,
+        };
+
+        Ok(self.completed_bytes + current_bytes)
     }
 
     pub fn total_bytes(&self) -> u64 {
@@ -70,68 +71,37 @@ impl GameReader {
     }
 
     fn next_game(&mut self) -> io::Result<Option<Vec<TrainingSample>>> {
-        let mut samples = Vec::new();
-
         loop {
             if self.reader.is_none() {
                 let Some(path) = self.paths.next() else {
                     return Ok(None);
                 };
-                let mut reader = BufReader::new(File::open(path)?);
-                self.line.clear();
-                self.bytes_read += reader.read_line(&mut self.line)? as u64;
-                self.reader = Some(reader);
+                self.reader = Some(BufReader::new(File::open(path)?));
             }
 
-            self.line.clear();
-            let bytes = self.reader.as_mut().unwrap().read_line(&mut self.line)?;
-            self.bytes_read += bytes as u64;
-
-            if bytes == 0 {
+            let reader = self.reader.as_mut().unwrap();
+            let Some(game) = read_game(reader)? else {
+                self.completed_bytes += reader.stream_position()?;
                 self.reader = None;
-                if self.board.take().is_some() {
-                    return Ok(Some(samples));
-                }
                 continue;
-            }
+            };
 
-            let mut fields = self.line.trim_end().split(',');
-            let position = fields.next().unwrap();
+            let mut board = game.start_position;
+            let mut samples = Vec::new();
 
-            if !position.is_empty() {
-                let board = position
-                    .parse::<Board>()
-                    .map_err(|error| io::Error::other(error.to_string()))?;
-                if self.board.replace(board).is_some() {
-                    return Ok(Some(samples));
-                }
-            } else {
-                let mv = fields
-                    .next()
-                    .unwrap()
-                    .parse::<Move>()
-                    .map_err(|error| io::Error::other(error.to_string()))?;
-                let score = fields.next().unwrap();
-                let outcome = fields.next().unwrap();
-                let board = self.board.as_mut().unwrap();
-
-                if !score.is_empty() {
-                    let score = score.parse().map_err(io::Error::other)?;
-                    let outcome = match outcome {
-                        "W" => GameOutcome::White,
-                        "D" => GameOutcome::Draw,
-                        "B" => GameOutcome::Black,
-                        _ => return Err(io::Error::other("Unknown game outcome")),
-                    };
+            for data in game.moves {
+                if let Some(sample) = data.sample {
                     samples.push(TrainingSample {
                         board: board.clone(),
-                        score,
-                        outcome,
+                        score: sample.score,
+                        outcome: sample.outcome,
                     });
                 }
 
-                board.play_unchecked(mv);
+                board.play_unchecked(data.mv);
             }
+
+            return Ok(Some(samples));
         }
     }
 }

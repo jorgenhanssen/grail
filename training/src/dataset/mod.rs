@@ -1,3 +1,4 @@
+mod binary;
 mod collection;
 mod reader;
 mod samples;
@@ -10,6 +11,6 @@ pub use samples::{GameData, GameOutcome, MoveData, Sample, TrainingSample};
 pub use stats::DatasetCollectionStats;
 pub use writer::DatasetWriter;
 
-const TRAIN_FILE: &str = "train.csv";
-const VAL_FILE: &str = "val.csv";
-const TEST_FILE: &str = "test.csv";
+const TRAIN_FILE: &str = "train.bin";
+const VAL_FILE: &str = "val.bin";
+const TEST_FILE: &str = "test.bin";
