@@ -4,7 +4,9 @@ use std::path::Path;
 
 use crate::paths::DATA_DIR;
 
-use super::{DatasetReader, DatasetWriter, GameReader, TEST_FILE, TRAIN_FILE, VAL_FILE};
+use super::{
+    DatasetMetadata, DatasetReader, DatasetWriter, GameReader, TEST_FILE, TRAIN_FILE, VAL_FILE,
+};
 
 pub struct DatasetCollection {
     datasets: Vec<DatasetReader>,
@@ -43,6 +45,16 @@ impl DatasetCollection {
         log::info!("Writing samples to {}", path.display());
 
         Ok(writer)
+    }
+
+    pub fn metadata(&self) -> io::Result<DatasetMetadata> {
+        let mut total = DatasetMetadata::default();
+
+        for dataset in &self.datasets {
+            total += dataset.metadata()?;
+        }
+
+        Ok(total)
     }
 
     pub fn train_games(&self) -> io::Result<GameReader> {

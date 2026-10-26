@@ -7,7 +7,7 @@ use rand::Rng;
 use rand::seq::SliceRandom;
 
 use super::binary::read_game;
-use super::{TEST_FILE, TRAIN_FILE, TrainingSample, VAL_FILE};
+use super::{DatasetMetadata, METADATA_FILE, TEST_FILE, TRAIN_FILE, TrainingSample, VAL_FILE};
 
 pub struct DatasetReader {
     pub path: PathBuf,
@@ -16,6 +16,11 @@ pub struct DatasetReader {
 impl DatasetReader {
     pub fn new(path: PathBuf) -> Self {
         Self { path }
+    }
+
+    pub fn metadata(&self) -> io::Result<DatasetMetadata> {
+        let file = File::open(self.path.join(METADATA_FILE))?;
+        Ok(serde_json::from_reader(BufReader::new(file))?)
     }
 
     pub fn train_games(&self) -> io::Result<GameReader> {

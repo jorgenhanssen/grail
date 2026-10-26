@@ -46,8 +46,8 @@ name = "train"
 path = "src/bin/train/main.rs"
 
 [[bin]]
-name = "dataset_analysis"
-path = "src/bin/dataset_analysis.rs"
+name = "dataset-stats"
+path = "src/bin/dataset_stats/main.rs"
 
 [lints]
 workspace = true

@@ -62,11 +62,9 @@ fn train(args: Args) -> Result<(), Box<dyn Error>> {
 
     let shutdown = setup_shutdown_handler()?;
     let datasets = DatasetCollection::open()?;
-    let stats = datasets.stats()?;
+    let metadata = datasets.metadata()?;
 
-    stats.log();
-
-    let mut trainer = Trainer::new(&args, &state, stats.train_samples)?;
+    let mut trainer = Trainer::new(&args, &state, metadata.train.samples)?;
 
     if state.has_history() {
         log::info!(

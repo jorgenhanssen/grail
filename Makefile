@@ -2,7 +2,7 @@ SHELL = /bin/bash
 
 .ONESHELL:
 
-.PHONY: grail grail-pgo datagen datagen-pgo train dataset-analysis clean profile tuner tuner-pgo
+.PHONY: grail grail-pgo datagen datagen-pgo train clean profile tuner tuner-pgo dataset-stats
 
 # Default to native optimization for local development.
 RUSTFLAGS = -C target-cpu=native
@@ -30,8 +30,8 @@ train:
 		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin train; \
 	fi
 
-dataset-analysis:
-	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin dataset_analysis
+dataset-stats:
+	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin dataset-stats
 
 tuner:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p tuning --bin tuner
