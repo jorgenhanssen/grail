@@ -20,17 +20,9 @@ pub struct Args {
     #[arg(long, default_value_t = 200)]
     pub epochs: usize,
 
-    /// Number of data loader workers.
-    #[arg(long, default_value_t = 1)]
-    pub workers: usize,
-
-    /// Fraction of data for validation set.
-    #[arg(long, default_value_t = 0.05)]
-    pub val_ratio: f64,
-
-    /// Fraction of data for test set.
-    #[arg(long, default_value_t = 0.01)]
-    pub test_ratio: f64,
+    /// Size of the sample buffer.
+    #[arg(long, default_value_t = 1_000_000)]
+    pub buffer_size: usize,
 
     /// Learning rate decay factor per epoch.
     #[arg(long, default_value_t = 0.95)]
@@ -40,10 +32,6 @@ pub struct Args {
     #[arg(long, default_value_t = 5)]
     pub patience: u64,
 
-    /// Size of each shard in megabytes.
-    #[arg(long, default_value_t = 500)]
-    pub shard_size_mb: usize,
-
     /// WDL blending weight (0.0 = pure eval, 1.0 = pure WDL).
     #[arg(long, default_value_t = 0.2)]
     pub wdl: f64,
@@ -52,11 +40,7 @@ pub struct Args {
     #[arg(long, default_value_t = 0.5)]
     pub draw_target: f64,
 
-    /// Skip samples that are in check, captures, or promotes.
-    #[arg(long)]
-    pub quiets_only: bool,
-
-    /// Random seed for train/val/test split assignment.
+    /// Random seed for dataset read order and buffer randomization.
     #[arg(long, requires = "restart")]
     pub seed: Option<u64>,
 

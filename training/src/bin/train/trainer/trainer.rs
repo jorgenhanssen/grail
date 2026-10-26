@@ -1,24 +1,22 @@
 use candle_core::{DType, Device, Tensor};
 use candle_nn::{AdamW, Optimizer, ParamsAdamW, VarBuilder, VarMap};
 use nnue::network::Network;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 use std::error::Error;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use training::dataset::DatasetCollection;
 
 use crate::args::Args;
-use crate::dataset::{DataLoader, ShardReader, ShardedDataset};
+use crate::data_loader::DataLoader;
+use crate::feature_encoder::FeatureEncoder;
 use crate::state::{EpochRecord, TrainingState};
 use crate::trainer::evaluation::evaluate;
 use crate::trainer::progress::TrainingProgressBar;
 use crate::utils::device::get_device;
 use crate::utils::loss::wdl_eval_loss;
-
-/// Number of shards to keep loaded for training.
-const TRAIN_SHARDS: usize = 10;
-
-/// Number of shards to keep loaded for validation/test.
-const EVAL_SHARDS: usize = 4;
 
 pub struct Trainer {
     network: Network,
@@ -26,7 +24,8 @@ pub struct Trainer {
     varmap: VarMap,
     device: Device,
     batch_size: usize,
-    workers: usize,
+    num_batches: usize,
+    buffer_size: usize,
     epochs: usize,
     lr_decay: f64,
     patience: u64,
@@ -35,7 +34,11 @@ pub struct Trainer {
 }
 
 impl Trainer {
-    pub fn new(args: &Args, state: &TrainingState) -> Result<Self, Box<dyn Error>> {
+    pub fn new(
+        args: &Args,
+        state: &TrainingState,
+        train_samples: usize,
+    ) -> Result<Self, Box<dyn Error>> {
         let device = get_device();
         let wdl = args.wdl.clamp(0.0, 1.0);
         let draw_target = args.draw_target.clamp(0.0, 1.0) as f32;
@@ -63,7 +66,8 @@ impl Trainer {
             varmap,
             device,
             batch_size: args.batch_size,
-            workers: args.workers,
+            num_batches: train_samples.div_ceil(args.batch_size),
+            buffer_size: args.buffer_size,
             epochs: args.epochs,
             lr_decay: args.lr_decay,
             patience: args.patience,
@@ -74,7 +78,7 @@ impl Trainer {
 
     pub fn train(
         &mut self,
-        dataset: &ShardedDataset,
+        datasets: &DatasetCollection,
         state: &mut TrainingState,
         model_path: &Path,
         state_path: &Path,
@@ -101,7 +105,8 @@ impl Trainer {
 
             let prev_best_val = state.best_achieved_val_loss();
 
-            let Some((train_loss, val_loss)) = self.train_epoch(dataset, &shutdown)? else {
+            let seed = state.seed.wrapping_add(epoch as u64);
+            let Some((train_loss, val_loss)) = self.train_epoch(datasets, seed, &shutdown)? else {
                 log::info!("Epoch {} interrupted", epoch);
                 break;
             };
@@ -131,7 +136,7 @@ impl Trainer {
         }
 
         if !shutdown.load(Ordering::Relaxed) {
-            self.test_model(dataset, model_path, &shutdown)?;
+            self.test_model(datasets, model_path, &shutdown)?;
         }
 
         Ok(())
@@ -139,26 +144,30 @@ impl Trainer {
 
     fn train_epoch(
         &mut self,
-        dataset: &ShardedDataset,
+        datasets: &DatasetCollection,
+        seed: u64,
         shutdown: &Arc<AtomicBool>,
     ) -> Result<Option<(f32, f32)>, Box<dyn Error>> {
-        let reader = Arc::new(ShardReader::new(dataset.train_path(), TRAIN_SHARDS)?);
-        let loader = DataLoader::new(
-            reader,
+        let mut rng = StdRng::seed_from_u64(seed);
+        let mut games = datasets.train_games()?;
+        games.shuffle_files(&mut rng);
+
+        let loader = DataLoader::new(games, self.buffer_size, Some(rng), Arc::clone(shutdown));
+        let encoder = FeatureEncoder::new(
+            loader,
             self.batch_size,
-            self.workers,
             Arc::clone(shutdown),
             self.draw_target,
         );
 
-        let num_batches = dataset.stats.train_samples.div_ceil(self.batch_size);
-        let progress = TrainingProgressBar::new(num_batches)?;
+        let progress = TrainingProgressBar::new(self.num_batches)?;
 
         let mut batches_processed = 0;
         let mut total_loss = 0.0;
         let mut train_loss = 0.0;
 
-        for batch in loader {
+        for batch in encoder {
+            let batch = batch?;
             if shutdown.load(Ordering::Relaxed) {
                 return Ok(None);
             }
@@ -197,15 +206,27 @@ impl Trainer {
             progress.update(train_loss);
         }
 
-        let val_reader = Arc::new(ShardReader::new(dataset.val_path(), EVAL_SHARDS)?);
+        if shutdown.load(Ordering::Relaxed) {
+            return Ok(None);
+        }
+
         let val_loader = DataLoader::new(
-            val_reader,
+            datasets.val_games()?,
+            self.buffer_size,
+            None,
+            Arc::clone(shutdown),
+        );
+        let val_encoder = FeatureEncoder::new(
+            val_loader,
             self.batch_size,
-            self.workers,
             Arc::clone(shutdown),
             self.draw_target,
         );
-        let val_loss = evaluate(&self.network, val_loader, &self.device, self.wdl)?;
+        let val_loss = evaluate(&self.network, val_encoder, &self.device, self.wdl)?;
+
+        if shutdown.load(Ordering::Relaxed) {
+            return Ok(None);
+        }
 
         progress.finish(val_loss, train_loss);
 
@@ -219,22 +240,26 @@ impl Trainer {
 
     fn test_model(
         &mut self,
-        dataset: &ShardedDataset,
+        datasets: &DatasetCollection,
         model_path: &Path,
         shutdown: &Arc<AtomicBool>,
     ) -> Result<f32, Box<dyn Error>> {
         log::info!("Running final test set evaluation...");
         self.load_model(model_path)?;
 
-        let test_reader = Arc::new(ShardReader::new(dataset.test_path(), EVAL_SHARDS)?);
         let test_loader = DataLoader::new(
-            test_reader,
+            datasets.test_games()?,
+            self.buffer_size,
+            None,
+            Arc::clone(shutdown),
+        );
+        let test_encoder = FeatureEncoder::new(
+            test_loader,
             self.batch_size,
-            self.workers,
             Arc::clone(shutdown),
             self.draw_target,
         );
-        let test_loss = evaluate(&self.network, test_loader, &self.device, self.wdl)?;
+        let test_loss = evaluate(&self.network, test_encoder, &self.device, self.wdl)?;
         log::info!("Test Loss: {:.6}", test_loss);
 
         Ok(test_loss)

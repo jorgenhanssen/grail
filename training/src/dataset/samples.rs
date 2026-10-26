@@ -16,6 +16,12 @@ pub struct Sample {
     pub outcome: GameOutcome,
 }
 
+pub struct TrainingSample {
+    pub board: Board,
+    pub score: i16,
+    pub outcome: GameOutcome,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameOutcome {
     White,

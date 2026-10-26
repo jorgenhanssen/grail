@@ -4,7 +4,7 @@ use std::path::Path;
 
 use nnue::network::EVAL_OUTPUT_BOUND;
 
-use super::GameData;
+use super::{GameData, TEST_FILE, TRAIN_FILE, VAL_FILE};
 
 const CSV_HEADER: &str = "position,move,score,outcome";
 
@@ -19,9 +19,9 @@ impl DatasetWriter {
         let train_ratio = 1.0 - val_ratio - test_ratio;
 
         Ok(Self {
-            train: SplitWriter::new(&path.join("train.csv"), train_ratio)?,
-            val: SplitWriter::new(&path.join("val.csv"), val_ratio)?,
-            test: SplitWriter::new(&path.join("test.csv"), test_ratio)?,
+            train: SplitWriter::new(&path.join(TRAIN_FILE), train_ratio)?,
+            val: SplitWriter::new(&path.join(VAL_FILE), val_ratio)?,
+            test: SplitWriter::new(&path.join(TEST_FILE), test_ratio)?,
         })
     }
 

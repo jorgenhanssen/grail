@@ -17,26 +17,17 @@ pub struct EpochRecord {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TrainingState {
     pub seed: u64,
-    pub val_ratio: f64,
-    pub test_ratio: f64,
     pub history: Vec<EpochRecord>,
 }
 
 impl TrainingState {
     /// Load state from disk if present, otherwise build a fresh one with a random/provided seed.
-    pub fn new(
-        path: &Path,
-        val_ratio: f64,
-        test_ratio: f64,
-        seed: Option<u64>,
-    ) -> Result<Self, Box<dyn Error>> {
+    pub fn new(path: &Path, seed: Option<u64>) -> Result<Self, Box<dyn Error>> {
         if path.exists() {
             Self::load(path)
         } else {
             Ok(Self {
                 seed: seed.unwrap_or_else(|| rand::rng().random()),
-                val_ratio,
-                test_ratio,
                 history: Vec::new(),
             })
         }
@@ -106,8 +97,6 @@ mod tests {
     use super::*;
 
     const SEED: u64 = 12345;
-    const VAL_RATIO: f64 = 0.05;
-    const TEST_RATIO: f64 = 0.01;
     const LR: f64 = 0.001;
 
     fn record(epoch: usize, val_loss: f32) -> EpochRecord {
@@ -122,8 +111,6 @@ mod tests {
     fn fresh() -> TrainingState {
         TrainingState {
             seed: SEED,
-            val_ratio: VAL_RATIO,
-            test_ratio: TEST_RATIO,
             history: Vec::new(),
         }
     }
@@ -140,8 +127,6 @@ mod tests {
 
         let loaded = TrainingState::load(&path).unwrap();
         assert_eq!(loaded.seed, SEED);
-        assert_eq!(loaded.val_ratio, VAL_RATIO);
-        assert_eq!(loaded.test_ratio, TEST_RATIO);
         assert_eq!(loaded.next_epoch_number(), 3);
         assert_eq!(loaded.best_achieved_val_loss(), 0.4);
     }
@@ -156,9 +141,7 @@ mod tests {
     fn new_returns_fresh_when_missing() {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("missing.json");
-        let s = TrainingState::new(&path, VAL_RATIO, TEST_RATIO, None).unwrap();
-        assert_eq!(s.val_ratio, VAL_RATIO);
-        assert_eq!(s.test_ratio, TEST_RATIO);
+        let s = TrainingState::new(&path, None).unwrap();
         assert!(!s.has_history());
     }
 
@@ -170,7 +153,7 @@ mod tests {
         original.record_epoch(record(1, 0.5));
         original.save(&path).unwrap();
 
-        let s = TrainingState::new(&path, 0.0, 0.0, Some(99999)).unwrap();
+        let s = TrainingState::new(&path, Some(99999)).unwrap();
         assert_eq!(s.seed, SEED);
         assert!(s.has_history());
     }

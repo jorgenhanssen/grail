@@ -1,5 +1,6 @@
 mod args;
-mod dataset;
+mod data_loader;
+mod feature_encoder;
 mod state;
 mod trainer;
 mod utils;
@@ -8,7 +9,6 @@ use args::{Args, Command};
 use candle_core::DType;
 use candle_nn::{VarBuilder, VarMap};
 use clap::Parser;
-use dataset::ShardedDataset;
 use nnue::MODEL_PATH;
 use nnue::network::Network;
 use simplelog::{Config, LevelFilter, SimpleLogger};
@@ -18,7 +18,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use trainer::Trainer;
-use training::paths::{DATA_DIR, STATE_PATH};
+use training::dataset::DatasetCollection;
+use training::paths::STATE_PATH;
 use utils::device::get_device;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -57,37 +58,29 @@ fn train(args: Args) -> Result<(), Box<dyn Error>> {
         log::warn!("Discarded existing training state at {}", STATE_PATH);
     }
 
-    let mut state = TrainingState::new(state_path, args.val_ratio, args.test_ratio, args.seed)?;
+    let mut state = TrainingState::new(state_path, args.seed)?;
 
     let shutdown = setup_shutdown_handler()?;
-    let dataset = ShardedDataset::build(
-        Path::new(DATA_DIR),
-        args.shard_size_mb,
-        args.quiets_only,
-        &state,
-    )?;
-    let mut trainer = Trainer::new(&args, &state)?;
+    let datasets = DatasetCollection::open()?;
+    let stats = datasets.stats()?;
+
+    stats.log();
+
+    let mut trainer = Trainer::new(&args, &state, stats.train_samples)?;
 
     if state.has_history() {
         log::info!(
-            "Resuming from epoch {} (seed {}, val/test {:.2}/{:.2})",
+            "Resuming from epoch {} (seed {})",
             state.next_epoch_number(),
             state.seed,
-            state.val_ratio,
-            state.test_ratio,
         );
         trainer.load_model(model_path)?;
     } else {
-        log::info!(
-            "Starting fresh training (seed {}, val/test {:.2}/{:.2})",
-            state.seed,
-            state.val_ratio,
-            state.test_ratio,
-        );
+        log::info!("Starting fresh training (seed {})", state.seed);
         trainer.save_model(model_path)?;
     }
 
-    trainer.train(&dataset, &mut state, model_path, state_path, shutdown)?;
+    trainer.train(&datasets, &mut state, model_path, state_path, shutdown)?;
     Ok(())
 }
 
