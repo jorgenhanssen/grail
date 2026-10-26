@@ -45,5 +45,9 @@ path = "src/bin/datagen/main.rs"
 name = "train"
 path = "src/bin/train/main.rs"
 
+[[bin]]
+name = "dataset_analysis"
+path = "src/bin/dataset_analysis.rs"
+
 [lints]
 workspace = true

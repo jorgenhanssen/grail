@@ -12,7 +12,7 @@ pub struct DatasetWriter {
 }
 
 impl DatasetWriter {
-    pub(super) fn new(path: &Path, val_ratio: f64, test_ratio: f64) -> io::Result<Self> {
+    pub fn new(path: &Path, val_ratio: f64, test_ratio: f64) -> io::Result<Self> {
         let train_ratio = 1.0 - val_ratio - test_ratio;
 
         Ok(Self {

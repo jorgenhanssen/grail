@@ -10,11 +10,11 @@ use super::binary::read_game;
 use super::{TEST_FILE, TRAIN_FILE, TrainingSample, VAL_FILE};
 
 pub struct DatasetReader {
-    pub(super) path: PathBuf,
+    pub path: PathBuf,
 }
 
 impl DatasetReader {
-    pub(super) fn new(path: PathBuf) -> Self {
+    pub fn new(path: PathBuf) -> Self {
         Self { path }
     }
 
@@ -39,7 +39,7 @@ pub struct GameReader {
 }
 
 impl GameReader {
-    pub(super) fn new(paths: Vec<PathBuf>) -> io::Result<Self> {
+    pub fn new(paths: Vec<PathBuf>) -> io::Result<Self> {
         let mut total_bytes = 0;
         for path in &paths {
             total_bytes += fs::metadata(path)?.len();
