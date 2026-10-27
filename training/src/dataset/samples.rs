@@ -22,6 +22,23 @@ pub struct TrainingSample {
     pub outcome: GameOutcome,
 }
 
+impl GameData {
+    pub fn into_samples(self) -> impl Iterator<Item = TrainingSample> {
+        let mut board = self.start_position;
+
+        self.moves.into_iter().filter_map(move |data| {
+            let sample = data.sample.map(|sample| TrainingSample {
+                board: board.clone(),
+                score: sample.score,
+                outcome: sample.outcome,
+            });
+
+            board.play_unchecked(data.mv);
+            sample
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameOutcome {
     White,

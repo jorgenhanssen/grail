@@ -32,7 +32,7 @@ impl DataLoader {
                     }
 
                     match games.next() {
-                        Some(Ok(samples)) => buffer.extend(samples),
+                        Some(Ok(game)) => buffer.extend(game.into_samples()),
                         Some(Err(error)) => {
                             let _ = sender.send(Err(error));
                             return;

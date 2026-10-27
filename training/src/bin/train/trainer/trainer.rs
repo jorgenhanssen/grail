@@ -149,7 +149,7 @@ impl Trainer {
         shutdown: &Arc<AtomicBool>,
     ) -> Result<Option<(f32, f32)>, Box<dyn Error>> {
         let mut rng = StdRng::seed_from_u64(seed);
-        let mut games = datasets.train_games()?;
+        let mut games = datasets.train_games();
         games.shuffle_files(&mut rng);
 
         let loader = DataLoader::new(games, self.buffer_size, Some(rng), Arc::clone(shutdown));
@@ -211,7 +211,7 @@ impl Trainer {
         }
 
         let val_loader = DataLoader::new(
-            datasets.val_games()?,
+            datasets.val_games(),
             self.buffer_size,
             None,
             Arc::clone(shutdown),
@@ -248,7 +248,7 @@ impl Trainer {
         self.load_model(model_path)?;
 
         let test_loader = DataLoader::new(
-            datasets.test_games()?,
+            datasets.test_games(),
             self.buffer_size,
             None,
             Arc::clone(shutdown),

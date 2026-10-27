@@ -23,7 +23,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
-use training::dataset::DatasetCollection;
+use training::dataset::DatasetWriter;
 use utils::Book;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         None
     } else {
         let name = Local::now().format("%Y-%m-%d-%H:%M").to_string();
-        let writer = DatasetCollection::create(&name, args.val_ratio, args.test_ratio)?;
+        let writer = DatasetWriter::create(&name, args.val_ratio, args.test_ratio)?;
         Some(Arc::new(Mutex::new(writer)))
     };
     let samples = generator.run(game_config, args.max_games, stop_flag, writer)?;

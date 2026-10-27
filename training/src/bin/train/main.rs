@@ -61,7 +61,7 @@ fn train(args: Args) -> Result<(), Box<dyn Error>> {
     let mut state = TrainingState::new(state_path, args.seed)?;
 
     let shutdown = setup_shutdown_handler()?;
-    let datasets = DatasetCollection::open()?;
+    let datasets = DatasetCollection::all()?;
     let metadata = datasets.metadata()?;
 
     let mut trainer = Trainer::new(&args, &state, metadata.train.samples)?;

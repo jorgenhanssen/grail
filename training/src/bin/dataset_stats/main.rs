@@ -1,70 +1,58 @@
+mod args;
 mod stats;
 
+use std::collections::hash_map::RandomState;
 use std::io;
-use std::path::PathBuf;
 
+use args::{Args, Split};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
+use rayon::prelude::*;
 use stats::DatasetStats;
 use training::dataset::{DatasetCollection, GameReader};
-
-const PROGRESS_UPDATE_INTERVAL: usize = 100_000;
-
-#[derive(Parser)]
-#[command(about = "Show statistics for generated training datasets")]
-struct Args {
-    /// Binary files to read. Defaults to all datasets and splits.
-    files: Vec<PathBuf>,
-
-    /// Evaluation threshold in centipawns.
-    #[arg(short, long, default_value_t = 600)]
-    threshold: i32,
-}
 
 fn main() -> io::Result<()> {
     let args = Args::parse();
 
-    let readers = if args.files.is_empty() {
-        let datasets = DatasetCollection::open()?;
-        vec![
-            datasets.train_games()?,
-            datasets.val_games()?,
-            datasets.test_games()?,
-        ]
+    let datasets = if args.datasets.is_empty() {
+        DatasetCollection::all()?
     } else {
-        vec![GameReader::new(args.files)?]
+        DatasetCollection::open(args.datasets)
     };
 
-    let total_bytes = readers.iter().map(|reader| reader.total_bytes()).sum();
-    let progress = ProgressBar::new(total_bytes);
+    let metadata = datasets.metadata()?;
+
+    let (games, total_games) = match args.split {
+        Some(Split::Train) => (datasets.train_games(), metadata.train.games),
+        Some(Split::Val) => (datasets.val_games(), metadata.val.games),
+        Some(Split::Test) => (datasets.test_games(), metadata.test.games),
+        None => (
+            GameReader::new(datasets.files()),
+            metadata.train.games + metadata.val.games + metadata.test.games,
+        ),
+    };
+
+    let progress = ProgressBar::new(total_games as u64);
     progress.set_style(
         ProgressStyle::default_spinner()
-            .template("{spinner:.cyan} Reading datasets... {percent:>3}%")
+            .template("{spinner:.cyan} Analyzing games... {percent:>3}%")
             .unwrap(),
     );
 
-    let mut stats = DatasetStats::new(args.threshold);
+    let mut stats = DatasetStats::new(args.threshold, RandomState::new());
 
-    for mut reader in readers {
-        let mut reported_bytes = 0;
-        let mut samples_since_update = 0;
+    let results: io::Result<Vec<_>> = games
+        .enumerate()
+        .par_bridge()
+        .try_fold_with(stats.clone(), |mut stats, (game_id, game)| {
+            stats.record_game(game_id, game?);
+            progress.inc(1);
+            Ok(stats)
+        })
+        .collect();
 
-        while let Some(game) = reader.next() {
-            let samples = game?;
-
-            stats.record_game(&samples);
-            samples_since_update += samples.len();
-
-            if samples_since_update >= PROGRESS_UPDATE_INTERVAL {
-                let bytes_read = reader.bytes_read()?;
-
-                progress.inc(bytes_read - reported_bytes);
-                reported_bytes = bytes_read;
-                samples_since_update = 0;
-            }
-        }
-
-        progress.inc(reader.bytes_read()? - reported_bytes);
+    for result in results? {
+        stats.merge(result);
     }
 
     progress.finish_and_clear();

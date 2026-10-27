@@ -1,6 +1,8 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
+
+use crate::paths::DATA_DIR;
 
 use super::binary::write_game;
 use super::{
@@ -15,15 +17,24 @@ pub struct DatasetWriter {
 }
 
 impl DatasetWriter {
-    pub fn new(path: &Path, val_ratio: f64, test_ratio: f64) -> io::Result<Self> {
+    pub fn create(name: &str, val_ratio: f64, test_ratio: f64) -> io::Result<Self> {
+        let path = Path::new(DATA_DIR).join(name);
+
+        fs::create_dir_all(DATA_DIR)?;
+        fs::create_dir(&path)?;
+
         let train_ratio = 1.0 - val_ratio - test_ratio;
 
-        Ok(Self {
-            path: path.to_path_buf(),
+        let writer = Self {
+            path: path.clone(),
             train: SplitWriter::new(&path.join(TRAIN_FILE), train_ratio)?,
             val: SplitWriter::new(&path.join(VAL_FILE), val_ratio)?,
             test: SplitWriter::new(&path.join(TEST_FILE), test_ratio)?,
-        })
+        };
+
+        log::info!("Writing samples to {}", path.display());
+
+        Ok(writer)
     }
 
     pub fn write_game(&mut self, game: &GameData) -> io::Result<()> {
