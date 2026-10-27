@@ -12,6 +12,7 @@ impl Searcher {
     pub(super) fn get_reduction(
         &self,
         depth: u8,
+        is_pv_move: bool,
         is_improving: bool,
         is_capture: bool,
         is_promotion: bool,
@@ -24,10 +25,6 @@ impl Searcher {
         alpha: i16,
         eval: i16,
     ) -> u8 {
-        if move_index == 0 {
-            return 0;
-        }
-
         let mut reduction = self.lmr.get(depth, move_index);
 
         // Reduce more
@@ -66,6 +63,9 @@ impl Searcher {
 
         // Reduce less
         if reduction > FracPly(0) {
+            if is_pv_move {
+                reduction -= FracPly(self.config.anti_reduction_pv_move);
+            }
             if parent.in_check() || child.in_check() {
                 reduction -= FracPly(self.config.anti_reduction_check);
             }

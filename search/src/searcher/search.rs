@@ -565,6 +565,7 @@ impl Searcher {
 
         let reduction = self.get_reduction(
             depth,
+            is_pv_move,
             is_improving,
             is_capture,
             is_promotion,
