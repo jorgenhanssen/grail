@@ -15,6 +15,7 @@ uci = { path = "../uci" }
 utils = { path = "../utils" }
 
 ahash = { workspace = true }
+byteorder = { workspace = true }
 cozy-chess = { workspace = true }
 chrono = { workspace = true }
 ctrlc = { workspace = true }
@@ -27,7 +28,6 @@ clap = { workspace = true }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
 indicatif = { workspace = true }
-tempfile = { workspace = true }
 hyperloglogplus = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -44,6 +44,10 @@ path = "src/bin/datagen/main.rs"
 [[bin]]
 name = "train"
 path = "src/bin/train/main.rs"
+
+[[bin]]
+name = "dataset-stats"
+path = "src/bin/dataset_stats/main.rs"
 
 [lints]
 workspace = true

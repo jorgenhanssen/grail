@@ -2,16 +2,17 @@ use crate::game::GameConfig;
 use crate::histogram::ScoreHistogram;
 use crate::opening::OpeningSource;
 use crate::refinery::RefinementStats;
-use crate::samples::Sample;
 use crate::worker::SelfPlayWorker;
 use indicatif::MultiProgress;
 use nnue::MODEL_PATH;
 use pyrrhic_rs::TableBases;
 use search::CozyAdapter;
 use std::error::Error;
-use std::sync::Arc;
+use std::io;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use training::dataset::DatasetWriter;
 
 const PROGRESS_UPDATE_INTERVAL_MS: u64 = 200;
 
@@ -61,7 +62,8 @@ impl Generator {
         game_config: GameConfig,
         max_games: Option<usize>,
         stop_flag: Arc<AtomicBool>,
-    ) -> Vec<Sample> {
+        writer: Option<Arc<Mutex<DatasetWriter>>>,
+    ) -> io::Result<usize> {
         log::info!(
             "Generating samples ({}, multi_pv={}, threads={}, dense={}) - Press Ctrl+C to stop",
             game_config.limit,
@@ -88,6 +90,7 @@ impl Generator {
                 let histogram_handle = histogram.clone_handle();
                 let tb = self.tablebases.clone();
                 let evaluator = self.evaluator.clone();
+                let writer = writer.clone();
 
                 std::thread::spawn(move || {
                     let mut worker = SelfPlayWorker::new(
@@ -102,20 +105,21 @@ impl Generator {
                         histogram_handle,
                         tb,
                     );
-                    worker.play_games(stop_flag)
+                    worker.play_games(stop_flag, writer)
                 })
             })
             .collect();
 
         // Spawn progress update thread
-        let progress_handle =
-            Self::spawn_progress_updater(sample_counter, histogram, Arc::clone(&stop_flag));
+        let progress_handle = Self::spawn_progress_updater(
+            Arc::clone(&sample_counter),
+            histogram,
+            Arc::clone(&stop_flag),
+        );
 
-        let mut samples = Vec::new();
         let mut refinery_stats = RefinementStats::default();
         for handle in worker_handles {
-            let (worker_samples, worker_stats) = handle.join().unwrap();
-            samples.extend(worker_samples);
+            let worker_stats = handle.join().unwrap()?;
             refinery_stats.merge(&worker_stats);
         }
 
@@ -124,7 +128,7 @@ impl Generator {
 
         refinery_stats.log_summary();
 
-        samples
+        Ok(sample_counter.load(Ordering::Relaxed))
     }
 
     fn spawn_progress_updater(

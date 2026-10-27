@@ -2542,6 +2542,7 @@ name = "training"
 version = "3.0.0"
 dependencies = [
  "ahash",
+ "byteorder",
  "candle-core",
  "candle-nn",
  "chrono",
@@ -2561,7 +2562,6 @@ dependencies = [
  "serde",
  "serde_json",
  "simplelog",
- "tempfile",
  "uci",
  "utils",
 ]

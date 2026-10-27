@@ -2,19 +2,20 @@ use candle_core::{Device, Tensor};
 use nnue::network::Network;
 use std::error::Error;
 
-use crate::dataset::DataLoader;
+use crate::feature_encoder::FeatureEncoder;
 use crate::utils::loss::wdl_eval_loss;
 
 pub fn evaluate(
     network: &Network,
-    loader: DataLoader,
+    encoder: FeatureEncoder,
     device: &Device,
     wdl: f64,
 ) -> Result<f32, Box<dyn Error>> {
     let mut total_loss = 0.0;
     let mut batches = 0;
 
-    for batch in loader {
+    for batch in encoder {
+        let batch = batch?;
         let batch_len = batch.len();
         if batch_len == 0 {
             continue;

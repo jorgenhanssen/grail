@@ -1,9 +1,9 @@
 use crate::limit::SearchLimit;
-use crate::samples::GameOutcome;
 use cozy_chess::{Board, Move};
 use rand::{RngExt, rng};
 use search::{Engine, SearchResult};
 use std::collections::HashMap;
+use training::dataset::{GameData, GameOutcome, MoveData, Sample};
 use utils::{flip_eval_perspective, has_check, has_insufficient_material, has_legal_moves};
 
 #[derive(Clone, Copy)]
@@ -22,13 +22,6 @@ impl GameConfig {
     }
 }
 
-/// A recorded position/sample (outcomes are labelled in the refinery).
-pub struct Position {
-    pub fen: String,
-    pub score: i16,
-    pub best_move: Move,
-}
-
 /// A self-play game that records positions for training.
 ///
 /// Uses MultiPV search at decision points and teleports along chosen PV lines
@@ -36,18 +29,19 @@ pub struct Position {
 pub struct SelfPlayGame {
     board: Board,
     position_counts: HashMap<u64, usize>,
-    positions: Vec<Position>,
-    plies_played: usize,
+    data: GameData,
     config: GameConfig,
 }
 
 impl SelfPlayGame {
     pub fn new(board: Board, config: GameConfig) -> Self {
         Self {
+            data: GameData {
+                start_position: board.clone(),
+                moves: Vec::new(),
+            },
             board,
             position_counts: HashMap::new(),
-            positions: Vec::new(),
-            plies_played: 0,
             config,
         }
     }
@@ -64,8 +58,8 @@ impl SelfPlayGame {
 
         loop {
             // Cursed long game... no trustworthy outcome, discard the game.
-            if self.plies_played >= self.config.max_game_plies {
-                self.positions.clear();
+            if self.data.moves.len() >= self.config.max_game_plies {
+                self.data.moves.clear();
                 return;
             }
 
@@ -74,6 +68,7 @@ impl SelfPlayGame {
             }
 
             let is_anchor = line.is_empty();
+            let mut sample = None;
 
             if is_anchor || self.config.dense_sampling {
                 let Some(result) = self.search(engine) else {
@@ -87,9 +82,10 @@ impl SelfPlayGame {
                     break;
                 }
 
-                if let Some(mv) = pv.best_move() {
-                    self.record_position(pv.score, mv);
-                }
+                sample = Some(Sample {
+                    score: flip_eval_perspective(self.board.side_to_move(), pv.score),
+                    outcome: GameOutcome::Draw,
+                });
 
                 if is_anchor {
                     let chosen = result.select_softmax().expect("has lines");
@@ -103,7 +99,7 @@ impl SelfPlayGame {
                 break;
             }
 
-            self.play_move(line.remove(0));
+            self.play_move(line.remove(0), sample);
         }
     }
 
@@ -112,20 +108,11 @@ impl SelfPlayGame {
         engine.search(&self.config.limit.go_params(), None)
     }
 
-    fn record_position(&mut self, eval: i16, best_move: Move) {
-        let white_score = flip_eval_perspective(self.board.side_to_move(), eval);
-        self.positions.push(Position {
-            fen: format!("{:#}", self.board),
-            score: white_score,
-            best_move,
-        });
-    }
-
     fn opening_is_too_imbalanced(&self, score: i16) -> bool {
         let Some(max) = self.config.max_opening_imbalance else {
             return false;
         };
-        self.positions.is_empty() && score.abs() > max
+        self.data.moves.is_empty() && score.abs() > max
     }
 
     /// The game outcome. Returns None for speculative draws (50-move rule / repetition)
@@ -149,9 +136,9 @@ impl SelfPlayGame {
     }
 
     /// Play a single move, updating all game state.
-    fn play_move(&mut self, mv: Move) {
+    fn play_move(&mut self, mv: Move, sample: Option<Sample>) {
+        self.data.moves.push(MoveData { mv, sample });
         self.board.play_unchecked(mv);
-        self.plies_played += 1;
 
         // Track position for repetition detection
         let hash = self.board.hash();
@@ -186,42 +173,7 @@ impl SelfPlayGame {
             .collect()
     }
 
-    pub fn into_positions(self) -> Vec<Position> {
-        self.positions
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::str::FromStr;
-
-    use cozy_chess::Board;
-
-    use super::*;
-    use crate::limit::SearchLimit;
-
-    #[test]
-    fn recorded_fen_matches_board() {
-        let config = GameConfig {
-            limit: SearchLimit::Depth(1),
-            max_opening_imbalance: None,
-            max_teleport_plies: 1,
-            max_teleport_pv_fraction: 1.0,
-            max_game_plies: 1,
-            dense_sampling: false,
-        };
-        let best_move = "e2e4".parse().unwrap();
-        let fens = [
-            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-            "bqnnrkrb/pppppppp/8/8/8/8/PPPPPPPP/BQNNRKRB w GEge - 0 1",
-        ];
-
-        for fen in fens {
-            let board = Board::from_str(fen).unwrap();
-            let mut game = SelfPlayGame::new(board.clone(), config);
-            game.record_position(0, best_move);
-            let recorded = Board::from_str(&game.positions[0].fen).unwrap();
-            assert_eq!(recorded, board);
-        }
+    pub fn into_data(self) -> GameData {
+        self.data
     }
 }
