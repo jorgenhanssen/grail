@@ -1,14 +1,18 @@
+mod clock;
 mod config;
 
-pub use config::GameConfig;
+pub use config::{GameConfig, SearchMode};
 
 use std::collections::HashMap;
+use std::time::Instant;
 
 use ahash::AHashSet;
 use cozy_chess::{Board, Color, Move};
 use search::Engine;
 use uci::commands::GoParams;
 use utils::{has_check, has_insufficient_material, has_legal_moves};
+
+use self::clock::Clock;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -56,10 +60,17 @@ impl Game {
         white.new_game();
         black.new_game();
 
-        let go = GoParams {
-            soft_nodes: Some(self.config.nodes),
-            ..Default::default()
-        };
+        let mut go = GoParams::default();
+        let mut clock = None;
+
+        match self.config.search_mode {
+            SearchMode::Nodes { per_move } => {
+                go.soft_nodes = Some(per_move);
+            }
+            SearchMode::Time { initial } => {
+                clock = Some(Clock::new(initial));
+            }
+        }
 
         loop {
             if self.plies >= self.config.max_plies {
@@ -74,7 +85,19 @@ impl Game {
 
             engine.set_position(self.board.clone(), Some(self.history()));
 
-            let result = engine.search(&go, None).expect("search returned nothing");
+            if let Some(clock) = &clock {
+                go = clock.get_go_params();
+            }
+
+            let start = Instant::now();
+            let result = engine.search(&go, None);
+            if let Some(clock) = &mut clock {
+                if !clock.finish_move(stm, start.elapsed()) {
+                    return Outcome::Win(!stm);
+                }
+            }
+
+            let result = result.expect("search returned nothing");
             let pv = result.primary().expect("search returned no move");
             let mv = pv.best_move().expect("search returned no move");
             let score = pv.score;

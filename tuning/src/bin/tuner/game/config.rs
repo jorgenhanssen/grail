@@ -1,7 +1,15 @@
+use std::time::Duration;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SearchMode {
+    Nodes { per_move: u64 },
+    Time { initial: Duration },
+}
+
 /// Configuration for a game.
 #[derive(Clone, Copy)]
 pub struct GameConfig {
-    pub nodes: u64,
+    pub search_mode: SearchMode,
     pub max_plies: u64,
 
     // Adjudication

@@ -185,8 +185,9 @@ make tuner
 - `--book`: Path to an EPD opening book.
 - `--pairs`: Game pairs per iteration (default: 100).
 - `--nodes`: Soft node limit per move (default: 25000).
+- `--time`: TC mode (seconds per side + 1% increment).
 - `--iterations`: Stop after this many iterations (runs until Ctrl+C if omitted).
-- `--workers`: Worker threads (default: logical CPUs).
+- `--workers`: Worker threads (default: physical cores for TC, logical CPUs for nodes).
 - `--gain`: How hard to nudge parameters.
 - `--max-plies`: Abort game as draw after this many plies (default: 500).
 - `--resign-score`: Score threshold to adjudicate a win (default: 400).

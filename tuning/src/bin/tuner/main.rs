@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use args::Args;
 use clap::Parser;
 use config::EngineConfig;
-use game::GameConfig;
+use game::{GameConfig, SearchMode};
 use gradient::Gradient;
 use matcher::Matcher;
 use params::Parameters;
@@ -27,13 +27,18 @@ fn main() -> Result<(), String> {
     let stop = abort_listener()?;
 
     let book = Book::load(&args.book).unwrap();
-    let workers = args.workers.unwrap_or_else(|| num_cpus::get() as u64);
+    let search_mode = args.search_mode();
+    let workers = args.workers.unwrap_or_else(|| match search_mode {
+        SearchMode::Nodes { .. } => num_cpus::get() as u64,
+        // Reserve 1 CPU as a buffer in timed mode
+        SearchMode::Time { .. } => (num_cpus::get_physical() - 1) as u64,
+    });
 
     let matcher = Matcher::new(
         workers,
         args.pairs,
         GameConfig {
-            nodes: args.nodes,
+            search_mode,
             max_plies: args.max_plies,
             resign_score: args.resign_score,
             resign_moves: args.resign_moves,
