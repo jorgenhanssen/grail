@@ -1,5 +1,4 @@
 use clap::Parser;
-use std::ops::RangeInclusive;
 
 #[derive(Parser, Debug)]
 #[command(name = "NNUE Data Generator")]
@@ -38,14 +37,6 @@ pub struct Args {
     #[arg(long)]
     pub max_opening_imbalance: Option<i16>,
 
-    /// Max plies of the PV allowed when teleporting.
-    #[arg(long, default_value_t = 8, value_parser = clap::value_parser!(u64).range(1..))]
-    pub max_teleport_plies: u64,
-
-    /// Max fraction of the PV length allowed when teleporting.
-    #[arg(long, default_value_t = 0.4, value_parser = |s: &str| parse_f64_range(s, 0.0..=1.0))]
-    pub max_teleport_pv_fraction: f64,
-
     /// Discard games lasting longer than this many plies
     #[arg(long, default_value_t = 300, value_parser = clap::value_parser!(u64).range(1..))]
     pub max_game_plies: u64,
@@ -58,10 +49,6 @@ pub struct Args {
     #[arg(long)]
     pub dry_run: bool,
 
-    /// Record only anchor/decision nodes.
-    #[arg(long)]
-    pub sparse_samples: bool,
-
     /// Path to an EPD opening book. If omitted, games start from the standard startpos.
     #[arg(long)]
     pub book: Option<String>,
@@ -69,17 +56,4 @@ pub struct Args {
     /// Random legal plies from the selected position.
     #[arg(long, default_value_t = 0)]
     pub random_plies: usize,
-}
-
-// Clap doesnt have a range parser for f64.
-fn parse_f64_range(s: &str, range: RangeInclusive<f64>) -> Result<f64, String> {
-    let value: f64 = s.parse().map_err(|e| format!("{e}"))?;
-    if !range.contains(&value) {
-        return Err(format!(
-            "must be between {} and {}, got {value}",
-            range.start(),
-            range.end()
-        ));
-    }
-    Ok(value)
 }
