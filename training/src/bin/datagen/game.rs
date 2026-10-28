@@ -1,13 +1,16 @@
-use crate::limit::SearchLimit;
 use cozy_chess::{Board, Move};
+use rand::RngExt;
 use search::{Engine, SearchResult};
 use std::collections::HashMap;
 use training::dataset::{GameData, GameOutcome, MoveData, Sample};
+use uci::commands::GoParams;
 use utils::{flip_eval_perspective, has_check, has_insufficient_material, has_legal_moves};
 
 #[derive(Clone, Copy)]
 pub struct GameConfig {
-    pub limit: SearchLimit,
+    pub scout_nodes: u64,
+    pub eval_nodes: u64,
+    pub sample_rate: f64,
     pub max_opening_imbalance: Option<i16>,
     pub max_game_plies: usize,
 }
@@ -47,9 +50,19 @@ impl SelfPlayGame {
                 break;
             }
 
-            let Some(result) = self.search(engine) else {
+            let Some(mut result) = self.search(engine, self.config.scout_nodes) else {
                 break;
             };
+
+            // Scout node is lucky winner and becomes a sample!
+            let is_sample = self.should_sample();
+            if is_sample {
+                let Some(eval_result) = self.search(engine, self.config.eval_nodes) else {
+                    break;
+                };
+                result = eval_result;
+            }
+
             let Some(pv) = result.primary() else {
                 break;
             };
@@ -58,9 +71,13 @@ impl SelfPlayGame {
                 break;
             }
 
-            let sample = Sample {
-                score: flip_eval_perspective(self.board.side_to_move(), pv.score),
-                outcome: GameOutcome::Draw,
+            let sample = if is_sample {
+                Some(Sample {
+                    score: flip_eval_perspective(self.board.side_to_move(), pv.score),
+                    outcome: GameOutcome::Draw,
+                })
+            } else {
+                None
             };
 
             let chosen = result.select_softmax().expect("has lines");
@@ -68,13 +85,23 @@ impl SelfPlayGame {
                 break;
             };
 
-            self.play_move(mv, Some(sample));
+            self.play_move(mv, sample);
         }
     }
 
-    fn search(&self, engine: &mut Engine) -> Option<SearchResult> {
+    fn search(&self, engine: &mut Engine, nodes: u64) -> Option<SearchResult> {
         engine.set_position(self.board.clone(), Some(self.history()));
-        engine.search(&self.config.limit.go_params(), None)
+
+        let params = GoParams {
+            soft_nodes: Some(nodes),
+            ..Default::default()
+        };
+
+        engine.search(&params, None)
+    }
+
+    fn should_sample(&self) -> bool {
+        rand::rng().random::<f64>() < self.config.sample_rate
     }
 
     fn opening_is_too_imbalanced(&self, score: i16) -> bool {

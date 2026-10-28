@@ -65,8 +65,9 @@ impl Generator {
         writer: Option<Arc<Mutex<DatasetWriter>>>,
     ) -> io::Result<usize> {
         log::info!(
-            "Generating samples ({}, multi_pv={}, threads={}). Press Ctrl+C to stop.",
-            game_config.limit,
+            "Generating samples (scout_nodes={}, eval_nodes={}, multi_pv={}, threads={}). Press Ctrl+C to stop.",
+            game_config.scout_nodes,
+            game_config.eval_nodes,
             self.pv_lines,
             self.threads,
         );

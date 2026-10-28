@@ -2,7 +2,6 @@ mod args;
 mod game;
 mod generator;
 mod histogram;
-mod limit;
 mod opening;
 mod refinery;
 mod worker;
@@ -12,7 +11,6 @@ use chrono::Local;
 use clap::Parser;
 use game::GameConfig;
 use generator::Generator;
-use limit::SearchLimit;
 use log::LevelFilter;
 use opening::OpeningSource;
 use simplelog::{Config, SimpleLogger};
@@ -47,13 +45,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         book,
         random_plies: args.random_plies,
     };
-    let limit = match args.nodes {
-        Some(nodes) => SearchLimit::SoftNodes(nodes),
-        None => SearchLimit::Depth(args.depth),
-    };
     let generator = Generator::new(threads, args.pv_lines, opening, args.syzygy_path)?;
     let game_config = GameConfig {
-        limit,
+        scout_nodes: args.scout_nodes,
+        eval_nodes: args.eval_nodes,
+        sample_rate: args.sample_rate,
         max_opening_imbalance: args.max_opening_imbalance,
         max_game_plies: args.max_game_plies as usize,
     };

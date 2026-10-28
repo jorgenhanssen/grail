@@ -17,13 +17,17 @@ pub struct Args {
     #[arg(long, default_value_t = 0.01)]
     pub test_ratio: f64,
 
-    /// Search depth for position evaluation.
-    #[arg(long, default_value_t = 8)]
-    pub depth: u8,
+    /// Soft node limit for the scout/shallow search.
+    #[arg(long, default_value_t = 3000)]
+    pub scout_nodes: u64,
 
-    /// Soft node limit per position (finishes the ongoing iteration).
-    #[arg(long, conflicts_with = "depth")]
-    pub nodes: Option<u64>,
+    /// Fraction of scout positions selected for an eval search.
+    #[arg(long, default_value_t = 0.2)]
+    pub sample_rate: f64,
+
+    /// Soft node limit for the eval search.
+    #[arg(long, default_value_t = 25000)]
+    pub eval_nodes: u64,
 
     /// Number of PV lines to search at each decision point.
     #[arg(long, default_value_t = 1)]
