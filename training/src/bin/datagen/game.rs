@@ -1,6 +1,5 @@
 use crate::limit::SearchLimit;
 use cozy_chess::{Board, Move};
-use rand::{RngExt, rng};
 use search::{Engine, SearchResult};
 use std::collections::HashMap;
 use training::dataset::{GameData, GameOutcome, MoveData, Sample};
@@ -10,22 +9,10 @@ use utils::{flip_eval_perspective, has_check, has_insufficient_material, has_leg
 pub struct GameConfig {
     pub limit: SearchLimit,
     pub max_opening_imbalance: Option<i16>,
-    pub max_teleport_plies: usize,
-    pub max_teleport_pv_fraction: f64,
     pub max_game_plies: usize,
-    pub dense_sampling: bool,
-}
-impl GameConfig {
-    fn max_teleport_len(&self, pv_len: usize) -> usize {
-        let pv_cap = ((pv_len as f64) * self.max_teleport_pv_fraction).floor() as usize;
-        self.max_teleport_plies.min(pv_cap.max(1))
-    }
 }
 
 /// A self-play game that records positions for training.
-///
-/// Uses MultiPV search at decision points and teleports along chosen PV lines
-/// to produce varied games from the same openings.
 pub struct SelfPlayGame {
     board: Board,
     position_counts: HashMap<u64, usize>,
@@ -46,15 +33,8 @@ impl SelfPlayGame {
         }
     }
 
-    /// Play the game using MultiPV search and teleporting.
-    ///
-    /// At each decision point: search, record sample, select PV via softmax,
-    /// then teleport along the chosen PV. With sparse sampling, only the
-    /// anchor/decision nodes are searched and recorded.
     pub fn play(&mut self, engine: &mut Engine) {
         engine.new_game();
-
-        let mut line: Vec<Move> = Vec::new();
 
         loop {
             // Cursed long game... no trustworthy outcome, discard the game.
@@ -67,39 +47,28 @@ impl SelfPlayGame {
                 break;
             }
 
-            let is_anchor = line.is_empty();
-            let mut sample = None;
+            let Some(result) = self.search(engine) else {
+                break;
+            };
+            let Some(pv) = result.primary() else {
+                break;
+            };
 
-            if is_anchor || self.config.dense_sampling {
-                let Some(result) = self.search(engine) else {
-                    break;
-                };
-                let Some(pv) = result.primary() else {
-                    break;
-                };
-
-                if self.opening_is_too_imbalanced(pv.score) {
-                    break;
-                }
-
-                sample = Some(Sample {
-                    score: flip_eval_perspective(self.board.side_to_move(), pv.score),
-                    outcome: GameOutcome::Draw,
-                });
-
-                if is_anchor {
-                    let chosen = result.select_softmax().expect("has lines");
-                    let max_len = self.config.max_teleport_len(chosen.line.len());
-                    let len = rng().random_range(1..=max_len);
-                    line = chosen.line.iter().take(len).copied().collect();
-                }
-            }
-
-            if line.is_empty() {
+            if self.opening_is_too_imbalanced(pv.score) {
                 break;
             }
 
-            self.play_move(line.remove(0), sample);
+            let sample = Sample {
+                score: flip_eval_perspective(self.board.side_to_move(), pv.score),
+                outcome: GameOutcome::Draw,
+            };
+
+            let chosen = result.select_softmax().expect("has lines");
+            let Some(mv) = chosen.best_move() else {
+                break;
+            };
+
+            self.play_move(mv, Some(sample));
         }
     }
 

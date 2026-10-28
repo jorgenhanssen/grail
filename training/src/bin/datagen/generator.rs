@@ -65,11 +65,10 @@ impl Generator {
         writer: Option<Arc<Mutex<DatasetWriter>>>,
     ) -> io::Result<usize> {
         log::info!(
-            "Generating samples ({}, multi_pv={}, threads={}, dense={}) - Press Ctrl+C to stop",
+            "Generating samples ({}, multi_pv={}, threads={}). Press Ctrl+C to stop.",
             game_config.limit,
             self.pv_lines,
             self.threads,
-            game_config.dense_sampling,
         );
 
         let sample_counter = Arc::new(AtomicUsize::new(0));
