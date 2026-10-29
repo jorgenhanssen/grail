@@ -1,16 +1,21 @@
+use crate::sampler::Sampler;
 use cozy_chess::{Board, Move};
-use rand::RngExt;
 use search::{Engine, SearchResult};
 use std::collections::HashMap;
 use training::dataset::{GameData, GameOutcome, MoveData, Sample};
 use uci::commands::GoParams;
-use utils::{flip_eval_perspective, has_check, has_insufficient_material, has_legal_moves};
+use utils::{
+    Node, NodeType, flip_eval_perspective, has_check, has_insufficient_material, has_legal_moves,
+};
 
 #[derive(Clone, Copy)]
 pub struct GameConfig {
     pub scout_nodes: u64,
     pub eval_nodes: u64,
-    pub sample_rate: f64,
+    pub base_chance: f64,
+    pub feature_delta_weight: f64,
+    pub eval_delta_weight: f64,
+    pub disagreement_weight: f64,
     pub max_opening_imbalance: Option<i16>,
     pub max_game_plies: usize,
 }
@@ -21,6 +26,7 @@ pub struct SelfPlayGame {
     position_counts: HashMap<u64, usize>,
     data: GameData,
     config: GameConfig,
+    sampler: Sampler,
 }
 
 impl SelfPlayGame {
@@ -33,6 +39,12 @@ impl SelfPlayGame {
             board,
             position_counts: HashMap::new(),
             config,
+            sampler: Sampler::new(
+                config.base_chance,
+                config.feature_delta_weight,
+                config.eval_delta_weight,
+                config.disagreement_weight,
+            ),
         }
     }
 
@@ -50,12 +62,20 @@ impl SelfPlayGame {
                 break;
             }
 
+            let node = Node::new(self.board.clone(), NodeType::Pv);
+            let static_eval = engine.get_static_eval(&node);
+
             let Some(mut result) = self.search(engine, self.config.scout_nodes) else {
                 break;
             };
 
+            let scout_eval = flip_eval_perspective(
+                self.board.side_to_move(),
+                result.primary().expect("has lines").score,
+            );
+
             // Scout node is lucky winner and becomes a sample!
-            let is_sample = self.should_sample();
+            let is_sample = self.sampler.should_sample(&node, static_eval, scout_eval);
             if is_sample {
                 let Some(eval_result) = self.search(engine, self.config.eval_nodes) else {
                     break;
@@ -98,10 +118,6 @@ impl SelfPlayGame {
         };
 
         engine.search(&params, None)
-    }
-
-    fn should_sample(&self) -> bool {
-        rand::rng().random::<f64>() < self.config.sample_rate
     }
 
     fn opening_is_too_imbalanced(&self, score: i16) -> bool {
