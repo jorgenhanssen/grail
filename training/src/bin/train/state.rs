@@ -1,8 +1,8 @@
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::fs::{self, File};
-use std::io::{self, BufReader, BufWriter};
+use std::fs::File;
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -21,15 +21,10 @@ pub struct TrainingState {
 }
 
 impl TrainingState {
-    /// Load state from disk if present, otherwise build a fresh one with a random/provided seed.
-    pub fn new(path: &Path, seed: Option<u64>) -> Result<Self, Box<dyn Error>> {
-        if path.exists() {
-            Self::load(path)
-        } else {
-            Ok(Self {
-                seed: seed.unwrap_or_else(|| rand::rng().random()),
-                history: Vec::new(),
-            })
+    pub fn new(seed: Option<u64>) -> Self {
+        Self {
+            seed: seed.unwrap_or_else(|| rand::rng().random()),
+            history: Vec::new(),
         }
     }
 
@@ -42,16 +37,6 @@ impl TrainingState {
         let file = File::create(path)?;
         serde_json::to_writer_pretty(BufWriter::new(file), self)?;
         Ok(())
-    }
-
-    /// Removes the state file if it exists. Returns true if something was deleted.
-    pub fn destroy(path: &Path) -> io::Result<bool> {
-        if path.exists() {
-            fs::remove_file(path)?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
     }
 
     pub fn record_epoch(&mut self, record: EpochRecord) {

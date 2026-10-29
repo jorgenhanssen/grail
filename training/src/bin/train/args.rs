@@ -39,18 +39,14 @@ pub struct Args {
     /// Target win-probability for drawn games (smaller = prefer wins over draws).
     #[arg(long, default_value_t = 0.5)]
     pub draw_target: f64,
-
-    /// Random seed for dataset read order and buffer randomization.
-    #[arg(long, requires = "restart")]
-    pub seed: Option<u64>,
-
-    /// Discard any saved progress and train from epoch 1.
-    #[arg(long)]
-    pub restart: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum Command {
-    /// Save a randomly initialized model and exit.
-    Init,
+    /// Create a random model and reset training state.
+    Init {
+        /// Random seed for weights (GPU only), dataset read order and buffer shuffling.
+        #[arg(long)]
+        seed: Option<u64>,
+    },
 }
