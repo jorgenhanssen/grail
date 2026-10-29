@@ -1,14 +1,31 @@
+use crate::args::Args;
 use cozy_chess::Color;
 use nnue::encoding::{NUM_FEATURES, encode_board_bitset};
 use nnue::network::FV_SCALE;
 use rand::RngExt;
 use utils::{Node, bitset};
 
+#[derive(Clone, Copy)]
+pub struct SamplerConfig {
+    pub base_chance: f64,
+    pub feature_delta_weight: f64,
+    pub eval_delta_weight: f64,
+    pub disagreement_weight: f64,
+}
+
+impl SamplerConfig {
+    pub fn from_args(args: &Args) -> Self {
+        Self {
+            base_chance: args.base_chance,
+            feature_delta_weight: args.feature_delta_weight,
+            eval_delta_weight: args.eval_delta_weight,
+            disagreement_weight: args.disagreement_weight,
+        }
+    }
+}
+
 pub struct Sampler {
-    base_chance: f64,
-    feature_delta_weight: f64,
-    eval_delta_weight: f64,
-    disagreement_weight: f64,
+    config: SamplerConfig,
     previous: Option<SampleCandidate>,
 }
 
@@ -19,17 +36,9 @@ struct SampleCandidate {
 }
 
 impl Sampler {
-    pub fn new(
-        base_chance: f64,
-        feature_delta_weight: f64,
-        eval_delta_weight: f64,
-        disagreement_weight: f64,
-    ) -> Self {
+    pub fn new(config: SamplerConfig) -> Self {
         Self {
-            base_chance,
-            feature_delta_weight,
-            eval_delta_weight,
-            disagreement_weight,
+            config,
             previous: None,
         }
     }
@@ -37,7 +46,7 @@ impl Sampler {
     pub fn should_sample(&mut self, node: &Node, static_eval: i16, scout_eval: i16) -> bool {
         let candidate = SampleCandidate::new(node, scout_eval);
 
-        let mut sample_chance = self.base_chance;
+        let mut sample_chance = self.config.base_chance;
 
         if let Some(previous) = &self.previous {
             sample_chance += self.feature_delta_chance(&candidate, previous);
@@ -60,19 +69,19 @@ impl Sampler {
     fn feature_delta_chance(&self, candidate: &SampleCandidate, previous: &SampleCandidate) -> f64 {
         let feature_delta = feature_distance(candidate, previous);
 
-        self.feature_delta_weight * feature_delta.powi(2)
+        self.config.feature_delta_weight * feature_delta.powi(2)
     }
 
     fn eval_delta_chance(&self, scout_eval: i16, previous_eval: i16) -> f64 {
         let eval_delta = eval_distance(scout_eval, previous_eval);
 
-        self.eval_delta_weight * eval_delta.powi(2)
+        self.config.eval_delta_weight * eval_delta.powi(2)
     }
 
     fn eval_disagreement_chance(&self, static_eval: i16, scout_eval: i16) -> f64 {
         let disagreement = eval_distance(static_eval, scout_eval);
 
-        self.disagreement_weight * disagreement.powi(2)
+        self.config.disagreement_weight * disagreement.powi(2)
     }
 }
 
