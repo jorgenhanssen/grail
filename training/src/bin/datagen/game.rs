@@ -1,3 +1,4 @@
+use crate::args::Args;
 use crate::sampler::Sampler;
 use cozy_chess::{Board, Move};
 use search::{Engine, SearchResult};
@@ -12,12 +13,19 @@ use utils::{
 pub struct GameConfig {
     pub scout_nodes: u64,
     pub eval_nodes: u64,
-    pub base_chance: f64,
-    pub feature_delta_weight: f64,
-    pub eval_delta_weight: f64,
-    pub disagreement_weight: f64,
     pub max_opening_imbalance: Option<i16>,
     pub max_game_plies: usize,
+}
+
+impl GameConfig {
+    pub fn from_args(args: &Args) -> Self {
+        Self {
+            scout_nodes: args.scout_nodes,
+            eval_nodes: args.eval_nodes,
+            max_opening_imbalance: args.max_opening_imbalance,
+            max_game_plies: args.max_game_plies as usize,
+        }
+    }
 }
 
 /// A self-play game that records positions for training.
@@ -30,7 +38,7 @@ pub struct SelfPlayGame {
 }
 
 impl SelfPlayGame {
-    pub fn new(board: Board, config: GameConfig) -> Self {
+    pub fn new(board: Board, config: GameConfig, sampler: Sampler) -> Self {
         Self {
             data: GameData {
                 start_position: board.clone(),
@@ -39,12 +47,7 @@ impl SelfPlayGame {
             board,
             position_counts: HashMap::new(),
             config,
-            sampler: Sampler::new(
-                config.base_chance,
-                config.feature_delta_weight,
-                config.eval_delta_weight,
-                config.disagreement_weight,
-            ),
+            sampler,
         }
     }
 

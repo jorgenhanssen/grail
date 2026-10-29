@@ -2,6 +2,7 @@ use crate::game::GameConfig;
 use crate::histogram::ScoreHistogram;
 use crate::opening::OpeningSource;
 use crate::refinery::RefinementStats;
+use crate::sampler::SamplerConfig;
 use crate::worker::SelfPlayWorker;
 use indicatif::MultiProgress;
 use nnue::MODEL_PATH;
@@ -60,6 +61,7 @@ impl Generator {
     pub fn run(
         &self,
         game_config: GameConfig,
+        sampler_config: SamplerConfig,
         max_games: Option<usize>,
         stop_flag: Arc<AtomicBool>,
         writer: Option<Arc<Mutex<DatasetWriter>>>,
@@ -98,6 +100,7 @@ impl Generator {
                         sample_counter,
                         game_id_counter,
                         game_config,
+                        sampler_config,
                         max_games,
                         pv_lines,
                         evaluator,

@@ -2,6 +2,7 @@ use crate::game::{GameConfig, SelfPlayGame};
 use crate::histogram::HistogramHandle;
 use crate::opening::OpeningSource;
 use crate::refinery::{RefinementStats, Refinery};
+use crate::sampler::{Sampler, SamplerConfig};
 use config::EngineConfig;
 use pyrrhic_rs::TableBases;
 use search::{CozyAdapter, Engine};
@@ -21,6 +22,7 @@ pub struct SelfPlayWorker {
     game_id_counter: Arc<AtomicUsize>,
     engine: Engine,
     game_config: GameConfig,
+    sampler_config: SamplerConfig,
     max_games: Option<usize>,
     opening_source: Arc<OpeningSource>,
     histogram: HistogramHandle,
@@ -35,6 +37,7 @@ impl SelfPlayWorker {
         sample_counter: Arc<AtomicUsize>,
         game_id_counter: Arc<AtomicUsize>,
         game_config: GameConfig,
+        sampler_config: SamplerConfig,
         max_games: Option<usize>,
         multi_pv: u8,
         evaluator: nnue::Evaluator,
@@ -60,6 +63,7 @@ impl SelfPlayWorker {
             sample_counter,
             game_id_counter,
             game_config,
+            sampler_config,
             max_games,
             engine,
             opening_source,
@@ -83,8 +87,9 @@ impl SelfPlayWorker {
             }
 
             let opening = self.opening_source.next_opening();
+            let sampler = Sampler::new(self.sampler_config);
 
-            let mut game = SelfPlayGame::new(opening, self.game_config);
+            let mut game = SelfPlayGame::new(opening, self.game_config, sampler);
             game.play(&mut self.engine);
 
             let outcome = game.outcome();
