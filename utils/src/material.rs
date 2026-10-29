@@ -54,9 +54,9 @@ pub fn majors(board: &Board, color: Color) -> BitBoard {
     board.colored_pieces(color, Piece::Rook) | board.colored_pieces(color, Piece::Queen)
 }
 
-/// Cap evaluation based on insufficient material.
-/// If a side cannot possibly win, cap eval so they can't be "winning".
-pub fn cap_eval_by_material(board: &Board, score: i16) -> i16 {
+/// Refine the static (white) evaluation based on the position.
+/// Such as: if a side cannot possibly win, cap eval so they can't be "winning".
+pub fn refine_static_eval(board: &Board, score: i16) -> i16 {
     let mut capped = score;
     if side_has_insufficient_material(board, Color::White) {
         capped = capped.min(0);

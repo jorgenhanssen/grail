@@ -3,7 +3,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use ahash::AHashSet;
 use config::EngineConfig;
 use cozy_chess::Board;
-use search::Engine;
+use search::{Engine, Node, NodeType};
 use uci::{NULL_MOVE, UciOutput, move_to_uci};
 
 use crate::bench::run_benchmark;
@@ -25,6 +25,8 @@ pub enum EngineCommand {
     Go(uci::commands::GoParams),
     /// Display current position.
     Display,
+    /// Evaluate current position.
+    Eval,
     /// Run the engine benchmark.
     Bench,
     /// Shut down the worker thread.
@@ -89,6 +91,14 @@ impl EngineWorker {
                 }
                 EngineCommand::Display => {
                     display_position(self.engine.board(), self.last_search.as_ref())
+                }
+                EngineCommand::Eval => {
+                    let node = Node::new(self.engine.board().clone(), NodeType::Pv);
+                    let score = self.engine.get_static_eval(&node);
+
+                    let _ = self.uci_tx.send(UciOutput::InfoString(format!(
+                        "static eval: {score:+} cp (white)"
+                    )));
                 }
                 EngineCommand::Bench => run_benchmark(&mut self.engine),
                 EngineCommand::Quit => break,

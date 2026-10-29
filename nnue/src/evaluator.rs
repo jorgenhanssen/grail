@@ -1,7 +1,7 @@
 use candle_core::{DType, Device};
 use candle_nn::VarBuilder;
 use cozy_chess::Color;
-use utils::{Node, flip_eval_perspective};
+use utils::{Node, flip_eval_perspective, refine_static_eval};
 
 use crate::{
     encoding::encode_board_bitset,
@@ -40,6 +40,8 @@ impl Evaluator {
         let stm_score = stm_score.clamp(i16::MIN as f32, i16::MAX as f32) as i16;
 
         // Return the score as white (as needed by the search)
-        flip_eval_perspective(stm, stm_score)
+        let score = flip_eval_perspective(stm, stm_score);
+
+        refine_static_eval(board, score)
     }
 }

@@ -1,4 +1,4 @@
-use utils::{Node, cap_eval_by_material, flip_eval_perspective};
+use utils::{Node, flip_eval_perspective};
 
 use crate::tablebase;
 
@@ -6,11 +6,8 @@ use super::Searcher;
 
 impl Searcher {
     /// Get the static evaluation from the perspective of the side to move.
-    pub(super) fn static_eval(&mut self, node: &Node) -> i16 {
-        let mut score = self.evaluator.evaluate(node);
-
-        score = cap_eval_by_material(node.board(), score);
-
+    pub(super) fn static_eval_for_stm(&mut self, node: &Node) -> i16 {
+        let score = self.evaluator.evaluate(node);
         flip_eval_perspective(node.side_to_move(), score)
     }
 

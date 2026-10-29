@@ -121,6 +121,7 @@ impl Grail {
             }
             UciInput::Stop => self.stop.store(true, Ordering::Relaxed),
             UciInput::Display => self.send_engine_command(EngineCommand::Display),
+            UciInput::Eval => self.send_engine_command(EngineCommand::Eval),
             UciInput::Bench => self.send_engine_command(EngineCommand::Bench),
             UciInput::Quit => return false,
             UciInput::Unknown(_) => {} // Ignore unknown commands per UCI spec

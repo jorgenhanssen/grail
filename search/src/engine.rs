@@ -6,6 +6,7 @@ use config::EngineConfig;
 use cozy_chess::Board;
 use pyrrhic_rs::TableBases;
 use uci::UciOutput;
+use utils::Node;
 
 use crate::{
     result::SearchResult,
@@ -101,6 +102,10 @@ impl Engine {
 
     pub fn config(&self) -> &EngineConfig {
         &self.config
+    }
+
+    pub fn get_static_eval(&mut self, node: &Node) -> i16 {
+        self.evaluator.evaluate(node)
     }
 
     pub fn set_tablebases(&self, tb: TableBases<CozyAdapter>) {

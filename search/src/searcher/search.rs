@@ -245,7 +245,7 @@ impl Searcher {
 
         // As deep as we can go, so return static eval
         if ply as usize >= MAX_DEPTH {
-            return self.static_eval(node);
+            return self.static_eval_for_stm(node);
         }
 
         if mate_distance_prune(&mut bounds, ply) {
@@ -278,7 +278,7 @@ impl Searcher {
 
         let static_eval = tt_info
             .and_then(|t| t.static_eval)
-            .unwrap_or_else(|| self.static_eval(node));
+            .unwrap_or_else(|| self.static_eval_for_stm(node));
 
         let prev_moves = self.search_stack.prev_moves();
 
