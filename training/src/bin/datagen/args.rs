@@ -21,9 +21,21 @@ pub struct Args {
     #[arg(long, default_value_t = 3000)]
     pub scout_nodes: u64,
 
-    /// Fraction of scout positions selected for an eval search.
-    #[arg(long, default_value_t = 0.2)]
-    pub sample_rate: f64,
+    /// Base chance of selecting a scout position for an eval search.
+    #[arg(long, default_value_t = 0.05)]
+    pub base_chance: f64,
+
+    /// Increases chance of sampling a position if the features have changed since the last sample.
+    #[arg(long, default_value_t = 0.5)]
+    pub feature_delta_weight: f64,
+
+    /// Increases chance of sampling a position if the eval has changed since the last sample.
+    #[arg(long, default_value_t = 0.5)]
+    pub eval_delta_weight: f64,
+
+    /// Increases chance of sampling a position if the static and scout eval disagree.
+    #[arg(long, default_value_t = 0.5)]
+    pub disagreement_weight: f64,
 
     /// Soft node limit for the eval search.
     #[arg(long, default_value_t = 25000)]

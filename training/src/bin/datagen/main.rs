@@ -4,6 +4,7 @@ mod generator;
 mod histogram;
 mod opening;
 mod refinery;
+mod sampler;
 mod worker;
 
 use args::Args;
@@ -49,7 +50,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let game_config = GameConfig {
         scout_nodes: args.scout_nodes,
         eval_nodes: args.eval_nodes,
-        sample_rate: args.sample_rate,
+        base_chance: args.base_chance,
+        feature_delta_weight: args.feature_delta_weight,
+        eval_delta_weight: args.eval_delta_weight,
+        disagreement_weight: args.disagreement_weight,
         max_opening_imbalance: args.max_opening_imbalance,
         max_game_plies: args.max_game_plies as usize,
     };
