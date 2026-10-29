@@ -137,33 +137,24 @@ Train a new network using the generated data:
 ```bash
 make train
 
+./target/release/train init --seed 67
 ./target/release/train
 ```
 
-Run it again later and it'll pick up where it left off. Pass `--restart` to start from scratch.
+`train init` creates random weights in `nnue/model.safetensors` and resets `training/training.json`. Used to train a new model.
+
+`train` loads the existing model and training state. Run it again later and it'll pick up where it left off.
 
 **Arguments:**
 
 - `--batch-size`: Batch size for training (default: 16384).
 - `--learning-rate`: Initial learning rate (default: 0.001).
 - `--epochs`: Max number of epochs to train (default: 200).
-- `--workers`: Number of worker threads for data loading (default: 1).
-- `--val-ratio`: Fraction of data to use for validation (default: 0.05).
-- `--test-ratio`: Fraction of data to use for testing (default: 0.01).
+- `--buffer-size`: Number of samples to load into the shuffled buffer (default: 1000000).
 - `--lr-decay`: Learning rate decay factor (default: 0.95).
 - `--patience`: Epochs without improvement before early stopping (default: 5).
-- `--shard-size-mb`: Size of each data shard in megabytes (default: 500).
 - `--wdl`: WDL blending weight, 0.0 = pure eval, 1.0 = pure WDL (default: 0.2).
 - `--draw-target`: Target win-probability for drawn games, smaller = prefer wins over draws (default: 0.5).
-- `--quiets-only`: Skip samples that are in check, or whose best move captures or promotes.
-- `--seed`: Seed for the train/validation/test split. Requires `--restart`.
-- `--restart`: Discard saved progress and train from epoch 1.
-
-If you want to initialize a new/random model without starting training:
-
-```bash
-./target/release/train init
-```
 
 ### SPSA Tuning
 
