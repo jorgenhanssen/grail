@@ -40,10 +40,12 @@ fn init_model(seed: Option<u64>) -> Result<(), Box<dyn Error>> {
 
     let device = get_device();
 
-    // Candle deosn't support seeded weight initialization on CPU :(
-    // "Error: cannot seed the CPU rng with set_seed"
     if !device.is_cpu() {
         device.set_seed(state.seed)?;
+    } else if seed.is_some() {
+        // Candle deosn't support seeded weight initialization on CPU :(
+        // "Error: cannot seed the CPU rng with set_seed"
+        log::warn!("Seeded CPU weight init is not supported. Using random weights instead.");
     }
 
     let varmap = VarMap::new();
