@@ -99,6 +99,7 @@ impl Searcher {
             return result;
         }
 
+        // Negative extension
         if tt.value >= beta || node.is_cut() {
             result.extension = -self.config.negative_extension;
         }
