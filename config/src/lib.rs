@@ -94,8 +94,9 @@ pub struct EngineConfig {
     pub singular_min_depth: u8,
     pub singular_depth_margin: u8,
     pub singular_beta_margin: i16,
-    pub double_ext_margin: i16,
-    pub double_ext_overshoot_penalty: i16,
+    pub double_extension_margin: i16,
+    pub double_extension_overshoot_penalty: i16,
+    pub negative_extension: i8,
 
     pub correction_history_max_correction: i32,
     pub correction_table_size: usize,
@@ -205,8 +206,9 @@ impl Default for EngineConfig {
             singular_min_depth: 6,
             singular_depth_margin: 3,
             singular_beta_margin: 200,
-            double_ext_margin: 50,
-            double_ext_overshoot_penalty: 2,
+            double_extension_margin: 50,
+            double_extension_overshoot_penalty: 2,
+            negative_extension: 1,
 
             correction_history_max_correction: 1024,
             correction_table_size: 16384,

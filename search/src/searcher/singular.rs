@@ -81,8 +81,8 @@ impl Searcher {
             // extensions progressively harder deep in the tree.
             // Should help cases where TT hits givve check chains (KQ+K,,, etc).
             let overshoot = ply.saturating_sub(self.root_depth) as i16;
-            let double_margin = self.config.double_ext_margin
-                + overshoot * overshoot * self.config.double_ext_overshoot_penalty;
+            let double_margin = self.config.double_extension_margin
+                + overshoot * overshoot * self.config.double_extension_overshoot_penalty;
             if singular_value < singular_beta.saturating_sub(double_margin) {
                 result.extension = 2;
                 return result;
@@ -99,8 +99,9 @@ impl Searcher {
             return result;
         }
 
-        // TODO: Negative extensions. Infrastructure is now in place
-        // but tested neutral at STC/LTC. Revisit after tuning.
+        if tt.value >= beta || node.is_cut() {
+            result.extension = -self.config.negative_extension;
+        }
 
         result
     }
