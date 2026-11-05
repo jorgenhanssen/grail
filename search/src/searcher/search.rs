@@ -579,13 +579,13 @@ impl Searcher {
             corrected_eval,
         );
 
-        let extension = self.get_extension(node, &m, moved_piece, is_capture);
-        let extension = (extension + extra_extension).max(0) as u8;
+        let extension = self.get_extension(node, &m, moved_piece, is_capture) + extra_extension;
+        let extended_depth = depth.saturating_add_signed(extension);
 
-        let mut adjusted_depth = depth.saturating_add(extension).saturating_sub(reduction);
+        let mut search_depth = extended_depth.saturating_sub(reduction);
 
         if self.try_futility_prune(
-            adjusted_depth,
+            search_depth,
             in_check,
             is_tactical,
             is_pv_move,
@@ -605,7 +605,7 @@ impl Searcher {
         self.search_stack.push_move(&child, moved);
         let mut value = -self.search_node(
             &child,
-            adjusted_depth.saturating_sub(1),
+            search_depth.saturating_sub(1),
             ply.saturating_add(1),
             child_bounds,
             true,
@@ -621,13 +621,12 @@ impl Searcher {
                 child.set_type(child.node_type().inverted());
             }
 
-            // Search at full depth
-            adjusted_depth = depth.saturating_add(extension);
+            search_depth = extended_depth;
 
             self.search_stack.push_move(&child, moved);
             value = -self.search_node(
                 &child,
-                adjusted_depth.saturating_sub(1),
+                search_depth.saturating_sub(1),
                 ply.saturating_add(1),
                 child_bounds,
                 true,
@@ -642,7 +641,7 @@ impl Searcher {
             self.search_stack.push_move(&child, moved);
             value = -self.search_node(
                 &child,
-                adjusted_depth.saturating_sub(1),
+                search_depth.saturating_sub(1),
                 ply.saturating_add(1),
                 bounds.invert(),
                 true,
@@ -652,7 +651,7 @@ impl Searcher {
 
         let is_quiet = !is_capture && !is_promotion;
 
-        Some((value, is_quiet, adjusted_depth))
+        Some((value, is_quiet, search_depth))
     }
 
     /// Updates the history tables after a beta cutoff: boost the cutting move,
