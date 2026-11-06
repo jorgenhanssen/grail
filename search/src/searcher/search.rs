@@ -461,11 +461,19 @@ impl Searcher {
 
         // Check for terminal position (no legal moves)
         if move_index == -1 {
-            return if in_check {
+            let value = if in_check {
                 -(MATE_VALUE - ply as i16) // Checkmate
             } else {
                 0 // Stalemate
             };
+
+            // Ok so I lied... If we are in singular we excluded the only legal move (not terminal).
+            // in that case no other move can beat the threshold, so this has to fail low.
+            if singular.is_some() {
+                return value.min(original_bounds.alpha);
+            }
+
+            return value;
         }
 
         // Let's not store a partial result in the TT / correction.
@@ -474,8 +482,7 @@ impl Searcher {
         }
 
         // Use original alpha when storing in tables, since the bound type depends on the original expectation.
-        // Alpha may have been raised during search, but the bound type depends on
-        // whether we improved.
+        // Alpha may have been raised during search, but the bound type depends on if  we improved.
         if singular.is_none() {
             self.shared.tt().store(
                 hash,
