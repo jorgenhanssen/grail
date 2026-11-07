@@ -1,13 +1,16 @@
-use cozy_chess::{Board, Color, Move, Square};
+use cozy_chess::{Color, Move, Square};
+use utils::Node;
 
 use config::EngineConfig;
 
 use super::utils::apply_gravity;
 use crate::MAX_DEPTH;
 
-const HISTORY_SIZE: usize = Color::NUM * Square::NUM * Square::NUM;
+const ATTACK_SIZE: usize = 4; // [from attacked][to attacked]
+const HISTORY_SIZE: usize = Color::NUM * Square::NUM * Square::NUM * ATTACK_SIZE;
 
-/// Scores quiet moves based on search success. Indexed by [color][from][to].
+/// Scores quiet moves based on search success.
+/// Indexed by [color][from][to][from attacked][to attacked].
 /// Moves causing beta cutoffs get bonuses and moves searched before it get malus.
 ///
 /// <https://www.chessprogramming.org/History_Heuristic>
@@ -50,29 +53,33 @@ impl HistoryHeuristic {
         self.history.fill(0);
     }
 
-    pub fn get(&self, color: Color, source: Square, dest: Square) -> i16 {
-        self.history[Self::index(color, source, dest)]
+    pub fn get(&self, node: &Node, mv: Move) -> i16 {
+        self.history[Self::index(node, mv)]
     }
 
-    fn update_move(&mut self, c: Color, source: Square, dest: Square, bonus: i32) {
-        let idx = Self::index(c, source, dest);
-        apply_gravity(&mut self.history[idx], bonus, self.max_history);
+    pub fn update(&mut self, node: &Node, mv: Move, delta: i32) {
+        let idx = Self::index(node, mv);
+        apply_gravity(&mut self.history[idx], delta, self.max_history);
     }
 
-    pub fn update(&mut self, board: &Board, mv: Move, delta: i32) {
-        let color = board.side_to_move();
-        self.update_move(color, mv.from, mv.to, delta);
-    }
+    fn index(node: &Node, mv: Move) -> usize {
+        let color = node.side_to_move();
+        let enemy_attacks = node.attacks_for(!color);
 
-    fn index(color: Color, source: Square, dest: Square) -> usize {
         let color_idx = color as usize;
-        let source_idx = source as usize;
-        let dest_idx = dest as usize;
+        let source_idx = mv.from as usize;
+        let dest_idx = mv.to as usize;
 
         let color_stride = Square::NUM * Square::NUM;
         let source_stride = Square::NUM;
 
-        color_idx * color_stride + source_idx * source_stride + dest_idx
+        let from_attacked = enemy_attacks.has(mv.from) as usize;
+        let to_attacked = enemy_attacks.has(mv.to) as usize;
+
+        let move_idx = color_idx * color_stride + source_idx * source_stride + dest_idx;
+        let attack_idx = from_attacked * 2 + to_attacked;
+
+        move_idx * ATTACK_SIZE + attack_idx
     }
 
     pub fn get_bonus(&self, depth: u8) -> i32 {

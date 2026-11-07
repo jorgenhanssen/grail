@@ -554,7 +554,7 @@ impl Searcher {
         let hist = if is_capture {
             self.capture_history.get(node.board(), m)
         } else {
-            self.history_heuristic.get(moved_color, m.from, m.to)
+            self.history_heuristic.get(node, m)
         };
         let cont_hist = self.continuation_history.get(prev_moves, moved);
 
@@ -677,7 +677,7 @@ impl Searcher {
 
         if is_quiet {
             let bonus = self.history_heuristic.get_bonus(depth);
-            self.history_heuristic.update(board, mv, bonus);
+            self.history_heuristic.update(node, mv, bonus);
 
             let cont_bonus = self.continuation_history.get_bonus(depth);
             self.continuation_history
@@ -691,7 +691,7 @@ impl Searcher {
             let quiet_malus = self.history_heuristic.get_malus(depth);
             let cont_malus = self.continuation_history.get_malus(depth);
             for &q in quiets_searched {
-                self.history_heuristic.update(board, q, quiet_malus);
+                self.history_heuristic.update(node, q, quiet_malus);
                 self.continuation_history
                     .update_quiet_all(board, prev_moves, q, cont_malus);
             }
