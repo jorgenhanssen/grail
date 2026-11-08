@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 use config::EngineConfig;
-use cozy_chess::{BitBoard, Move, Piece};
+use cozy_chess::{Move, Piece};
 use utils::{PAWN_VALUE, captured_piece, gives_check, piece_value};
 
 use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic, PieceTo, PrevMoves};
@@ -45,18 +45,10 @@ pub struct MainMoveGenerator {
     bad_quiet_threshold: i16,
     escape_divisor: i16,
     unsafe_square_divisor: i16,
-    threats: BitBoard,
-    enemy_attacks: BitBoard,
 }
 
 impl MainMoveGenerator {
-    pub fn new(
-        config: &EngineConfig,
-        best_move: Option<Move>,
-        prev_moves: PrevMoves,
-        threats: BitBoard,
-        enemy_attacks: BitBoard,
-    ) -> Self {
+    pub fn new(config: &EngineConfig, best_move: Option<Move>, prev_moves: PrevMoves) -> Self {
         Self {
             gen_phase: Phase::BestMove,
             best_move,
@@ -73,8 +65,6 @@ impl MainMoveGenerator {
             bad_quiet_threshold: config.ordering_bad_quiet_threshold,
             escape_divisor: config.ordering_escape_divisor,
             unsafe_square_divisor: config.ordering_unsafe_square_divisor,
-            threats,
-            enemy_attacks,
         }
     }
 
@@ -187,7 +177,7 @@ impl MainMoveGenerator {
                             score += continuation_history.get(&self.prev_moves, curr);
 
                             let value = piece_value(piece);
-                            let to_unsafe = self.enemy_attacks.has(mov.to);
+                            let (to_unsafe, escapes_threat) = node.move_safety(mov);
 
                             // Gives check = great (sometimes)
                             if gives_check(board, mov)
@@ -198,7 +188,7 @@ impl MainMoveGenerator {
                             }
 
                             // Escapes threat = good
-                            if self.threats.has(mov.from) {
+                            if escapes_threat {
                                 score += value / self.escape_divisor;
                             }
 

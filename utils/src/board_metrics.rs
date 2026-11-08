@@ -4,6 +4,7 @@ use cozy_chess::{
 };
 
 use crate::attacks::get_queen_moves;
+use crate::threats::threat_targets;
 
 /// Per-color attack/threat/support bitboards, computed once and reused
 /// throughout evaluation.
@@ -11,7 +12,7 @@ use crate::attacks::get_queen_moves;
 pub struct BoardMetrics {
     pub attacks: [BitBoard; Color::NUM],
 
-    /// Opponent's pieces under attack by lesser pieces.
+    /// Pieces under attack by lesser enemy pieces.
     pub threats: [BitBoard; Color::NUM],
 
     /// Own pieces defended by own pieces.
@@ -21,67 +22,11 @@ pub struct BoardMetrics {
 impl BoardMetrics {
     /// Compute all board metrics in a single pass.
     pub fn new(board: &Board) -> Self {
-        let all_pieces = board.occupied();
-        let white_pieces = board.colors(Color::White);
-        let black_pieces = board.colors(Color::Black);
+        let (white_attacks, black_threats) = compute(board, Color::White);
+        let (black_attacks, white_threats) = compute(board, Color::Black);
 
-        let pawns = board.pieces(Piece::Pawn);
-        let knights = board.pieces(Piece::Knight);
-        let bishops = board.pieces(Piece::Bishop);
-        let rooks = board.pieces(Piece::Rook);
-        let queens = board.pieces(Piece::Queen);
-
-        let white_pawns = pawns & white_pieces;
-        let black_pawns = pawns & black_pieces;
-        let white_knights = knights & white_pieces;
-        let black_knights = knights & black_pieces;
-        let white_bishops = bishops & white_pieces;
-        let black_bishops = bishops & black_pieces;
-        let white_rooks = rooks & white_pieces;
-        let black_rooks = rooks & black_pieces;
-        let white_queens = queens & white_pieces;
-        let black_queens = queens & black_pieces;
-
-        let white_minors = white_knights | white_bishops;
-        let black_minors = black_knights | black_bishops;
-        let white_majors = white_rooks | white_queens;
-        let black_majors = black_rooks | black_queens;
-        let white_non_pawns = white_minors | white_majors;
-        let black_non_pawns = black_minors | black_majors;
-
-        let white_king = board.king(Color::White);
-        let black_king = board.king(Color::Black);
-
-        let (white_attacks, black_threats) = compute(
-            Color::White,
-            white_pawns,
-            white_knights,
-            white_bishops,
-            white_rooks,
-            white_queens,
-            white_king,
-            black_non_pawns,
-            black_majors,
-            black_queens,
-            all_pieces,
-        );
-
-        let (black_attacks, white_threats) = compute(
-            Color::Black,
-            black_pawns,
-            black_knights,
-            black_bishops,
-            black_rooks,
-            black_queens,
-            black_king,
-            white_non_pawns,
-            white_majors,
-            white_queens,
-            all_pieces,
-        );
-
-        let white_support = white_attacks & white_pieces;
-        let black_support = black_attacks & black_pieces;
+        let white_support = white_attacks & board.colors(Color::White);
+        let black_support = black_attacks & board.colors(Color::Black);
 
         Self {
             attacks: [white_attacks, black_attacks],
@@ -92,57 +37,53 @@ impl BoardMetrics {
 }
 
 /// Compute attacks and threats for one color in a single pass.
-#[allow(clippy::too_many_arguments)]
-fn compute(
-    color: Color,
-    pawns: BitBoard,
-    knights: BitBoard,
-    bishops: BitBoard,
-    rooks: BitBoard,
-    queens: BitBoard,
-    king: cozy_chess::Square,
-    opponent_non_pawns: BitBoard,
-    opponent_majors: BitBoard,
-    opponent_queens: BitBoard,
-    all_pieces: BitBoard,
-) -> (BitBoard, BitBoard) {
+fn compute(board: &Board, color: Color) -> (BitBoard, BitBoard) {
+    let occupied = board.occupied();
     let mut attacks = BitBoard::EMPTY;
     let mut threats = BitBoard::EMPTY;
 
-    // Pawns: threaten any non-pawn piece
-    for sq in pawns {
+    // TODO: Consider refactoring these into a helper function
+    let targets = threat_targets(board, !color, Piece::Pawn);
+    for sq in board.colored_pieces(color, Piece::Pawn) {
         let squares = get_pawn_attacks(sq, color);
         attacks |= squares;
-        threats |= squares & opponent_non_pawns;
+        threats |= squares & targets;
     }
 
-    // Knights: threaten major pieces (rooks, queens)
-    for sq in knights {
+    let targets = threat_targets(board, !color, Piece::Knight);
+    for sq in board.colored_pieces(color, Piece::Knight) {
         let squares = get_knight_moves(sq);
         attacks |= squares;
-        threats |= squares & opponent_majors;
+        threats |= squares & targets;
     }
 
-    // Bishops: threaten major pieces (rooks, queens)
-    for sq in bishops {
-        let squares = get_bishop_moves(sq, all_pieces);
+    let targets = threat_targets(board, !color, Piece::Bishop);
+    for sq in board.colored_pieces(color, Piece::Bishop) {
+        let squares = get_bishop_moves(sq, occupied);
         attacks |= squares;
-        threats |= squares & opponent_majors;
+        threats |= squares & targets;
     }
 
-    for sq in rooks {
-        let squares = get_rook_moves(sq, all_pieces);
+    let targets = threat_targets(board, !color, Piece::Rook);
+    for sq in board.colored_pieces(color, Piece::Rook) {
+        let squares = get_rook_moves(sq, occupied);
         attacks |= squares;
-        threats |= squares & opponent_queens;
+        threats |= squares & targets;
     }
 
-    // Queens: don't generate threats (nothing more valuable to threaten)
-    for sq in queens {
-        attacks |= get_queen_moves(sq, all_pieces);
+    let targets = threat_targets(board, !color, Piece::Queen);
+    for sq in board.colored_pieces(color, Piece::Queen) {
+        let squares = get_queen_moves(sq, occupied);
+        attacks |= squares;
+        threats |= squares & targets;
     }
 
-    // Kings: Also don't generate threats (can be discussed, I suppose)
-    attacks |= get_king_moves(king);
+    let targets = threat_targets(board, !color, Piece::King);
+    for sq in board.colored_pieces(color, Piece::King) {
+        let squares = get_king_moves(sq);
+        attacks |= squares;
+        threats |= squares & targets;
+    }
 
     (attacks, threats)
 }
