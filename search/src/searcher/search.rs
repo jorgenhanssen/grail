@@ -353,8 +353,6 @@ impl Searcher {
         let mut best_move = None;
         let mut best_move_depth = 0;
 
-        let threats = node.threats();
-
         let best_move_hint = if ply == 0 {
             // At root we can use the currently best move for ordering
             self.multi_pv.best_move_hint()
@@ -362,14 +360,7 @@ impl Searcher {
             tt_move
         };
 
-        let enemy_attacks = node.attacks_for(!node.side_to_move());
-        let mut movegen = MainMoveGenerator::new(
-            &self.config,
-            best_move_hint,
-            prev_moves,
-            threats,
-            enemy_attacks,
-        );
+        let mut movegen = MainMoveGenerator::new(&self.config, best_move_hint, prev_moves);
 
         // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff
         let mut quiets_searched: ArrayVec<Move, { MAX_QUIETS }> = ArrayVec::new();
