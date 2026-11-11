@@ -11,6 +11,7 @@ use crate::pv::{MultiPvSearchContext, PvLine, PvTable};
 use crate::{
     history::{CaptureHistory, ContinuationHistory, HistoryHeuristic},
     lmr::LmrTable,
+    move_ordering::RootMoves,
     scores::MATE_VALUE,
     stack::SearchStack,
     utils::{convert_centipawn_score, convert_mate_score},
@@ -42,8 +43,11 @@ pub struct Searcher {
     /// Neural network evaluation
     evaluator: nnue::Evaluator,
 
-    /// Multi-PV search context (exclusions, PVs, etc)
+    /// Multi-PV search context
     multi_pv: MultiPvSearchContext,
+
+    /// Persistent root move order
+    root_moves: RootMoves,
 
     /// The position we are finding the best move for (root position)
     board: Board,
@@ -105,6 +109,7 @@ impl Searcher {
             evaluator,
 
             multi_pv: MultiPvSearchContext::new(),
+            root_moves: RootMoves::default(),
 
             board: Board::default(),
             game_history: AHashSet::new(),

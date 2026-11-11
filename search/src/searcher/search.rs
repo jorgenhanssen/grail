@@ -12,7 +12,7 @@ use utils::{Node, NodeType, has_legal_moves};
 use crate::{
     aspiration::Pass,
     history::{PieceTo, PrevMoves},
-    move_ordering::{MAX_CAPTURES, MAX_QUIETS, MainMoveGenerator},
+    move_ordering::{MAX_CAPTURES, MAX_QUIETS, MainMoveGenerator, RootMoves},
     pv::PvLine,
     result::SearchResult,
     stack::SearchNode,
@@ -43,7 +43,8 @@ impl Searcher {
             return None;
         }
 
-        self.init_search();
+        let root = Node::new(self.board.clone(), NodeType::Pv);
+        self.init_search(&root);
 
         let mut controller =
             SearchController::new(params, &self.board, self.config.move_overhead as u64);
@@ -61,7 +62,6 @@ impl Searcher {
             .or_else(|| params.soft_nodes.map(|n| n.saturating_mul(16)));
 
         let pv_count = self.config.multi_pv as usize;
-        let root = Node::new(self.board.clone(), NodeType::Pv);
         let mut depth = 1u8;
 
         // Iterative deepening
@@ -72,7 +72,6 @@ impl Searcher {
                 break;
             }
 
-            self.multi_pv.reset_excluded();
             self.root_depth = depth;
 
             for pv_index in 0..pv_count {
@@ -80,10 +79,6 @@ impl Searcher {
                 controller.add_aspiration_failures(failures);
 
                 if let Some(pv) = pv {
-                    // Exclude this move for subsequent PVs to not search it multiple times
-                    if let Some(mv) = pv.best_move() {
-                        self.multi_pv.add_excluded(mv);
-                    }
                     if let Some(out) = output {
                         self.send_search_info(out, depth, &pv, controller.elapsed());
                     }
@@ -137,9 +132,10 @@ impl Searcher {
     ///
     /// <https://www.chessprogramming.org/Lazy_SMP>
     pub fn search_auxiliary(&mut self) {
-        self.init_search();
-
         let root = Node::new(self.board.clone(), NodeType::Pv);
+
+        self.init_search(&root);
+
         let mut depth = 1u8;
 
         while !self.shared.is_stopped() && depth < MAX_DEPTH as u8 {
@@ -163,12 +159,16 @@ impl Searcher {
     /// Aspiration window search for a single PV line.
     /// Returns the PV (if any) and the number of aspiration failures.
     fn search_pv(&mut self, root: &Node, depth: u8, pv_index: usize) -> (Option<PvLine>, u32) {
+        if pv_index >= self.root_moves.len() {
+            return (None, 0);
+        }
         self.multi_pv.begin_pv_search(pv_index, depth);
 
         let mut retries = 0;
         let mut failures = 0u32;
 
         loop {
+            self.root_moves.restart(pv_index);
             let bounds = self.multi_pv.lines[pv_index].window.bounds();
 
             let score = self.search_node(root, depth, 0, bounds, true);
@@ -203,7 +203,7 @@ impl Searcher {
     }
 
     /// Initializes state for a new search.
-    fn init_search(&mut self) {
+    fn init_search(&mut self, root: &Node) {
         self.local_nodes = 0;
         self.max_ply_reached = 1;
         self.nmp_min_ply = 0;
@@ -211,6 +211,16 @@ impl Searcher {
         self.search_stack.clear();
         self.search_stack.push(SearchNode::new(self.board.hash()));
 
+        let movegen = MainMoveGenerator::new(&self.config, None, self.search_stack.prev_moves());
+
+        let moves = movegen.get_all_moves(
+            root,
+            &self.history_heuristic,
+            &self.capture_history,
+            &self.continuation_history,
+        );
+
+        self.root_moves = RootMoves::new(moves);
         self.multi_pv.init(&self.config);
     }
 
@@ -353,32 +363,29 @@ impl Searcher {
         let mut best_move = None;
         let mut best_move_depth = 0;
 
-        let best_move_hint = if ply == 0 {
-            // At root we can use the currently best move for ordering
-            self.multi_pv.best_move_hint()
-        } else {
-            tt_move
-        };
-
-        let mut movegen = MainMoveGenerator::new(&self.config, best_move_hint, prev_moves);
+        let mut movegen = MainMoveGenerator::new(&self.config, tt_move, prev_moves);
 
         // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff
         let mut quiets_searched: ArrayVec<Move, { MAX_QUIETS }> = ArrayVec::new();
         let mut captures_searched: ArrayVec<Move, { MAX_CAPTURES }> = ArrayVec::new();
 
         let mut move_index = -1;
-        while let Some(m) = movegen.next(
-            node,
-            &self.history_heuristic,
-            &self.capture_history,
-            &self.continuation_history,
-        ) {
-            if singular.is_some_and(|s| s.excluded == m) {
-                continue;
-            }
+        loop {
+            let next_move = if ply == 0 {
+                self.root_moves.next()
+            } else {
+                movegen.next(
+                    node,
+                    &self.history_heuristic,
+                    &self.capture_history,
+                    &self.continuation_history,
+                )
+            };
+            let Some(m) = next_move else {
+                break;
+            };
 
-            // Let's not search the same move twice in different PVs
-            if ply == 0 && self.multi_pv.is_excluded(m) {
+            if singular.is_some_and(|s| s.excluded == m) {
                 continue;
             }
 
@@ -417,6 +424,10 @@ impl Searcher {
             ) {
                 if self.shared.is_stopped() {
                     break;
+                }
+
+                if ply == 0 && value > bounds.alpha {
+                    self.root_moves.promote(m);
                 }
 
                 if value > best_value {

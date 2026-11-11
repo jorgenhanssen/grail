@@ -49,24 +49,15 @@ impl PvSearchContext {
 pub struct MultiPvSearchContext {
     /// Search context for each PV line
     pub lines: Vec<PvSearchContext>,
-    /// Root moves excluded at current depth (moves already found for higher PV ranks)
-    excluded: Vec<Move>,
-    /// Index of the PV currently being searched
-    pub current_pv_index: Option<usize>,
 }
 
 impl MultiPvSearchContext {
     pub fn new() -> Self {
-        Self {
-            lines: Vec::new(),
-            excluded: Vec::new(),
-            current_pv_index: None,
-        }
+        Self { lines: Vec::new() }
     }
 
     pub fn init(&mut self, config: &EngineConfig) {
         self.lines.clear();
-        self.excluded.clear();
 
         for _ in 0..config.multi_pv {
             let window = AspirationWindow::new(config);
@@ -75,30 +66,9 @@ impl MultiPvSearchContext {
     }
 
     pub fn begin_pv_search(&mut self, pv_index: usize, depth: u8) {
-        self.current_pv_index = Some(pv_index);
         let prev_score = self.lines[pv_index].result.score;
+
         self.lines[pv_index].window.begin_depth(depth, prev_score);
-    }
-
-    /// Called at the start of each depth before iterating through the PVs.
-    pub fn reset_excluded(&mut self) {
-        self.excluded.clear();
-        self.current_pv_index = None;
-    }
-
-    pub fn add_excluded(&mut self, mv: Move) {
-        self.excluded.push(mv);
-    }
-
-    pub fn is_excluded(&self, mv: Move) -> bool {
-        self.excluded.contains(&mv)
-    }
-
-    /// Best move from the previous depth's search of the current PV rank, used
-    /// as a hint for move ordering.
-    pub fn best_move_hint(&self) -> Option<Move> {
-        let pv_index = self.current_pv_index?;
-        self.lines.get(pv_index)?.result.best_move()
     }
 
     pub fn primary(&self) -> Option<&PvLine> {

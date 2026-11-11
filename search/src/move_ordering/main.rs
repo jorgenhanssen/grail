@@ -68,6 +68,27 @@ impl MainMoveGenerator {
         }
     }
 
+    pub fn get_all_moves(
+        mut self,
+        node: &Node,
+        history_heuristic: &HistoryHeuristic,
+        capture_history: &CaptureHistory,
+        continuation_history: &ContinuationHistory,
+    ) -> Vec<Move> {
+        let mut moves = Vec::new();
+
+        while let Some(mv) = self.next(
+            node,
+            history_heuristic,
+            capture_history,
+            continuation_history,
+        ) {
+            moves.push(mv);
+        }
+
+        moves
+    }
+
     pub fn next(
         &mut self,
         node: &Node,
