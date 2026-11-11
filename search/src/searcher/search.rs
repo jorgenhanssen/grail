@@ -162,6 +162,7 @@ impl Searcher {
         if pv_index >= self.root_moves.len() {
             return (None, 0);
         }
+
         self.multi_pv.begin_pv_search(pv_index, depth);
 
         let mut retries = 0;
