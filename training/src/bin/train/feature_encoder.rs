@@ -5,7 +5,7 @@ use std::sync::mpsc::{Receiver, sync_channel};
 use std::thread::{self, JoinHandle};
 
 use cozy_chess::Color;
-use nnue::encoding::{FeatureIndices, encode_board_indices};
+use nnue::features::{FeatureIndices, encode_board_indices};
 use nnue::network::{FV_SCALE, output_bucket};
 use training::dataset::{GameOutcome, TrainingSample};
 use utils::board_metrics::BoardMetrics;
