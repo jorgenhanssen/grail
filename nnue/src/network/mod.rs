@@ -1,12 +1,6 @@
-pub mod accumulator;
-pub mod inference;
-pub mod linear;
 pub mod model;
-pub mod simd;
 
 use cozy_chess::Board;
-pub use inference::NNUENetwork;
-pub use linear::LinearLayer;
 pub use model::Network;
 
 /// Size of the accumulator that input features are embedded into.

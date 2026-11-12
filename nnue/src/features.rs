@@ -4,12 +4,83 @@ use utils::board_metrics::BoardMetrics;
 use crate::bitset;
 
 const NUM_KING_BUCKETS: usize = 12;
+pub const NUM_ACCUMULATOR_BUCKETS: usize = 2 * NUM_KING_BUCKETS; // 2 because mirroring
 const NUM_PIECE_FEATURES: usize = Square::NUM * Piece::NUM * Color::NUM;
-const NUM_SUPPORT_FEATURES: usize = Square::NUM * 2;
-const NUM_THREAT_FEATURES: usize = Square::NUM * 2;
+const NUM_SUPPORT_FEATURES: usize = Square::NUM * Color::NUM;
+const NUM_THREAT_FEATURES: usize = Square::NUM * Color::NUM;
+const NUM_TACTICAL_FEATURES: usize = NUM_SUPPORT_FEATURES + NUM_THREAT_FEATURES;
 
-pub const NUM_FEATURES: usize =
-    NUM_KING_BUCKETS * NUM_PIECE_FEATURES + NUM_SUPPORT_FEATURES + NUM_THREAT_FEATURES;
+pub const NUM_FEATURES: usize = NUM_KING_BUCKETS * NUM_PIECE_FEATURES + NUM_TACTICAL_FEATURES;
+
+/// Piece placements, support and threats from one side's perspective.
+#[derive(Clone, Copy, Default)]
+pub struct Features {
+    // The accumulator stores pieces per king buckets for faster inference.
+    // therefore we only need to store the pieces for a single king bucket.
+    pieces: bitset!(NUM_PIECE_FEATURES),
+    tactical: bitset!(NUM_TACTICAL_FEATURES),
+    king_bucket: usize,
+    mirrored: bool, // king mirror
+}
+
+impl Features {
+    pub fn from_board(board: &Board, metrics: &BoardMetrics, perspective: Color) -> Self {
+        let mirror = king_is_on_the_right(board, perspective);
+
+        let mut features = Self {
+            king_bucket: king_bucket(board, perspective),
+            mirrored: mirror,
+            ..Default::default()
+        };
+
+        // Piece placements (per king bucket)
+        for color in Color::ALL {
+            let side_offset = if color == perspective { 0 } else { Piece::NUM };
+            for piece in Piece::ALL {
+                let piece_idx = side_offset + piece as usize;
+                for sq in board.colored_pieces(color, piece) {
+                    let sq_idx = transform_square(sq, perspective, mirror) as usize;
+                    features
+                        .pieces
+                        .set(sq_idx * (Piece::NUM * Color::NUM) + piece_idx);
+                }
+            }
+        }
+
+        // Support
+        let (us_support, them_support) = from_perspective(metrics.support, perspective, mirror);
+        features.tactical.set_u64(0, us_support.0);
+        features.tactical.set_u64(1, them_support.0);
+
+        // Threats
+        let (us_threats, them_threats) = from_perspective(metrics.threats, perspective, mirror);
+        features.tactical.set_u64(2, us_threats.0);
+        features.tactical.set_u64(3, them_threats.0);
+
+        features
+    }
+
+    pub fn accumulator_index(&self) -> usize {
+        2 * self.king_bucket + usize::from(self.mirrored)
+    }
+
+    pub fn for_each_diff(&self, current: &Self, mut f: impl FnMut(usize, bool)) {
+        let piece_offset = current.king_bucket * NUM_PIECE_FEATURES;
+        self.pieces.for_each_diff(&current.pieces, |idx| {
+            f(piece_offset + idx, current.pieces.get(idx));
+        });
+        self.tactical.for_each_diff(&current.tactical, |idx| {
+            f(PIECE_FEATURES_END + idx, current.tactical.get(idx));
+        });
+    }
+
+    pub fn for_each_active(&self, mut f: impl FnMut(usize)) {
+        let piece_offset = self.king_bucket * NUM_PIECE_FEATURES;
+        self.pieces.for_each_active(|idx| f(piece_offset + idx));
+        self.tactical
+            .for_each_active(|idx| f(PIECE_FEATURES_END + idx));
+    }
+}
 
 // Exported to the analysis tool
 pub const PIECE_FEATURES_START: usize = 0;
@@ -30,77 +101,22 @@ pub fn encode_board(
     perspective: Color,
 ) -> [f32; NUM_FEATURES] {
     let mut features = [0f32; NUM_FEATURES];
-    let mirror = king_is_on_the_right(board, perspective);
-    let bucket_offset = king_bucket(board, perspective) * NUM_PIECE_FEATURES;
 
-    // Piece placements (per king bucket)
-    for color in [Color::White, Color::Black] {
-        let side_offset = if color == perspective { 0 } else { Piece::NUM };
-        for piece in Piece::ALL {
-            let piece_idx = side_offset + piece as usize;
-            for sq in board.colored_pieces(color, piece) {
-                let sq_idx = transform_square(sq, perspective, mirror) as usize;
-                features[bucket_offset + sq_idx * (Piece::NUM * Color::NUM) + piece_idx] = 1.0;
-            }
-        }
-    }
-
-    // Support
-    let (us_support, them_support) = from_perspective(metrics.support, perspective, mirror);
-    for sq in us_support {
-        features[US_SUPPORT_START + sq as usize] = 1.0;
-    }
-    for sq in them_support {
-        features[THEM_SUPPORT_START + sq as usize] = 1.0;
-    }
-
-    // Threats
-    let (us_threats, them_threats) = from_perspective(metrics.threats, perspective, mirror);
-    for sq in us_threats {
-        features[US_THREATS_START + sq as usize] = 1.0;
-    }
-    for sq in them_threats {
-        features[THEM_THREATS_START + sq as usize] = 1.0;
-    }
+    Features::from_board(board, metrics, perspective)
+        .for_each_active(|index| features[index] = 1.0);
 
     features
 }
 
-/// Encodes features into a packed bitset for inference.
+/// Encodes features into a packed bitset.
 pub fn encode_board_bitset(
     board: &Board,
     metrics: &BoardMetrics,
     perspective: Color,
 ) -> bitset!(NUM_FEATURES) {
     let mut bitset: bitset!(NUM_FEATURES) = Default::default();
-    let mirror = king_is_on_the_right(board, perspective);
-    let bucket_offset = king_bucket(board, perspective) * NUM_PIECE_FEATURES;
 
-    // Piece placements (per king bucket)
-    for color in [Color::White, Color::Black] {
-        let side_offset = if color == perspective { 0 } else { Piece::NUM };
-        for piece in Piece::ALL {
-            let piece_idx = side_offset + piece as usize;
-            for sq in board.colored_pieces(color, piece) {
-                let sq_idx = transform_square(sq, perspective, mirror) as usize;
-                bitset.set(bucket_offset + sq_idx * (Piece::NUM * Color::NUM) + piece_idx);
-            }
-        }
-    }
-
-    // The bitboard sections all start at 64-bit aligned offsets, so let's write
-    // whole ranks at once instead of iterating per square.
-
-    // Support
-    let (us_support, them_support) = from_perspective(metrics.support, perspective, mirror);
-    bitset.set_u64(bitset.u64_index(US_SUPPORT_START), us_support.0);
-    bitset.set_u64(bitset.u64_index(THEM_SUPPORT_START), them_support.0);
-
-    // Threats
-    let (us_threats, them_threats) = from_perspective(metrics.threats, perspective, mirror);
-    bitset.set_u64(bitset.u64_index(US_THREATS_START), us_threats.0);
-    bitset.set_u64(bitset.u64_index(THEM_THREATS_START), them_threats.0);
-
+    Features::from_board(board, metrics, perspective).for_each_active(|idx| bitset.set(idx));
     bitset
 }
 
@@ -113,10 +129,10 @@ pub fn encode_board_indices(
     metrics: &BoardMetrics,
     perspective: Color,
 ) -> FeatureIndices {
-    let bitset = encode_board_bitset(board, metrics, perspective);
+    let features = Features::from_board(board, metrics, perspective);
 
     let mut indices = FeatureIndices::new();
-    bitset.for_each_active(|index| indices.push(index as u32));
+    features.for_each_active(|index| indices.push(index as u32));
 
     indices
 }
