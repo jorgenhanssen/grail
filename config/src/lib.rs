@@ -129,9 +129,9 @@ impl Default for EngineConfig {
             aspiration_score_divisor: 16384,
 
             history_max_value: 512,
-            history_prune_depth_multiplier: -80,
+            history_prune_depth_multiplier: -77,
             history_bonus_multiplier: 13,
-            history_malus_multiplier: 4,
+            history_malus_multiplier: 5,
 
             capture_history_max_value: 512,
             capture_history_bonus_multiplier: 9,
@@ -144,7 +144,7 @@ impl Default for EngineConfig {
 
             ordering_quiet_check_bonus: 1000,
             ordering_quiet_check_see_margin: 35,
-            ordering_bad_quiet_threshold: -56,
+            ordering_bad_quiet_threshold: -53,
             ordering_escape_divisor: 4,
             ordering_unsafe_square_divisor: 20,
 
@@ -160,7 +160,7 @@ impl Default for EngineConfig {
             anti_reduction_threat: 544,
             anti_reduction_check: 1010,
 
-            reduction_history_divisor: 266,
+            reduction_history_divisor: 263,
             reduction_capture_history_divisor: 132,
             reduction_cont_hist_divisor: 984,
             reduction_alpha_gap_scale: 2,
