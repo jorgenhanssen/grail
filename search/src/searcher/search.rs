@@ -7,7 +7,7 @@ use uci::{
     UciOutput,
     commands::{GoParams, Info, Score},
 };
-use utils::{Node, NodeType, has_legal_moves};
+use utils::{FracPly, Node, NodeType, has_legal_moves};
 
 use crate::{
     aspiration::Pass,
@@ -517,7 +517,7 @@ impl Searcher {
         is_improving: bool,
         tt_move_is_capture: bool,
         corrected_eval: i16,
-        extra_extension: i8,
+        extra_extension: FracPly,
         prev_moves: &PrevMoves,
     ) -> Option<(i16, bool, u8)> {
         let moved_color = node.board().side_to_move();
@@ -578,9 +578,10 @@ impl Searcher {
         );
 
         let extension = self.get_extension(node, &m, moved_piece, is_capture) + extra_extension;
-        let extended_depth = depth.saturating_add_signed(extension);
+        let extended_depth = (depth as i32 + extension.whole()).clamp(0, u8::MAX as i32) as u8;
 
-        let mut search_depth = extended_depth.saturating_sub(reduction);
+        let adjustment = (extension - reduction).whole();
+        let mut search_depth = (depth as i32 + adjustment).clamp(0, u8::MAX as i32) as u8;
 
         if self.try_futility_prune(
             search_depth,
@@ -611,7 +612,7 @@ impl Searcher {
         self.search_stack.pop();
 
         // Re-search without reduction if reduced search beat alpha
-        if reduction > 0 && value > bounds.alpha {
+        if search_depth < extended_depth && value > bounds.alpha {
             // Don't demote the PV move to a Cut node just because we reduced it.
             if is_pv_move && is_pv_node {
                 child.set_type(NodeType::Pv);

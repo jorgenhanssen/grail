@@ -1,6 +1,6 @@
 use crate::scores::MATE_SCORE_BOUND;
 use cozy_chess::Move;
-use utils::Node;
+use utils::{FracPly, Node};
 
 use crate::{
     stack::SingularSearch,
@@ -14,7 +14,7 @@ use super::Searcher;
 #[derive(Default)]
 pub(super) struct SingularProbeResult {
     /// Extension to apply to the TT move (can be negative).
-    pub extension: i8,
+    pub extension: FracPly,
     /// If Some, prune the node and return this value.
     pub multi_cut: Option<i16>,
 }
@@ -84,10 +84,10 @@ impl Searcher {
             let double_margin = self.config.double_extension_margin
                 + overshoot * overshoot * self.config.double_extension_overshoot_penalty;
             if singular_value < singular_beta.saturating_sub(double_margin) {
-                result.extension = 2;
+                result.extension = FracPly::from_ply(2);
                 return result;
             }
-            result.extension = 1;
+            result.extension = FracPly::from_ply(1);
             return result;
         }
 
@@ -101,7 +101,7 @@ impl Searcher {
 
         // Negative extension
         if tt.value >= beta || node.is_cut() {
-            result.extension = -self.config.negative_extension;
+            result.extension = FracPly(-self.config.negative_extension);
         }
 
         result

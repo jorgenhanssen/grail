@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, Sub, SubAssign};
 
 /// A fractional ply for fine-grained reduction calculations.
 /// Internal units: 1024 = 1 ply.
@@ -8,6 +8,11 @@ pub struct FracPly(pub i32);
 impl FracPly {
     /// Number of fractional units per ply.
     pub const ONE: i32 = 1024;
+
+    /// Convert signed whole plies to fixed-point units.
+    pub const fn from_ply(plies: i32) -> Self {
+        Self(plies * Self::ONE)
+    }
 
     /// Number of whole plies.
     pub const fn whole(self) -> i32 {
@@ -43,6 +48,14 @@ impl SubAssign for FracPly {
     }
 }
 
+impl Div<i32> for FracPly {
+    type Output = FracPly;
+
+    fn div(self, rhs: i32) -> FracPly {
+        FracPly(self.0 / rhs)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,8 +85,8 @@ mod tests {
 
     #[test]
     fn sub_negative_increases() {
-        let mut a = FracPly(FracPly::ONE);
-        a -= FracPly(-FracPly::ONE);
+        let mut a = FracPly::from_ply(1);
+        a -= FracPly::from_ply(-1);
         assert_eq!(a.0, FracPly::ONE * 2);
     }
 

@@ -24,7 +24,7 @@ impl Searcher {
         tt_move_is_capture: bool,
         alpha: i16,
         eval: i16,
-    ) -> u8 {
+    ) -> FracPly {
         let mut reduction = self.lmr.get(depth, move_index);
 
         // Reduce more
@@ -57,9 +57,8 @@ impl Searcher {
             self.config.reduction_history_divisor
         };
 
-        reduction -= FracPly(hist as i32 * FracPly::ONE / hist_divisor);
-        reduction -=
-            FracPly(cont_hist as i32 * FracPly::ONE / self.config.reduction_cont_hist_divisor);
+        reduction -= FracPly::from_ply(hist as i32) / hist_divisor;
+        reduction -= FracPly::from_ply(cont_hist as i32) / self.config.reduction_cont_hist_divisor;
 
         // Reduce less
         if reduction > FracPly(0) {
@@ -74,6 +73,7 @@ impl Searcher {
             }
         }
 
-        reduction.whole().clamp(0, depth.saturating_sub(2) as i32) as u8
+        let max_reduction = FracPly::from_ply(depth.saturating_sub(2) as i32);
+        reduction.clamp(FracPly(0), max_reduction)
     }
 }

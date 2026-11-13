@@ -1,5 +1,5 @@
 use cozy_chess::{Color, Move, Piece, Rank};
-use utils::Node;
+use utils::{FracPly, Node};
 
 use super::Searcher;
 
@@ -10,7 +10,7 @@ impl Searcher {
         m: &Move,
         moved_piece: Piece,
         is_capture: bool,
-    ) -> i8 {
+    ) -> FracPly {
         // Passed pawn extension: extend non-capture pawn pushes to 7th rank.
         // https://www.chessprogramming.org/Passed_Pawn_Extensions
         if moved_piece == Piece::Pawn && !is_capture && m.promotion.is_none() {
@@ -19,10 +19,10 @@ impl Searcher {
                 Color::Black => m.to.rank() == Rank::Second,
             };
             if is_seventh {
-                return 1;
+                return FracPly::from_ply(1);
             }
         }
 
-        0
+        FracPly(0)
     }
 }
