@@ -148,22 +148,22 @@ impl Default for EngineConfig {
             ordering_escape_divisor: 4,
             ordering_unsafe_square_divisor: 20,
 
-            lmr_base: -4,
-            lmr_divisor: 220, // in cents
+            lmr_base: -208,
+            lmr_divisor: 221, // in cents
 
-            reduction_cut_node: 1598,
-            reduction_not_improving: 796,
-            reduction_quiets_if_tt_capture: 1014,
-            reduction_non_pv_node: 977,
-            reduction_quiet: 558,
-            anti_reduction_pv_move: 1035,
-            anti_reduction_threat: 544,
-            anti_reduction_check: 1010,
+            reduction_cut_node: 1544,
+            reduction_not_improving: 631,
+            reduction_quiets_if_tt_capture: 942,
+            reduction_non_pv_node: 873,
+            reduction_quiet: 391,
+            anti_reduction_pv_move: 1164,
+            anti_reduction_threat: 632,
+            anti_reduction_check: 1132,
 
-            reduction_history_divisor: 263,
-            reduction_capture_history_divisor: 132,
-            reduction_cont_hist_divisor: 984,
-            reduction_alpha_gap_scale: 2,
+            reduction_history_divisor: 252,
+            reduction_capture_history_divisor: 133,
+            reduction_cont_hist_divisor: 975,
+            reduction_alpha_gap_scale: 3,
             reduction_alpha_gap_min: -66,
             reduction_alpha_gap_max: 90,
 

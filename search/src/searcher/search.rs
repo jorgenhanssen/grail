@@ -578,9 +578,9 @@ impl Searcher {
         );
 
         let extension = self.get_extension(node, &m, moved_piece, is_capture) + extra_extension;
-        let extended_depth = (depth as i32 + extension.whole()).clamp(0, u8::MAX as i32) as u8;
+        let extended_depth = (depth as i32 + extension.round()).clamp(0, u8::MAX as i32) as u8;
 
-        let adjustment = (extension - reduction).whole();
+        let adjustment = (extension - reduction).round();
         let mut search_depth = (depth as i32 + adjustment).clamp(0, u8::MAX as i32) as u8;
 
         if self.try_futility_prune(
