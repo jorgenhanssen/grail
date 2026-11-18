@@ -145,16 +145,15 @@ impl MainMoveGenerator {
         if self.gen_phase == Phase::GenQuiets {
             self.gen_phase = Phase::GoodQuiets;
 
-            let empty_squares = !board.occupied();
-            let our_pieces = board.colors(board.side_to_move());
+            // Quiet = wherever our opponent does not have pieces.
+            // includes our own pieces because cozy notes castling as rook self-capture.
+            let quiet_squares = !board.colors(!board.side_to_move());
 
             board.generate_moves(|moves| {
-                for mov in moves {
-                    // Allow moves to empty squares OR castling (king captures own rook in cozy-chess)
-                    let is_castling = our_pieces.has(mov.to);
-                    if !empty_squares.has(mov.to) && !is_castling {
-                        continue;
-                    }
+                let mut quiets = moves;
+                quiets.to &= quiet_squares;
+
+                for mov in quiets {
                     if Some(mov) == self.best_move {
                         continue;
                     }
