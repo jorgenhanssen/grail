@@ -74,17 +74,6 @@ pub fn collect_legal_moves(board: &Board) -> Vec<Move> {
     moves
 }
 
-/// Check if the side to move is in check.
-pub fn has_check(board: &Board) -> bool {
-    !board.checkers().is_empty()
-}
-
-/// Check if a move gives check to the opponent.
-pub fn gives_check(board: &Board, mv: Move) -> bool {
-    let new_board = make_move(board, mv);
-    has_check(&new_board)
-}
-
 #[cfg(test)]
 mod tests {
     use cozy_chess::Square;
@@ -130,22 +119,5 @@ mod tests {
             only_move(&one_move),
             collect_legal_moves(&one_move).len() == 1
         );
-    }
-
-    #[test]
-    fn check_detection() {
-        let start = Board::default();
-        assert!(!has_check(&start));
-        assert!(!gives_check(&start, mv("e2", "e4")));
-
-        let in_check: Board = "rnbqkbnr/ppppp1pp/8/5p1Q/4P3/8/PPPP1PPP/RNB1KBNR b KQkq - 1 2"
-            .parse()
-            .unwrap();
-        assert!(has_check(&in_check));
-
-        let qxf7: Board = "rnbqkbnr/pppp1ppp/8/4p2Q/4P3/8/PPPP1PPP/RNB1KBNR w KQkq - 1 3"
-            .parse()
-            .unwrap();
-        assert!(gives_check(&qxf7, mv("h5", "f7")));
     }
 }

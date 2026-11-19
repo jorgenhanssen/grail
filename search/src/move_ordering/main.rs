@@ -1,7 +1,7 @@
 use arrayvec::ArrayVec;
 use config::EngineConfig;
 use cozy_chess::{Move, Piece};
-use utils::{PAWN_VALUE, captured_piece, gives_check, piece_value};
+use utils::{CheckChecker, PAWN_VALUE, captured_piece, piece_value};
 
 use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic, PieceTo, PrevMoves};
 use crate::utils::see::see;
@@ -145,6 +145,8 @@ impl MainMoveGenerator {
         if self.gen_phase == Phase::GenQuiets {
             self.gen_phase = Phase::GoodQuiets;
 
+            let check_checker = CheckChecker::new(board);
+
             // Quiet = wherever our opponent does not have pieces.
             // includes our own pieces because cozy notes castling as rook self-capture.
             let quiet_squares = !board.colors(!board.side_to_move());
@@ -179,7 +181,7 @@ impl MainMoveGenerator {
                             let (to_unsafe, escapes_threat) = node.move_safety(mov, piece);
 
                             // Gives check = great (sometimes)
-                            if gives_check(board, mov)
+                            if check_checker.gives_check(mov)
                                 // Try to filter out "junk checks" that just hang material
                                 && (!to_unsafe || see(board, mov, -self.quiet_check_see_margin))
                             {
