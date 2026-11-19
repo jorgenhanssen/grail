@@ -133,23 +133,23 @@ fn apply_feature_change(
     }
 }
 
-/// Dequantizes one color's i16 buffer into f32 and applies ReLU into output.
+/// Applies ReLU to an i16 buffer and dequantizes into f32.
 fn dequantize_and_relu(
     buffer: &[i16; EMBEDDING_SIZE],
     weights: &AccumulatorWeights,
     output: &mut [f32; EMBEDDING_SIZE],
 ) {
-    let zeros = SimdF32::splat(0.0);
+    let zeros = i16x16::splat(0);
     let (buffer, _) = buffer.as_chunks::<SIMD_WIDTH_F32>();
     let (scales, _) = weights.inv_scales.as_chunks::<SIMD_WIDTH_F32>();
     let (output, _) = output.as_chunks_mut::<SIMD_WIDTH_F32>();
 
     for ((values, scales), output) in buffer.iter().zip(scales).zip(output) {
-        let vals_i16 = i16x16::new(*values);
+        let vals_i16 = i16x16::new(*values).max(zeros);
         let vals_f32 = i32x16::from_i16x16(vals_i16).round_float();
         let scale_vec = SimdF32::new(*scales);
 
-        let activated = (vals_f32 * scale_vec).max(zeros);
+        let activated = vals_f32 * scale_vec;
         *output = *activated.as_array();
     }
 }
