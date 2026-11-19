@@ -88,7 +88,7 @@ impl PositionCorrection {
 
     /// Combined correction value for this position across all four tables.
     pub(super) fn weighted_value(&self, board: &Board) -> i32 {
-        let (pawn_idx, minor_idx, white_nonpawn_idx, black_nonpawn_idx) = self.get_indices(board);
+        let [pawn_idx, minor_idx, white_nonpawn_idx, black_nonpawn_idx] = self.get_indices(board);
 
         let pawn_value = self.pawn[pawn_idx] as i32;
         let minor_value = self.minor[minor_idx] as i32;
@@ -103,7 +103,7 @@ impl PositionCorrection {
     /// Update each table with a gravity-scaled bonus. The pawn table uses the
     /// raw bonus, the others scale it by their own update weight.
     pub(super) fn apply_bonus(&mut self, board: &Board, bonus: i32, limit: i32) {
-        let (pawn_idx, minor_idx, white_nonpawn_idx, black_nonpawn_idx) = self.get_indices(board);
+        let [pawn_idx, minor_idx, white_nonpawn_idx, black_nonpawn_idx] = self.get_indices(board);
 
         let pawn_bonus = bonus;
         let minor_bonus = bonus * self.minor_update_weight / 128;
@@ -123,26 +123,15 @@ impl PositionCorrection {
         );
     }
 
-    fn get_indices(&self, board: &Board) -> (usize, usize, usize, usize) {
-        let color = board.side_to_move();
-
-        let pawn_idx = self.index(color, zobrist_key!(board, PAWN_ZOBRIST, PAWN_PIECES));
-        let minor_idx = self.index(color, zobrist_key!(board, MINOR_ZOBRIST, MINOR_PIECES));
-        let white_nonpawn_idx = self.index(
-            color,
+    fn get_indices(&self, board: &Board) -> [usize; 4] {
+        let keys = [
+            zobrist_key!(board, PAWN_ZOBRIST, PAWN_PIECES),
+            zobrist_key!(board, MINOR_ZOBRIST, MINOR_PIECES),
             zobrist_key!(board, NON_PAWN_ZOBRIST, NON_PAWN_PIECES, Color::White),
-        );
-        let black_nonpawn_idx = self.index(
-            color,
             zobrist_key!(board, NON_PAWN_ZOBRIST, NON_PAWN_PIECES, Color::Black),
-        );
+        ];
 
-        (pawn_idx, minor_idx, white_nonpawn_idx, black_nonpawn_idx)
-    }
-
-    fn index(&self, color: Color, key: u64) -> usize {
-        let color_idx = color as usize;
-        let key_idx = (key as usize) % self.table_size;
-        color_idx * self.table_size + key_idx
+        let offset = board.side_to_move() as usize * self.table_size;
+        keys.map(|key| offset + key as usize % self.table_size)
     }
 }
