@@ -1,3 +1,4 @@
+use arrayvec::ArrayVec;
 use config::EngineConfig;
 use cozy_chess::Move;
 
@@ -118,70 +119,57 @@ impl Default for MultiPvSearchContext {
 /// Triangular PV-table: collects the principal variation during search.
 /// https://www.chessprogramming.org/Triangular_PV-Table
 ///
-/// Uses the "Quadratic PV-Table" layout for cheaper indexing.
-///
-/// ply 0: [e2e4, e7e5, g1f3, b8c6, None]
-/// ply 1: [e7e5, g1f3, b8c6, None]
-/// ply 2: [g1f3, b8c6, None]
-/// ply 3: [b8c6, None]
+/// ply 0: [e2e4, e7e5, g1f3, b8c6]
+/// ply 1: [e7e5, g1f3, b8c6]
+/// ply 2: [g1f3, b8c6]
+/// ply 3: [b8c6]
 pub struct PvTable {
-    pv_array: Vec<Option<Move>>,
+    rows: Vec<ArrayVec<Move, MAX_DEPTH>>,
 }
 
 impl PvTable {
     pub fn new() -> Self {
         Self {
-            pv_array: vec![None; MAX_DEPTH * MAX_DEPTH],
+            rows: vec![ArrayVec::new(); MAX_DEPTH],
         }
-    }
-
-    /// Starting index of the PV row for a given ply.
-    fn index(ply: usize) -> usize {
-        ply * MAX_DEPTH
     }
 
     /// Mark this ply as having no PV yet.
     pub fn init_ply(&mut self, ply: u8) {
-        let p = ply as usize;
-        if p < MAX_DEPTH {
-            self.pv_array[Self::index(p)] = None;
+        if let Some(row) = self.rows.get_mut(ply as usize) {
+            row.clear();
         }
     }
 
     /// Write a move at this ply with no continuation (e.g. TT cutoff).
     pub fn set_move(&mut self, ply: u8, mv: Move) {
-        let p = ply as usize;
-        let pv_index = Self::index(p);
-        self.pv_array[pv_index] = Some(mv);
-        self.pv_array[pv_index + 1] = None;
+        let row = &mut self.rows[ply as usize];
+
+        row.clear();
+        row.push(mv);
     }
 
     /// Write a move at this ply and append the child's PV from ply + 1.
     pub fn update(&mut self, ply: u8, mv: Move) {
-        let p = ply as usize;
-        let pv_index = Self::index(p);
-        self.pv_array[pv_index] = Some(mv);
+        let ply = ply as usize;
 
-        if p + 1 < MAX_DEPTH {
-            let pv_next_index = Self::index(p + 1);
-            self.pv_array.copy_within(
-                pv_next_index..pv_next_index + MAX_DEPTH - p - 1,
-                pv_index + 1,
-            );
+        let (parents, children) = self.rows.split_at_mut(ply + 1);
+        let parent = &mut parents[ply];
+
+        parent.clear();
+        parent.push(mv);
+
+        if let Some(child) = children.first() {
+            parent.try_extend_from_slice(child).unwrap();
         }
     }
 
     /// Read the PV at a specific ply
     pub fn get(&self, ply: u8) -> Vec<Move> {
-        let pv_index = Self::index(ply as usize);
-        self.pv_array[pv_index..pv_index + MAX_DEPTH]
-            .iter()
-            .take_while(|m| m.is_some())
-            .map(|m| m.unwrap())
-            .collect()
+        self.rows[ply as usize].to_vec()
     }
 
     pub fn is_empty(&self, ply: u8) -> bool {
-        self.pv_array[Self::index(ply as usize)].is_none()
+        self.rows[ply as usize].is_empty()
     }
 }
