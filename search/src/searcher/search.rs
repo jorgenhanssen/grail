@@ -15,7 +15,7 @@ use crate::{
     move_ordering::{MAX_CAPTURES, MAX_QUIETS, MainMoveGenerator},
     pv::PvLine,
     result::SearchResult,
-    stack::SearchNode,
+    stack::{EvalDelta, SearchNode},
     time_control::SearchController,
     transposition::{Bound, ProbeResult},
     utils::Bounds,
@@ -324,7 +324,8 @@ impl Searcher {
             }
         }
 
-        let is_improving = !in_check && self.search_stack.is_improving();
+        let eval_delta = self.search_stack.eval_delta();
+        let is_improving = !in_check && eval_delta.is_some_and(EvalDelta::is_improving);
 
         if let Some(score) = self.try_reverse_futility_prune(
             node,
