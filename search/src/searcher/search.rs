@@ -335,7 +335,7 @@ impl Searcher {
             static_eval,
             bounds,
             ply,
-            is_improving,
+            eval_delta,
         ) {
             return score;
         }

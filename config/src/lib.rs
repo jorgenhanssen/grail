@@ -74,6 +74,8 @@ pub struct EngineConfig {
     pub rfp_base_margin: i16,
     pub rfp_depth_multiplier: i16,
     pub rfp_improving_bonus: i16,
+    pub rfp_delta_start: i16,
+    pub rfp_delta_width: u16,
 
     pub razor_max_depth: u8,
     pub razor_base_margin: i16,
@@ -186,6 +188,8 @@ impl Default for EngineConfig {
             rfp_base_margin: 150,
             rfp_depth_multiplier: 100,
             rfp_improving_bonus: 50,
+            rfp_delta_start: -45,
+            rfp_delta_width: 50,
 
             razor_max_depth: 3,
             razor_base_margin: 512,

@@ -1,4 +1,5 @@
 use crate::scores::MATE_VALUE;
+use crate::stack::EvalDelta;
 use cozy_chess::{Move, Piece};
 use utils::{Node, captured_piece, piece_value};
 
@@ -240,7 +241,7 @@ impl Searcher {
         static_eval: i16,
         bounds: Bounds,
         ply: u8,
-        is_improving: bool,
+        eval_delta: Option<EvalDelta>,
     ) -> Option<i16> {
         if depth > self.config.rfp_max_depth || in_check || node.is_pv() {
             return None;
@@ -248,8 +249,10 @@ impl Searcher {
 
         let mut margin =
             self.config.rfp_base_margin + (depth as i16 - 1) * self.config.rfp_depth_multiplier;
-        if is_improving {
-            margin -= self.config.rfp_improving_bonus;
+        if let Some(EvalDelta(delta)) = eval_delta {
+            let width = i32::from(self.config.rfp_delta_width.max(1));
+            let weight = (delta - i32::from(self.config.rfp_delta_start)).clamp(0, width);
+            margin -= (i32::from(self.config.rfp_improving_bonus) * weight / width) as i16;
         }
 
         if corrected_eval - margin >= bounds.beta && corrected_eval.abs() < NEAR_MATE_VALUE {
