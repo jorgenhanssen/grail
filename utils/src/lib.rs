@@ -2,6 +2,7 @@ mod attacks;
 pub mod bitset;
 pub mod board_metrics;
 mod book;
+mod checks;
 mod eval;
 mod material;
 mod math;
@@ -14,6 +15,7 @@ mod zobrist;
 
 pub use attacks::{get_attackers_to, get_discovered_attacks, get_queen_moves};
 pub use book::Book;
+pub use checks::{CheckChecker, gives_check, has_check};
 pub use eval::flip_eval_perspective;
 pub use material::{
     BISHOP_VALUE, KNIGHT_VALUE, MAJOR_PIECES, MINOR_PIECES, NON_PAWN_PIECES, PAWN_PIECES,
@@ -22,8 +24,8 @@ pub use material::{
 };
 pub use math::select_softmax;
 pub use moves::{
-    captured_piece, collect_legal_moves, en_passant_square, gives_check, has_check,
-    has_legal_moves, is_capture, is_en_passant, make_move, only_move,
+    captured_piece, collect_legal_moves, en_passant_square, has_legal_moves, is_capture,
+    is_en_passant, make_move, only_move,
 };
 pub use node::{Node, NodeType, creates_threat, evades_threat};
 pub use ply::FracPly;
