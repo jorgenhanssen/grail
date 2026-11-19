@@ -57,7 +57,7 @@ pub fn simd_dot_product_batched<const N: usize>(input: &[f32], rows: [&[f32]; N]
     for (i, chunk) in input.iter().enumerate() {
         let x = SimdF32::new(*chunk);
         for (sum, weights) in sums.iter_mut().zip(&rows) {
-            *sum += x * SimdF32::new(weights[i]);
+            *sum = x.mul_add(SimdF32::new(weights[i]), *sum);
         }
     }
 
