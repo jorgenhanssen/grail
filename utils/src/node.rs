@@ -158,7 +158,7 @@ impl Node {
     }
 
     /// Returns (destination is attacked, escapes a threat)
-    pub fn move_safety(&self, mv: Move) -> (bool, bool) {
+    pub fn move_safety(&self, mv: Move, piece: Piece) -> (bool, bool) {
         let board = self.board();
         let them = !self.side_to_move();
         let enemy_attacks = self.attacks_for(them);
@@ -177,7 +177,6 @@ impl Node {
             return (to_attacked, false);
         }
 
-        let piece = board.piece_on(mv.from).unwrap();
         let lesser_pieces = threat_attackers(board, them, piece);
 
         (to_attacked, (attackers & lesser_pieces).is_empty())

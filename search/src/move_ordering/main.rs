@@ -176,7 +176,7 @@ impl MainMoveGenerator {
                             score += continuation_history.get(&self.prev_moves, curr);
 
                             let value = piece_value(piece);
-                            let (to_unsafe, escapes_threat) = node.move_safety(mov);
+                            let (to_unsafe, escapes_threat) = node.move_safety(mov, piece);
 
                             // Gives check = great (sometimes)
                             if gives_check(board, mov)
