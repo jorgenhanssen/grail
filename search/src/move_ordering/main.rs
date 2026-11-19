@@ -152,6 +152,7 @@ impl MainMoveGenerator {
             board.generate_moves(|moves| {
                 let mut quiets = moves;
                 quiets.to &= quiet_squares;
+                let piece = quiets.piece;
 
                 for mov in quiets {
                     if Some(mov) == self.best_move {
@@ -168,7 +169,6 @@ impl MainMoveGenerator {
                             let mut score = 0;
 
                             let color = board.side_to_move();
-                            let piece = board.piece_on(mov.from).unwrap();
 
                             score += history_heuristic.get(node, mov);
 
