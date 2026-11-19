@@ -54,16 +54,15 @@ impl QMoveGenerator {
         let mut forcing_moves = ArrayVec::new();
 
         board.generate_moves(|moves| {
+            // Evasion ordering by negated piece value: king (0) first, then
+            // cheapest pieces. This prioritizes safe king escapes and risks
+            // the least valuable material when blocking or capturing.
+            let score = -piece_value(moves.piece);
+
             for mov in moves {
                 if forcing_moves.len() >= MAX_FORCING_MOVES {
                     return true;
                 }
-
-                // Evasion ordering by negated piece value: king (0) first, then
-                // cheapest pieces. This prioritizes safe king escapes and risks
-                // the least valuable material when blocking or capturing.
-                let moved_piece = board.piece_on(mov.from).unwrap();
-                let score: i16 = -piece_value(moved_piece);
 
                 forcing_moves.push(ScoredMove { mov, score });
             }
