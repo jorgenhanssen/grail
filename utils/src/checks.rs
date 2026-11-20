@@ -1,6 +1,8 @@
-use cozy_chess::{BitBoard, Board, Move, Piece, get_knight_moves};
+use cozy_chess::{
+    BitBoard, Board, Move, Piece, Rank, get_bishop_moves, get_knight_moves, get_pawn_attacks,
+    get_rook_moves,
+};
 
-use crate::attacks::get_queen_moves;
 use crate::moves::{en_passant_square, make_move};
 
 /// Check if the side to move is in check.
@@ -21,8 +23,8 @@ pub struct CheckChecker<'a> {
     board: &'a Board,
     /// Starting squares that need a check test regardless of the destination.
     from_squares: BitBoard,
-    /// Destinations that need a check test regardless of the starting square.
-    to_squares: BitBoard,
+    /// Candidate destinations indexed by piece.
+    to_squares: [BitBoard; Piece::NUM],
 }
 
 impl<'a> CheckChecker<'a> {
@@ -30,28 +32,41 @@ impl<'a> CheckChecker<'a> {
         let us = board.side_to_move();
         let enemy_king = board.king(!us);
 
-        let enemy_king_rays = get_queen_moves(enemy_king, board.occupied());
+        let occupied = board.occupied();
+        let bishop_check_rays = get_bishop_moves(enemy_king, occupied);
+        let rook_check_rays = get_rook_moves(enemy_king, occupied);
+        let knight_check_squares = get_knight_moves(enemy_king);
+
+        let enemy_king_rays = bishop_check_rays | rook_check_rays;
 
         // if a blocker on the enemy kings slider ray moves, there can be a discovered check.
         // Also, castling starts at our king but can check with the rook so we have to check that too.
         let from_squares = enemy_king_rays | board.colored_pieces(us, Piece::King);
 
-        // A move to one of these squares will give direct check.
-        let mut to_squares = enemy_king_rays | get_knight_moves(enemy_king);
+        let back_rank = Rank::Eighth.relative_to(us).bitboard();
+        let promotion_checks = back_rank & (enemy_king_rays | knight_check_squares);
+        let mut pawn_check_squares = get_pawn_attacks(enemy_king, !us) | promotion_checks;
         if let Some(ep) = en_passant_square(board) {
             // hehe gotcha: an en passant pawn can give check.
-            to_squares |= ep.bitboard();
+            pawn_check_squares |= ep.bitboard();
         }
 
         Self {
             board,
             from_squares,
-            to_squares,
+            to_squares: Piece::ALL.map(|piece| match piece {
+                Piece::Pawn => pawn_check_squares,
+                Piece::Knight => knight_check_squares,
+                Piece::Bishop => bishop_check_rays,
+                Piece::Rook => rook_check_rays,
+                Piece::Queen => enemy_king_rays,
+                Piece::King => BitBoard::EMPTY,
+            }),
         }
     }
 
-    pub fn gives_check(&self, mov: Move) -> bool {
-        if !self.from_squares.has(mov.from) && !self.to_squares.has(mov.to) {
+    pub fn gives_check(&self, mov: Move, piece: Piece) -> bool {
+        if !self.from_squares.has(mov.from) && !self.to_squares[piece as usize].has(mov.to) {
             return false;
         }
 
@@ -72,7 +87,7 @@ mod tests {
             let child = make_move(&board, mov);
 
             assert_eq!(
-                checker.gives_check(mov),
+                checker.gives_check(mov, board.piece_on(mov.from).unwrap()),
                 !child.checkers().is_empty(),
                 "{fen}, move {mov}"
             );
@@ -87,8 +102,13 @@ mod tests {
             "6k1/8/8/3pP3/8/8/B7/6K1 w - d6 0 2",
             "6k1/b7/8/8/3Pp3/8/5N2/6K1 b - d3 0 2",
             "4k3/8/8/8/4N3/8/8/K3R3 w - - 0 1",
+            "4k3/7N/8/8/8/8/8/K7 w - - 0 1",
+            "4k3/8/8/8/4B3/8/8/K3R3 w - - 0 1",
+            "4k3/8/8/8/8/8/1B5R/K7 w - - 0 1",
             "4k3/5p2/8/7Q/8/8/8/K7 w - - 0 1",
             "4k3/P7/8/8/8/8/8/K7 w - - 0 1",
+            "8/4k3/8/3P4/8/8/1P2P3/K7 w - - 0 1",
+            "7k/8/8/8/8/5K2/4p3/8 b - - 0 1",
         ];
 
         for fen in fens {
