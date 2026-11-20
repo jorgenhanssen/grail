@@ -7,7 +7,7 @@ use uci::{
     UciOutput,
     commands::{GoParams, Info, Score},
 };
-use utils::{FracPly, Node, NodeType, has_legal_moves};
+use utils::{FracPly, Node, NodeType, captured_piece, has_legal_moves};
 
 use crate::{
     aspiration::Pass,
@@ -543,7 +543,8 @@ impl Searcher {
 
         let moved = PieceTo::new(moved_color, moved_piece, m.to);
         let hist = if is_capture {
-            self.capture_history.get(node.board(), m)
+            let victim = captured_piece(node.board(), m).unwrap();
+            self.capture_history.get(moved_piece, m.to, victim)
         } else {
             self.history_heuristic.get(node, m)
         };

@@ -39,7 +39,7 @@ impl QMoveGenerator {
                 }
 
                 // MVV-LVA + capture history: prefer capturing valuable pieces with cheap ones
-                let score = capture_score(board, mov, capture_history);
+                let score = capture_score(board, mov, moves.piece, capture_history);
 
                 forcing_moves.push(ScoredMove { mov, score });
             }

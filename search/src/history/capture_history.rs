@@ -47,12 +47,8 @@ impl CaptureHistory {
         self.history.fill(0);
     }
 
-    pub fn get(&self, board: &Board, mv: Move) -> i16 {
-        let attacker = board.piece_on(mv.from).unwrap();
-        let Some(victim) = captured_piece(board, mv) else {
-            return 0;
-        };
-        self.history[Self::index(attacker, mv.to, victim)]
+    pub fn get(&self, attacker: Piece, to: Square, victim: Piece) -> i16 {
+        self.history[Self::index(attacker, to, victim)]
     }
 
     pub fn update_capture(&mut self, board: &Board, mv: Move, delta: i32) {

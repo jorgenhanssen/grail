@@ -105,7 +105,7 @@ impl MainMoveGenerator {
 
                     self.good_captures.push(ScoredMove {
                         mov,
-                        score: capture_score(board, mov, capture_history),
+                        score: capture_score(board, mov, moves.piece, capture_history),
                     });
                 }
                 false
