@@ -3,6 +3,17 @@ use utils::Node;
 
 use crate::history::{PieceTo, PrevMoves};
 
+/// Change in stack eval since last move (same side).
+#[derive(Clone, Copy)]
+pub struct EvalDelta(pub i32);
+
+impl EvalDelta {
+    pub fn is_improving(self) -> bool {
+        const IMPROVING_MARGIN: i32 = 20;
+        self.0 > -IMPROVING_MARGIN
+    }
+}
+
 /// Context for singular extension search.
 #[derive(Clone, Copy)]
 pub struct SingularSearch {
@@ -87,22 +98,14 @@ impl SearchStack {
         self.nodes.last()
     }
 
-    /// Returns true if eval improved vs 2 plies ago (same side to move).
-    pub fn is_improving(&self) -> bool {
-        const IMPROVING_MARGIN: i16 = 20;
+    pub fn eval_delta(&self) -> Option<EvalDelta> {
+        let [.., previous, _, current] = self.nodes.as_slice() else {
+            return None;
+        };
 
-        let len = self.nodes.len();
-        if len < 3 {
-            return false;
-        }
-
-        if let Some(current_eval) = self.nodes[len - 1].eval {
-            if let Some(prev_eval) = self.nodes[len - 3].eval {
-                return current_eval > prev_eval - IMPROVING_MARGIN;
-            }
-        }
-
-        false
+        Some(EvalDelta(
+            i32::from(current.eval?) - i32::from(previous.eval?),
+        ))
     }
 
     /// Detects a single repetition and treats it as a draw.
