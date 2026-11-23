@@ -9,7 +9,7 @@ impl Searcher {
     ///
     /// <https://www.chessprogramming.org/Late_Move_Reductions>
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn get_reduction(
+    pub fn get_reduction(
         &self,
         depth: u8,
         is_pv_move: bool,

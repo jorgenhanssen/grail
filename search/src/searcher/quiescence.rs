@@ -19,7 +19,7 @@ impl Searcher {
     /// for a reliable static evaluation.
     ///
     /// <https://www.chessprogramming.org/Quiescence_Search>
-    pub(super) fn quiescence_search(&mut self, node: &Node, mut bounds: Bounds, ply: u8) -> i16 {
+    pub fn quiescence_search(&mut self, node: &Node, mut bounds: Bounds, ply: u8) -> i16 {
         self.pv_table.init_ply(ply);
 
         // Check if we should stop searching

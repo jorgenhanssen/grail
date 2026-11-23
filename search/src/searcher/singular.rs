@@ -12,7 +12,7 @@ use super::Searcher;
 
 /// Result of probing for singular extension or multi-cut.
 #[derive(Default)]
-pub(super) struct SingularProbeResult {
+pub struct SingularProbeResult {
     /// Extension to apply to the TT move (can be negative).
     pub extension: FracPly,
     /// If Some, prune the node and return this value.
@@ -26,7 +26,7 @@ impl Searcher {
     /// <https://www.chessprogramming.org/Singular_Extensions>
     /// <https://www.chessprogramming.org/Multi-Cut>
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn probe_singular(
+    pub fn probe_singular(
         &mut self,
         node: &Node,
         m: Move,

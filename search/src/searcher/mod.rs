@@ -16,7 +16,7 @@ use crate::{
     utils::{convert_centipawn_score, convert_mate_score},
 };
 
-pub(crate) use shared_state::SharedSearcherState;
+pub use shared_state::SharedSearcherState;
 
 mod eval;
 mod extension;

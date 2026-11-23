@@ -3,7 +3,7 @@ use std::time::Duration;
 use cozy_chess::Color;
 use uci::commands::GoParams;
 
-pub(super) struct Clock {
+pub struct Clock {
     remaining: [Duration; Color::NUM],
     increment: Duration,
 }

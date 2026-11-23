@@ -3,12 +3,12 @@ use utils::{captured_piece, piece_value};
 
 use crate::history::CaptureHistory;
 
-pub(super) struct ScoredMove {
+pub struct ScoredMove {
     pub mov: Move,
     pub score: i16,
 }
 
-pub(super) fn select_highest(array: &[ScoredMove]) -> Option<usize> {
+pub fn select_highest(array: &[ScoredMove]) -> Option<usize> {
     if array.is_empty() {
         return None;
     }
@@ -23,7 +23,7 @@ pub(super) fn select_highest(array: &[ScoredMove]) -> Option<usize> {
     Some(best_index)
 }
 
-pub(super) fn capture_score(
+pub fn capture_score(
     board: &Board,
     mv: Move,
     attacker: Piece,

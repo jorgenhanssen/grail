@@ -7,7 +7,7 @@ mod move_ordering;
 mod pv;
 mod result;
 mod scores;
-pub(crate) mod searcher;
+mod searcher;
 mod stack;
 pub mod tablebase;
 mod time_control;

@@ -1,7 +1,6 @@
 use cozy_chess::{BitBoard, Board, Color, File, Piece, Square};
+use utils::bitset;
 use utils::board_metrics::BoardMetrics;
-
-use crate::bitset;
 
 const NUM_KING_BUCKETS: usize = 12;
 pub const NUM_ACCUMULATOR_BUCKETS: usize = 2 * NUM_KING_BUCKETS; // 2 because mirroring

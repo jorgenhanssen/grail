@@ -217,7 +217,7 @@ impl Searcher {
     /// Alpha-beta search with principal variation search (PVS) and late move reductions.
     ///
     /// <https://www.chessprogramming.org/Principal_Variation_Search>
-    pub(super) fn search_node(
+    pub fn search_node(
         &mut self,
         node: &Node,
         depth: u8,
@@ -657,7 +657,7 @@ impl Searcher {
 
     /// Updates the history tables after a beta cutoff: boost the cutting move,
     /// apply malus to the moves we searched before it.
-    pub(super) fn on_fail_high(
+    fn on_fail_high(
         &mut self,
         node: &Node,
         mv: Move,

@@ -4,7 +4,7 @@ use utils::{FracPly, Node};
 use super::Searcher;
 
 impl Searcher {
-    pub(super) fn get_extension(
+    pub fn get_extension(
         &self,
         node: &Node,
         m: &Move,

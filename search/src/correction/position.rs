@@ -15,7 +15,7 @@ const NON_PAWN_ZOBRIST: [u64; Square::NUM * NON_PAWN_PIECES.len()] =
 
 /// Correction indexed by partial Zobrist hashes of the board for different piece types.
 #[derive(Clone)]
-pub(super) struct PositionCorrection {
+pub struct PositionCorrection {
     // [color][zobrist_hash].
     pawn: Vec<i16>,
     // [color][zobrist_hash].
@@ -36,7 +36,7 @@ pub(super) struct PositionCorrection {
 }
 
 impl PositionCorrection {
-    pub(super) fn new(config: &EngineConfig) -> Self {
+    pub fn new(config: &EngineConfig) -> Self {
         let table_size = config.correction_table_size;
         let total_size = Color::NUM * table_size;
         Self {
@@ -53,7 +53,7 @@ impl PositionCorrection {
         }
     }
 
-    pub(super) fn configure(&mut self, config: &EngineConfig) {
+    pub fn configure(&mut self, config: &EngineConfig) {
         let new_table_size = config.correction_table_size;
         if self.table_size != new_table_size {
             let total_size = Color::NUM * new_table_size;
@@ -70,7 +70,7 @@ impl PositionCorrection {
         self.nonpawn_update_weight = config.correction_nonpawn_update_weight;
     }
 
-    pub(super) fn matches_config(&self, config: &EngineConfig) -> bool {
+    pub fn matches_config(&self, config: &EngineConfig) -> bool {
         self.table_size == config.correction_table_size
             && self.pawn_weight == config.correction_pawn_weight
             && self.minor_weight == config.correction_minor_weight
@@ -79,7 +79,7 @@ impl PositionCorrection {
             && self.nonpawn_update_weight == config.correction_nonpawn_update_weight
     }
 
-    pub(super) fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.pawn.fill(0);
         self.minor.fill(0);
         self.white_nonpawn.fill(0);
@@ -87,7 +87,7 @@ impl PositionCorrection {
     }
 
     /// Combined correction value for this position across all four tables.
-    pub(super) fn weighted_value(&self, board: &Board) -> i32 {
+    pub fn weighted_value(&self, board: &Board) -> i32 {
         let [pawn_idx, minor_idx, white_nonpawn_idx, black_nonpawn_idx] = self.get_indices(board);
 
         let pawn_value = self.pawn[pawn_idx] as i32;
@@ -102,7 +102,7 @@ impl PositionCorrection {
 
     /// Update each table with a gravity-scaled bonus. The pawn table uses the
     /// raw bonus, the others scale it by their own update weight.
-    pub(super) fn apply_bonus(&mut self, board: &Board, bonus: i32, limit: i32) {
+    pub fn apply_bonus(&mut self, board: &Board, bonus: i32, limit: i32) {
         let [pawn_idx, minor_idx, white_nonpawn_idx, black_nonpawn_idx] = self.get_indices(board);
 
         let pawn_bonus = bonus;
