@@ -217,9 +217,9 @@ impl Default for EngineConfig {
             correction_nonpawn_weight: 11468,
             correction_continuation_weight: 4472,
             correction_combined_divisor: 134500,
-            correction_minor_update_weight: 150,
-            correction_nonpawn_update_weight: 180,
-            correction_continuation_update_weight: 160,
+            correction_minor_update_weight: 164,
+            correction_nonpawn_update_weight: 185,
+            correction_continuation_update_weight: 163,
             correction_continuation_max_moves: 2,
         }
     }
