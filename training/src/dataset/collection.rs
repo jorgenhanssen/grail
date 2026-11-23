@@ -35,13 +35,9 @@ impl DatasetCollection {
     }
 
     pub fn get(&self, name: &str) -> Option<&DatasetReader> {
-        for dataset in &self.datasets {
-            if dataset.path.file_name() == Some(OsStr::new(name)) {
-                return Some(dataset);
-            }
-        }
-
-        None
+        self.datasets
+            .iter()
+            .find(|dataset| dataset.path.file_name() == Some(OsStr::new(name)))
     }
 
     pub fn files(&self) -> Vec<PathBuf> {

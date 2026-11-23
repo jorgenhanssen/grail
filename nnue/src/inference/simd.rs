@@ -16,33 +16,31 @@ pub const SIMD_BATCH_SIZE: usize = 4;
 pub fn simd_relu(values: &mut [f32]) {
     let zeros = SimdF32::splat(0.0);
 
-    for chunk in values.chunks_exact_mut(SIMD_WIDTH_F32) {
-        let activated = SimdF32::new(chunk.try_into().unwrap()).max(zeros);
-        chunk.copy_from_slice(activated.as_array());
+    let (chunks, _) = values.as_chunks_mut::<SIMD_WIDTH_F32>();
+
+    for chunk in chunks {
+        *chunk = *SimdF32::new(*chunk).max(zeros).as_array();
     }
 }
 
 pub fn simd_add(dest: &mut [f32], src: &[f32]) {
-    for (dest, src) in dest
-        .chunks_exact_mut(SIMD_WIDTH_F32)
-        .zip(src.chunks_exact(SIMD_WIDTH_F32))
-    {
-        let d = SimdF32::new(dest.try_into().unwrap());
-        let s = SimdF32::new(src.try_into().unwrap());
-        dest.copy_from_slice((d + s).as_array());
+    let (dest, _) = dest.as_chunks_mut::<SIMD_WIDTH_F32>();
+    let (src, _) = src.as_chunks::<SIMD_WIDTH_F32>();
+
+    for (dest, src) in dest.iter_mut().zip(src) {
+        let sum = SimdF32::new(*dest) + SimdF32::new(*src);
+        *dest = *sum.as_array();
     }
 }
 
 pub fn simd_dot_product(a: &[f32], b: &[f32]) -> f32 {
     let mut sum_vec = SimdF32::splat(0.0);
 
-    for (a, b) in a
-        .chunks_exact(SIMD_WIDTH_F32)
-        .zip(b.chunks_exact(SIMD_WIDTH_F32))
-    {
-        let a_vec = SimdF32::new(a.try_into().unwrap());
-        let b_vec = SimdF32::new(b.try_into().unwrap());
-        sum_vec += a_vec * b_vec;
+    let (a, _) = a.as_chunks::<SIMD_WIDTH_F32>();
+    let (b, _) = b.as_chunks::<SIMD_WIDTH_F32>();
+
+    for (a, b) in a.iter().zip(b) {
+        sum_vec += SimdF32::new(*a) * SimdF32::new(*b);
     }
 
     sum_vec.reduce_add()
