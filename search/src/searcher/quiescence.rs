@@ -29,6 +29,9 @@ impl Searcher {
 
         self.max_ply_reached = self.max_ply_reached.max(ply);
 
+        if node.is_stalemate() {
+            return 0;
+        }
         if self.is_forced_draw(node) {
             return self.draw_value();
         }
@@ -50,7 +53,6 @@ impl Searcher {
 
         let board = node.board();
         let in_check = node.in_check();
-
         let original_bounds = bounds;
 
         let tt_info = self.shared.tt().probe(hash, ply);

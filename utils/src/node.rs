@@ -6,7 +6,7 @@ use crate::attacks::get_attackers_to;
 use crate::board_metrics::BoardMetrics;
 use crate::is_zugzwang;
 use crate::material::total_material;
-use crate::moves::is_capture;
+use crate::moves::{has_legal_moves, is_capture};
 use crate::threats::threat_attackers;
 
 /// Alpha-beta node classification.
@@ -93,6 +93,10 @@ impl Node {
 
     pub fn is_checkmate(&self) -> bool {
         self.in_check() && self.board.status() == GameStatus::Won
+    }
+
+    pub fn is_stalemate(&self) -> bool {
+        !self.in_check() && !has_legal_moves(&self.board)
     }
 
     pub fn is_fifty_move_draw(&self) -> bool {
