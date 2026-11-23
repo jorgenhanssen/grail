@@ -1,6 +1,6 @@
 [package]
 name = "grail"
-description = "A UCI chess engine written in Rust"
+description = { workspace = true }
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
