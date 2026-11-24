@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use cozy_chess::{Board, Move};
 use uci::commands::GoParams;
@@ -19,22 +19,29 @@ pub struct SearchController {
     stats: TimeControlStats,
 }
 
-impl SearchController {
-    pub fn new(params: &GoParams, board: &Board, move_overhead_ms: u64) -> Self {
+impl Default for SearchController {
+    fn default() -> Self {
         Self {
             start_time: Instant::now(),
-            time_budget: TimeBudget::new(params, board, move_overhead_ms),
-            max_depth: params.depth,
+            time_budget: None,
+            max_depth: None,
             last_iteration_duration_ms: None,
             current_iteration_start_ms: None,
             stats: TimeControlStats::new(),
         }
     }
+}
 
-    /// Hard deadline as an Instant, or None if there is no time control.
-    pub fn deadline(&self) -> Option<Instant> {
+impl SearchController {
+    pub fn start(&mut self, params: &GoParams, board: &Board, move_overhead_ms: u64) {
+        *self = Self::default();
+        self.time_budget = TimeBudget::new(params, board, move_overhead_ms);
+        self.max_depth = params.depth;
+    }
+
+    pub fn hard_limit_reached(&self) -> bool {
         self.time_budget
-            .map(|b| self.start_time + std::time::Duration::from_millis(b.hard_limit()))
+            .is_some_and(|budget| self.elapsed() >= Duration::from_millis(budget.hard_limit()))
     }
 
     pub fn should_continue_to_next_depth(&self, next_depth: u8) -> bool {
@@ -89,7 +96,7 @@ impl SearchController {
         None
     }
 
-    pub fn elapsed(&self) -> std::time::Duration {
+    pub fn elapsed(&self) -> Duration {
         self.start_time.elapsed()
     }
 

@@ -1,5 +1,4 @@
 use std::sync::{Arc, mpsc::Sender};
-use std::time::Instant;
 
 use ahash::AHashSet;
 use cozy_chess::Board;
@@ -13,6 +12,7 @@ use crate::{
     lmr::LmrTable,
     scores::MATE_VALUE,
     stack::SearchStack,
+    time_control::SearchController,
     utils::{convert_centipawn_score, convert_mate_score},
 };
 
@@ -76,8 +76,9 @@ pub struct Searcher {
     /// Triangular PV table for the principal variation
     pv_table: PvTable,
 
-    /// Hard time deadline for the search (main searcher).
-    deadline: Option<Instant>,
+    /// Tracks search time and time budget.
+    /// The main searcher starts the clock (helpers uses the stop flag).
+    time_control: SearchController,
 
     /// Hard node limit (all searchers combined)
     node_limit: Option<u64>,
@@ -122,7 +123,7 @@ impl Searcher {
 
             pv_table: PvTable::new(),
 
-            deadline: None,
+            time_control: SearchController::default(),
             node_limit: None,
 
             nmp_min_ply: 0,
@@ -177,30 +178,22 @@ impl Searcher {
         self.shared.total_nodes() + self.local_nodes
     }
 
-    /// Checks if any hard search limit has been reached (time deadline or
-    /// total node count). Sets the shared stop flag when triggered.
-    fn check_limits(&self) {
-        if let Some(deadline) = self.deadline {
-            if Instant::now() >= deadline {
-                self.shared.set_stop(true);
-                return;
-            }
-        }
-
-        if let Some(node_limit) = self.node_limit {
-            if self.searched_nodes() >= node_limit {
-                self.shared.set_stop(true);
-            }
+    fn node_limit_reached(&self) -> bool {
+        match self.node_limit {
+            Some(limit) => self.searched_nodes() >= limit,
+            None => false,
         }
     }
 
-    fn send_search_info(
-        &self,
-        output: &Sender<UciOutput>,
-        current_depth: u8,
-        pv: &PvLine,
-        elapsed: std::time::Duration,
-    ) {
+    /// Stops the search if a node/time limit has been reached.
+    fn check_limits(&self) {
+        if self.time_control.hard_limit_reached() || self.node_limit_reached() {
+            self.shared.set_stop(true);
+        }
+    }
+
+    fn send_search_info(&self, output: &Sender<UciOutput>, current_depth: u8, pv: &PvLine) {
+        let elapsed = self.time_control.elapsed();
         let found_checkmate = pv.score.abs() >= MATE_VALUE - MAX_DEPTH as i16;
         let total = self.searched_nodes();
         let secs = elapsed.as_secs_f64();

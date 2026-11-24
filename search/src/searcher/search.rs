@@ -16,7 +16,6 @@ use crate::{
     pv::PvLine,
     result::SearchResult,
     stack::SearchNode,
-    time_control::SearchController,
     transposition::{Bound, ProbeResult},
     utils::Bounds,
 };
@@ -45,9 +44,8 @@ impl Searcher {
 
         self.init_search();
 
-        let mut controller =
-            SearchController::new(params, &self.board, self.config.move_overhead as u64);
-        self.deadline = controller.deadline();
+        self.time_control
+            .start(params, &self.board, self.config.move_overhead as u64);
 
         // Oh boy...
         // During datagen with softnodes (10k), several threads would hang
@@ -66,9 +64,9 @@ impl Searcher {
 
         // Iterative deepening
         while !self.shared.is_stopped() && depth < MAX_DEPTH as u8 {
-            controller.on_iteration_start();
+            self.time_control.on_iteration_start();
 
-            if !controller.should_continue_to_next_depth(depth) {
+            if !self.time_control.should_continue_to_next_depth(depth) {
                 break;
             }
 
@@ -77,7 +75,7 @@ impl Searcher {
 
             for pv_index in 0..pv_count {
                 let (pv, failures) = self.search_pv(&root, depth, pv_index);
-                controller.add_aspiration_failures(failures);
+                self.time_control.add_aspiration_failures(failures);
 
                 if let Some(pv) = pv {
                     // Exclude this move for subsequent PVs to not search it multiple times
@@ -85,7 +83,7 @@ impl Searcher {
                         self.multi_pv.add_excluded(mv);
                     }
                     if let Some(out) = output {
-                        self.send_search_info(out, depth, &pv, controller.elapsed());
+                        self.send_search_info(out, depth, &pv);
                     }
                     self.multi_pv.lines[pv_index].result = pv;
                 } else {
@@ -98,7 +96,7 @@ impl Searcher {
             }
 
             if let Some(pv) = self.multi_pv.primary() {
-                controller.on_iteration_complete(
+                self.time_control.on_iteration_complete(
                     depth,
                     pv.score,
                     pv.best_move(),
