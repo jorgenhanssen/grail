@@ -59,21 +59,17 @@ impl EngineWorker {
         while let Ok(cmd) = self.rx.recv() {
             match cmd {
                 EngineCommand::Go(params) => {
-                    let stm = self.engine.board().side_to_move();
-                    let result = self.engine.search(&params, Some(&self.uci_tx));
-
-                    // UCI requires bestmove for every "go" command, even in checkmate positions
                     let mut uci_move = NULL_MOVE.to_string();
 
-                    if let Some(ref r) = result {
-                        let lines = r.lines();
-                        if !lines.is_empty() {
-                            self.last_search = Some(SearchResultMeta::new(lines.to_vec(), stm));
+                    if let Some(result) = self.engine.search(&params, Some(&self.uci_tx)) {
+                        let board = self.engine.board();
+
+                        if let Some(mv) = result.best_move() {
+                            uci_move = move_to_uci(board, mv, self.engine.config().chess960);
                         }
-                        if let Some(mv) = r.primary().and_then(search::PvLine::best_move) {
-                            uci_move =
-                                move_to_uci(self.engine.board(), mv, self.engine.config().chess960);
-                        }
+
+                        self.last_search =
+                            Some(SearchResultMeta::new(result, board.side_to_move()));
                     }
 
                     let _ = self.uci_tx.send(UciOutput::BestMove(uci_move));
