@@ -32,7 +32,7 @@ impl SearchResult {
     }
 
     /// Returns the predicted best move's reply.
-    pub fn ponder_move(&self) -> Option<Move> {
+    pub fn best_reply(&self) -> Option<Move> {
         self.primary()?.line.get(1).copied()
     }
 

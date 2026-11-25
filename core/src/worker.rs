@@ -114,7 +114,7 @@ impl EngineWorker {
         let config = self.engine.config();
 
         let ponder_move = if config.ponder {
-            result.and_then(SearchResult::ponder_move)
+            result.and_then(SearchResult::best_reply)
         } else {
             None
         };
