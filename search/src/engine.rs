@@ -1,4 +1,8 @@
-use std::sync::{Arc, atomic::AtomicBool, mpsc::Sender};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+    mpsc::Sender,
+};
 use std::thread;
 
 use ahash::AHashSet;
@@ -15,6 +19,21 @@ use crate::{
     transposition::TranspositionTable,
 };
 
+#[derive(Clone, Default)]
+pub struct SearchHandle {
+    stop_requested: Arc<AtomicBool>,
+}
+
+impl SearchHandle {
+    pub fn stop(&self) {
+        self.stop_requested.store(true, Ordering::Relaxed);
+    }
+
+    pub fn is_stopped(&self) -> bool {
+        self.stop_requested.load(Ordering::Relaxed)
+    }
+}
+
 pub struct Engine {
     config: EngineConfig,
     shared: Arc<SharedSearcherState>,
@@ -25,8 +44,8 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(config: &EngineConfig, stop: Arc<AtomicBool>, evaluator: nnue::Evaluator) -> Self {
-        let shared = Arc::new(SharedSearcherState::new(config, stop));
+    pub fn new(config: &EngineConfig, evaluator: nnue::Evaluator) -> Self {
+        let shared = Arc::new(SharedSearcherState::new(config));
 
         if !config.syzygy_path.is_empty() {
             shared.init_tablebases(&config.syzygy_path);
@@ -86,6 +105,7 @@ impl Engine {
     pub fn new_game(&mut self) {
         self.shared.tt().clear();
         self.shared.correction().reset();
+
         for searcher in &mut self.searchers {
             searcher.new_game();
         }
@@ -112,30 +132,27 @@ impl Engine {
         self.shared.set_tablebases(tb);
     }
 
-    pub fn stop(&self) {
-        self.shared.set_stop(true);
-    }
-
     pub fn search(
         &mut self,
         params: &uci::commands::GoParams,
         output: Option<&Sender<UciOutput>>,
+        handle: Option<SearchHandle>,
     ) -> Option<SearchResult> {
+        let handle = handle.unwrap_or_default();
+
         for searcher in &mut self.searchers {
-            searcher.set_position(self.board.clone(), self.game_history.clone());
+            searcher.prepare_new_search(
+                self.board.clone(),
+                self.game_history.clone(),
+                handle.clone(),
+            );
         }
 
-        self.shared.set_stop(false);
         self.shared.reset_nodes();
         self.shared.tt().age();
 
-        let mut result = None;
-
-        let shared = &self.shared;
-        let searchers = &mut self.searchers;
-
         thread::scope(|s| {
-            let (main, helpers) = searchers.split_first_mut().unwrap();
+            let (main, helpers) = self.searchers.split_first_mut().unwrap();
 
             for helper in helpers.iter_mut() {
                 s.spawn(move || {
@@ -144,12 +161,11 @@ impl Engine {
                 });
             }
 
-            result = main.search(params, output);
+            let result = main.search(params, output);
             main.sync_nodes();
 
-            shared.set_stop(true);
-        });
-
-        result
+            handle.stop();
+            result
+        })
     }
 }

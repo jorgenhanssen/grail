@@ -105,7 +105,7 @@ impl SelfPlayGame {
 
     fn search(&self, engine: &mut Engine) -> Option<SearchResult> {
         engine.set_position(self.board.clone(), Some(self.history()));
-        engine.search(&self.config.limit.go_params(), None)
+        engine.search(&self.config.limit.go_params(), None, None)
     }
 
     fn opening_is_too_imbalanced(&self, score: i16) -> bool {

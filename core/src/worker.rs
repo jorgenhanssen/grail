@@ -3,7 +3,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use ahash::AHashSet;
 use config::EngineConfig;
 use cozy_chess::Board;
-use search::{Engine, Node, NodeType};
+use search::{Engine, Node, NodeType, SearchHandle};
 use uci::{NULL_MOVE, UciOutput, move_to_uci};
 
 use crate::bench::run_benchmark;
@@ -22,7 +22,7 @@ pub enum EngineCommand {
         history: AHashSet<u64>,
     },
     /// Start searching with the given parameters.
-    Go(uci::commands::GoParams),
+    Go(uci::commands::GoParams, SearchHandle),
     /// Display current position.
     Display,
     /// Evaluate current position.
@@ -58,10 +58,14 @@ impl EngineWorker {
     pub fn run(mut self) {
         while let Ok(cmd) = self.rx.recv() {
             match cmd {
-                EngineCommand::Go(params) => {
+                EngineCommand::Go(params, handle) => {
                     let mut uci_move = NULL_MOVE.to_string();
 
-                    if let Some(result) = self.engine.search(&params, Some(&self.uci_tx)) {
+                    let result = self
+                        .engine
+                        .search(&params, Some(&self.uci_tx), Some(handle));
+
+                    if let Some(result) = result {
                         let board = self.engine.board();
 
                         if let Some(mv) = result.best_move() {

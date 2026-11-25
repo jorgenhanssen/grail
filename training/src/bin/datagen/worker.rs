@@ -48,8 +48,7 @@ impl SelfPlayWorker {
             ..EngineConfig::default()
         };
 
-        let stop = Arc::new(AtomicBool::new(false));
-        let engine = Engine::new(&config, stop, evaluator);
+        let engine = Engine::new(&config, evaluator);
 
         if let Some(ref tb) = tablebases {
             engine.set_tablebases(tb.clone());

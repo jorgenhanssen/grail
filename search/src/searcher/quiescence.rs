@@ -23,7 +23,7 @@ impl Searcher {
         self.pv_table.init_ply(ply);
 
         // Check if we should stop searching
-        if self.shared.is_stopped() {
+        if self.handle.is_stopped() {
             return 0;
         }
 
@@ -181,7 +181,7 @@ impl Searcher {
             let value = -child_score;
 
             // Check if we were stopped during the recursive search
-            if self.shared.is_stopped() {
+            if self.handle.is_stopped() {
                 break;
             }
 

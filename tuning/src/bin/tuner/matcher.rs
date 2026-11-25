@@ -1,6 +1,6 @@
 use std::fmt;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
 
 use config::EngineConfig;
 use cozy_chess::Color;
@@ -95,8 +95,8 @@ impl Matcher {
         // Runs the following scope once for each thread in the pool.
         // This is nice so we only set up engines a and b once per thread per match.
         pool.broadcast(|_| {
-            let mut a = Engine::new(config_a, Arc::default(), self.evaluator.clone());
-            let mut b = Engine::new(config_b, Arc::default(), self.evaluator.clone());
+            let mut a = Engine::new(config_a, self.evaluator.clone());
+            let mut b = Engine::new(config_b, self.evaluator.clone());
 
             while (next.fetch_add(1, Ordering::Relaxed) as u64) < self.pairs {
                 let opening = book.random_position();

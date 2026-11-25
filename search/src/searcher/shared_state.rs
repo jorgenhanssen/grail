@@ -1,8 +1,5 @@
 use std::cell::UnsafeCell;
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, AtomicU64, Ordering},
-};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use config::EngineConfig;
 use pyrrhic_rs::TableBases;
@@ -22,7 +19,6 @@ pub struct SharedSearcherState {
     tt: UnsafeCell<TranspositionTable>,
     correction: UnsafeCell<Correction>,
     tb: UnsafeCell<Option<TableBases<CozyAdapter>>>,
-    stop: Arc<AtomicBool>,
     total_nodes: AtomicU64,
 }
 
@@ -30,12 +26,11 @@ pub struct SharedSearcherState {
 unsafe impl Sync for SharedSearcherState {}
 
 impl SharedSearcherState {
-    pub fn new(config: &EngineConfig, stop: Arc<AtomicBool>) -> Self {
+    pub fn new(config: &EngineConfig) -> Self {
         Self {
             tt: UnsafeCell::new(TranspositionTable::new(config.hash_size as usize)),
             correction: UnsafeCell::new(Correction::new(config)),
             tb: UnsafeCell::new(None),
-            stop,
             total_nodes: AtomicU64::new(0),
         }
     }
@@ -48,14 +43,6 @@ impl SharedSearcherState {
     #[allow(clippy::mut_from_ref)]
     pub fn correction(&self) -> &mut Correction {
         unsafe { &mut *self.correction.get() }
-    }
-
-    pub fn is_stopped(&self) -> bool {
-        self.stop.load(Ordering::Relaxed)
-    }
-
-    pub fn set_stop(&self, value: bool) {
-        self.stop.store(value, Ordering::Relaxed);
     }
 
     pub fn add_nodes(&self, count: u64) {

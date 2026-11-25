@@ -90,7 +90,7 @@ impl Game {
             }
 
             let start = Instant::now();
-            let result = engine.search(&go, None);
+            let result = engine.search(&go, None, None);
             if let Some(clock) = &mut clock {
                 if !clock.finish_move(stm, start.elapsed()) {
                     return Outcome::Win(!stm);

@@ -17,7 +17,7 @@ mod utils;
 /// Maximum search depth supported by the engine.
 pub const MAX_DEPTH: usize = 100;
 
-pub use engine::Engine;
+pub use engine::{Engine, SearchHandle};
 pub use pv::PvLine;
 pub use result::SearchResult;
 pub use tablebase::CozyAdapter;

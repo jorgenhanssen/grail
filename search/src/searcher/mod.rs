@@ -27,11 +27,14 @@ mod search;
 mod shared_state;
 mod singular;
 
-use crate::MAX_DEPTH;
+use crate::{MAX_DEPTH, SearchHandle};
 
 pub struct Searcher {
-    /// Shared state across all searchers (TT, correction history, stop etc)
+    /// Shared state across all searchers (TT, correction history, node count, etc.)
     shared: Arc<SharedSearcherState>,
+
+    // External handle for the current search
+    handle: SearchHandle,
 
     /// ID/index for this searcher (0 = main, 1.. = helpers)
     thread_id: usize,
@@ -100,6 +103,7 @@ impl Searcher {
     ) -> Self {
         Self {
             shared,
+            handle: SearchHandle::default(),
             thread_id,
             config: config.clone(),
 
@@ -147,7 +151,13 @@ impl Searcher {
         }
     }
 
-    pub fn set_position(&mut self, board: Board, game_history: AHashSet<u64>) {
+    pub fn prepare_new_search(
+        &mut self,
+        board: Board,
+        game_history: AHashSet<u64>,
+        handle: SearchHandle,
+    ) {
+        self.handle = handle;
         self.board = board;
         self.game_history = game_history;
     }
@@ -188,7 +198,7 @@ impl Searcher {
     /// Stops the search if a node/time limit has been reached.
     fn check_limits(&self) {
         if self.time_control.hard_limit_reached() || self.node_limit_reached() {
-            self.shared.set_stop(true);
+            self.handle.stop();
         }
     }
 

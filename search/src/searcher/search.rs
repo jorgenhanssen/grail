@@ -63,7 +63,7 @@ impl Searcher {
         let mut depth = 1u8;
 
         // Iterative deepening
-        while !self.shared.is_stopped() && depth < MAX_DEPTH as u8 {
+        while !self.handle.is_stopped() && depth < MAX_DEPTH as u8 {
             self.time_control.on_iteration_start();
 
             if !self.time_control.should_continue_to_next_depth(depth) {
@@ -90,7 +90,7 @@ impl Searcher {
                     break; // No more moves for additional PVs
                 }
 
-                if self.shared.is_stopped() {
+                if self.handle.is_stopped() {
                     break;
                 }
             }
@@ -140,7 +140,7 @@ impl Searcher {
         let root = Node::new(self.board.clone(), NodeType::Pv);
         let mut depth = 1u8;
 
-        while !self.shared.is_stopped() && depth < MAX_DEPTH as u8 {
+        while !self.handle.is_stopped() && depth < MAX_DEPTH as u8 {
             // Each helper skips a different 1/3 of depths to seed TT diversity:
             //   Thread 1: skips depths 2, 5, 8, 11, ...
             //   Thread 2: skips depths 1, 4, 7, 10, ...
@@ -174,7 +174,7 @@ impl Searcher {
                 return (None, failures);
             }
 
-            if self.shared.is_stopped() {
+            if self.handle.is_stopped() {
                 return (
                     Some(PvLine::new(self.pv_table.get(0), score, pv_index)),
                     failures,
@@ -227,7 +227,7 @@ impl Searcher {
 
         let singular = self.search_stack.current().and_then(|n| n.singular);
 
-        if self.shared.is_stopped() {
+        if self.handle.is_stopped() {
             return 0;
         }
 
@@ -414,7 +414,7 @@ impl Searcher {
                 singular_result.extension,
                 &prev_moves,
             ) {
-                if self.shared.is_stopped() {
+                if self.handle.is_stopped() {
                     break;
                 }
 
@@ -467,7 +467,7 @@ impl Searcher {
         }
 
         // Let's not store a partial result in the TT / correction.
-        if self.shared.is_stopped() {
+        if self.handle.is_stopped() {
             return best_value;
         }
 
