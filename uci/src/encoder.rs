@@ -11,7 +11,10 @@ impl Encoder {
             UciOutput::UciOk => "uciok".to_string(),
             UciOutput::ReadyOk => "readyok".to_string(),
 
-            UciOutput::BestMove(best_move) => format!("bestmove {}", best_move),
+            UciOutput::BestMove { best_move, ponder } => match ponder {
+                Some(reply) => format!("bestmove {best_move} ponder {reply}"),
+                None => format!("bestmove {best_move}"),
+            },
             UciOutput::Info(info) => {
                 format!(
                     "info depth {} seldepth {} multipv {} score {} nodes {} nps {} hashfull {} time {} pv {}",

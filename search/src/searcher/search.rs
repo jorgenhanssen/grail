@@ -44,8 +44,12 @@ impl Searcher {
 
         self.init_search();
 
-        self.time_control
-            .start(params, &self.board, self.config.move_overhead as u64);
+        self.time_control.start(
+            params,
+            &self.board,
+            self.config.move_overhead as u64,
+            self.handle.clock(),
+        );
 
         // Oh boy...
         // During datagen with softnodes (10k), several threads would hang

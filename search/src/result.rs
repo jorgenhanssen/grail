@@ -31,6 +31,11 @@ impl SearchResult {
         self.primary()?.best_move()
     }
 
+    /// Returns the predicted best move's reply.
+    pub fn best_reply(&self) -> Option<Move> {
+        self.primary()?.line.get(1).copied()
+    }
+
     /// Returns all PV lines.
     pub fn lines(&self) -> &[PvLine] {
         &self.lines

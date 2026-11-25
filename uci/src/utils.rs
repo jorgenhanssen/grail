@@ -8,6 +8,12 @@ pub fn move_to_uci(board: &Board, mv: Move, chess960: bool) -> String {
     display_uci_move(board, mv).to_string()
 }
 
+pub fn reply_to_uci(board: &Board, first_move: Move, reply: Move, chess960: bool) -> String {
+    let mut after_move = board.clone();
+    after_move.play_unchecked(first_move);
+    move_to_uci(&after_move, reply, chess960)
+}
+
 pub fn pv_to_uci(starting_board: &Board, pv: &[Move], chess960: bool) -> Vec<String> {
     let mut result = Vec::with_capacity(pv.len());
     let mut board = starting_board.clone();
@@ -34,5 +40,15 @@ mod tests {
         let stationary_king: Board = "4k3/8/8/8/8/8/8/6KR w H - 0 1".parse().unwrap();
         let castle = "g1h1".parse::<Move>().unwrap();
         assert_eq!(move_to_uci(&stationary_king, castle, true), "g1h1");
+    }
+
+    #[test]
+    fn castling_reply_uses_the_position_after_the_first_move() {
+        let board: Board = "4k2r/8/8/8/8/8/4P3/4K3 w k - 0 1".parse().unwrap();
+        let first_move = "e2e4".parse().unwrap();
+        let reply = "e8h8".parse().unwrap();
+
+        assert_eq!(reply_to_uci(&board, first_move, reply, false), "e8g8");
+        assert_eq!(reply_to_uci(&board, first_move, reply, true), "e8h8");
     }
 }
