@@ -15,6 +15,7 @@ pub enum UciInput {
     },
     Go(GoParams),
 
+    PonderHit,
     Stop,
     Quit,
     SetOption {
@@ -36,7 +37,10 @@ pub enum UciOutput {
     IdAuthor(String),
     UciOk,
     ReadyOk,
-    BestMove(String),
+    BestMove {
+        best_move: String,
+        ponder: Option<String>,
+    },
     Info(Info),
     InfoString(String),
     Option(String),
@@ -94,6 +98,8 @@ impl Default for Score {
 pub struct GoParams {
     /// Search until "stop" is received.
     pub infinite: bool,
+    /// Search on opponents time until ponderhit or stop.
+    pub ponder: bool,
     /// White's remaining time in milliseconds.
     pub wtime: Option<u64>,
     /// Black's remaining time in milliseconds.

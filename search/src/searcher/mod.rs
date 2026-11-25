@@ -80,7 +80,7 @@ pub struct Searcher {
     pv_table: PvTable,
 
     /// Tracks search time and time budget.
-    /// The main searcher starts the clock (helpers uses the stop flag).
+    /// Managed by the main searcher.
     time_control: SearchController,
 
     /// Hard node limit (all searchers combined)

@@ -113,10 +113,15 @@ impl Grail {
             UciInput::Go(params) => {
                 self.stop_search();
 
-                let handle = SearchHandle::default();
+                let handle = SearchHandle::new(params.ponder);
                 self.active_search = Some(handle.clone());
 
                 self.send_engine_command(EngineCommand::Go(params, handle));
+            }
+            UciInput::PonderHit => {
+                if let Some(handle) = &self.active_search {
+                    handle.start_clock();
+                }
             }
             UciInput::Stop => self.stop_search(),
             UciInput::Display => self.send_engine_command(EngineCommand::Display),

@@ -9,6 +9,7 @@ pub struct EngineConfig {
     pub syzygy_path: String,
     pub syzygy_probe_depth: u8,
     pub chess960: bool,
+    pub ponder: bool,
 
     pub aspiration_window_size: i32,
     pub aspiration_window_widen: i32,
@@ -121,6 +122,7 @@ impl Default for EngineConfig {
             syzygy_path: String::new(),
             syzygy_probe_depth: 1,
             chess960: false,
+            ponder: false,
 
             aspiration_window_size: 37,
             aspiration_window_widen: 132,

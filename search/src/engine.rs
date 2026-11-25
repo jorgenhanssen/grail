@@ -1,9 +1,10 @@
 use std::sync::{
-    Arc,
+    Arc, OnceLock,
     atomic::{AtomicBool, Ordering},
     mpsc::Sender,
 };
 use std::thread;
+use std::time::Instant;
 
 use ahash::AHashSet;
 use config::EngineConfig;
@@ -19,18 +20,47 @@ use crate::{
     transposition::TranspositionTable,
 };
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct SearchHandle {
     stop_requested: Arc<AtomicBool>,
+    clock_start: Arc<OnceLock<Instant>>,
+}
+
+impl Default for SearchHandle {
+    fn default() -> Self {
+        Self::new(false)
+    }
 }
 
 impl SearchHandle {
+    pub fn new(ponder: bool) -> Self {
+        let clock_start = if ponder {
+            // our clock hasn't started if we are pondering.
+            OnceLock::new()
+        } else {
+            OnceLock::from(Instant::now())
+        };
+
+        Self {
+            stop_requested: Arc::default(),
+            clock_start: Arc::new(clock_start),
+        }
+    }
+
     pub fn stop(&self) {
         self.stop_requested.store(true, Ordering::Relaxed);
     }
 
     pub fn is_stopped(&self) -> bool {
         self.stop_requested.load(Ordering::Relaxed)
+    }
+
+    pub fn start_clock(&self) {
+        self.clock_start.get_or_init(Instant::now);
+    }
+
+    pub fn clock(&self) -> Arc<OnceLock<Instant>> {
+        Arc::clone(&self.clock_start)
     }
 }
 

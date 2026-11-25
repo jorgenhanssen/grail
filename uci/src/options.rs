@@ -78,6 +78,7 @@ const UCI_NAME_MULTI_PV: &str = "MultiPV";
 const UCI_NAME_SYZYGY_PATH: &str = "SyzygyPath";
 const UCI_NAME_SYZYGY_PROBE_DEPTH: &str = "SyzygyProbeDepth";
 const UCI_NAME_CHESS960: &str = "UCI_Chess960";
+const UCI_NAME_PONDER: &str = "Ponder";
 
 const HASH: UciOption = UciOption {
     name: UCI_NAME_HASH,
@@ -110,6 +111,10 @@ const CHESS960: UciOption = UciOption {
     name: UCI_NAME_CHESS960,
     option_type: UciOptionType::Check,
 };
+const PONDER: UciOption = UciOption {
+    name: UCI_NAME_PONDER,
+    option_type: UciOptionType::Check,
+};
 
 /// Update the config with the value of a UCI setoption command.
 pub fn set_uci_option(config: &mut EngineConfig, name: &str, value: &str) -> Result<(), String> {
@@ -135,6 +140,9 @@ pub fn set_uci_option(config: &mut EngineConfig, name: &str, value: &str) -> Res
         UCI_NAME_CHESS960 => {
             config.chess960 = parse_check(&CHESS960, value)?;
         }
+        UCI_NAME_PONDER => {
+            config.ponder = parse_check(&PONDER, value)?;
+        }
         "" => {
             return Err("Invalid setoption command: missing option name".to_owned());
         }
@@ -156,5 +164,6 @@ pub fn list_uci_options(config: &EngineConfig) -> Vec<String> {
         SYZYGY_PATH.to_uci(&config.syzygy_path),
         SYZYGY_PROBE_DEPTH.to_uci(config.syzygy_probe_depth),
         CHESS960.to_uci(config.chess960),
+        PONDER.to_uci(config.ponder),
     ]
 }
