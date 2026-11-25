@@ -1,4 +1,5 @@
-use std::time::Instant;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 
 use cozy_chess::{Board, Move};
 use uci::commands::GoParams;
@@ -11,7 +12,8 @@ use crate::time_control::stats::TimeControlStats;
 const NEXT_ITERATION_DURATION_FACTOR: f64 = 2.0;
 
 pub struct SearchController {
-    start_time: Instant,
+    search_start: Instant,
+    clock_start: Arc<OnceLock<Instant>>,
     time_budget: Option<TimeBudget>,
     max_depth: Option<u8>,
     last_iteration_duration_ms: Option<u64>,
@@ -19,22 +21,44 @@ pub struct SearchController {
     stats: TimeControlStats,
 }
 
-impl SearchController {
-    pub fn new(params: &GoParams, board: &Board, move_overhead_ms: u64) -> Self {
+impl Default for SearchController {
+    fn default() -> Self {
         Self {
-            start_time: Instant::now(),
-            time_budget: TimeBudget::new(params, board, move_overhead_ms),
-            max_depth: params.depth,
+            search_start: Instant::now(),
+            clock_start: Arc::default(),
+            time_budget: None,
+            max_depth: None,
             last_iteration_duration_ms: None,
             current_iteration_start_ms: None,
             stats: TimeControlStats::new(),
         }
     }
+}
 
-    /// Hard deadline as an Instant, or None if there is no time control.
-    pub fn deadline(&self) -> Option<Instant> {
-        self.time_budget
-            .map(|b| self.start_time + std::time::Duration::from_millis(b.hard_limit()))
+impl SearchController {
+    pub fn start(
+        &mut self,
+        params: &GoParams,
+        board: &Board,
+        move_overhead_ms: u64,
+        clock_start: Arc<OnceLock<Instant>>,
+    ) {
+        *self = Self {
+            clock_start,
+            time_budget: TimeBudget::new(params, board, move_overhead_ms),
+            max_depth: params.depth,
+            ..Self::default()
+        };
+    }
+
+    pub fn hard_limit_reached(&self) -> bool {
+        let Some(budget) = self.time_budget else {
+            return false;
+        };
+
+        self.clock_start
+            .get()
+            .is_some_and(|start| start.elapsed() >= Duration::from_millis(budget.hard_limit()))
     }
 
     pub fn should_continue_to_next_depth(&self, next_depth: u8) -> bool {
@@ -51,7 +75,11 @@ impl SearchController {
 
         // Time check (if specified)
         if let Some(budget) = self.time_budget {
-            let elapsed = self.elapsed().as_millis() as u64;
+            let Some(start) = self.clock_start.get() else {
+                return true;
+            };
+
+            let elapsed = start.elapsed().as_millis() as u64;
 
             match budget {
                 // Exact (movetime): stop exactly at hard limit.
@@ -89,8 +117,8 @@ impl SearchController {
         None
     }
 
-    pub fn elapsed(&self) -> std::time::Duration {
-        self.start_time.elapsed()
+    pub fn elapsed(&self) -> Duration {
+        self.search_start.elapsed()
     }
 
     pub fn on_iteration_start(&mut self) {

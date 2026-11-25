@@ -1,6 +1,6 @@
 [package]
 name = "grail"
-description = "A UCI chess engine written in Rust"
+description = { workspace = true }
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
@@ -15,8 +15,6 @@ uci = { path = "../uci" }
 
 ahash = { workspace = true }
 cozy-chess = { workspace = true }
-candle-core = { workspace = true }
-candle-nn = { workspace = true }
 
 [lints]
 workspace = true

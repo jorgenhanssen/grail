@@ -1,6 +1,7 @@
 use arrayvec::ArrayVec;
-use cozy_chess::{BitBoard, Move, Piece};
-use utils::{PAWN_VALUE, captured_piece, gives_check, piece_value};
+use config::EngineConfig;
+use cozy_chess::{Move, Piece};
+use utils::{CheckChecker, PAWN_VALUE, captured_piece, piece_value};
 
 use crate::history::{CaptureHistory, ContinuationHistory, HistoryHeuristic, PieceTo, PrevMoves};
 use crate::utils::see::see;
@@ -44,23 +45,10 @@ pub struct MainMoveGenerator {
     bad_quiet_threshold: i16,
     escape_divisor: i16,
     unsafe_square_divisor: i16,
-    threats: BitBoard,
-    enemy_attacks: BitBoard,
 }
 
 impl MainMoveGenerator {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        best_move: Option<Move>,
-        prev_moves: PrevMoves,
-        quiet_check_bonus: i16,
-        quiet_check_see_margin: i16,
-        bad_quiet_threshold: i16,
-        escape_divisor: i16,
-        unsafe_square_divisor: i16,
-        threats: BitBoard,
-        enemy_attacks: BitBoard,
-    ) -> Self {
+    pub fn new(config: &EngineConfig, best_move: Option<Move>, prev_moves: PrevMoves) -> Self {
         Self {
             gen_phase: Phase::BestMove,
             best_move,
@@ -72,13 +60,11 @@ impl MainMoveGenerator {
             good_quiets: ArrayVec::new(),
             bad_quiets: ArrayVec::new(),
 
-            quiet_check_bonus,
-            quiet_check_see_margin,
-            bad_quiet_threshold,
-            escape_divisor,
-            unsafe_square_divisor,
-            threats,
-            enemy_attacks,
+            quiet_check_bonus: config.ordering_quiet_check_bonus,
+            quiet_check_see_margin: config.ordering_quiet_check_see_margin,
+            bad_quiet_threshold: config.ordering_bad_quiet_threshold,
+            escape_divisor: config.ordering_escape_divisor,
+            unsafe_square_divisor: config.ordering_unsafe_square_divisor,
         }
     }
 
@@ -119,7 +105,7 @@ impl MainMoveGenerator {
 
                     self.good_captures.push(ScoredMove {
                         mov,
-                        score: capture_score(board, mov, capture_history),
+                        score: capture_score(board, mov, moves.piece, capture_history),
                     });
                 }
                 false
@@ -159,16 +145,18 @@ impl MainMoveGenerator {
         if self.gen_phase == Phase::GenQuiets {
             self.gen_phase = Phase::GoodQuiets;
 
-            let empty_squares = !board.occupied();
-            let our_pieces = board.colors(board.side_to_move());
+            let check_checker = CheckChecker::new(board);
+
+            // Quiet = wherever our opponent does not have pieces.
+            // includes our own pieces because cozy notes castling as rook self-capture.
+            let quiet_squares = !board.colors(!board.side_to_move());
 
             board.generate_moves(|moves| {
-                for mov in moves {
-                    // Allow moves to empty squares OR castling (king captures own rook in cozy-chess)
-                    let is_castling = our_pieces.has(mov.to);
-                    if !empty_squares.has(mov.to) && !is_castling {
-                        continue;
-                    }
+                let mut quiets = moves;
+                quiets.to &= quiet_squares;
+                let piece = quiets.piece;
+
+                for mov in quiets {
                     if Some(mov) == self.best_move {
                         continue;
                     }
@@ -183,18 +171,17 @@ impl MainMoveGenerator {
                             let mut score = 0;
 
                             let color = board.side_to_move();
-                            let piece = board.piece_on(mov.from).unwrap();
 
-                            score += history_heuristic.get(color, mov.from, mov.to);
+                            score += history_heuristic.get(node, mov);
 
                             let curr = PieceTo::new(color, piece, mov.to);
                             score += continuation_history.get(&self.prev_moves, curr);
 
                             let value = piece_value(piece);
-                            let to_unsafe = self.enemy_attacks.has(mov.to);
+                            let (to_unsafe, escapes_threat) = node.move_safety(mov, piece);
 
                             // Gives check = great (sometimes)
-                            if gives_check(board, mov)
+                            if check_checker.gives_check(mov, piece)
                                 // Try to filter out "junk checks" that just hang material
                                 && (!to_unsafe || see(board, mov, -self.quiet_check_see_margin))
                             {
@@ -202,7 +189,7 @@ impl MainMoveGenerator {
                             }
 
                             // Escapes threat = good
-                            if self.threats.has(mov.from) {
+                            if escapes_threat {
                                 score += value / self.escape_divisor;
                             }
 

@@ -19,23 +19,26 @@ impl Searcher {
     /// for a reliable static evaluation.
     ///
     /// <https://www.chessprogramming.org/Quiescence_Search>
-    pub(super) fn quiescence_search(&mut self, node: &Node, mut bounds: Bounds, ply: u8) -> i16 {
+    pub fn quiescence_search(&mut self, node: &Node, mut bounds: Bounds, ply: u8) -> i16 {
         self.pv_table.init_ply(ply);
 
         // Check if we should stop searching
-        if self.shared.is_stopped() {
+        if self.handle.is_stopped() {
             return 0;
         }
 
         self.max_ply_reached = self.max_ply_reached.max(ply);
 
+        if node.is_stalemate() {
+            return 0;
+        }
         if self.is_forced_draw(node) {
             return self.draw_value();
         }
 
         // Ply limit - return static eval if we've hit max ply
         if ply as usize >= MAX_DEPTH {
-            let raw_eval = self.static_eval(node);
+            let raw_eval = self.static_eval_for_stm(node);
             let prev_moves = self.search_stack.prev_moves();
             return self
                 .shared
@@ -50,7 +53,6 @@ impl Searcher {
 
         let board = node.board();
         let in_check = node.in_check();
-
         let original_bounds = bounds;
 
         let tt_info = self.shared.tt().probe(hash, ply);
@@ -62,20 +64,21 @@ impl Searcher {
             }
         }
 
-        let static_eval = tt_info
-            .and_then(|t| t.static_eval)
-            .unwrap_or_else(|| self.static_eval(node));
-        let prev_moves = self.search_stack.prev_moves();
-        let stand_pat = self
-            .shared
-            .correction()
-            .adjust(board, &prev_moves, static_eval);
-
-        let board_material = node.total_material();
+        let (static_eval, stand_pat) = if in_check {
+            (None, -SCORE_INF)
+        } else {
+            let eval = tt_info
+                .and_then(|t| t.static_eval)
+                .unwrap_or_else(|| self.static_eval_for_stm(node));
+            let prev_moves = self.search_stack.prev_moves();
+            let corrected_eval = self.shared.correction().adjust(board, &prev_moves, eval);
+            (Some(eval), corrected_eval)
+        };
 
         // Delta pruning: skip captures that can't possibly improve alpha
         // https://www.chessprogramming.org/Delta_Pruning
-        let can_delta = !in_check && board_material >= self.config.qs_delta_material_threshold;
+        let can_delta =
+            !in_check && node.total_material() >= self.config.qs_delta_material_threshold;
 
         // Do a "stand-pat" evaluation if not in check
         if !in_check {
@@ -85,7 +88,7 @@ impl Searcher {
                     ply,
                     0, // Prefer deeper entries rather than QS entries
                     stand_pat,
-                    Some(static_eval),
+                    static_eval,
                     original_bounds.alpha,
                     original_bounds.beta,
                     None,
@@ -114,7 +117,7 @@ impl Searcher {
                         ply,
                         0, // Prefer deeper entries rather than QS entries
                         stand_pat,
-                        Some(static_eval),
+                        static_eval,
                         original_bounds.alpha,
                         original_bounds.beta,
                         None,
@@ -126,7 +129,7 @@ impl Searcher {
             bounds.raise_alpha(stand_pat);
         }
 
-        let mut best_eval = if in_check { -SCORE_INF } else { stand_pat };
+        let mut best_eval = stand_pat;
         let mut captures_searched: ArrayVec<Move, 32> = ArrayVec::new();
 
         let mut moves = QMoveGenerator::new(node, &self.capture_history);
@@ -178,7 +181,7 @@ impl Searcher {
             let value = -child_score;
 
             // Check if we were stopped during the recursive search
-            if self.shared.is_stopped() {
+            if self.handle.is_stopped() {
                 break;
             }
 
@@ -206,7 +209,7 @@ impl Searcher {
             ply,
             0,
             best_eval,
-            Some(static_eval),
+            static_eval,
             original_bounds.alpha,
             original_bounds.beta,
             None,

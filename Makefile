@@ -2,7 +2,7 @@ SHELL = /bin/bash
 
 .ONESHELL:
 
-.PHONY: grail grail-pgo datagen datagen-pgo train clean profile tuner tuner-pgo
+.PHONY: grail grail-pgo datagen datagen-pgo train clean profile tuner tuner-pgo dataset-stats
 
 # Default to native optimization for local development.
 RUSTFLAGS = -C target-cpu=native
@@ -24,12 +24,14 @@ test:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo test
 
 train:
-	@GPU_FEATURES=$$([ "$$(uname -s)" = "Darwin" ] && echo metal || (command -v nvcc >/dev/null 2>&1 && echo cuda || true)); \
-	if [ -n "$$GPU_FEATURES" ]; then \
-		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin train --features $$GPU_FEATURES; \
+	@if command -v nvcc >/dev/null 2>&1; then \
+		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin train --features cuda; \
 	else \
 		RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin train; \
 	fi
+
+dataset-stats:
+	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p training --bin dataset-stats
 
 tuner:
 	RUSTFLAGS="$(RUSTFLAGS)" cargo build --release -p tuning --bin tuner

@@ -24,7 +24,7 @@ pub fn run_benchmark(engine: &mut Engine) {
 
         engine.new_game();
         engine.set_position(board, None);
-        let _ = engine.search(&params, Some(&tx));
+        let _ = engine.search(&params, Some(&tx), None);
 
         let Some(UciOutput::Info(info)) = rx.try_iter().last() else {
             panic!("No info from search ({fen})");

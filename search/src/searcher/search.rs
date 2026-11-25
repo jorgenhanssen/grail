@@ -7,7 +7,7 @@ use uci::{
     UciOutput,
     commands::{GoParams, Info, Score},
 };
-use utils::{Node, NodeType, has_legal_moves};
+use utils::{FracPly, Node, NodeType, captured_piece, has_legal_moves};
 
 use crate::{
     aspiration::Pass,
@@ -16,7 +16,6 @@ use crate::{
     pv::PvLine,
     result::SearchResult,
     stack::SearchNode,
-    time_control::SearchController,
     transposition::{Bound, ProbeResult},
     utils::Bounds,
 };
@@ -45,9 +44,12 @@ impl Searcher {
 
         self.init_search();
 
-        let mut controller =
-            SearchController::new(params, &self.board, self.config.move_overhead as u64);
-        self.deadline = controller.deadline();
+        self.time_control.start(
+            params,
+            &self.board,
+            self.config.move_overhead as u64,
+            self.handle.clock(),
+        );
 
         // Oh boy...
         // During datagen with softnodes (10k), several threads would hang
@@ -65,10 +67,10 @@ impl Searcher {
         let mut depth = 1u8;
 
         // Iterative deepening
-        while !self.shared.is_stopped() && depth < MAX_DEPTH as u8 {
-            controller.on_iteration_start();
+        while !self.handle.is_stopped() && depth < MAX_DEPTH as u8 {
+            self.time_control.on_iteration_start();
 
-            if !controller.should_continue_to_next_depth(depth) {
+            if !self.time_control.should_continue_to_next_depth(depth) {
                 break;
             }
 
@@ -77,7 +79,7 @@ impl Searcher {
 
             for pv_index in 0..pv_count {
                 let (pv, failures) = self.search_pv(&root, depth, pv_index);
-                controller.add_aspiration_failures(failures);
+                self.time_control.add_aspiration_failures(failures);
 
                 if let Some(pv) = pv {
                     // Exclude this move for subsequent PVs to not search it multiple times
@@ -85,20 +87,20 @@ impl Searcher {
                         self.multi_pv.add_excluded(mv);
                     }
                     if let Some(out) = output {
-                        self.send_search_info(out, depth, &pv, controller.elapsed());
+                        self.send_search_info(out, depth, &pv);
                     }
                     self.multi_pv.lines[pv_index].result = pv;
                 } else {
                     break; // No more moves for additional PVs
                 }
 
-                if self.shared.is_stopped() {
+                if self.handle.is_stopped() {
                     break;
                 }
             }
 
             if let Some(pv) = self.multi_pv.primary() {
-                controller.on_iteration_complete(
+                self.time_control.on_iteration_complete(
                     depth,
                     pv.score,
                     pv.best_move(),
@@ -142,7 +144,7 @@ impl Searcher {
         let root = Node::new(self.board.clone(), NodeType::Pv);
         let mut depth = 1u8;
 
-        while !self.shared.is_stopped() && depth < MAX_DEPTH as u8 {
+        while !self.handle.is_stopped() && depth < MAX_DEPTH as u8 {
             // Each helper skips a different 1/3 of depths to seed TT diversity:
             //   Thread 1: skips depths 2, 5, 8, 11, ...
             //   Thread 2: skips depths 1, 4, 7, 10, ...
@@ -176,7 +178,7 @@ impl Searcher {
                 return (None, failures);
             }
 
-            if self.shared.is_stopped() {
+            if self.handle.is_stopped() {
                 return (
                     Some(PvLine::new(self.pv_table.get(0), score, pv_index)),
                     failures,
@@ -211,19 +213,13 @@ impl Searcher {
         self.search_stack.clear();
         self.search_stack.push(SearchNode::new(self.board.hash()));
 
-        self.multi_pv.init(
-            self.config.multi_pv as usize,
-            self.config.aspiration_window_size,
-            self.config.aspiration_window_widen,
-            self.config.aspiration_window_depth,
-            self.config.aspiration_score_divisor,
-        );
+        self.multi_pv.init(&self.config);
     }
 
     /// Alpha-beta search with principal variation search (PVS) and late move reductions.
     ///
     /// <https://www.chessprogramming.org/Principal_Variation_Search>
-    pub(super) fn search_node(
+    pub fn search_node(
         &mut self,
         node: &Node,
         depth: u8,
@@ -235,7 +231,7 @@ impl Searcher {
 
         let singular = self.search_stack.current().and_then(|n| n.singular);
 
-        if self.shared.is_stopped() {
+        if self.handle.is_stopped() {
             return 0;
         }
 
@@ -251,7 +247,7 @@ impl Searcher {
 
         // As deep as we can go, so return static eval
         if ply as usize >= MAX_DEPTH {
-            return self.static_eval(node);
+            return self.static_eval_for_stm(node);
         }
 
         if mate_distance_prune(&mut bounds, ply) {
@@ -284,7 +280,7 @@ impl Searcher {
 
         let static_eval = tt_info
             .and_then(|t| t.static_eval)
-            .unwrap_or_else(|| self.static_eval(node));
+            .unwrap_or_else(|| self.static_eval_for_stm(node));
 
         let prev_moves = self.search_stack.prev_moves();
 
@@ -330,7 +326,8 @@ impl Searcher {
             }
         }
 
-        let is_improving = !in_check && self.search_stack.is_improving();
+        let eval_delta = self.search_stack.eval_delta();
+        let is_improving = !in_check && eval_delta.is_some_and(|delta| delta.is_improving());
 
         if let Some(score) = self.try_reverse_futility_prune(
             node,
@@ -359,8 +356,6 @@ impl Searcher {
         let mut best_move = None;
         let mut best_move_depth = 0;
 
-        let threats = node.threats();
-
         let best_move_hint = if ply == 0 {
             // At root we can use the currently best move for ordering
             self.multi_pv.best_move_hint()
@@ -368,18 +363,7 @@ impl Searcher {
             tt_move
         };
 
-        let enemy_attacks = node.attacks_for(!node.side_to_move());
-        let mut movegen = MainMoveGenerator::new(
-            best_move_hint,
-            prev_moves,
-            self.config.ordering_quiet_check_bonus,
-            self.config.ordering_quiet_check_see_margin,
-            self.config.ordering_bad_quiet_threshold,
-            self.config.ordering_escape_divisor,
-            self.config.ordering_unsafe_square_divisor,
-            threats,
-            enemy_attacks,
-        );
+        let mut movegen = MainMoveGenerator::new(&self.config, best_move_hint, prev_moves);
 
         // Used for punishing potentially "bad" quiet moves that were searched before a potential beta cutoff
         let mut quiets_searched: ArrayVec<Move, { MAX_QUIETS }> = ArrayVec::new();
@@ -434,7 +418,7 @@ impl Searcher {
                 singular_result.extension,
                 &prev_moves,
             ) {
-                if self.shared.is_stopped() {
+                if self.handle.is_stopped() {
                     break;
                 }
 
@@ -471,21 +455,28 @@ impl Searcher {
 
         // Check for terminal position (no legal moves)
         if move_index == -1 {
-            return if in_check {
+            let value = if in_check {
                 -(MATE_VALUE - ply as i16) // Checkmate
             } else {
                 0 // Stalemate
             };
+
+            // Ok so I lied... If we are in singular we excluded the only legal move (not terminal).
+            // in that case no other move can beat the threshold, so this has to fail low.
+            if singular.is_some() {
+                return value.min(original_bounds.alpha);
+            }
+
+            return value;
         }
 
         // Let's not store a partial result in the TT / correction.
-        if self.shared.is_stopped() {
+        if self.handle.is_stopped() {
             return best_value;
         }
 
         // Use original alpha when storing in tables, since the bound type depends on the original expectation.
-        // Alpha may have been raised during search, but the bound type depends on
-        // whether we improved.
+        // Alpha may have been raised during search, but the bound type depends on if  we improved.
         if singular.is_none() {
             self.shared.tt().store(
                 hash,
@@ -529,7 +520,7 @@ impl Searcher {
         is_improving: bool,
         tt_move_is_capture: bool,
         corrected_eval: i16,
-        extra_extension: i8,
+        extra_extension: FracPly,
         prev_moves: &PrevMoves,
     ) -> Option<(i16, bool, u8)> {
         let moved_color = node.board().side_to_move();
@@ -555,9 +546,10 @@ impl Searcher {
 
         let moved = PieceTo::new(moved_color, moved_piece, m.to);
         let hist = if is_capture {
-            self.capture_history.get(node.board(), m)
+            let victim = captured_piece(node.board(), m).unwrap();
+            self.capture_history.get(moved_piece, m.to, victim)
         } else {
-            self.history_heuristic.get(moved_color, m.from, m.to)
+            self.history_heuristic.get(node, m)
         };
         let cont_hist = self.continuation_history.get(prev_moves, moved);
 
@@ -574,7 +566,6 @@ impl Searcher {
         let is_tactical = in_check || gives_check || is_capture || is_promotion;
 
         let reduction = self.get_reduction(
-            ply,
             depth,
             is_pv_move,
             is_improving,
@@ -590,13 +581,14 @@ impl Searcher {
             corrected_eval,
         );
 
-        let extension = self.get_extension(node, &m, moved_piece, is_capture);
-        let extension = (extension + extra_extension).max(0) as u8;
+        let extension = self.get_extension(node, &m, moved_piece, is_capture) + extra_extension;
+        let extended_depth = (depth as i32 + extension.round()).clamp(0, u8::MAX as i32) as u8;
 
-        let mut adjusted_depth = depth.saturating_add(extension).saturating_sub(reduction);
+        let adjustment = (extension - reduction).round();
+        let mut search_depth = (depth as i32 + adjustment).clamp(0, u8::MAX as i32) as u8;
 
         if self.try_futility_prune(
-            adjusted_depth,
+            search_depth,
             in_check,
             is_tactical,
             is_pv_move,
@@ -616,7 +608,7 @@ impl Searcher {
         self.search_stack.push_move(&child, moved);
         let mut value = -self.search_node(
             &child,
-            adjusted_depth.saturating_sub(1),
+            search_depth.saturating_sub(1),
             ply.saturating_add(1),
             child_bounds,
             true,
@@ -624,7 +616,7 @@ impl Searcher {
         self.search_stack.pop();
 
         // Re-search without reduction if reduced search beat alpha
-        if reduction > 0 && value > bounds.alpha {
+        if search_depth < extended_depth && value > bounds.alpha {
             // Don't demote the PV move to a Cut node just because we reduced it.
             if is_pv_move && is_pv_node {
                 child.set_type(NodeType::Pv);
@@ -632,13 +624,12 @@ impl Searcher {
                 child.set_type(child.node_type().inverted());
             }
 
-            // Search at full depth
-            adjusted_depth = depth.saturating_add(extension);
+            search_depth = extended_depth;
 
             self.search_stack.push_move(&child, moved);
             value = -self.search_node(
                 &child,
-                adjusted_depth.saturating_sub(1),
+                search_depth.saturating_sub(1),
                 ply.saturating_add(1),
                 child_bounds,
                 true,
@@ -653,7 +644,7 @@ impl Searcher {
             self.search_stack.push_move(&child, moved);
             value = -self.search_node(
                 &child,
-                adjusted_depth.saturating_sub(1),
+                search_depth.saturating_sub(1),
                 ply.saturating_add(1),
                 bounds.invert(),
                 true,
@@ -663,12 +654,12 @@ impl Searcher {
 
         let is_quiet = !is_capture && !is_promotion;
 
-        Some((value, is_quiet, adjusted_depth))
+        Some((value, is_quiet, search_depth))
     }
 
     /// Updates the history tables after a beta cutoff: boost the cutting move,
     /// apply malus to the moves we searched before it.
-    pub(super) fn on_fail_high(
+    fn on_fail_high(
         &mut self,
         node: &Node,
         mv: Move,
@@ -682,7 +673,7 @@ impl Searcher {
 
         if is_quiet {
             let bonus = self.history_heuristic.get_bonus(depth);
-            self.history_heuristic.update(board, mv, bonus);
+            self.history_heuristic.update(node, mv, bonus);
 
             let cont_bonus = self.continuation_history.get_bonus(depth);
             self.continuation_history
@@ -696,7 +687,7 @@ impl Searcher {
             let quiet_malus = self.history_heuristic.get_malus(depth);
             let cont_malus = self.continuation_history.get_malus(depth);
             for &q in quiets_searched {
-                self.history_heuristic.update(board, q, quiet_malus);
+                self.history_heuristic.update(node, q, quiet_malus);
                 self.continuation_history
                     .update_quiet_all(board, prev_moves, q, cont_malus);
             }

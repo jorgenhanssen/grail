@@ -1,6 +1,6 @@
 # Grail
 
-[![CCRL 40/15](https://img.shields.io/badge/CCRL%2040%2F15-3394%20Elo-%23DAA520.svg)](https://computerchess.org.uk/ccrl/4040/cgi/compare_engines.cgi?family=Grail&print=Rating+list)
+[![CCRL 40/15](https://img.shields.io/badge/CCRL%2040%2F15-3425%20Elo-%23DAA520.svg)](https://computerchess.org.uk/ccrl/4040/cgi/compare_engines.cgi?family=Grail&print=Rating+list)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
 
@@ -24,7 +24,7 @@ Each release includes builds for a few different CPU architectures:
 | ----------------------- | ----------- | ----------------------------------------------------- |
 | **Linux / Windows**     | `x86-64-v4` | Intel Skylake-X/Ice Lake+ (2017+), AMD Zen 4+ (2022+) |
 | **Linux / Windows**     | `x86-64-v3` | Intel Haswell+ (2013+), AMD Zen 2+ (2019+)            |
-| **Linux ARM / Android** | `aarch64`   | Any 64-bit ARM CPU                                    |
+| **Linux ARM / Android** | `arm64`     | Any 64-bit ARM CPU                                    |
 | **macOS**               | `arm64`     | Apple Silicon (M1/M2/M3/M4)                           |
 
 <!-- prettier-ignore -->
@@ -54,6 +54,7 @@ Once added to your GUI, you can configure Grail via the UCI options:
 - **SyzygyPath**: Paths to Syzygy tablebase files (separated by `;` on Windows, `:` on Linux/macOS).
 - **SyzygyProbeDepth**: Minimum depth to probe tablebases (Default: 1).
 - **UCI_Chess960**: Enable Chess960 (Default: false).
+- **Ponder**: Enable pondering (Default: false).
 
 The engine supports standard time controls (increment, sudden death, moves to go) and analysis modes (fixed depth, fixed nodes, soft nodes, infinite).
 
@@ -84,7 +85,7 @@ The project includes a `Makefile` for convenience:
 - **`make grail-pgo`**: Release build with PGO.
 - **`make datagen`**: Builds the NNUE self-play datagen.
 - **`make datagen-pgo`**: Builds the NNUE self-play datagen with PGO.
-- **`make train`**: Builds the NNUE trainer (auto-detects CUDA/Metal).
+- **`make train`**: Builds the NNUE trainer with CUDA if `nvcc` is available.
 - **`make tuner`**: Builds the SPSA tuner.
 - **`make tuner-pgo`**: Builds the SPSA tuner with PGO.
 - **`make profile`**: Profiles the built-in benchmark with [`samply`](https://github.com/mstange/samply).
@@ -122,6 +123,8 @@ make datagen
 - `--syzygy-path`: Paths to Syzygy tablebase files.
 - `--max-opening-imbalance`: Discard games whose opening eval exceeds this many centipawns in absolute value.
 - `--max-teleport-plies`: Max plies to teleport along a PV between recorded positions (default: 8).
+- `--max-teleport-pv-fraction`: Max fraction of the PV length allowed when teleporting (default: 0.4).
+- `--sparse-samples`: Record only the anchor positions.
 - `--max-game-plies`: Discard games lasting longer than this many plies (default: 300).
 - `--max-games`: Stop after this many games total.
 - `--dry-run`: Generate samples but don't write the dataset to disk.
@@ -135,31 +138,24 @@ Train a new network using the generated data:
 ```bash
 make train
 
+./target/release/train init --seed 67
 ./target/release/train
 ```
 
-Run it again later and it'll pick up where it left off. Pass `--restart` to start from scratch.
+`train init` creates random weights in `nnue/model.safetensors` and resets `training/training.json`. Used to train a new model.
+
+`train` loads the existing model and training state. Run it again later and it'll pick up where it left off.
 
 **Arguments:**
 
 - `--batch-size`: Batch size for training (default: 16384).
 - `--learning-rate`: Initial learning rate (default: 0.001).
 - `--epochs`: Max number of epochs to train (default: 200).
-- `--workers`: Number of worker threads for data loading (default: 1).
-- `--val-ratio`: Fraction of data to use for validation (default: 0.05).
-- `--test-ratio`: Fraction of data to use for testing (default: 0.01).
+- `--buffer-size`: Number of samples to load into the shuffled buffer (default: 1000000).
 - `--lr-decay`: Learning rate decay factor (default: 0.95).
 - `--patience`: Epochs without improvement before early stopping (default: 5).
-- `--shard-size-mb`: Size of each data shard in megabytes (default: 500).
 - `--wdl`: WDL blending weight, 0.0 = pure eval, 1.0 = pure WDL (default: 0.2).
 - `--draw-target`: Target win-probability for drawn games, smaller = prefer wins over draws (default: 0.5).
-- `--restart`: Discard saved progress and train from epoch 1.
-
-If you want to initialize a new/random model without starting training:
-
-```bash
-./target/release/train init
-```
 
 ### SPSA Tuning
 
@@ -181,8 +177,9 @@ make tuner
 - `--book`: Path to an EPD opening book.
 - `--pairs`: Game pairs per iteration (default: 100).
 - `--nodes`: Soft node limit per move (default: 25000).
+- `--time`: TC mode (seconds per side + 1% increment).
 - `--iterations`: Stop after this many iterations (runs until Ctrl+C if omitted).
-- `--workers`: Worker threads (default: logical CPUs).
+- `--workers`: Worker threads (default: physical cores for TC, logical CPUs for nodes).
 - `--gain`: How hard to nudge parameters.
 - `--max-plies`: Abort game as draw after this many plies (default: 500).
 - `--resign-score`: Score threshold to adjudicate a win (default: 400).

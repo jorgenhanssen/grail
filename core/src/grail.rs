@@ -1,16 +1,14 @@
 use std::io::BufRead;
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-    mpsc::{self, Sender},
-};
+use std::sync::mpsc::{self, Sender};
 use std::thread::{self, JoinHandle};
 
 use config::EngineConfig;
+use search::{Engine, SearchHandle};
 use uci::{Decoder, UciConnection, UciInput, UciOutput, list_uci_options, set_uci_option};
 
-use crate::engine::create_engine;
 use crate::worker::{EngineCommand, EngineWorker};
+
+static NNUE_BYTES: &[u8] = include_bytes!("../../nnue/model.safetensors");
 
 const ENGINE_NAME: &str = "Grail";
 const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -22,7 +20,7 @@ const ENGINE_AUTHOR: &str = "Jørgen Hanssen";
 /// the engine worker thread via channels.
 pub struct Grail {
     config: EngineConfig,
-    stop: Arc<AtomicBool>,
+    active_search: Option<SearchHandle>,
     cmd_tx: Sender<EngineCommand>,
     uci_tx: Sender<UciOutput>,
     worker_handle: JoinHandle<()>,
@@ -31,21 +29,23 @@ pub struct Grail {
 impl Grail {
     /// Creates a new Grail instance, spawning the engine worker thread.
     pub fn new() -> Self {
-        let stop = Arc::new(AtomicBool::new(false));
         let (cmd_tx, cmd_rx) = mpsc::channel();
 
         let uci = UciConnection::new();
         let uci_tx = uci.output_sender();
 
         let config = EngineConfig::default();
-        let engine = create_engine(&config, Arc::clone(&stop));
+        let engine = Engine::new(
+            &config,
+            nnue::Evaluator::from_safetensors(NNUE_BYTES).expect("Failed to load embedded NNUE"),
+        );
 
         let worker = EngineWorker::new(engine, cmd_rx, uci_tx.clone());
         let worker_handle = thread::spawn(move || worker.run());
 
         Self {
             config,
-            stop,
+            active_search: None,
             cmd_tx,
             uci_tx,
             worker_handle,
@@ -69,6 +69,7 @@ impl Grail {
                         break;
                     }
                 }
+                self.stop_search();
             }
         }
 
@@ -110,11 +111,21 @@ impl Grail {
                 history: game_history,
             }),
             UciInput::Go(params) => {
-                self.stop.store(false, Ordering::Relaxed);
-                self.send_engine_command(EngineCommand::Go(params));
+                self.stop_search();
+
+                let handle = SearchHandle::new(params.ponder);
+                self.active_search = Some(handle.clone());
+
+                self.send_engine_command(EngineCommand::Go(params, handle));
             }
-            UciInput::Stop => self.stop.store(true, Ordering::Relaxed),
+            UciInput::PonderHit => {
+                if let Some(handle) = &self.active_search {
+                    handle.start_clock();
+                }
+            }
+            UciInput::Stop => self.stop_search(),
             UciInput::Display => self.send_engine_command(EngineCommand::Display),
+            UciInput::Eval => self.send_engine_command(EngineCommand::Eval),
             UciInput::Bench => self.send_engine_command(EngineCommand::Bench),
             UciInput::Quit => return false,
             UciInput::Unknown(_) => {} // Ignore unknown commands per UCI spec
@@ -130,8 +141,13 @@ impl Grail {
         let _ = self.cmd_tx.send(command);
     }
 
+    fn stop_search(&mut self) {
+        if let Some(handle) = self.active_search.take() {
+            handle.stop();
+        }
+    }
+
     fn shutdown(self) {
-        self.stop.store(true, Ordering::Relaxed);
         self.send_engine_command(EngineCommand::Quit);
         let _ = self.worker_handle.join();
     }

@@ -1,7 +1,7 @@
 use candle_core::Result;
 use candle_nn::Linear;
 
-use super::simd::{SIMD_BATCH_SIZE, simd_dot_product, simd_dot_product_batched};
+use super::simd::{SIMD_BATCH_SIZE, SIMD_WIDTH_F32, simd_dot_product, simd_dot_product_batched};
 
 /// Linear layer optimized for CPU inference.
 ///
@@ -17,10 +17,15 @@ pub struct LinearLayer {
 
 impl LinearLayer {
     pub fn from_candle_linear(linear: &Linear) -> Result<Self> {
-        let weights: Box<[f32]> = linear.weight().flatten_all()?.to_vec1()?.into_boxed_slice();
+        let weights = linear.weight();
+        let (output_size, input_size) = weights.dims2()?;
+        assert!(
+            input_size.is_multiple_of(SIMD_WIDTH_F32),
+            "NNUE linear input width must be a multiple of {SIMD_WIDTH_F32}"
+        );
+
+        let weights: Box<[f32]> = weights.flatten_all()?.to_vec1()?.into_boxed_slice();
         let biases: Box<[f32]> = linear.bias().unwrap().to_vec1()?.into_boxed_slice();
-        let input_size = linear.weight().dim(1)?;
-        let output_size = linear.weight().dim(0)?;
 
         // Earlier NNUE analysis have found some cases with dead neurons.
         // They can be skipped to save computation.

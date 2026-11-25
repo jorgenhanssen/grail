@@ -1,6 +1,6 @@
 use std::fmt;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use config::EngineConfig;
 use cozy_chess::Color;
@@ -59,14 +59,20 @@ pub struct Matcher {
     workers: u64,
     pairs: u64,
     game: GameConfig,
+    evaluator: nnue::Evaluator,
 }
 
 impl Matcher {
     pub fn new(workers: u64, pairs: u64, game: GameConfig) -> Self {
+        let bytes = std::fs::read(nnue::MODEL_PATH).expect("Failed to read NNUE model");
+        let evaluator =
+            nnue::Evaluator::from_safetensors(&bytes).expect("Failed to load NNUE model");
+
         Self {
             workers,
             pairs,
             game,
+            evaluator,
         }
     }
 
@@ -89,8 +95,8 @@ impl Matcher {
         // Runs the following scope once for each thread in the pool.
         // This is nice so we only set up engines a and b once per thread per match.
         pool.broadcast(|_| {
-            let mut a = Engine::new(config_a, Arc::new(AtomicBool::new(false)), load_nnue);
-            let mut b = Engine::new(config_b, Arc::new(AtomicBool::new(false)), load_nnue);
+            let mut a = Engine::new(config_a, self.evaluator.clone());
+            let mut b = Engine::new(config_b, self.evaluator.clone());
 
             while (next.fetch_add(1, Ordering::Relaxed) as u64) < self.pairs {
                 let opening = book.random_position();
@@ -120,14 +126,4 @@ impl Matcher {
 
         score
     }
-}
-
-fn load_nnue() -> nnue::Evaluator {
-    let mut varmap = candle_nn::VarMap::new();
-    let mut evaluator = nnue::Evaluator::new(&varmap, &candle_core::Device::Cpu);
-
-    varmap.load(nnue::MODEL_PATH).unwrap();
-    evaluator.enable_nnue();
-
-    evaluator
 }

@@ -1,6 +1,9 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 use clap::Parser;
+
+use crate::game::SearchMode;
 
 #[derive(Parser, Debug)]
 #[command(name = "Grail Tuner")]
@@ -16,8 +19,12 @@ pub struct Args {
     pub pairs: u64,
 
     /// Soft node limit per move.
-    #[arg(long, default_value_t = 25_000)]
-    pub nodes: u64,
+    #[arg(long, conflicts_with = "time", value_parser = clap::value_parser!(u64).range(1..))]
+    pub nodes: Option<u64>,
+
+    /// TC seconds per side (1% inc).
+    #[arg(long, value_parser = clap::value_parser!(u32).range(1..))]
+    pub time: Option<u32>,
 
     /// Stop after this many SPSA iterations. Runs until Ctrl+C if not provided.
     #[arg(long, value_parser = clap::value_parser!(u64).range(1..))]
@@ -31,8 +38,8 @@ pub struct Args {
     #[arg(long, default_value_t = 500)]
     pub max_plies: u64,
 
-    /// Worker threads. Defaults to logical CPUs.
-    #[arg(long)]
+    /// Worker threads. Defaults to physical CPUs for TC and logical CPUs for nodes.
+    #[arg(long, value_parser = clap::value_parser!(u64).range(1..))]
     pub workers: Option<u64>,
 
     /// How hard to nudge the parameters.
@@ -58,4 +65,17 @@ pub struct Args {
     /// Moves after opening before allowing adjudicated draw.
     #[arg(long, default_value_t = 40)]
     pub draw_after: u64,
+}
+
+impl Args {
+    pub fn search_mode(&self) -> SearchMode {
+        match self.time {
+            Some(seconds) => SearchMode::Time {
+                initial: Duration::from_secs(seconds as u64),
+            },
+            None => SearchMode::Nodes {
+                per_move: self.nodes.unwrap_or(25_000),
+            },
+        }
+    }
 }

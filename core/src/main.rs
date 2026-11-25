@@ -1,8 +1,6 @@
 mod bench;
 mod display;
-mod engine;
 mod grail;
-mod nnue;
 mod search_metadata;
 mod worker;
 

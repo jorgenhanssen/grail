@@ -5,7 +5,6 @@ mod histogram;
 mod limit;
 mod opening;
 mod refinery;
-mod samples;
 mod worker;
 
 use args::Args;
@@ -16,17 +15,15 @@ use generator::Generator;
 use limit::SearchLimit;
 use log::LevelFilter;
 use opening::OpeningSource;
-use samples::write_samples;
 use simplelog::{Config, SimpleLogger};
 use std::{
     error::Error,
-    fs::{self, File},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
 };
-use training::paths::DATA_DIR;
+use training::dataset::DatasetWriter;
 use utils::Book;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -63,23 +60,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         max_game_plies: args.max_game_plies as usize,
         dense_sampling: !args.sparse_samples,
     };
-    let samples = generator.run(game_config, args.max_games, stop_flag);
+    let writer = if args.dry_run {
+        None
+    } else {
+        let name = Local::now().format("%Y-%m-%d-%H:%M").to_string();
+        let writer = DatasetWriter::create(&name, args.val_ratio, args.test_ratio)?;
+        Some(Arc::new(Mutex::new(writer)))
+    };
+    let samples = generator.run(game_config, args.max_games, stop_flag, writer)?;
 
-    log::info!("Generated {} samples", samples.len());
+    log::info!("Generated {} samples", samples);
 
     if args.dry_run {
         log::info!("Skipping dataset write (dry run)");
-        return Ok(());
     }
-
-    fs::create_dir_all(DATA_DIR)?;
-
-    let timestamp = Local::now().format("%Y-%m-%d-%H:%M");
-    let filename = format!("{}/{}.csv", DATA_DIR, timestamp);
-
-    log::info!("Writing samples to {}", filename);
-    let mut file = File::create(&filename)?;
-    write_samples(&mut file, &samples)?;
 
     Ok(())
 }

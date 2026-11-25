@@ -1,6 +1,6 @@
 use crate::scores::MATE_SCORE_BOUND;
 use cozy_chess::Move;
-use utils::Node;
+use utils::{FracPly, Node};
 
 use crate::{
     stack::SingularSearch,
@@ -12,9 +12,9 @@ use super::Searcher;
 
 /// Result of probing for singular extension or multi-cut.
 #[derive(Default)]
-pub(super) struct SingularProbeResult {
+pub struct SingularProbeResult {
     /// Extension to apply to the TT move (can be negative).
-    pub extension: i8,
+    pub extension: FracPly,
     /// If Some, prune the node and return this value.
     pub multi_cut: Option<i16>,
 }
@@ -26,7 +26,7 @@ impl Searcher {
     /// <https://www.chessprogramming.org/Singular_Extensions>
     /// <https://www.chessprogramming.org/Multi-Cut>
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn probe_singular(
+    pub fn probe_singular(
         &mut self,
         node: &Node,
         m: Move,
@@ -81,13 +81,13 @@ impl Searcher {
             // extensions progressively harder deep in the tree.
             // Should help cases where TT hits givve check chains (KQ+K,,, etc).
             let overshoot = ply.saturating_sub(self.root_depth) as i16;
-            let double_margin = self.config.double_ext_margin
-                + overshoot * overshoot * self.config.double_ext_overshoot_penalty;
+            let double_margin = self.config.double_extension_margin
+                + overshoot * overshoot * self.config.double_extension_overshoot_penalty;
             if singular_value < singular_beta.saturating_sub(double_margin) {
-                result.extension = 2;
+                result.extension = FracPly::from_ply(2);
                 return result;
             }
-            result.extension = 1;
+            result.extension = FracPly::from_ply(1);
             return result;
         }
 
@@ -99,8 +99,10 @@ impl Searcher {
             return result;
         }
 
-        // TODO: Negative extensions. Infrastructure is now in place
-        // but tested neutral at STC/LTC. Revisit after tuning.
+        // Negative extension
+        if tt.value >= beta || node.is_cut() {
+            result.extension = FracPly(-self.config.negative_extension);
+        }
 
         result
     }

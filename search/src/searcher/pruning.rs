@@ -11,7 +11,7 @@ const NEAR_MATE_VALUE: i16 = MATE_VALUE - 200;
 /// Mate distance pruning: nothing from here beats a mate in this many plies.
 ///
 /// <https://www.chessprogramming.org/Mate_Distance_Pruning>
-pub(super) fn mate_distance_prune(bounds: &mut Bounds, ply: u8) -> bool {
+pub fn mate_distance_prune(bounds: &mut Bounds, ply: u8) -> bool {
     let mate_in_ply = MATE_VALUE - ply as i16;
     let mated_in_ply = -(MATE_VALUE - ply as i16);
 
@@ -25,7 +25,7 @@ impl Searcher {
     /// Futility pruning: skip moves unlikely to raise alpha based on static eval + margin.
     ///
     /// <https://www.chessprogramming.org/Futility_Pruning>
-    pub(super) fn try_futility_prune(
+    pub fn try_futility_prune(
         &self,
         depth: u8,
         in_check: bool,
@@ -45,7 +45,7 @@ impl Searcher {
     /// Razoring: if eval is far below alpha, drop into qsearch to verify and return early.
     ///
     /// <https://www.chessprogramming.org/Razoring>
-    pub(super) fn try_razor_prune(
+    pub fn try_razor_prune(
         &mut self,
         node: &Node,
         depth: u8,
@@ -75,7 +75,7 @@ impl Searcher {
     ///
     /// <https://www.chessprogramming.org/Static_Exchange_Evaluation>
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn try_see_prune(
+    pub fn try_see_prune(
         &self,
         node: &Node,
         m: Move,
@@ -133,7 +133,7 @@ impl Searcher {
     /// Null move pruning: give the opponent a free move and see if we still beat beta.
     ///
     /// <https://www.chessprogramming.org/Null_Move_Pruning>
-    pub(super) fn try_null_move_prune(
+    pub fn try_null_move_prune(
         &mut self,
         node: &Node,
         depth: u8,
@@ -231,7 +231,7 @@ impl Searcher {
     /// Reverse futility pruning: if static eval - margin >= beta, the position is too good to search.
     ///
     /// <https://www.chessprogramming.org/Reverse_Futility_Pruning>
-    pub(super) fn try_reverse_futility_prune(
+    pub fn try_reverse_futility_prune(
         &mut self,
         node: &Node,
         depth: u8,
@@ -271,7 +271,7 @@ impl Searcher {
     /// Late move pruning: skip quiets near the horizon once we've searched enough of them.
     ///
     /// <https://www.chessprogramming.org/Futility_Pruning#MoveCountBasedPruning>
-    pub(super) fn should_lmp_prune(
+    pub fn should_lmp_prune(
         &self,
         node: &Node,
         mv: Move,
@@ -305,7 +305,7 @@ impl Searcher {
     }
 
     /// History pruning: skip quiet moves with bad history.
-    pub(super) fn try_history_prune(
+    pub fn try_history_prune(
         &self,
         depth: u8,
         is_pv_move: bool,

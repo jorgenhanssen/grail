@@ -1,7 +1,6 @@
 use utils::{FracPly, Node, creates_threat, evades_threat};
 
 use crate::scores::MATE_SCORE_BOUND;
-use crate::utils::near_root;
 
 use super::Searcher;
 
@@ -10,9 +9,8 @@ impl Searcher {
     ///
     /// <https://www.chessprogramming.org/Late_Move_Reductions>
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn get_reduction(
+    pub fn get_reduction(
         &self,
-        ply: u8,
         depth: u8,
         is_pv_move: bool,
         is_improving: bool,
@@ -26,10 +24,16 @@ impl Searcher {
         tt_move_is_capture: bool,
         alpha: i16,
         eval: i16,
-    ) -> u8 {
+    ) -> FracPly {
         let mut reduction = self.lmr.get(depth, move_index);
 
         // Reduce more
+        if !parent.is_pv() {
+            reduction += FracPly(self.config.reduction_non_pv_node);
+        }
+        if !is_capture && !is_promotion {
+            reduction += FracPly(self.config.reduction_quiet);
+        }
         if parent.is_cut() {
             reduction += FracPly(self.config.reduction_cut_node);
         }
@@ -53,32 +57,23 @@ impl Searcher {
             self.config.reduction_history_divisor
         };
 
-        reduction -= FracPly(hist as i32 * FracPly::ONE / hist_divisor);
-        reduction -=
-            FracPly(cont_hist as i32 * FracPly::ONE / self.config.reduction_cont_hist_divisor);
+        reduction -= FracPly::from_ply(hist as i32) / hist_divisor;
+        reduction -= FracPly::from_ply(cont_hist as i32) / self.config.reduction_cont_hist_divisor;
 
         // Reduce less
         if reduction > FracPly(0) {
             if is_pv_move {
                 reduction -= FracPly(self.config.anti_reduction_pv_move);
             }
-            if near_root(ply, depth) {
-                reduction -= FracPly(self.config.anti_reduction_near_root);
-            }
-            if parent.is_pv() {
-                reduction -= FracPly(self.config.anti_reduction_pv_node);
-            }
             if parent.in_check() || child.in_check() {
                 reduction -= FracPly(self.config.anti_reduction_check);
-            }
-            if is_capture || is_promotion {
-                reduction -= FracPly(self.config.anti_reduction_tactical);
             }
             if creates_threat(parent, child) || evades_threat(parent, child) {
                 reduction -= FracPly(self.config.anti_reduction_threat);
             }
         }
 
-        reduction.whole().clamp(0, depth.saturating_sub(2) as i32) as u8
+        let max_reduction = FracPly::from_ply(depth.saturating_sub(2) as i32);
+        reduction.clamp(FracPly(0), max_reduction)
     }
 }

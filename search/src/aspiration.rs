@@ -1,3 +1,5 @@
+use config::EngineConfig;
+
 use crate::scores::{MATE_SCORE_BOUND, SCORE_INF};
 
 use crate::utils::Bounds;
@@ -16,20 +18,20 @@ pub enum Pass {
 #[derive(Copy, Clone)]
 pub struct AspirationWindow {
     bounds: Bounds,
-    start_half: i16,
-    widen: i16,
+    start_half: i32,
+    widen: i32,
     enabled_from: u8,
     score_divisor: i32,
 }
 
 impl AspirationWindow {
-    pub fn new(start_half: i16, widen: i16, enabled_from: u8, score_divisor: i32) -> Self {
+    pub fn new(config: &EngineConfig) -> Self {
         Self {
             bounds: Bounds::FULL,
-            start_half,
-            widen,
-            enabled_from,
-            score_divisor,
+            start_half: config.aspiration_window_size,
+            widen: config.aspiration_window_widen,
+            enabled_from: config.aspiration_window_depth,
+            score_divisor: config.aspiration_score_divisor,
         }
     }
 
@@ -40,8 +42,8 @@ impl AspirationWindow {
             self.bounds = Bounds::FULL;
             return;
         }
-        // Mate scores are too large for the quadratic scaling below (i16 overflow).
-        if prev_score.abs() >= MATE_SCORE_BOUND {
+        // Use the full window for mate scores.
+        if prev_score.unsigned_abs() >= MATE_SCORE_BOUND as u16 {
             self.bounds = Bounds::FULL;
             return;
         }
@@ -49,13 +51,13 @@ impl AspirationWindow {
         // Score-based adjustment: larger scores get wider windows (inspired by 4ku).
         // Quadratic scaling: with divisor=16384: adds ish 0 at score=0, 5 at score=300, 15 at score=500
         let score_squared = (prev_score as i32) * (prev_score as i32);
-        let score_adjustment = (score_squared / self.score_divisor) as i16;
-
-        let half = (self.start_half + 10 * depth as i16 + score_adjustment).min(SCORE_INF);
+        let score_adjustment = score_squared / self.score_divisor;
+        let half = self.start_half + score_adjustment;
+        let half = half.min(SCORE_INF as i32) as i16;
 
         self.bounds = Bounds::new(
-            prev_score.saturating_sub(half),
-            prev_score.saturating_add(half),
+            prev_score.saturating_sub(half).max(-SCORE_INF),
+            prev_score.saturating_add(half).min(SCORE_INF),
         );
     }
 
@@ -70,13 +72,17 @@ impl AspirationWindow {
         }
         if score <= self.bounds.alpha {
             // fail-low: widen only the low side
-            let span = (self.bounds.beta - score).abs().max(self.start_half) * self.widen;
-            self.bounds.alpha = score.saturating_sub(span);
+            let distance = self.bounds.beta as i32 - score as i32;
+            let span = distance.max(self.start_half) * self.widen / 100;
+            self.bounds.alpha = (score as i32 - span).max(-SCORE_INF as i32) as i16;
+
             Pass::FailLow
         } else {
             // fail-high
-            let span = (score - self.bounds.alpha).abs().max(self.start_half) * self.widen;
-            self.bounds.beta = score.saturating_add(span);
+            let distance = score as i32 - self.bounds.alpha as i32;
+            let span = distance.max(self.start_half) * self.widen / 100;
+            self.bounds.beta = (score as i32 + span).min(SCORE_INF as i32) as i16;
+
             Pass::FailHigh
         }
     }

@@ -3,8 +3,8 @@ use std::sync::mpsc::{Receiver, Sender};
 use ahash::AHashSet;
 use config::EngineConfig;
 use cozy_chess::Board;
-use search::Engine;
-use uci::{NULL_MOVE, UciOutput, move_to_uci};
+use search::{Engine, Node, NodeType, SearchHandle, SearchResult};
+use uci::{NULL_MOVE, UciOutput, move_to_uci, reply_to_uci};
 
 use crate::bench::run_benchmark;
 use crate::display::display_position;
@@ -22,9 +22,11 @@ pub enum EngineCommand {
         history: AHashSet<u64>,
     },
     /// Start searching with the given parameters.
-    Go(uci::commands::GoParams),
+    Go(uci::commands::GoParams, SearchHandle),
     /// Display current position.
     Display,
+    /// Evaluate current position.
+    Eval,
     /// Run the engine benchmark.
     Bench,
     /// Shut down the worker thread.
@@ -56,25 +58,20 @@ impl EngineWorker {
     pub fn run(mut self) {
         while let Ok(cmd) = self.rx.recv() {
             match cmd {
-                EngineCommand::Go(params) => {
-                    let stm = self.engine.board().side_to_move();
-                    let result = self.engine.search(&params, Some(&self.uci_tx));
+                EngineCommand::Go(params, handle) => {
+                    let result = self
+                        .engine
+                        .search(&params, Some(&self.uci_tx), Some(handle));
 
-                    // UCI requires bestmove for every "go" command, even in checkmate positions
-                    let mut uci_move = NULL_MOVE.to_string();
+                    let best_move = self.best_move_output(result.as_ref());
 
-                    if let Some(ref r) = result {
-                        let lines = r.lines();
-                        if !lines.is_empty() {
-                            self.last_search = Some(SearchResultMeta::new(lines.to_vec(), stm));
-                        }
-                        if let Some(mv) = r.primary().and_then(search::PvLine::best_move) {
-                            uci_move =
-                                move_to_uci(self.engine.board(), mv, self.engine.config().chess960);
-                        }
+                    if let Some(result) = result {
+                        self.last_search = Some(SearchResultMeta::new(
+                            result,
+                            self.engine.board().side_to_move(),
+                        ));
                     }
-
-                    let _ = self.uci_tx.send(UciOutput::BestMove(uci_move));
+                    let _ = self.uci_tx.send(best_move);
                 }
                 EngineCommand::SetPosition { board, history } => {
                     self.last_search = None;
@@ -85,14 +82,46 @@ impl EngineWorker {
                     self.engine.new_game();
                 }
                 EngineCommand::Configure(config) => {
-                    self.engine.configure(&config, false);
+                    self.engine.configure(&config);
                 }
                 EngineCommand::Display => {
                     display_position(self.engine.board(), self.last_search.as_ref())
                 }
+                EngineCommand::Eval => {
+                    let node = Node::new(self.engine.board().clone(), NodeType::Pv);
+                    let score = self.engine.get_static_eval(&node);
+
+                    let _ = self.uci_tx.send(UciOutput::InfoString(format!(
+                        "static eval: {score:+} cp (white)"
+                    )));
+                }
                 EngineCommand::Bench => run_benchmark(&mut self.engine),
                 EngineCommand::Quit => break,
             }
+        }
+    }
+
+    fn best_move_output(&self, result: Option<&SearchResult>) -> UciOutput {
+        let Some(best_move) = result.and_then(SearchResult::best_move) else {
+            // Uci always expects a best move, so fall back to null move.
+            return UciOutput::BestMove {
+                best_move: NULL_MOVE.to_owned(),
+                ponder: None,
+            };
+        };
+
+        let board = self.engine.board();
+        let config = self.engine.config();
+
+        let ponder_move = if config.ponder {
+            result.and_then(SearchResult::best_reply)
+        } else {
+            None
+        };
+
+        UciOutput::BestMove {
+            best_move: move_to_uci(board, best_move, config.chess960),
+            ponder: ponder_move.map(|reply| reply_to_uci(board, best_move, reply, config.chess960)),
         }
     }
 }

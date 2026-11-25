@@ -1,11 +1,17 @@
-use std::sync::{Arc, atomic::AtomicBool, mpsc::Sender};
+use std::sync::{
+    Arc, OnceLock,
+    atomic::{AtomicBool, Ordering},
+    mpsc::Sender,
+};
 use std::thread;
+use std::time::Instant;
 
 use ahash::AHashSet;
 use config::EngineConfig;
 use cozy_chess::Board;
 use pyrrhic_rs::TableBases;
 use uci::UciOutput;
+use utils::Node;
 
 use crate::{
     result::SearchResult,
@@ -14,48 +20,93 @@ use crate::{
     transposition::TranspositionTable,
 };
 
+#[derive(Clone)]
+pub struct SearchHandle {
+    stop_requested: Arc<AtomicBool>,
+    clock_start: Arc<OnceLock<Instant>>,
+}
+
+impl Default for SearchHandle {
+    fn default() -> Self {
+        Self::new(false)
+    }
+}
+
+impl SearchHandle {
+    pub fn new(ponder: bool) -> Self {
+        let clock_start = if ponder {
+            // our clock hasn't started if we are pondering.
+            OnceLock::new()
+        } else {
+            OnceLock::from(Instant::now())
+        };
+
+        Self {
+            stop_requested: Arc::default(),
+            clock_start: Arc::new(clock_start),
+        }
+    }
+
+    pub fn stop(&self) {
+        self.stop_requested.store(true, Ordering::Relaxed);
+    }
+
+    pub fn is_stopped(&self) -> bool {
+        self.stop_requested.load(Ordering::Relaxed)
+    }
+
+    pub fn start_clock(&self) {
+        self.clock_start.get_or_init(Instant::now);
+    }
+
+    pub fn clock(&self) -> Arc<OnceLock<Instant>> {
+        Arc::clone(&self.clock_start)
+    }
+}
+
 pub struct Engine {
     config: EngineConfig,
     shared: Arc<SharedSearcherState>,
     board: Board,
     game_history: AHashSet<u64>,
     searchers: Vec<Searcher>,
-    create_evaluator: fn() -> nnue::Evaluator,
+    evaluator: nnue::Evaluator,
 }
 
 impl Engine {
-    pub fn new(
-        config: &EngineConfig,
-        stop: Arc<AtomicBool>,
-        create_evaluator: fn() -> nnue::Evaluator,
-    ) -> Self {
-        let shared = Arc::new(SharedSearcherState::new(config, stop));
+    pub fn new(config: &EngineConfig, evaluator: nnue::Evaluator) -> Self {
+        let shared = Arc::new(SharedSearcherState::new(config));
 
-        let mut engine = Self {
+        if !config.syzygy_path.is_empty() {
+            shared.init_tablebases(&config.syzygy_path);
+        }
+
+        let searchers = (0..config.threads)
+            .map(|thread_id| {
+                Searcher::new(Arc::clone(&shared), thread_id, config, evaluator.clone())
+            })
+            .collect();
+
+        Self {
             config: config.clone(),
             shared,
             board: Board::default(),
             game_history: AHashSet::new(),
-            searchers: Vec::new(),
-            create_evaluator,
-        };
-        engine.configure(config, true);
-        engine
+            searchers,
+            evaluator,
+        }
     }
 
-    pub fn configure(&mut self, config: &EngineConfig, init: bool) {
-        let old_config = self.config.clone();
-        self.config = config.clone();
-
-        if init || old_config.hash_size != config.hash_size {
+    pub fn configure(&mut self, config: &EngineConfig) {
+        if self.config.hash_size != config.hash_size {
             *self.shared.tt() = TranspositionTable::new(config.hash_size as usize);
         }
 
-        if init || !self.shared.correction().matches_config(config) {
+        if !self.shared.correction().matches_config(config) {
             self.shared.correction().configure(config);
         }
 
-        if init || old_config.syzygy_path != config.syzygy_path {
+        if self.config.syzygy_path != config.syzygy_path {
             if config.syzygy_path.is_empty() {
                 self.shared.clear_tablebases();
             } else {
@@ -63,26 +114,28 @@ impl Engine {
             }
         }
 
+        self.searchers.truncate(config.threads);
+        for searcher in &mut self.searchers {
+            searcher.configure(config);
+        }
+
         while self.searchers.len() < config.threads {
             let thread_id = self.searchers.len();
-            let evaluator = (self.create_evaluator)();
             self.searchers.push(Searcher::new(
                 Arc::clone(&self.shared),
                 thread_id,
                 config,
-                evaluator,
+                self.evaluator.clone(),
             ));
         }
-        self.searchers.truncate(config.threads);
 
-        for searcher in &mut self.searchers {
-            searcher.configure(config);
-        }
+        self.config.clone_from(config);
     }
 
     pub fn new_game(&mut self) {
         self.shared.tt().clear();
         self.shared.correction().reset();
+
         for searcher in &mut self.searchers {
             searcher.new_game();
         }
@@ -101,34 +154,35 @@ impl Engine {
         &self.config
     }
 
-    pub fn set_tablebases(&self, tb: TableBases<CozyAdapter>) {
-        self.shared.set_tablebases(tb);
+    pub fn get_static_eval(&mut self, node: &Node) -> i16 {
+        self.evaluator.evaluate(node)
     }
 
-    pub fn stop(&self) {
-        self.shared.set_stop(true);
+    pub fn set_tablebases(&self, tb: TableBases<CozyAdapter>) {
+        self.shared.set_tablebases(tb);
     }
 
     pub fn search(
         &mut self,
         params: &uci::commands::GoParams,
         output: Option<&Sender<UciOutput>>,
+        handle: Option<SearchHandle>,
     ) -> Option<SearchResult> {
+        let handle = handle.unwrap_or_default();
+
         for searcher in &mut self.searchers {
-            searcher.set_position(self.board.clone(), self.game_history.clone());
+            searcher.prepare_new_search(
+                self.board.clone(),
+                self.game_history.clone(),
+                handle.clone(),
+            );
         }
 
-        self.shared.set_stop(false);
         self.shared.reset_nodes();
         self.shared.tt().age();
 
-        let mut result = None;
-
-        let shared = &self.shared;
-        let searchers = &mut self.searchers;
-
         thread::scope(|s| {
-            let (main, helpers) = searchers.split_first_mut().unwrap();
+            let (main, helpers) = self.searchers.split_first_mut().unwrap();
 
             for helper in helpers.iter_mut() {
                 s.spawn(move || {
@@ -137,12 +191,11 @@ impl Engine {
                 });
             }
 
-            result = main.search(params, output);
+            let result = main.search(params, output);
             main.sync_nodes();
 
-            shared.set_stop(true);
-        });
-
-        result
+            handle.stop();
+            result
+        })
     }
 }

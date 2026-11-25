@@ -1,7 +1,7 @@
 use candle_core::{Result, Tensor};
 use candle_nn::{Linear, VarBuilder, linear};
 
-use crate::encoding::NUM_FEATURES;
+use crate::features::NUM_FEATURES;
 use crate::kernels::embedding;
 
 use super::{EMBEDDING_SIZE, HIDDEN_SIZE, OUTPUT_BUCKETS};

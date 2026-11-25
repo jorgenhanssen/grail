@@ -2,10 +2,12 @@ use std::cell::OnceCell;
 
 use cozy_chess::{BitBoard, Board, Color, GameStatus, Move, Piece, Square};
 
+use crate::attacks::get_attackers_to;
 use crate::board_metrics::BoardMetrics;
 use crate::is_zugzwang;
 use crate::material::total_material;
-use crate::moves::is_capture;
+use crate::moves::{has_legal_moves, is_capture};
+use crate::threats::threat_attackers;
 
 /// Alpha-beta node classification.
 ///
@@ -93,6 +95,10 @@ impl Node {
         self.in_check() && self.board.status() == GameStatus::Won
     }
 
+    pub fn is_stalemate(&self) -> bool {
+        !self.in_check() && !has_legal_moves(&self.board)
+    }
+
     pub fn is_fifty_move_draw(&self) -> bool {
         self.board.halfmove_clock() >= 100 && !self.is_checkmate()
     }
@@ -153,6 +159,31 @@ impl Node {
 
     pub fn threats(&self) -> BitBoard {
         self.threats_for(self.side_to_move())
+    }
+
+    /// Returns (destination is attacked, escapes a threat)
+    pub fn move_safety(&self, mv: Move, piece: Piece) -> (bool, bool) {
+        let board = self.board();
+        let them = !self.side_to_move();
+        let enemy_attacks = self.attacks_for(them);
+        let to_attacked = enemy_attacks.has(mv.to);
+
+        // Only an attacked source can hide an enemy ray to the destination.
+        if !enemy_attacks.has(mv.from) {
+            return (to_attacked, false);
+        }
+
+        let occupied = (board.occupied() ^ mv.from.bitboard()) | mv.to.bitboard();
+        let attackers = get_attackers_to(board, mv.to, occupied) & board.colors(them);
+        let to_attacked = to_attacked || !attackers.is_empty();
+
+        if !self.threats().has(mv.from) {
+            return (to_attacked, false);
+        }
+
+        let lesser_pieces = threat_attackers(board, them, piece);
+
+        (to_attacked, (attackers & lesser_pieces).is_empty())
     }
 
     pub fn create_child(&self, mv: Move, mv_index: i32) -> Self {

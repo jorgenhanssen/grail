@@ -10,6 +10,14 @@ pub struct Args {
     #[arg(long)]
     pub threads: Option<usize>,
 
+    /// Fraction of data for validation set.
+    #[arg(long, default_value_t = 0.05)]
+    pub val_ratio: f64,
+
+    /// Fraction of data for test set.
+    #[arg(long, default_value_t = 0.01)]
+    pub test_ratio: f64,
+
     /// Search depth for position evaluation.
     #[arg(long, default_value_t = 8)]
     pub depth: u8,

@@ -21,6 +21,7 @@ impl Decoder {
     pub fn decode(&self, input: &str) -> UciInput {
         match input {
             "uci" => UciInput::Uci,
+            "ponderhit" => UciInput::PonderHit,
             "isready" => UciInput::IsReady,
             "ucinewgame" => UciInput::UciNewGame,
 
@@ -33,6 +34,7 @@ impl Decoder {
 
             // Non-standard commands
             "d" => UciInput::Display,
+            "eval" => UciInput::Eval,
             "bench" => UciInput::Bench,
 
             _ => UciInput::Unknown(input.to_string()),
@@ -104,6 +106,7 @@ impl Decoder {
     fn decode_go(&self, input: &str) -> UciInput {
         UciInput::Go(GoParams {
             infinite: input.contains("infinite"),
+            ponder: input.contains("ponder"),
             wtime: extract_numeric_param(input, "wtime"),
             btime: extract_numeric_param(input, "btime"),
             winc: extract_numeric_param(input, "winc"),
@@ -141,6 +144,7 @@ mod tests {
         assert!(matches!(decode("uci"), UciInput::Uci));
         assert!(matches!(decode("isready"), UciInput::IsReady));
         assert!(matches!(decode("ucinewgame"), UciInput::UciNewGame));
+        assert!(matches!(decode("ponderhit"), UciInput::PonderHit));
         assert!(matches!(decode("stop"), UciInput::Stop));
         assert!(matches!(decode("quit"), UciInput::Quit));
         assert!(matches!(decode("debug on"), UciInput::Debug(true)));
@@ -180,6 +184,8 @@ mod tests {
 
         let timed = go("go wtime 60000 btime 60000 winc 1000 binc 1000");
         assert!(!timed.infinite);
+        assert!(!timed.ponder);
+        assert!(go("go ponder wtime 60000 btime 60000").ponder);
         assert_eq!(timed.wtime, Some(60000));
         assert_eq!(timed.btime, Some(60000));
         assert_eq!(timed.winc, Some(1000));

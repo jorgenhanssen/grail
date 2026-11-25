@@ -80,7 +80,9 @@ impl TimeBudget {
         // Actual time the engine can afford per move (including increment and advantage)
         let base_time = (total_available as f64) / (moves_left as f64);
         let increment_bonus = (increment as f64) * INCREMENT_USAGE;
-        let hard = ((base_time + increment_bonus) as u64).max(MIN_TIME_PER_MOVE);
+        let hard = ((base_time + increment_bonus) as u64)
+            .max(MIN_TIME_PER_MOVE)
+            .min(time_left.saturating_sub(move_overhead_ms));
 
         let target = ((hard as f64) * INITIAL_TARGET_FACTOR) as u64;
 

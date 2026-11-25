@@ -1,3 +1,4 @@
+use cozy_chess::Move;
 use utils::select_softmax;
 
 use crate::pv::PvLine;
@@ -23,6 +24,16 @@ impl SearchResult {
     /// Returns the primary (best) PV line.
     pub fn primary(&self) -> Option<&PvLine> {
         self.lines.first()
+    }
+
+    /// Returns the first move of the primary PV line.
+    pub fn best_move(&self) -> Option<Move> {
+        self.primary()?.best_move()
+    }
+
+    /// Returns the predicted best move's reply.
+    pub fn best_reply(&self) -> Option<Move> {
+        self.primary()?.line.get(1).copied()
     }
 
     /// Returns all PV lines.

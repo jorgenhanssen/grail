@@ -2,19 +2,17 @@ use crate::game::GameConfig;
 use crate::histogram::ScoreHistogram;
 use crate::opening::OpeningSource;
 use crate::refinery::RefinementStats;
-use crate::samples::Sample;
 use crate::worker::SelfPlayWorker;
-use candle_core::Device;
-use candle_nn::VarMap;
 use indicatif::MultiProgress;
 use nnue::MODEL_PATH;
 use pyrrhic_rs::TableBases;
 use search::CozyAdapter;
 use std::error::Error;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::io;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use training::dataset::DatasetWriter;
 
 const PROGRESS_UPDATE_INTERVAL_MS: u64 = 200;
 
@@ -24,6 +22,7 @@ pub struct Generator {
     pv_lines: u8,
     opening_source: Arc<OpeningSource>,
     tablebases: Option<TableBases<CozyAdapter>>,
+    evaluator: nnue::Evaluator,
 }
 
 impl Generator {
@@ -33,13 +32,10 @@ impl Generator {
         opening_source: OpeningSource,
         syzygy_path: Option<String>,
     ) -> Result<Self, Box<dyn Error>> {
-        if !PathBuf::from(MODEL_PATH).exists() {
-            return Err(format!(
-                "NNUE model not found at {}. Create an initial model first.",
-                MODEL_PATH
-            )
-            .into());
-        }
+        let nnue_bytes = std::fs::read(MODEL_PATH).map_err(|e| {
+            format!("NNUE model not found at {MODEL_PATH} ({e}). Create an initial model first.")
+        })?;
+        let evaluator = nnue::Evaluator::from_safetensors(&nnue_bytes)?;
 
         let tablebases = match syzygy_path {
             Some(path) => {
@@ -57,6 +53,7 @@ impl Generator {
             pv_lines,
             opening_source: Arc::new(opening_source),
             tablebases,
+            evaluator,
         })
     }
 
@@ -65,7 +62,8 @@ impl Generator {
         game_config: GameConfig,
         max_games: Option<usize>,
         stop_flag: Arc<AtomicBool>,
-    ) -> Vec<Sample> {
+        writer: Option<Arc<Mutex<DatasetWriter>>>,
+    ) -> io::Result<usize> {
         log::info!(
             "Generating samples ({}, multi_pv={}, threads={}, dense={}) - Press Ctrl+C to stop",
             game_config.limit,
@@ -91,6 +89,8 @@ impl Generator {
                 let stop_flag = Arc::clone(&stop_flag);
                 let histogram_handle = histogram.clone_handle();
                 let tb = self.tablebases.clone();
+                let evaluator = self.evaluator.clone();
+                let writer = writer.clone();
 
                 std::thread::spawn(move || {
                     let mut worker = SelfPlayWorker::new(
@@ -100,25 +100,26 @@ impl Generator {
                         game_config,
                         max_games,
                         pv_lines,
-                        Self::load_nnue,
+                        evaluator,
                         opening_source,
                         histogram_handle,
                         tb,
                     );
-                    worker.play_games(stop_flag)
+                    worker.play_games(stop_flag, writer)
                 })
             })
             .collect();
 
         // Spawn progress update thread
-        let progress_handle =
-            Self::spawn_progress_updater(sample_counter, histogram, Arc::clone(&stop_flag));
+        let progress_handle = Self::spawn_progress_updater(
+            Arc::clone(&sample_counter),
+            histogram,
+            Arc::clone(&stop_flag),
+        );
 
-        let mut samples = Vec::new();
         let mut refinery_stats = RefinementStats::default();
         for handle in worker_handles {
-            let (worker_samples, worker_stats) = handle.join().unwrap();
-            samples.extend(worker_samples);
+            let worker_stats = handle.join().unwrap()?;
             refinery_stats.merge(&worker_stats);
         }
 
@@ -127,15 +128,7 @@ impl Generator {
 
         refinery_stats.log_summary();
 
-        samples
-    }
-
-    fn load_nnue() -> nnue::Evaluator {
-        let mut varmap = VarMap::new();
-        let mut evaluator = nnue::Evaluator::new(&varmap, &Device::Cpu);
-        varmap.load(MODEL_PATH).unwrap();
-        evaluator.enable_nnue();
-        evaluator
+        Ok(sample_counter.load(Ordering::Relaxed))
     }
 
     fn spawn_progress_updater(

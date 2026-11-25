@@ -1,5 +1,4 @@
 use std::sync::{Arc, mpsc::Sender};
-use std::time::Instant;
 
 use ahash::AHashSet;
 use cozy_chess::Board;
@@ -13,10 +12,11 @@ use crate::{
     lmr::LmrTable,
     scores::MATE_VALUE,
     stack::SearchStack,
+    time_control::SearchController,
     utils::{convert_centipawn_score, convert_mate_score},
 };
 
-pub(crate) use shared_state::SharedSearcherState;
+pub use shared_state::SharedSearcherState;
 
 mod eval;
 mod extension;
@@ -27,11 +27,14 @@ mod search;
 mod shared_state;
 mod singular;
 
-use crate::MAX_DEPTH;
+use crate::{MAX_DEPTH, SearchHandle};
 
 pub struct Searcher {
-    /// Shared state across all searchers (TT, correction history, stop etc)
+    /// Shared state across all searchers (TT, correction history, node count, etc.)
     shared: Arc<SharedSearcherState>,
+
+    // External handle for the current search
+    handle: SearchHandle,
 
     /// ID/index for this searcher (0 = main, 1.. = helpers)
     thread_id: usize,
@@ -76,8 +79,9 @@ pub struct Searcher {
     /// Triangular PV table for the principal variation
     pv_table: PvTable,
 
-    /// Hard time deadline for the search (main searcher).
-    deadline: Option<Instant>,
+    /// Tracks search time and time budget.
+    /// Managed by the main searcher.
+    time_control: SearchController,
 
     /// Hard node limit (all searchers combined)
     node_limit: Option<u64>,
@@ -99,6 +103,7 @@ impl Searcher {
     ) -> Self {
         Self {
             shared,
+            handle: SearchHandle::default(),
             thread_id,
             config: config.clone(),
 
@@ -118,11 +123,11 @@ impl Searcher {
             capture_history: CaptureHistory::new(config),
             continuation_history: ContinuationHistory::new(config),
 
-            lmr: LmrTable::new(config.lmr_divisor),
+            lmr: LmrTable::new(config.lmr_base, config.lmr_divisor),
 
             pv_table: PvTable::new(),
 
-            deadline: None,
+            time_control: SearchController::default(),
             node_limit: None,
 
             nmp_min_ply: 0,
@@ -146,7 +151,13 @@ impl Searcher {
         }
     }
 
-    pub fn set_position(&mut self, board: Board, game_history: AHashSet<u64>) {
+    pub fn prepare_new_search(
+        &mut self,
+        board: Board,
+        game_history: AHashSet<u64>,
+        handle: SearchHandle,
+    ) {
+        self.handle = handle;
         self.board = board;
         self.game_history = game_history;
     }
@@ -177,30 +188,22 @@ impl Searcher {
         self.shared.total_nodes() + self.local_nodes
     }
 
-    /// Checks if any hard search limit has been reached (time deadline or
-    /// total node count). Sets the shared stop flag when triggered.
-    fn check_limits(&self) {
-        if let Some(deadline) = self.deadline {
-            if Instant::now() >= deadline {
-                self.shared.set_stop(true);
-                return;
-            }
-        }
-
-        if let Some(node_limit) = self.node_limit {
-            if self.searched_nodes() >= node_limit {
-                self.shared.set_stop(true);
-            }
+    fn node_limit_reached(&self) -> bool {
+        match self.node_limit {
+            Some(limit) => self.searched_nodes() >= limit,
+            None => false,
         }
     }
 
-    fn send_search_info(
-        &self,
-        output: &Sender<UciOutput>,
-        current_depth: u8,
-        pv: &PvLine,
-        elapsed: std::time::Duration,
-    ) {
+    /// Stops the search if a node/time limit has been reached.
+    fn check_limits(&self) {
+        if self.time_control.hard_limit_reached() || self.node_limit_reached() {
+            self.handle.stop();
+        }
+    }
+
+    fn send_search_info(&self, output: &Sender<UciOutput>, current_depth: u8, pv: &PvLine) {
+        let elapsed = self.time_control.elapsed();
         let found_checkmate = pv.score.abs() >= MATE_VALUE - MAX_DEPTH as i16;
         let total = self.searched_nodes();
         let secs = elapsed.as_secs_f64();
